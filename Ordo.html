@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ordo — Marketing Planning &amp; Funnel Calculation</title>
+<title>Strategy — Marketing Planning &amp; Funnel Calculation</title>
 <style>
 :root{
   --nav:#1F3AC7; --nav-dk:#16299A; --ink:#10182B; --ink-2:#45506B; --ink-3:#7C879E;
@@ -286,7 +286,7 @@ svg{display:block;max-width:100%}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <div id="authGate" style="display:none"></div>
 <div class="topnav" id="topnav">
-  <div class="tn-brand"><span class="tn-mk">O</span><div class="tn-brandtext"><div class="tn-name">Ordo</div><div class="tn-sub">All modules</div></div></div>
+  <div class="tn-brand"><span class="tn-mk">N</span><div class="tn-brandtext"><div class="tn-name">North</div><div class="tn-sub">v0.20</div></div></div>
   <nav class="tn-links" id="tnLinks"></nav>
   <div class="tn-search">
     <div class="bx"><input id="tnSearchInput" placeholder="Search modules..." oninput="tnSearch(this.value)" onkeydown="tnSearchKey(event)"><span class="tn-kbd">/</span></div>
@@ -1466,7 +1466,7 @@ function subscribeRealtime(){
     .subscribe();
 }
 function loginScreenHtml(err){
-  return '<div class="authwrap"><h2>Ordo</h2><p class="sub">Sign in to continue.</p>'+
+  return '<div class="authwrap"><h2>Strategy</h2><p class="sub">Sign in to continue.</p>'+
     '<div class="err">'+(err?esc(err):'')+'</div>'+
     '<input id="authEmail" type="email" placeholder="Email" autocomplete="username">'+
     '<input id="authPass" type="password" placeholder="Password" autocomplete="current-password">'+
@@ -1475,7 +1475,7 @@ function loginScreenHtml(err){
     '</div>';
 }
 function signUpScreenHtml(err, notice){
-  return '<div class="authwrap"><h2>Ordo</h2><p class="sub">Create an account.</p>'+
+  return '<div class="authwrap"><h2>Strategy</h2><p class="sub">Create an account.</p>'+
     '<div class="err">'+(err?esc(err):'')+'</div>'+
     (notice ? '<div class="sub" style="margin-bottom:8px">'+esc(notice)+'</div>' : '')+
     '<input id="suEmail" type="email" placeholder="Email" autocomplete="username">'+
@@ -1486,7 +1486,7 @@ function signUpScreenHtml(err, notice){
     '</div>';
 }
 function onboardingScreenHtml(err){
-  return '<div class="authwrap"><h2>Ordo</h2><p class="sub">You\'re signed in, but this login isn\'t linked to an organization yet.</p>'+
+  return '<div class="authwrap"><h2>Strategy</h2><p class="sub">You\'re signed in, but this login isn\'t linked to an organization yet.</p>'+
     '<div class="err">'+(err?esc(err):'')+'</div>'+
     '<div style="border:1px solid #ddd;border-radius:8px;padding:12px;margin-bottom:12px">'+
       '<b>Create a new organization</b>'+
@@ -3675,20 +3675,20 @@ function renderTnAcct(){
 /* Consistent cross-module bar: search jumps between the 8 tools, same list
    and behavior as every other file -- not this tool's own pages/regions/pods. */
 const MODULES=[
-  {id:'Ordo',label:'Ordo',desc:'Funnel planning & forecasting',color:'#1F3AC7'},
-  {id:'Cursus',label:'Cursus',desc:'Campaign & activity execution',color:'#0E7C6B'},
-  {id:'Eventus',label:'Eventus',desc:'Event planning & logistics',color:'#B5480E'},
-  {id:'Custodia',label:'Custodia',desc:'Asset register',color:'#3B6E1F'},
-  {id:'Prospectus',label:'Prospectus',desc:'ICP filters & opportunity reports',color:'#9C2B3C'},
-  {id:'Augur',label:'Augur',desc:'Lead & deal scoring',color:'#5A3E9C'},
-  {id:'Schema',label:'Schema',desc:'Process maps & workflows',color:'#3A5A8C'},
-  {id:'Norma',label:'Norma',desc:'Shared configuration',color:'#B5730E'}
+  {id:'Ordo',label:'Strategy',desc:'Funnel planning & forecasting',color:'#1F3AC7',icon:'St'},
+  {id:'Cursus',label:'Campaign Planning',desc:'Campaign & activity execution',color:'#0E7C6B',icon:'Ca'},
+  {id:'Eventus',label:'Events',desc:'Event planning & logistics',color:'#B5480E',icon:'Ev'},
+  {id:'Custodia',label:'Assets',desc:'Asset register',color:'#3B6E1F',icon:'As'},
+  {id:'Prospectus',label:'Targets',desc:'ICP filters & opportunity reports',color:'#9C2B3C',icon:'Ta'},
+  {id:'Augur',label:'Scoring',desc:'Lead & deal scoring',color:'#5A3E9C',icon:'Sc'},
+  {id:'Schema',label:'Process Maps',desc:'Process maps & workflows',color:'#3A5A8C',icon:'Pr'},
+  {id:'Norma',label:'Configuration',desc:'Shared configuration',color:'#B5730E',icon:'Co'}
 ];
 const THIS_MODULE='Ordo';
 function renderTnModuleLinks(){
   return MODULES.map(m=>m.id===THIS_MODULE
-    ? `<span class="tn-link on"><span class="mk" style="background:${m.color}">${m.label[0]}</span>${m.label}</span>`
-    : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}"><span class="mk" style="background:${m.color}">${m.label[0]}</span>${m.label}</a>`
+    ? `<span class="tn-link on"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</span>`
+    : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`
   ).join('');
 }
 function tnSearchResults(q){

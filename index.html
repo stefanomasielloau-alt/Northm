@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>MarPlan</title>
+<title>North</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -99,16 +99,16 @@ body{font-family:var(--sans); background:var(--canvas); color:var(--ink); font-s
 <body>
 <div id="authGate" style="display:none"></div>
 <div class="topnav" id="topnav">
-  <div class="tn-brand"><span class="tn-mk">M</span><div class="tn-brandtext"><div class="tn-name">MarPlan</div><div class="tn-sub">All modules</div></div></div>
+  <div class="tn-brand"><span class="tn-mk">N</span><div class="tn-brandtext"><div class="tn-name">North</div><div class="tn-sub">v0.20</div></div></div>
   <nav class="tn-links" id="tnLinks">
-    <a class="tn-link" href="Ordo.html" target="tool_Ordo"><span class="mk" style="background:#1F3AC7">O</span>Ordo</a>
-    <a class="tn-link" href="Cursus.html" target="tool_Cursus"><span class="mk" style="background:#0E7C6B">C</span>Cursus</a>
-    <a class="tn-link" href="Eventus.html" target="tool_Eventus"><span class="mk" style="background:#B5480E">E</span>Eventus</a>
-    <a class="tn-link" href="Custodia.html" target="tool_Custodia"><span class="mk" style="background:#3B6E1F">C</span>Custodia</a>
-    <a class="tn-link" href="Prospectus.html" target="tool_Prospectus"><span class="mk" style="background:#9C2B3C">P</span>Prospectus</a>
-    <a class="tn-link" href="Augur.html" target="tool_Augur"><span class="mk" style="background:#5A3E9C">A</span>Augur</a>
-    <a class="tn-link" href="Schema.html" target="tool_Schema"><span class="mk" style="background:#3A5A8C">S</span>Schema</a>
-    <a class="tn-link" href="Norma.html" target="tool_Norma"><span class="mk" style="background:#B5730E">N</span>Norma</a>
+    <a class="tn-link" href="Ordo.html" target="tool_Ordo"><span class="mk" style="background:#1F3AC7">St</span>Strategy</a>
+    <a class="tn-link" href="Cursus.html" target="tool_Cursus"><span class="mk" style="background:#0E7C6B">Ca</span>Campaign Planning</a>
+    <a class="tn-link" href="Eventus.html" target="tool_Eventus"><span class="mk" style="background:#B5480E">Ev</span>Events</a>
+    <a class="tn-link" href="Custodia.html" target="tool_Custodia"><span class="mk" style="background:#3B6E1F">As</span>Assets</a>
+    <a class="tn-link" href="Prospectus.html" target="tool_Prospectus"><span class="mk" style="background:#9C2B3C">Ta</span>Targets</a>
+    <a class="tn-link" href="Augur.html" target="tool_Augur"><span class="mk" style="background:#5A3E9C">Sc</span>Scoring</a>
+    <a class="tn-link" href="Schema.html" target="tool_Schema"><span class="mk" style="background:#3A5A8C">Pr</span>Process Maps</a>
+    <a class="tn-link" href="Norma.html" target="tool_Norma"><span class="mk" style="background:#B5730E">Co</span>Configuration</a>
   </nav>
   <div class="tn-search">
     <div class="bx"><input id="tnSearchInput" placeholder="Search modules..." oninput="tnSearch(this.value)" onkeydown="tnSearchKey(event)"><span class="tn-kbd">/</span></div>
@@ -117,17 +117,17 @@ body{font-family:var(--sans); background:var(--canvas); color:var(--ink); font-s
   <div class="tn-acct" id="tnAcct"></div>
 </div>
 <div class="top" id="top">
-  <h1>MarPlan</h1>
-  <p>A suite of connected marketing and sales planning tools, sharing one database. Norma holds the configuration
+  <h1>North</h1>
+  <p>A suite of connected marketing and sales planning tools, sharing one database. Configuration holds the setup
     they share (cost buckets, tracking IDs, roles); every other tool reads and writes live, in real time —
     no export/import step. This page pulls a live cross-tool summary from all of them.</p>
 </div>
 <div class="wrap" id="wrap"></div>
-<div class="foot" id="foot">MarPlan — a live cross-tool dashboard and directory.</div>
+<div class="foot" id="foot">North — a live cross-tool dashboard and directory.</div>
 <div id="layer"></div>
 <script>
 /* ============================================================================
-   MarPlan — suite dashboard. Same Supabase auth pattern as every other tool in
+   North — suite dashboard. Same Supabase auth pattern as every other tool in
    the suite (login/signup/onboarding gate, then load, then render), except the
    "page" here is a single cross-tool roll-up rather than a workflow of its own.
 
@@ -220,7 +220,7 @@ function subscribeRealtime(){
     .subscribe();
 }
 function loginScreenHtml(err){
-  return '<div class="authwrap"><h2>MarPlan</h2><p class="sub">Sign in to see your dashboard.</p>'+
+  return '<div class="authwrap"><h2>North</h2><p class="sub">Sign in to see your dashboard.</p>'+
     '<div class="err">'+(err?esc(err):'')+'</div>'+
     '<input id="authEmail" type="email" placeholder="Email" autocomplete="username">'+
     '<input id="authPass" type="password" placeholder="Password" autocomplete="current-password">'+
@@ -229,7 +229,7 @@ function loginScreenHtml(err){
     '</div>';
 }
 function signUpScreenHtml(err, notice){
-  return '<div class="authwrap"><h2>MarPlan</h2><p class="sub">Create an account.</p>'+
+  return '<div class="authwrap"><h2>North</h2><p class="sub">Create an account.</p>'+
     '<div class="err">'+(err?esc(err):'')+'</div>'+
     (notice ? '<div class="sub" style="margin-bottom:8px">'+esc(notice)+'</div>' : '')+
     '<input id="suEmail" type="email" placeholder="Email" autocomplete="username">'+
@@ -240,7 +240,7 @@ function signUpScreenHtml(err, notice){
     '</div>';
 }
 function onboardingScreenHtml(err){
-  return '<div class="authwrap"><h2>MarPlan</h2><p class="sub">You\'re signed in, but this login isn\'t linked to an organization yet.</p>'+
+  return '<div class="authwrap"><h2>North</h2><p class="sub">You\'re signed in, but this login isn\'t linked to an organization yet.</p>'+
     '<div class="err">'+(err?esc(err):'')+'</div>'+
     '<div style="border:1px solid #ddd;border-radius:8px;padding:12px;margin-bottom:12px">'+
       '<b>Create a new organization</b>'+
@@ -409,7 +409,7 @@ function render(){
     <div class="card">
       <div class="bar" style="background:#1F3AC7"></div>
       <div class="bd">
-        <h3><span class="mk" style="background:#1F3AC7">O</span>Ordo</h3>
+        <h3><span class="mk" style="background:#1F3AC7">St</span>Strategy</h3>
         <p>Funnel planning, forecasting, capacity checks and top-line reporting.</p>
         <div class="stats"><div class="stat"><b>${CFG.programmes.length}</b>programmes</div>
           <div class="stat"><b>${F.mk(r.totalBudget)}</b>total budget</div></div>
@@ -419,7 +419,7 @@ function render(){
     <div class="card">
       <div class="bar" style="background:#0E7C6B"></div>
       <div class="bd">
-        <h3><span class="mk" style="background:#0E7C6B">C</span>Cursus</h3>
+        <h3><span class="mk" style="background:#0E7C6B">Ca</span>Campaign Planning</h3>
         <p>Programme, campaign and activity execution — suppliers, POs, sign-off, committed/actual cost.</p>
         <div class="stats"><div class="stat"><b>${CFG.campaigns.length}</b>campaigns</div>
           <div class="stat"><b>${CFG.tasks.length}</b>activities</div>
@@ -430,7 +430,7 @@ function render(){
     <div class="card">
       <div class="bar" style="background:#B5480E"></div>
       <div class="bd">
-        <h3><span class="mk" style="background:#B5480E">E</span>Eventus</h3>
+        <h3><span class="mk" style="background:#B5480E">Ev</span>Events</h3>
         <p>Event planning, logistics and cost tracking — multi-venue events, speakers, checklists, attendance.</p>
         <div class="stats"><div class="stat"><b>${CFG.events.length}</b>events</div>
           <div class="stat"><b>${r.upcomingEvents.length}</b>upcoming</div></div>
@@ -440,7 +440,7 @@ function render(){
     <div class="card">
       <div class="bar" style="background:#3B6E1F"></div>
       <div class="bd">
-        <h3><span class="mk" style="background:#3B6E1F">C</span>Custodia</h3>
+        <h3><span class="mk" style="background:#3B6E1F">As</span>Assets</h3>
         <p>Physical, digital and swag asset register with a stock transactions ledger.</p>
         <div class="stats"><div class="stat"><b>${CFG.assets.length}</b>assets</div>
           <div class="stat" style="${r.lowStockAssets.length?'color:#C8791A':''}"><b>${r.lowStockAssets.length}</b>low stock</div></div>
@@ -454,7 +454,7 @@ function render(){
     <div class="card">
       <div class="bar" style="background:#9C2B3C"></div>
       <div class="bd">
-        <h3><span class="mk" style="background:#9C2B3C">P</span>Prospectus</h3>
+        <h3><span class="mk" style="background:#9C2B3C">Ta</span>Targets</h3>
         <p>ICP filters, a lightweight target list, and opportunity-sizing reports.</p>
         <div class="stats"><div class="stat"><b>${CFG.leads.length}</b>leads</div>
           <div class="stat"><b>${r.openLeads.length}</b>open</div></div>
@@ -464,7 +464,7 @@ function render(){
     <div class="card">
       <div class="bar" style="background:#5A3E9C"></div>
       <div class="bd">
-        <h3><span class="mk" style="background:#5A3E9C">A</span>Augur</h3>
+        <h3><span class="mk" style="background:#5A3E9C">Sc</span>Scoring</h3>
         <p>Deal scoring, pipeline forecast, and a contacts/touchpoint log for who you actually talk to.</p>
         <div class="stats"><div class="stat"><b>${r.openDeals.length}</b>open deals</div>
           <div class="stat"><b>${F.mk(r.pipelineValue)}</b>value</div>
@@ -475,7 +475,7 @@ function render(){
     <div class="card">
       <div class="bar" style="background:#3A5A8C"></div>
       <div class="bd">
-        <h3><span class="mk" style="background:#3A5A8C">S</span>Schema</h3>
+        <h3><span class="mk" style="background:#3A5A8C">Pr</span>Process Maps</h3>
         <p>Process maps and workflow diagrams — boxes, decisions, arrows, swimlanes.</p>
         <div class="stats"><div class="stat"><b>${CFG.workflows.length}</b>diagrams</div></div>
         <div class="row"><span class="pill ok">Live</span><a class="btn" href="Schema.html" target="tool_Schema">Open →</a></div>
@@ -488,7 +488,7 @@ function render(){
     <div class="card">
       <div class="bar" style="background:#B5730E"></div>
       <div class="bd">
-        <h3><span class="mk" style="background:#B5730E">N</span>Norma</h3>
+        <h3><span class="mk" style="background:#B5730E">Co</span>Configuration</h3>
         <p>The shared configuration hub — cost buckets, tracking ID convention, roles &amp; users, and org hierarchy.</p>
         <div class="row"><span class="pill ok">Live</span><a class="btn" href="Norma.html" target="tool_Norma">Open →</a></div>
       </div>
@@ -508,14 +508,14 @@ function render(){
 /* Real search over the 8 tools -- typing filters client-side; clicking a
    result opens that tool in its own named tab, same as the tn-links row. */
 const MODULES=[
-  {id:'Ordo',label:'Ordo',desc:'Funnel planning & forecasting'},
-  {id:'Cursus',label:'Cursus',desc:'Campaign & activity execution'},
-  {id:'Eventus',label:'Eventus',desc:'Event planning & logistics'},
-  {id:'Custodia',label:'Custodia',desc:'Asset register'},
-  {id:'Prospectus',label:'Prospectus',desc:'ICP filters & opportunity reports'},
-  {id:'Augur',label:'Augur',desc:'Lead & deal scoring'},
-  {id:'Schema',label:'Schema',desc:'Process maps & workflows'},
-  {id:'Norma',label:'Norma',desc:'Shared configuration'}
+  {id:'Ordo',label:'Strategy',desc:'Funnel planning & forecasting',icon:'St'},
+  {id:'Cursus',label:'Campaign Planning',desc:'Campaign & activity execution',icon:'Ca'},
+  {id:'Eventus',label:'Events',desc:'Event planning & logistics',icon:'Ev'},
+  {id:'Custodia',label:'Assets',desc:'Asset register',icon:'As'},
+  {id:'Prospectus',label:'Targets',desc:'ICP filters & opportunity reports',icon:'Ta'},
+  {id:'Augur',label:'Scoring',desc:'Lead & deal scoring',icon:'Sc'},
+  {id:'Schema',label:'Process Maps',desc:'Process maps & workflows',icon:'Pr'},
+  {id:'Norma',label:'Configuration',desc:'Shared configuration',icon:'Co'}
 ];
 function tnSearchResults(q){
   q=(q||'').trim().toLowerCase(); if(!q) return [];

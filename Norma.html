@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Norma — Shared Configuration</title>
+<title>Configuration — Shared Configuration</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 :root{
@@ -122,7 +122,7 @@ code{background:var(--canvas-2); padding:1px 5px; border-radius:4px; font-size:1
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <div id="authGate" style="display:none"></div>
 <div class="topnav" id="topnav">
-  <div class="tn-brand"><span class="tn-mk">N</span><div class="tn-brandtext"><div class="tn-name">Norma</div><div class="tn-sub">All modules</div></div></div>
+  <div class="tn-brand"><span class="tn-mk">N</span><div class="tn-brandtext"><div class="tn-name">North</div><div class="tn-sub">v0.20</div></div></div>
   <nav class="tn-links" id="tnLinks"></nav>
   <div class="tn-search">
     <div class="bx"><input id="tnSearchInput" placeholder="Search modules..." oninput="tnSearch(this.value)" onkeydown="tnSearchKey(event)"><span class="tn-kbd">/</span></div>
@@ -439,6 +439,25 @@ async function removeUserFromOrg(userId){
   render();
 }
 window.removeUserFromOrg = removeUserFromOrg;
+/* Moving a user to a different organization -- Super Admin only, since roles and
+   regions are both scoped to a single org, a cross-org move can't carry them over
+   safely. Clears role_id (nullable) and region access so the user shows up in their
+   new org needing a role assigned, rather than silently keeping stale, meaningless
+   permissions from the org they just left. */
+async function setUserOrg(userId, newOrgId){
+  if(!CFG.isSuperAdmin){ toast('Only Super Admin can move a user to a different organization.'); return; }
+  const u = byId(CFG.users, userId); if(!u || newOrgId===u.orgId) return;
+  const destName = orgName(newOrgId);
+  if(!confirm('Move '+u.name+' to "'+destName+'"? Their role and region access will be cleared — you\'ll need to set those again in the new organization.')) return;
+  const oldOrgId = u.orgId;
+  u.orgId = newOrgId; u.roleId = null; u.regionIds = []; u.crossRegion = false; render();
+  const { error } = await sb.from('profiles').update({ org_id:newOrgId, role_id:null, region_ids:[], cross_region:false }).eq('id', userId);
+  if(error){ u.orgId = oldOrgId; render(); toast('Could not move user: '+error.message); return; }
+  logAudit('move user to organization', u.name+' → '+destName);
+  render();
+  toast(u.name+' moved to '+destName+' — assign them a role there now.');
+}
+window.setUserOrg = setUserOrg;
 async function toggleRoleFlag(roleId, field, col){
   if(!canConfig()){ toast('Your role cannot change roles.'); return; }
   const r = byId(CFG.roles, roleId); if(!r) return;
@@ -577,7 +596,7 @@ function subscribeRealtime(){
     .subscribe();
 }
 function loginScreenHtml(err){
-  return '<div class="authwrap"><h2>Norma</h2><p class="sub">Sign in to continue.</p>'+
+  return '<div class="authwrap"><h2>Configuration</h2><p class="sub">Sign in to continue.</p>'+
     '<div class="err">'+(err?esc(err):'')+'</div>'+
     '<input id="authEmail" type="email" placeholder="Email" autocomplete="username">'+
     '<input id="authPass" type="password" placeholder="Password" autocomplete="current-password">'+
@@ -586,7 +605,7 @@ function loginScreenHtml(err){
     '</div>';
 }
 function signUpScreenHtml(err, notice){
-  return '<div class="authwrap"><h2>Norma</h2><p class="sub">Create an account.</p>'+
+  return '<div class="authwrap"><h2>Configuration</h2><p class="sub">Create an account.</p>'+
     '<div class="err">'+(err?esc(err):'')+'</div>'+
     (notice ? '<div class="sub" style="margin-bottom:8px">'+esc(notice)+'</div>' : '')+
     '<input id="suEmail" type="email" placeholder="Email" autocomplete="username">'+
@@ -597,7 +616,7 @@ function signUpScreenHtml(err, notice){
     '</div>';
 }
 function onboardingScreenHtml(err){
-  return '<div class="authwrap"><h2>Norma</h2><p class="sub">You\'re signed in, but this login isn\'t linked to an organization yet.</p>'+
+  return '<div class="authwrap"><h2>Configuration</h2><p class="sub">You\'re signed in, but this login isn\'t linked to an organization yet.</p>'+
     '<div class="err">'+(err?esc(err):'')+'</div>'+
     '<div style="border:1px solid #ddd;border-radius:8px;padding:12px;margin-bottom:12px">'+
       '<b>Create a new organization</b>'+
@@ -1087,8 +1106,11 @@ function pageUsers(){
     ${CFG.users.slice().sort((a,b)=>(orgName(a.orgId)).localeCompare(orgName(b.orgId))).map(u=>{
       const orgRegions = CFG.regions.filter(r=>r.orgId===u.orgId);
       return `<tr><td class="lb">${esc(u.name)}</td><td class="mini">${esc(u.email||'—')}</td>
-      ${sa?`<td class="mini">${esc(orgName(u.orgId))}${u.orgId===_orgId?' <span class="tag">yours</span>':''}</td>`:''}
+      ${sa?`<td class="mini"><select class="cel txt" style="width:150px" onchange="setUserOrg('${u.id}',this.value)">
+        ${(CFG.allOrganizations||[]).map(o=>`<option value="${o.id}" ${o.id===u.orgId?'selected':''}>${esc(o.name)}</option>`).join('')}
+        </select>${u.orgId===_orgId?' <span class="tag">yours</span>':''}</td>`:''}
       <td><select class="cel txt" style="width:130px" ${dis} onchange="setUserRole('${u.id}',this.value)">
+        ${!u.roleId?'<option value="" selected disabled>— choose a role —</option>':''}
         ${CFG.roles.filter(x=>x.orgId===u.orgId).map(x=>`<option value="${x.id}" ${x.id===u.roleId?'selected':''}>${esc(x.name)}</option>`).join('')}</select></td>
       <td><button class="btn sm" ${dis} onclick="setUserCrossRegion('${u.id}')">
         <span class="pill ${u.crossRegion?'ok':'warn'}">${u.crossRegion?'Transparent':'Isolated'}</span></button></td>
@@ -1201,20 +1223,20 @@ function renderTnAcct(){
 /* Consistent cross-module bar: search jumps between the 8 tools, same list
    and behavior as every other file -- not this tool's own pages/buckets/modules. */
 const MODULES=[
-  {id:'Ordo',label:'Ordo',desc:'Funnel planning & forecasting',color:'#1F3AC7'},
-  {id:'Cursus',label:'Cursus',desc:'Campaign & activity execution',color:'#0E7C6B'},
-  {id:'Eventus',label:'Eventus',desc:'Event planning & logistics',color:'#B5480E'},
-  {id:'Custodia',label:'Custodia',desc:'Asset register',color:'#3B6E1F'},
-  {id:'Prospectus',label:'Prospectus',desc:'ICP filters & opportunity reports',color:'#9C2B3C'},
-  {id:'Augur',label:'Augur',desc:'Lead & deal scoring',color:'#5A3E9C'},
-  {id:'Schema',label:'Schema',desc:'Process maps & workflows',color:'#3A5A8C'},
-  {id:'Norma',label:'Norma',desc:'Shared configuration',color:'#B5730E'}
+  {id:'Ordo',label:'Strategy',desc:'Funnel planning & forecasting',color:'#1F3AC7',icon:'St'},
+  {id:'Cursus',label:'Campaign Planning',desc:'Campaign & activity execution',color:'#0E7C6B',icon:'Ca'},
+  {id:'Eventus',label:'Events',desc:'Event planning & logistics',color:'#B5480E',icon:'Ev'},
+  {id:'Custodia',label:'Assets',desc:'Asset register',color:'#3B6E1F',icon:'As'},
+  {id:'Prospectus',label:'Targets',desc:'ICP filters & opportunity reports',color:'#9C2B3C',icon:'Ta'},
+  {id:'Augur',label:'Scoring',desc:'Lead & deal scoring',color:'#5A3E9C',icon:'Sc'},
+  {id:'Schema',label:'Process Maps',desc:'Process maps & workflows',color:'#3A5A8C',icon:'Pr'},
+  {id:'Norma',label:'Configuration',desc:'Shared configuration',color:'#B5730E',icon:'Co'}
 ];
 const THIS_MODULE='Norma';
 function renderTnModuleLinks(){
   return MODULES.map(m=>m.id===THIS_MODULE
-    ? `<span class="tn-link on"><span class="mk" style="background:${m.color}">${m.label[0]}</span>${m.label}</span>`
-    : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}"><span class="mk" style="background:${m.color}">${m.label[0]}</span>${m.label}</a>`
+    ? `<span class="tn-link on"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</span>`
+    : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`
   ).join('');
 }
 function tnSearchResults(q){

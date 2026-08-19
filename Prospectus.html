@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Prospectus — ICP & Opportunity Reports</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+  --nav:#9C2B3C; --nav-dk:#7A2130; --ink:#10182B; --ink-2:#45506B; --ink-3:#7C879E;
+  --surface:#FFFFFF; --canvas:#F2F4F8; --canvas-2:#E9EDF4; --line:#DFE3EB; --line-2:#EEF1F6;
+  --input:#7B3FE4; --input-bg:#F7F2FE; --calc:#45506B;
+  --ok:#0E8A5F; --ok-bg:#E7F5EF; --warn:#C8791A; --warn-bg:#FDF4E7; --bad:#D0342C; --bad-bg:#FCEDEC;
+  --r:8px; --r-sm:5px;
+  --sh:0 1px 2px rgba(16,24,43,.05), 0 1px 3px rgba(16,24,43,.04);
+  --sh-2:0 4px 16px rgba(16,24,43,.10);
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:var(--sans); background:var(--canvas); color:var(--ink); font-size:13.5px;}
+.sp{flex:1}
+.topnav{background:var(--surface); border-bottom:1px solid var(--line); min-height:56px; display:flex; align-items:center; padding:0 18px; gap:16px; position:sticky; top:0; z-index:50; box-shadow:var(--sh); flex-wrap:wrap;}
+.tn-brand{display:flex; align-items:center; gap:9px; flex-shrink:0; padding:8px 0;}
+.tn-mk{width:34px;height:34px;border-radius:8px;background:var(--nav);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px;flex-shrink:0;}
+.tn-brandtext{line-height:1.15}
+.tn-name{font-weight:800; font-size:14.5px; color:var(--ink);}
+.tn-sub{font-size:9px; letter-spacing:.08em; color:var(--ink-3); font-weight:700; text-transform:uppercase;}
+.tn-links{display:flex; align-items:center; gap:2px; flex:1; overflow-x:auto; min-width:0;}
+.tn-link{padding:7px 12px; border-radius:6px; font-size:12.5px; font-weight:600; color:var(--ink-2); text-decoration:none; white-space:nowrap; flex-shrink:0; display:inline-flex; align-items:center; gap:6px;}
+.tn-link:hover{background:var(--canvas-2)}
+.tn-link.on{background:var(--canvas-2); color:var(--ink); cursor:default;}
+.tn-link .mk{width:16px;height:16px;border-radius:4px;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:9px;flex-shrink:0;}
+.tn-search{position:relative; flex-shrink:0;}
+.tn-search .bx{display:flex; align-items:center; gap:6px; background:var(--canvas); border:1px solid var(--line); border-radius:7px; padding:6px 10px; width:190px;}
+.tn-search input{border:none;background:transparent;outline:none;font-size:12.5px;flex:1;color:var(--ink); min-width:0;}
+.tn-kbd{font-size:10px;color:var(--ink-3);background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:1px 5px;flex-shrink:0;}
+.tn-results{position:absolute; top:calc(100% + 4px); left:0; width:260px; background:var(--surface); border:1px solid var(--line); border-radius:8px; box-shadow:var(--sh-2); z-index:60; max-height:320px; overflow-y:auto;}
+.tn-results a{display:block; padding:8px 12px; text-decoration:none; color:var(--ink); font-size:12.5px; border-bottom:1px solid var(--line-2);}
+.tn-results a:last-child{border-bottom:none}
+.tn-results a:hover{background:var(--canvas-2)}
+.tn-results .ty{font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-3); font-weight:700;}
+.tn-results .none{padding:10px 12px; font-size:12px; color:var(--ink-3);}
+.tn-acct{display:flex; align-items:center; gap:8px; flex-shrink:0; padding:8px 0;}
+.tn-avatar{width:30px;height:30px;border-radius:50%;background:var(--nav);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex-shrink:0;}
+.tn-who{font-size:11.5px; line-height:1.3;}
+.tn-who b{display:block; color:var(--ink); font-weight:700;}
+.tn-who span{color:var(--ink-3);}
+.tn-signout{font-size:10.5px; color:var(--ink-3); text-decoration:none;}
+.tn-signout:hover{color:var(--ink)}
+/* ---------- restored left-hand page nav (this tool's own pages) ---------- */
+.wrap{display:flex; min-height:calc(100vh - 56px);}
+.side{width:210px; background:var(--surface); border-right:1px solid var(--line); padding:10px 0; flex-shrink:0;}
+.side h4{font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3); margin:14px 14px 6px;}
+.navi{display:flex; align-items:center; gap:8px; padding:7px 14px; text-decoration:none; color:var(--ink-2); font-size:13px; border-left:3px solid transparent;}
+.navi:hover{background:var(--canvas-2)}
+.navi.on{background:var(--canvas-2);border-left-color:var(--nav);color:var(--ink);font-weight:700}
+.navi .ix{width:16px; text-align:center; font-size:11px; color:var(--ink-3);}
+.navi.on .ix{color:var(--nav)}
+.main{flex:1; padding:18px 22px; max-width:none;}
+.phead{display:flex; align-items:flex-start; gap:14px; margin-bottom:14px;}
+.phead h1{font-size:19px; margin:0 0 3px;}
+.phead p{margin:0; color:var(--ink-2); font-size:12.5px; max-width:680px;}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); margin-bottom:14px; box-shadow:var(--sh);}
+.card.hl{border-color:var(--nav); box-shadow:0 0 0 1px var(--nav) inset, var(--sh);}
+.card h3{display:flex; align-items:center; gap:8px; margin:0; padding:11px 14px; border-bottom:1px solid var(--line-2); font-size:13.5px;}
+.card .bd{padding:14px;}
+.card .bd.flush{padding:0;}
+.scroll{overflow-x:auto;}
+.scroll.cap{max-height:520px; overflow-y:auto;}
+table{width:100%; border-collapse:collapse; font-size:12.5px;}
+th{text-align:left; padding:8px 10px; background:var(--canvas); color:var(--ink-2); font-weight:700; font-size:11.5px; text-transform:uppercase; letter-spacing:.02em; position:sticky; top:0;}
+td{padding:6px 10px; border-bottom:1px solid var(--line-2); vertical-align:middle;}
+td.n,th.n{text-align:right;}
+td.lb{font-weight:600;}
+.empty{padding:18px; text-align:center; color:var(--ink-3); font-size:12.5px;}
+.mini{font-size:11.5px; color:var(--ink-3);}
+.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; margin-bottom:14px;}
+.kpi{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:11px 13px;}
+.kpi.hl{border-color:var(--nav); background:linear-gradient(180deg,#fff,rgba(156,43,60,.05));}
+.kpi .k{font-size:11px; color:var(--ink-3); margin-bottom:3px;}
+.kpi .kpi-v{font-size:18px; font-weight:800; font-variant-numeric:tabular-nums;}
+.kpi.hl .kpi-v{color:var(--nav)}
+.kpi .sub{font-size:11px; color:var(--ink-3); margin-top:2px;}
+.row{display:flex; align-items:center; gap:6px;}
+.btn{background:#fff; border:1px solid var(--line); border-radius:6px; padding:6px 11px; font-size:12.5px; cursor:pointer; color:var(--ink); text-decoration:none; display:inline-flex; align-items:center; gap:5px;}
+.btn:hover{background:var(--canvas-2)}
+.btn.sm{padding:4px 9px; font-size:11.5px;}
+.btn.pri{background:var(--nav);border-color:var(--nav);color:#fff}
+.btn.pri:hover{background:var(--nav-dk)}
+.btn.dgr{color:var(--bad); border-color:#F3C9C6;}
+.btn.dgr:hover{background:var(--bad-bg)}
+.btn:disabled{opacity:.45; cursor:not-allowed;}
+.pill{display:inline-block; padding:2px 8px; border-radius:20px; font-size:10.5px; font-weight:700; background:var(--canvas-2); color:var(--ink-2);}
+.pill.ok{background:var(--ok-bg); color:var(--ok);}
+.pill.warn{background:var(--warn-bg); color:var(--warn);}
+.pill.bad{background:var(--bad-bg); color:var(--bad);}
+.pill.n{background:var(--canvas-2); color:var(--ink-2);}
+/* Shared status (RAG) pill -- same semantic scale + class names as Cursus/Eventus/Ordo/
+   Custodia (2026-08-13). */
+.rag{display:inline-flex; align-items:center; gap:3px; padding:2px 8px; border-radius:20px; font-size:10.5px; font-weight:700; white-space:nowrap;}
+.rag-grey{background:#E7EAF0; color:#5B6472;}
+.rag-blue{background:#E3E8FD; color:#1F3AC7;}
+.rag-amber{background:#FBEBD3; color:#B5730E;}
+.rag-red{background:#F8DEE0; color:#9C2B3C;}
+.rag-green{background:#DCF3E9; color:#0E8A5F;}
+.rag-exceed{color:#C9971A;}
+.note{background:#FBEEF0;border-left:3px solid var(--nav);border-radius:0 var(--r-sm) var(--r-sm) 0; padding:10px 14px; margin-bottom:14px; font-size:12px; color:var(--ink-2);}
+.in,input.in,select.in,textarea.in,.cel{border:1px solid #E1D3FA; border-radius:5px; padding:5px 7px; font-size:12.5px; background:var(--input-bg); color:var(--ink); font-family:inherit;}
+.in:focus,.cel:focus{outline:2px solid var(--input); outline-offset:0;}
+.cel.txt{width:100%;}
+.cel.w{width:70px;}
+textarea.cel{resize:vertical; min-height:44px;}
+.toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:9px 16px; border-radius:20px; font-size:12.5px; box-shadow:var(--sh-2); z-index:200; animation:fade .2s ease;}
+@keyframes fade{from{opacity:0; transform:translateX(-50%) translateY(6px)} to{opacity:1; transform:translateX(-50%) translateY(0)}}
+.lbl{font-size:11px; color:var(--ink-3); font-weight:700; text-transform:uppercase; letter-spacing:.02em;}
+.bar{background:var(--canvas-2); border-radius:20px; height:8px; overflow:hidden; margin:4px 0;}
+.bar i{display:block; height:100%; background:var(--nav); border-radius:20px;}
+.funnelrow{display:grid; grid-template-columns:150px 1fr 90px; align-items:center; gap:10px; padding:7px 0;}
+.icpcols{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+.icpcols ul{margin:6px 0 0; padding-left:18px;}
+.icpcols li{margin-bottom:5px;}
+.months{display:flex; align-items:flex-end; gap:6px; height:110px; margin:10px 0;}
+.months .mcol{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:4px;}
+.months .mbar{width:100%; background:linear-gradient(180deg,var(--nav),var(--nav-dk)); border-radius:3px 3px 0 0;}
+.months .mlbl{font-size:10px; color:var(--ink-3);}
+.authwrap{max-width:360px;margin:14vh auto;padding:32px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-2);}
+.authwrap h2{margin:0 0 4px;font-size:18px;}
+.authwrap p.sub{margin:0 0 20px;color:var(--ink-2);font-size:12.5px;}
+.authwrap input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;margin-bottom:10px;box-sizing:border-box;}
+.authwrap button{width:100%;padding:10px;border:none;border-radius:6px;background:var(--ink);color:#fff;font-weight:700;font-size:13px;cursor:pointer;}
+.authwrap .err{color:#B3261E;font-size:12px;margin:-4px 0 10px;min-height:14px;}
+</style>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<div id="authGate" style="display:none"></div>
+<div class="topnav" id="topnav">
+  <div class="tn-brand"><span class="tn-mk">P</span><div class="tn-brandtext"><div class="tn-name">Prospectus</div><div class="tn-sub">All modules</div></div></div>
+  <nav class="tn-links" id="tnLinks"></nav>
+  <div class="tn-search">
+    <div class="bx"><input id="tnSearchInput" placeholder="Search modules..." oninput="tnSearch(this.value)" onkeydown="tnSearchKey(event)"><span class="tn-kbd">/</span></div>
+    <div id="tnResults"></div>
+  </div>
+  <div class="tn-acct" id="tnAcct"></div>
+  <script>document.addEventListener('click',function(e){var r=document.getElementById('tnResults');if(r&&!e.target.closest('.tn-search'))r.innerHTML='';});</script>
+</div>
+<div class="wrap" id="wrap">
+  <nav class="side" id="side"></nav>
+  <main class="main" id="main"></main>
+</div>
+<div id="layer"></div>
+<script>
+/* ============================================================================
+   PROSPECTUS — ICP definition, a lightweight target list, and an opportunity-sizing
+   report. Reference material was a live tool ("ClientIntel.co") that took five inputs
+   (industry, what you sell, ideal client, avg deal value, market/country) and produced
+   an AI-written market-size + ICP + funnel + revenue-trajectory report.
+
+   IMPORTANT DEVIATION FROM THE REFERENCE, ON PURPOSE: the reference tool had an LLM
+   invent the market-size numbers from a one-line prompt. This build does not do that --
+   there is no live LLM call anywhere in this toolset yet (see Norma > LLM providers),
+   and even once one is connected, market size should be a user- or data-provider-supplied
+   assumption, not a number an LLM guesses at. So here, market size and the funnel
+   conversion rates are explicit, editable assumptions, and every other figure on the
+   report (active prospects, conversations, opportunities, wins, revenue) is calculated
+   forward from them -- the same forward/backward funnel-math pattern already trusted in
+   Ordo. The "Draft with LLM" buttons on the ICP narrative are real UI hooks but stay
+   disabled until an enabled provider is synced from Norma, and even then they do not
+   make a live call in v1 -- they're wired for later, not faked now.
+
+   High-level v1 per Stef's brief: this is the shape, not the final depth. Standalone
+   file, own CFG, no server -- same Norma bridge pattern as every other module.
+
+   Supabase note: filters/reports/leads now live in the shared database (2026-08-11-
+   supabase-schema-phase3-prospectus.sql), org-scoped like every other tool. Cost buckets
+   and LLM providers are read directly from the same shared tables Norma configures (real
+   read, not just the manual JSON import below) -- the Norma-export bridge stays as a
+   fallback for the one thing that genuinely isn't DB-backed yet, trackingConfig (the old
+   generic {mod}-{type}-{seq} scheme), exactly like every other tool in this suite.
+   ============================================================================ */
+const SUPABASE_URL = 'https://rcmocuubeajnqjltuwdv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjbW9jdXViZWFqbnFqbHR1d2R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzMTgzNTQsImV4cCI6MjEwMTg5NDM1NH0.rZuoKPmmkpNe8Ug8Gu_KmpoKyibigJccdpoRGcLt3pY';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* real UUIDs now for DB-backed rows (filters/reports/leads) -- kept the old prefix-string
+   uid() for anything that still isn't a DB row, since call sites like uid('flt') are used
+   purely as an id generator either way. */
+const uid = _p => crypto.randomUUID();
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const byId = (a,id) => a.find(x=>x.id===id);
+const F = {
+  n:(v,d=0)=>(v==null||isNaN(v))?'—':Number(v).toLocaleString('en-AU',{minimumFractionDigits:d,maximumFractionDigits:d}),
+  mk:(v,ccy)=>{ if(v==null||isNaN(v))return '—'; const a=Math.abs(v),s=v<0?'-':''; const c=ccy||'$';
+    if(a>=1e6) return s+c+(a/1e6).toFixed(a>=1e7?1:2)+'M';
+    if(a>=1e3) return s+c+Math.round(a/1e3)+'k'; return s+c+Math.round(a); },
+  pct:v=>(v==null||isNaN(v))?'—':Math.round(v*100)+'%',
+  dt:iso=>{ if(!iso)return '—'; return new Date(iso).toLocaleString('en-AU',{day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'}); },
+  d:iso=>{ if(!iso)return '—'; return new Date(iso).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'2-digit'}); }
+};
+const CCY_SYM={AUD:'A$',USD:'US$',GBP:'£',EUR:'€',SGD:'S$',NZD:'NZ$'};
+const MARKETS=['National','Regional','Global'];
+const STATUSES=['New','Contacted','Qualified','Disqualified'];
+
+/* ---------- shared status (RAG) colour system ----------
+   Same semantic scale + class names as Cursus/Eventus/Ordo/Custodia (2026-08-13). A
+   target's status is already a clean, purely categorical funnel (New -> Contacted ->
+   Qualified/Disqualified) with no date or numeric signal to threshold against, so
+   there's no RAG_THRESHOLDS constant here -- the mapping itself is the whole rule. */
+function ragForLead(l){
+  if(l.status==='Disqualified') return {tone:'red',label:'Disqualified'};
+  if(l.status==='Qualified') return {tone:'green',label:'Qualified'};
+  if(l.status==='Contacted') return {tone:'blue',label:'Contacted'};
+  return {tone:'grey',label:'New'};
+}
+function ragPillHtml(rag){
+  return `<span class="rag rag-${rag.tone}">${esc(rag.label)}${rag.exceed?' <span class="rag-exceed">★</span>':''}</span>`;
+}
+
+/* ---------- data ----------
+   Supabase-backed now — populated by loadFromSupabase() after sign-in. Empty shell here so
+   nothing downstream needs to change; only the population source moved. */
+const CFG = {};
+
+const UI = { page:'home', reportId:null, compareA:null, compareB:null };
+
+function logAudit(what,detail){
+  CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
+  if(CFG.audit.length>150)CFG.audit.pop();
+}
+function toast(msg){
+  const l=document.getElementById('layer');
+  const d=document.createElement('div'); d.className='toast'; d.textContent=msg;
+  l.appendChild(d); setTimeout(()=>d.remove(),2200);
+}
+function go(page){ UI.page=page; render(); }
+window.go=go;
+function openReport(id){ UI.reportId=id; UI.page='reportDetail'; render(); }
+window.openReport=openReport;
+function setIn(field,id,key,val,type){
+  const row=byId(CFG[field],id); if(!row)return;
+  let v=val;
+  if(type==='num'){ v=val===''?null:parseFloat(val); if(v!=null&&isNaN(v))v=null; }
+  if(type==='pct'){ v=val===''?null:parseFloat(val)/100; if(v!=null&&isNaN(v))v=null; }
+  row[key]=v;
+  if(field==='filters') row.updatedAt=new Date().toISOString().slice(0,10);
+  logAudit('edit',field+'.'+key); render();
+}
+window.setIn=setIn;
+function setListItem(field,id,listKey,idx,val){
+  const row=byId(CFG[field],id); if(!row)return;
+  row[listKey][idx]=val; logAudit('edit',field+'.'+listKey); render();
+}
+window.setListItem=setListItem;
+function addListItem(field,id,listKey){
+  const row=byId(CFG[field],id); if(!row)return;
+  row[listKey].push('New point'); render();
+}
+window.addListItem=addListItem;
+function removeListItem(field,id,listKey,idx){
+  const row=byId(CFG[field],id); if(!row)return;
+  row[listKey].splice(idx,1); render();
+}
+window.removeListItem=removeListItem;
+
+/* ---------- local autosave (survives a refresh/close; export/import is still the
+   portable, cross-tool bridge) ---------- */
+const LS_KEY='prospectus_autosave_v1';
+function saveLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(CFG)); }catch(e){} }
+function loadLocal(){
+  try{
+    const raw=localStorage.getItem(LS_KEY); if(!raw) return false;
+    const parsed=JSON.parse(raw);
+    Object.keys(parsed).forEach(k=>{ CFG[k]=parsed[k]; });
+    return true;
+  }catch(e){ return false; }
+}
+function clearLocal(){
+  localStorage.removeItem(LS_KEY);
+  toast('Local autosave cleared — reload the page to reset to the built-in defaults.');
+}
+window.clearLocal=clearLocal;
+
+/* ============================================================================
+   Supabase data layer — whole-plan load/save, same pattern as every other tool.
+   Cost buckets and LLM providers are shared read-only dimensions Norma owns; filters/
+   reports/leads are Prospectus's own tables; audit_log is shared.
+   ============================================================================ */
+let _orgId = null, _myProfile = null, _saveTimer = null, _realtimeChannel = null;
+/* Set right before an internal (non-user-initiated) signOut() -- e.g. bootApp()'s error path
+   below -- so the global onAuthStateChange listener knows to skip its reload-on-SIGNED_OUT and
+   let the error message stay on screen instead of wiping it out immediately. Without this, the
+   error flashes for a frame and then vanishes, which is exactly the "flash and it's gone" bug. */
+let _skipNextSignOutReload = false;
+
+async function upsertRows(table, rows, mapFn){
+  if(!rows || !rows.length) return;
+  try{
+    const payload = rows.map(r=>Object.assign(mapFn(r), {org_id:_orgId}));
+    const { error } = await sb.from(table).upsert(payload);
+    if(error) throw error;
+  }catch(e){ console.error('Save failed for '+table, e); toast('Could not save '+table+' to the database — see console.'); }
+}
+
+/* Fire-and-forget real delete, paired with upsertRows above. Called immediately after the
+   local CFG array filter in every remove*() function so the UI stays instant while the row
+   actually leaves the database (previously these were UPSERT-only, so removed rows silently
+   reappeared on next load). */
+async function deleteRow(table, id){
+  if(!_orgId || !id) return;
+  try{
+    const { error } = await sb.from(table).delete().eq('id', id).eq('org_id', _orgId);
+    if(error) throw error;
+  }catch(e){ console.error('Delete failed for '+table, e); toast('Removed here, but could not delete from the database — see console.'); }
+}
+
+async function saveToSupabase(){
+  if(!_orgId) return;
+  await Promise.all([
+    upsertRows('prospectus_filters', CFG.filters, f=>({
+      id:f.id,name:f.name,industry:f.industry||'',what_you_sell:f.whatYouSell||'',ideal_client:f.idealClient||'',
+      deal_value:f.dealValue||0,currency:f.currency||'AUD',market:f.market||'National',country:f.country||'',
+      updated_at:f.updatedAt||null,tracking_ref:f.trackingRef||null
+    })),
+    upsertRows('prospectus_reports', CFG.reports, r=>({
+      id:r.id,filter_id:r.filterId||null,name:r.name,generated_at:r.generatedAt||null,
+      market_low:r.marketLow,market_high:r.marketHigh,active_in_market_pct:r.activeInMarketPct,
+      conversation_rate:r.conversationRate,opportunity_rate:r.opportunityRate,win_rate:r.winRate,
+      ramp_months:r.rampMonths,icp_headline:r.icpHeadline||'',icp_attributes:r.icpAttributes||[],
+      icp_triggers:r.icpTriggers||[],tracking_ref:r.trackingRef||null
+    })),
+    upsertRows('prospectus_leads', CFG.leads, l=>({
+      id:l.id,filter_id:l.filterId||null,company:l.company,domain:l.domain||'',
+      contact_name:l.contactName||'',status:l.status||'New',notes:l.notes||''
+    })),
+    upsertRows('audit_log', CFG.audit, a=>({ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null}))
+  ]);
+}
+
+function scheduleSupabaseSave(){
+  if(!_orgId) return;
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(()=>{ saveToSupabase(); }, 900);
+}
+
+async function loadFromSupabase(){
+  const { data:{ user: authUser } } = await sb.auth.getUser();
+  if(!authUser) throw new Error('Not signed in.');
+  const { data: prof, error: profErr } = await sb.from('profiles')
+    .select('id,name,org_id,role_id,region_ids,cross_region').eq('id', authUser.id).single();
+  if(profErr || !prof){ const e = new Error('No profile linked yet.'); e.noProfile = true; throw e; }
+  _myProfile = prof; _orgId = prof.org_id;
+
+  const results = await Promise.all([
+    sb.from('prospectus_filters').select('id,name,industry,what_you_sell,ideal_client,deal_value,currency,market,country,updated_at,tracking_ref'),
+    sb.from('prospectus_reports').select('id,filter_id,name,generated_at,market_low,market_high,active_in_market_pct,conversation_rate,opportunity_rate,win_rate,ramp_months,icp_headline,icp_attributes,icp_triggers,tracking_ref'),
+    sb.from('prospectus_leads').select('id,filter_id,company,domain,contact_name,status,notes'),
+    sb.from('cost_buckets').select('id,code,label'),
+    sb.from('llm_providers').select('id,name,kind,endpoint,key_label,enabled,priority,notes'),
+    sb.from('audit_log').select('ts,what,detail').order('ts',{ascending:false}).limit(200)
+  ]);
+  const [filtersR,reportsR,leadsR,costBucketsR,llmR,auditR] = results;
+  for(const r of results){ if(r.error) throw r.error; }
+
+  CFG.filters = (filtersR.data||[]).map(f=>({
+    id:f.id,name:f.name,industry:f.industry||'',whatYouSell:f.what_you_sell||'',idealClient:f.ideal_client||'',
+    dealValue:f.deal_value||0,currency:f.currency||'AUD',market:f.market||'National',country:f.country||'',
+    updatedAt:f.updated_at||'',trackingRef:f.tracking_ref||null
+  }));
+  CFG.reports = (reportsR.data||[]).map(r=>({
+    id:r.id,filterId:r.filter_id,name:r.name,generatedAt:r.generated_at,
+    marketLow:r.market_low,marketHigh:r.market_high,activeInMarketPct:r.active_in_market_pct,
+    conversationRate:r.conversation_rate,opportunityRate:r.opportunity_rate,winRate:r.win_rate,
+    rampMonths:r.ramp_months,icpHeadline:r.icp_headline||'',icpAttributes:r.icp_attributes||[],
+    icpTriggers:r.icp_triggers||[],trackingRef:r.tracking_ref||null
+  }));
+  CFG.leads = (leadsR.data||[]).map(l=>({
+    id:l.id,filterId:l.filter_id,company:l.company,domain:l.domain||'',
+    contactName:l.contact_name||'',status:l.status||'New',notes:l.notes||''
+  }));
+  CFG.costBuckets = (costBucketsR.data||[]).map(c=>({id:c.id,code:c.code,label:c.label}));
+  CFG.llmProviders = (llmR.data||[]).map(p=>({
+    id:p.id,name:p.name,kind:p.kind,endpoint:p.endpoint||'',keyLabel:p.key_label||'',
+    enabled:!!p.enabled,priority:p.priority||0,notes:p.notes||''
+  }));
+  CFG.audit = (auditR.data||[]).map(a=>({ts:a.ts,what:a.what,detail:a.detail}));
+  /* trackingConfig (Norma's old generic {mod}-{type}-{seq} scheme) isn't wired to the
+     database this pilot, same as every other tool — session-only until that bridge exists. */
+  CFG.trackingConfig = null;
+  CFG.meta = { normaSyncedAt:null, normaConfigVersion:null };
+}
+
+/* Live notifications: subscribe to audit_log INSERTs for this org so an action
+   taken in another tab/tool shows up here as a toast without a reload. Own
+   actions are skipped (via user_id) since they're already toasted locally.
+   This is notification-only -- it does NOT live-sync the underlying record
+   (a campaign, a deal, etc); reload or navigate to see that reflected in place. */
+function subscribeRealtime(){
+  if(_realtimeChannel || !_orgId) return;
+  _realtimeChannel = sb.channel('audit_log_org_'+_orgId)
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'audit_log', filter:'org_id=eq.'+_orgId }, payload=>{
+      const row = payload.new || {};
+      if(_myProfile && row.user_id && row.user_id===_myProfile.id) return;
+      /* phase18: a targeted alert_people row carries a resolved target_user_ids list --
+         only toast a viewer whose own id is in it. Absent/empty (almost every row, and
+         any 'org'-targeted alert) keeps the original broadcast-to-everyone behaviour. The
+         row still joins the shared audit trail either way -- only the live toast is gated. */
+      const targeted = Array.isArray(row.target_user_ids) && row.target_user_ids.length>0;
+      const forMe = !targeted || (_myProfile && row.target_user_ids.includes(_myProfile.id));
+      if(forMe) toast((row.what||'Update')+(row.detail?' — '+row.detail:''));
+      if(CFG.audit){ CFG.audit.unshift({ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
+      render();
+    })
+    .subscribe();
+}
+function loginScreenHtml(err){
+  return '<div class="authwrap"><h2>Prospectus</h2><p class="sub">Sign in to continue.</p>'+
+    '<div class="err">'+(err?esc(err):'')+'</div>'+
+    '<input id="authEmail" type="email" placeholder="Email" autocomplete="username">'+
+    '<input id="authPass" type="password" placeholder="Password" autocomplete="current-password">'+
+    '<button onclick="doSignIn()">Sign in</button>'+
+    '<p class="sub" style="margin-top:10px">New here? <a href="#" onclick="showSignUpGate();return false;">Create an account</a></p>'+
+    '</div>';
+}
+function signUpScreenHtml(err, notice){
+  return '<div class="authwrap"><h2>Prospectus</h2><p class="sub">Create an account.</p>'+
+    '<div class="err">'+(err?esc(err):'')+'</div>'+
+    (notice ? '<div class="sub" style="margin-bottom:8px">'+esc(notice)+'</div>' : '')+
+    '<input id="suEmail" type="email" placeholder="Email" autocomplete="username">'+
+    '<input id="suPass" type="password" placeholder="Password (min 6 characters)" autocomplete="new-password">'+
+    '<input id="suPass2" type="password" placeholder="Confirm password" autocomplete="new-password">'+
+    '<button onclick="doSignUp()">Create account</button>'+
+    '<p class="sub" style="margin-top:10px">Already have an account? <a href="#" onclick="showAuthGate();return false;">Sign in</a></p>'+
+    '</div>';
+}
+function onboardingScreenHtml(err){
+  return '<div class="authwrap"><h2>Prospectus</h2><p class="sub">You\'re signed in, but this login isn\'t linked to an organization yet.</p>'+
+    '<div class="err">'+(err?esc(err):'')+'</div>'+
+    '<div style="border:1px solid #ddd;border-radius:8px;padding:12px;margin-bottom:12px">'+
+      '<b>Create a new organization</b>'+
+      '<input id="orgName" type="text" placeholder="Organization name">'+
+      '<input id="orgYourName" type="text" placeholder="Your name">'+
+      '<button onclick="doCreateOrg()">Create organization</button>'+
+    '</div>'+
+    '<div style="border:1px solid #ddd;border-radius:8px;padding:12px">'+
+      '<b>I have an invite code</b>'+
+      '<input id="inviteCode" type="text" placeholder="Invite code" style="text-transform:uppercase">'+
+      '<input id="inviteYourName" type="text" placeholder="Your name">'+
+      '<button onclick="doRedeemInvite()">Join organization</button>'+
+    '</div>'+
+    '<p class="sub" style="margin-top:10px"><a href="#" onclick="doSignOut();return false;">Sign out</a></p>'+
+    '</div>';
+}
+async function doSignIn(){
+  const email = document.getElementById('authEmail').value.trim();
+  const pass = document.getElementById('authPass').value;
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if(error){ document.getElementById('authGate').innerHTML = loginScreenHtml(error.message); return; }
+  await bootApp();
+}
+window.doSignIn = doSignIn;
+async function doSignUp(){
+  const email = document.getElementById('suEmail').value.trim();
+  const pass = document.getElementById('suPass').value;
+  const pass2 = document.getElementById('suPass2').value;
+  if(pass.length < 6){ document.getElementById('authGate').innerHTML = signUpScreenHtml('Password must be at least 6 characters.'); return; }
+  if(pass !== pass2){ document.getElementById('authGate').innerHTML = signUpScreenHtml('Passwords do not match.'); return; }
+  const { data, error } = await sb.auth.signUp({ email, password: pass });
+  if(error){ document.getElementById('authGate').innerHTML = signUpScreenHtml(error.message); return; }
+  if(data.session){ await bootApp(); return; }
+  document.getElementById('authGate').innerHTML = signUpScreenHtml(null, 'Account created — check your email to confirm, then sign in.');
+}
+window.doSignUp = doSignUp;
+async function doSignOut(){ await sb.auth.signOut(); location.reload(); }
+window.doSignOut = doSignOut;
+async function doCreateOrg(){
+  const p_org_name = document.getElementById('orgName').value.trim();
+  const p_your_name = document.getElementById('orgYourName').value.trim();
+  const { error } = await sb.rpc('create_organization', { p_org_name, p_your_name });
+  if(error){ document.getElementById('authGate').innerHTML = onboardingScreenHtml(error.message); return; }
+  await bootApp();
+}
+window.doCreateOrg = doCreateOrg;
+async function doRedeemInvite(){
+  const p_code = document.getElementById('inviteCode').value.trim();
+  const p_your_name = document.getElementById('inviteYourName').value.trim();
+  const { error } = await sb.rpc('redeem_invite', { p_code, p_your_name });
+  if(error){ document.getElementById('authGate').innerHTML = onboardingScreenHtml(error.message); return; }
+  await bootApp();
+}
+window.doRedeemInvite = doRedeemInvite;
+
+function showAuthGate(err){
+  const gate = document.getElementById('authGate');
+  gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
+  gate.innerHTML = loginScreenHtml(err);
+  document.getElementById('topnav').style.display = 'none';
+  document.getElementById('wrap').style.display = 'none';
+}
+window.showAuthGate = showAuthGate;
+function showSignUpGate(err){
+  const gate = document.getElementById('authGate');
+  gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
+  gate.innerHTML = signUpScreenHtml(err);
+  document.getElementById('topnav').style.display = 'none';
+  document.getElementById('wrap').style.display = 'none';
+}
+window.showSignUpGate = showSignUpGate;
+function showOnboardingGate(err){
+  const gate = document.getElementById('authGate');
+  gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
+  gate.innerHTML = onboardingScreenHtml(err);
+  document.getElementById('topnav').style.display = 'none';
+  document.getElementById('wrap').style.display = 'none';
+}
+function hideAuthGate(){
+  const gate = document.getElementById('authGate');
+  gate.style.display = 'none'; gate.innerHTML = '';
+  document.getElementById('topnav').style.display = '';
+  document.getElementById('wrap').style.display = '';
+}
+async function bootApp(){
+  const { data:{ session } } = await sb.auth.getSession();
+  if(!session){ showAuthGate(); return; }
+  try{ await loadFromSupabase(); }
+  catch(e){
+    console.error(e);
+    if(e.noProfile){ showOnboardingGate(); return; }
+    _skipNextSignOutReload = true;
+    await sb.auth.signOut();
+    showAuthGate(e.message || 'Could not load your data. Contact an admin.');
+    return;
+  }
+  hideAuthGate();
+  render();
+  subscribeRealtime();
+}
+
+/* ---------- Norma bridge ---------- */
+function handleNormaImportFile(file){
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>importSharedConfigFromNorma(e.target.result);
+  reader.onerror=()=>toast('Could not read that file.');
+  reader.readAsText(file);
+}
+window.handleNormaImportFile=handleNormaImportFile;
+function importSharedConfigFromNorma(jsonText){
+  let data;
+  try{ data=JSON.parse(jsonText); }
+  catch(e){ toast('That is not valid JSON — is it a Norma shared-config export?'); return; }
+  if(data.costBuckets && data.costBuckets.length){
+    data.costBuckets.forEach(b=>{ const ex=byId(CFG.costBuckets,b.id); if(ex) Object.assign(ex,b); else CFG.costBuckets.push(b); });
+  }
+  if(data.trackingConfig){ CFG.trackingConfig=data.trackingConfig; CFG.trackingConfig.mySeq=CFG.trackingConfig.mySeq||{}; }
+  if(data.llmProviders){ CFG.llmProviders=data.llmProviders; }
+  if(data.configVersion!=null){ CFG.meta.normaConfigVersion=data.configVersion; }
+  CFG.meta.normaSyncedAt=new Date().toISOString();
+  logAudit('import shared config from Norma','tracking convention + LLM providers');
+  render();
+  toast('Shared config imported from Norma.');
+}
+window.importSharedConfigFromNorma=importSharedConfigFromNorma;
+function nextTrackingRef(type){
+  const tc=CFG.trackingConfig; if(!tc) return null;
+  const modCode=(tc.modCodes&&tc.modCodes.prospectus)||'PRO';
+  const typeCode=(tc.typeCodes&&tc.typeCodes[type])||type.toUpperCase().slice(0,3);
+  tc.mySeq=tc.mySeq||{};
+  tc.mySeq[typeCode]=(tc.mySeq[typeCode]||0)+1;
+  const seq=String(tc.mySeq[typeCode]).padStart(tc.seqPadding||4,'0');
+  return tc.pattern.replace('{mod}',modCode).replace('{type}',typeCode).replace('{seq}',seq);
+}
+function hasEnabledLlm(){ return CFG.llmProviders.some(p=>p.enabled); }
+
+/* ---------- CRUD: filters ---------- */
+function addFilter(){
+  const f={id:uid('flt'),name:'New filter',industry:'',whatYouSell:'',idealClient:'',dealValue:0,currency:'AUD',market:'National',country:'',updatedAt:new Date().toISOString().slice(0,10)};
+  f.trackingRef=nextTrackingRef('filter');
+  CFG.filters.push(f); logAudit('add filter','New filter'); render(); toast('Filter added.');
+}
+window.addFilter=addFilter;
+function removeFilter(id){
+  if(!confirm('Remove this filter? Reports and target-list rows linked to it will stay, just unlinked.'))return;
+  CFG.filters=CFG.filters.filter(f=>f.id!==id); logAudit('remove filter',id); render();
+  deleteRow('prospectus_filters',id);
+}
+window.removeFilter=removeFilter;
+function generateReport(filterId){
+  const f=byId(CFG.filters,filterId); if(!f)return;
+  const r={id:uid('rpt'), filterId:filterId, name:f.name, generatedAt:new Date().toISOString(),
+    marketLow:null, marketHigh:null, activeInMarketPct:0.02, conversationRate:0.35, opportunityRate:0.14, winRate:0.2, rampMonths:6,
+    icpHeadline:f.idealClient||'Describe the ideal client headline here.',
+    icpAttributes:['New attribute'], icpTriggers:['New buying trigger']};
+  r.trackingRef=nextTrackingRef('report');
+  CFG.reports.unshift(r); logAudit('generate report',f.name); openReport(r.id); toast('Report created — fill in market size to size the opportunity.');
+}
+window.generateReport=generateReport;
+function removeReport(id){
+  if(!confirm('Remove this report?'))return;
+  CFG.reports=CFG.reports.filter(r=>r.id!==id);
+  if(UI.reportId===id){ UI.reportId=null; UI.page='reports'; }
+  logAudit('remove report',id); render();
+  deleteRow('prospectus_reports',id);
+}
+window.removeReport=removeReport;
+
+/* ---------- CRUD: target list ---------- */
+function addLead(){
+  CFG.leads.push({id:uid('led'),filterId:CFG.filters[0]?CFG.filters[0].id:null,company:'New company',domain:'',contactName:'',status:'New',notes:''});
+  logAudit('add lead','New company'); render(); toast('Added to target list.');
+}
+window.addLead=addLead;
+function removeLead(id){
+  CFG.leads=CFG.leads.filter(l=>l.id!==id); logAudit('remove lead',id); render();
+  deleteRow('prospectus_leads',id);
+}
+window.removeLead=removeLead;
+function exportTargetsForAugur(){
+  const payload={ exportedAt:new Date().toISOString(), source:'Prospectus',
+    leads:CFG.leads.map(l=>{
+      const f=byId(CFG.filters,l.filterId);
+      return {company:l.company, domain:l.domain, contactName:l.contactName, status:l.status, notes:l.notes,
+        filterName:f?f.name:null, dealValue:f?f.dealValue:null, currency:f?f.currency:null};
+    })
+  };
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='prospectus-targets-for-augur.json'; a.click();
+  logAudit('export target list for Augur',CFG.leads.length+' rows');
+  toast('Target list exported — import it from Augur’s Sync page.');
+}
+window.exportTargetsForAugur=exportTargetsForAugur;
+
+/* ---------- report math (transparent, forward from explicit assumptions only) ---------- */
+function computeReport(r){
+  const active=[r.marketLow,r.marketHigh].map(v=>v==null?null:Math.round(v*r.activeInMarketPct));
+  const conv=active.map(v=>v==null?null:Math.round(v*r.conversationRate));
+  const opp=conv.map(v=>v==null?null:Math.round(v*r.opportunityRate));
+  const win=opp.map(v=>v==null?null:Math.round(v*r.winRate));
+  return {activeLow:active[0],activeHigh:active[1],convLow:conv[0],convHigh:conv[1],oppLow:opp[0],oppHigh:opp[1],winLow:win[0],winHigh:win[1]};
+}
+function draftWithLlm(kind){
+  if(!hasEnabledLlm()){ toast('No enabled LLM provider — connect and enable one in Norma first.'); return; }
+  toast('Provider is connected, but v1 does not make live calls yet — draft "'+kind+'" manually for now.');
+}
+window.draftWithLlm=draftWithLlm;
+
+/* ---------- pages ---------- */
+function pageHome(){
+  const hr=new Date().getHours();
+  const greeting=hr<12?'Good morning':hr<18?'Good afternoon':'Good evening';
+  const name=(_myProfile&&_myProfile.name)?_myProfile.name.split(' ')[0]:'there';
+  const today=new Date().toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'long'});
+  const newTargets=CFG.leads.filter(l=>l.status==='New').length;
+
+  let h=`<div class="phead"><div><h1>${greeting}, ${esc(name)}</h1>
+    <p>${today} · ${newTargets?`<b>${newTargets}</b> new target${newTargets===1?'':'s'} not yet contacted`:'Nothing new on the target list'}</p></div>
+    <div class="sp"></div>
+    <button class="btn pri" onclick="go('filters');addFilter()">+ Quick add filter</button></div>`;
+
+  h+=`<div class="kpis">
+    <div class="kpi hl"><div class="k">ICP filters</div><div class="kpi-v">${CFG.filters.length}</div></div>
+    <div class="kpi"><div class="k">Target list</div><div class="kpi-v">${CFG.leads.length}</div><div class="sub">${newTargets} new</div></div>
+    <div class="kpi"><div class="k">Reports</div><div class="kpi-v">${CFG.reports.length}</div></div>
+  </div>`;
+
+  h+=`<div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">`;
+  h+=`<div style="flex:2;min-width:320px">
+    <div class="card"><h3>Filters <span class="sp"></span><button class="btn sm" onclick="go('filters')">Open Filters</button></h3><div class="bd flush"><table><thead><tr>
+      <th>Name</th><th>Industry</th><th>Ideal client</th><th></th></tr></thead><tbody>
+      ${CFG.filters.slice(0,6).map(f=>`<tr><td class="lb">${esc(f.name)}</td><td>${esc(f.industry)}</td><td>${esc(f.idealClient)}</td>
+        <td class="n"><a class="btn sm" href="#" onclick="generateReport('${f.id}');return false">Generate report</a></td></tr>`).join('')
+        || '<tr><td colspan="4" class="empty">No filters yet — Quick Add to create the first one.</td></tr>'}
+      </tbody></table></div></div>
+  </div>`;
+
+  h+=`<div style="flex:1;min-width:260px">
+    <div class="card"><h3>Reports</h3><div class="bd flush">
+      ${CFG.reports.slice(0,6).map(r=>`<div style="padding:7px 14px;border-bottom:1px solid var(--line);font-size:11.5px">
+        <a href="#" onclick="openReport('${r.id}');return false">${esc(r.name)}</a></div>`).join('')
+        || '<div class="empty">No reports yet.</div>'}
+    </div></div>
+    <div class="card"><h3>Recent activity</h3><div class="bd flush">
+      ${CFG.audit.slice(0,8).map(a=>`<div style="padding:7px 14px;border-bottom:1px solid var(--line);font-size:11.5px">
+        <div>${esc(a.what)}</div><div class="mini" style="color:var(--ink-2)">${esc(a.detail||'')} · ${F.dt(a.ts)}</div></div>`).join('')
+        || '<div class="empty">No activity yet.</div>'}
+    </div></div>
+  </div>`;
+  h+=`</div>`;
+  return h;
+}
+function pageFilters(){
+  let h=`<div class="phead"><div><h1>ICP filters</h1>
+    <p>Five quick inputs that describe an ideal-client segment. Reuse a filter to prefill a new report, or edit it and
+      regenerate. Market size stays a real, editable assumption on the report itself — never invented by this page.</p></div></div>`;
+  h+=`<div class="card"><h3>Filters <span class="sp"></span><span class="pill n">${CFG.filters.length}</span>
+      <button class="btn sm pri" onclick="addFilter()">New filter</button></h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>Name</th><th>Industry</th><th>What you sell</th><th>Ideal client</th><th class="n">Avg deal</th><th>Market</th><th>Country</th><th>Updated</th><th></th></tr></thead><tbody>
+    ${!CFG.filters.length?`<tr><td colspan="9" class="empty">No filters yet.</td></tr>`:CFG.filters.map(f=>`<tr>
+      <td><input class="cel txt" style="width:170px" value="${esc(f.name)}" onchange="setIn('filters','${f.id}','name',this.value)"></td>
+      <td><input class="cel txt" style="width:130px" value="${esc(f.industry)}" onchange="setIn('filters','${f.id}','industry',this.value)"></td>
+      <td><input class="cel txt" style="width:130px" value="${esc(f.whatYouSell)}" onchange="setIn('filters','${f.id}','whatYouSell',this.value)"></td>
+      <td><input class="cel txt" style="width:170px" value="${esc(f.idealClient)}" onchange="setIn('filters','${f.id}','idealClient',this.value)"></td>
+      <td class="n"><div class="row" style="justify-content:flex-end">
+        <select class="cel" style="width:62px" onchange="setIn('filters','${f.id}','currency',this.value)">
+          ${Object.keys(CCY_SYM).map(c=>`<option ${c===f.currency?'selected':''}>${c}</option>`).join('')}</select>
+        <input class="cel w" value="${f.dealValue||0}" onchange="setIn('filters','${f.id}','dealValue',this.value,'num')"></div></td>
+      <td><select class="cel" style="width:90px" onchange="setIn('filters','${f.id}','market',this.value)">
+        ${MARKETS.map(m=>`<option ${m===f.market?'selected':''}>${m}</option>`).join('')}</select></td>
+      <td><input class="cel txt" style="width:100px" value="${esc(f.country)}" onchange="setIn('filters','${f.id}','country',this.value)"></td>
+      <td class="mini">${F.d(f.updatedAt)}</td>
+      <td class="n"><div class="row">
+        <button class="btn sm pri" onclick="generateReport('${f.id}')">Generate report</button>
+        <button class="btn sm dgr" onclick="removeFilter('${f.id}')">Remove</button></div></td></tr>`).join('')}
+    </tbody></table></div></div></div>`;
+  return h;
+}
+
+function pageTargets(){
+  let h=`<div class="phead"><div><h1>Target list</h1>
+    <p>Companies matching a filter, worked like a lightweight pipeline. Scoring and forecasting come later (Augur);
+      this is just the list.</p></div></div>`;
+  h+=`<div class="card"><h3>Targets <span class="sp"></span><span class="pill n">${CFG.leads.length}</span>
+      <button class="btn sm" onclick="exportTargetsForAugur()">Export for Augur</button>
+      <button class="btn sm pri" onclick="addLead()">Add to list</button></h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>Company</th><th>Progress</th><th>Domain</th><th>Contact</th><th>Filter</th><th>Status</th><th>Notes</th><th></th></tr></thead><tbody>
+    ${!CFG.leads.length?`<tr><td colspan="8" class="empty">Nothing on the list yet.</td></tr>`:CFG.leads.map(l=>`<tr>
+      <td><input class="cel txt" style="width:150px" value="${esc(l.company)}" onchange="setIn('leads','${l.id}','company',this.value)"></td>
+      <td>${ragPillHtml(ragForLead(l))}</td>
+      <td><input class="cel txt" style="width:150px" placeholder="domain.com" value="${esc(l.domain)}" onchange="setIn('leads','${l.id}','domain',this.value)"></td>
+      <td><input class="cel txt" style="width:130px" value="${esc(l.contactName)}" onchange="setIn('leads','${l.id}','contactName',this.value)"></td>
+      <td><select class="cel txt" style="width:150px" onchange="setIn('leads','${l.id}','filterId',this.value)">
+        <option value="">—</option>${CFG.filters.map(f=>`<option value="${f.id}" ${f.id===l.filterId?'selected':''}>${esc(f.name)}</option>`).join('')}</select></td>
+      <td><select class="cel" style="width:110px" onchange="setIn('leads','${l.id}','status',this.value)">
+        ${STATUSES.map(s=>`<option ${s===l.status?'selected':''}>${s}</option>`).join('')}</select></td>
+      <td><input class="cel txt" style="width:200px" value="${esc(l.notes)}" onchange="setIn('leads','${l.id}','notes',this.value)"></td>
+      <td class="n"><button class="btn sm dgr" onclick="removeLead('${l.id}')">Remove</button></td></tr>`).join('')}
+    </tbody></table></div></div></div>`;
+  return h;
+}
+
+function pageReports(){
+  let h=`<div class="phead"><div><h1>Opportunity reports</h1>
+    <p>Generate one from a filter, then click in to size the opportunity against your own assumptions.</p></div></div>`;
+  h+=`<div class="card"><h3>Reports <span class="sp"></span><span class="pill n">${CFG.reports.length}</span></h3>
+    <div class="bd flush"><table><thead><tr><th>Name</th><th>Filter</th><th>Generated</th><th></th></tr></thead><tbody>
+    ${!CFG.reports.length?`<tr><td colspan="4" class="empty">No reports yet — generate one from the Filters page.</td></tr>`:CFG.reports.map(r=>{
+      const f=byId(CFG.filters,r.filterId);
+      return `<tr><td class="lb"><a href="#" onclick="openReport('${r.id}');return false">${esc(r.name)}</a>${r.trackingRef?`<div class="mini">${esc(r.trackingRef)}</div>`:''}</td>
+      <td class="mini">${f?esc(f.name):'—'}</td><td class="mini">${F.dt(r.generatedAt)}</td>
+      <td class="n"><div class="row">
+        <button class="btn sm" onclick="openReport('${r.id}')">Open</button>
+        <button class="btn sm dgr" onclick="removeReport('${r.id}')">Remove</button></div></td></tr>`;
+    }).join('')}
+    </tbody></table></div></div>`;
+  return h;
+}
+
+function setCompare(which,id){
+  if(which==='A') UI.compareA=id||null; else UI.compareB=id||null;
+  render();
+}
+window.setCompare=setCompare;
+function pageCompare(){
+  if(UI.compareA==null && CFG.reports[0]) UI.compareA=CFG.reports[0].id;
+  if(UI.compareB==null && CFG.reports[1]) UI.compareB=CFG.reports[1].id;
+  let h=`<div class="phead"><div><h1>Compare reports</h1>
+    <p>Pick two opportunity reports to see market size, funnel and revenue side by side.</p></div></div>`;
+  h+=`<div class="card"><div class="bd"><div class="row" style="gap:20px;flex-wrap:wrap">
+    <div><span class="lbl">Report A</span><br><select class="cel" style="width:240px" onchange="setCompare('A',this.value)">
+      <option value="">—</option>${CFG.reports.map(r=>`<option value="${r.id}" ${r.id===UI.compareA?'selected':''}>${esc(r.name)}</option>`).join('')}</select></div>
+    <div><span class="lbl">Report B</span><br><select class="cel" style="width:240px" onchange="setCompare('B',this.value)">
+      <option value="">—</option>${CFG.reports.map(r=>`<option value="${r.id}" ${r.id===UI.compareB?'selected':''}>${esc(r.name)}</option>`).join('')}</select></div>
+  </div></div></div>`;
+  const ra=byId(CFG.reports,UI.compareA), rb=byId(CFG.reports,UI.compareB);
+  if(!ra||!rb){ h+=`<div class="empty">Pick two reports to compare — generate a second one from the Filters page if you only have one.</div>`; return h; }
+  const fa=byId(CFG.filters,ra.filterId), fb=byId(CFG.filters,rb.filterId);
+  const ca=computeReport(ra), cb=computeReport(rb);
+  const ccyA=CCY_SYM[(fa&&fa.currency)||'AUD']||'$', ccyB=CCY_SYM[(fb&&fb.currency)||'AUD']||'$';
+  const revA=[(ca.winLow!=null&&fa)?ca.winLow*fa.dealValue:null,(ca.winHigh!=null&&fa)?ca.winHigh*fa.dealValue:null];
+  const revB=[(cb.winLow!=null&&fb)?cb.winLow*fb.dealValue:null,(cb.winHigh!=null&&fb)?cb.winHigh*fb.dealValue:null];
+  const row=(label,a,b)=>`<tr><td class="lb">${label}</td><td>${a}</td><td>${b}</td></tr>`;
+  h+=`<div class="card"><h3>Side by side</h3><div class="bd flush"><table><thead><tr><th></th><th>${esc(ra.name)}</th><th>${esc(rb.name)}</th></tr></thead><tbody>
+    ${row('Market size', F.n(ra.marketLow)+'–'+F.n(ra.marketHigh), F.n(rb.marketLow)+'–'+F.n(rb.marketHigh))}
+    ${row('Active in-market now', F.n(ca.activeLow)+'–'+F.n(ca.activeHigh), F.n(cb.activeLow)+'–'+F.n(cb.activeHigh))}
+    ${row('Conversation rate', F.pct(ra.conversationRate), F.pct(rb.conversationRate))}
+    ${row('Opportunity rate', F.pct(ra.opportunityRate), F.pct(rb.opportunityRate))}
+    ${row('Win rate', F.pct(ra.winRate), F.pct(rb.winRate))}
+    ${row('Monthly clients won', F.n(ca.winLow)+'–'+F.n(ca.winHigh), F.n(cb.winLow)+'–'+F.n(cb.winHigh))}
+    ${row('Avg deal value', fa?F.mk(fa.dealValue,ccyA):'—', fb?F.mk(fb.dealValue,ccyB):'—')}
+    ${row('Monthly revenue', F.mk(revA[0],ccyA)+'–'+F.mk(revA[1],ccyA), F.mk(revB[0],ccyB)+'–'+F.mk(revB[1],ccyB))}
+  </tbody></table></div></div>`;
+  return h;
+}
+
+function pageReportDetail(){
+  const r=byId(CFG.reports,UI.reportId);
+  if(!r) return `<div class="empty">Report not found.</div><a class="btn" href="#" onclick="go('reports');return false">← Back to reports</a>`;
+  const f=byId(CFG.filters,r.filterId);
+  const ccy=CCY_SYM[(f&&f.currency)||'AUD']||'$';
+  const c=computeReport(r);
+  const revLow=(c.winLow!=null&&f)?c.winLow*f.dealValue:null;
+  const revHigh=(c.winHigh!=null&&f)?c.winHigh*f.dealValue:null;
+  let h=`<div class="phead"><div>
+    ${f?`<span class="pill">${esc(f.country)} · ${esc(f.market)} · ${esc(f.industry)}</span>`:''}
+    <h1 style="margin-top:6px">${esc(r.name)}</h1>
+    <p>Generated ${F.dt(r.generatedAt)}${r.trackingRef?' · '+esc(r.trackingRef):''}</p></div>
+    <div class="sp"></div>
+    <a class="btn sm" href="#" onclick="go('reports');return false">← Back to reports</a></div>`;
+
+  h+=`<div class="kpis">
+    <div class="kpi hl"><div class="k">Market size (your estimate)</div>
+      <div class="row"><input class="cel w" value="${r.marketLow==null?'':r.marketLow}" placeholder="low" onchange="setIn('reports','${r.id}','marketLow',this.value,'num')">
+      <span class="mini">–</span>
+      <input class="cel w" value="${r.marketHigh==null?'':r.marketHigh}" placeholder="high" onchange="setIn('reports','${r.id}','marketHigh',this.value,'num')"></div>
+      <div class="sub">businesses matching this ICP — enter your own figure or a data-provider export; not invented here</div></div>
+    <div class="kpi"><div class="k">Active in-market now</div><div class="kpi-v">${F.n(c.activeLow)} – ${F.n(c.activeHigh)}</div>
+      <div class="sub">at <input class="cel w" style="width:50px;display:inline-block" value="${Math.round((r.activeInMarketPct||0)*100)}" onchange="setIn('reports','${r.id}','activeInMarketPct',this.value,'pct')">% of market</div></div>
+    <div class="kpi"><div class="k">Monthly clients won</div><div class="kpi-v">${F.n(c.winLow)} – ${F.n(c.winHigh)}</div>
+      <div class="sub">at ${f?F.mk(f.dealValue,ccy):'—'} avg deal</div></div>
+    <div class="kpi"><div class="k">Monthly revenue</div><div class="kpi-v">${F.mk(revLow,ccy)} – ${F.mk(revHigh,ccy)}</div>
+      <div class="sub">clients won × avg deal value</div></div>
+  </div>`;
+
+  h+=`<div class="card hl"><h3>Ideal client profile <span class="sp"></span>
+      <button class="btn sm" onclick="draftWithLlm('ICP narrative')">Draft with LLM${hasEnabledLlm()?'':' (none connected)'}</button></h3>
+    <div class="bd">
+      <textarea class="cel txt" rows="2" onchange="setIn('reports','${r.id}','icpHeadline',this.value)">${esc(r.icpHeadline)}</textarea>
+      <div class="icpcols" style="margin-top:12px">
+        <div><span class="lbl" style="color:var(--ok)">Attributes</span>
+          <ul>${r.icpAttributes.map((a,i)=>`<li><div class="row">
+            <input class="cel txt" value="${esc(a)}" onchange="setListItem('reports','${r.id}','icpAttributes',${i},this.value)">
+            <button class="btn sm dgr" onclick="removeListItem('reports','${r.id}','icpAttributes',${i})">✕</button></div></li>`).join('')}</ul>
+          <button class="btn sm" onclick="addListItem('reports','${r.id}','icpAttributes')">Add attribute</button></div>
+        <div><span class="lbl" style="color:var(--warn)">Buying triggers</span>
+          <ul>${r.icpTriggers.map((a,i)=>`<li><div class="row">
+            <input class="cel txt" value="${esc(a)}" onchange="setListItem('reports','${r.id}','icpTriggers',${i},this.value)">
+            <button class="btn sm dgr" onclick="removeListItem('reports','${r.id}','icpTriggers',${i})">✕</button></div></li>`).join('')}</ul>
+          <button class="btn sm" onclick="addListItem('reports','${r.id}','icpTriggers')">Add trigger</button></div>
+      </div>
+    </div></div>`;
+
+  h+=`<div class="card"><h3>Monthly pipeline</h3><div class="bd">
+    <div class="funnelrow"><div class="lbl">Active in-market</div><div class="bar"><i style="width:100%"></i></div><div class="mini n">${F.n(c.activeLow)}–${F.n(c.activeHigh)}</div></div>
+    <div class="funnelrow"><div class="lbl">Conversations <input class="cel w" style="width:44px" value="${Math.round((r.conversationRate||0)*100)}" onchange="setIn('reports','${r.id}','conversationRate',this.value,'pct')">%</div>
+      <div class="bar"><i style="width:${Math.round((r.conversationRate||0)*100)}%"></i></div><div class="mini n">${F.n(c.convLow)}–${F.n(c.convHigh)}</div></div>
+    <div class="funnelrow"><div class="lbl">Opportunities <input class="cel w" style="width:44px" value="${Math.round((r.opportunityRate||0)*100)}" onchange="setIn('reports','${r.id}','opportunityRate',this.value,'pct')">%</div>
+      <div class="bar"><i style="width:${Math.round((r.opportunityRate||0)*100)}%"></i></div><div class="mini n">${F.n(c.oppLow)}–${F.n(c.oppHigh)}</div></div>
+    <div class="funnelrow"><div class="lbl">Clients won <input class="cel w" style="width:44px" value="${Math.round((r.winRate||0)*100)}" onchange="setIn('reports','${r.id}','winRate',this.value,'pct')">%</div>
+      <div class="bar"><i style="width:${Math.round((r.winRate||0)*100)}%"></i></div><div class="mini n">${F.n(c.winLow)}–${F.n(c.winHigh)}</div></div>
+    <p class="mini" style="margin-top:8px">Each stage rate is your own editable assumption, applied to the stage above it — nothing here is modelled by an LLM.</p>
+    </div></div>`;
+
+  const ramp=r.rampMonths||6;
+  let months='';
+  for(let m=1;m<=ramp;m++){
+    const pct=Math.round((m/ramp)*100);
+    months+=`<div class="mcol"><div class="mbar" style="height:${pct}%"></div><div class="mlbl">M${m}</div></div>`;
+  }
+  h+=`<div class="card"><h3>Illustrative revenue ramp <span class="sp"></span>
+      <span class="mini">over <input class="cel w" style="width:40px;display:inline-block" value="${ramp}" onchange="setIn('reports','${r.id}','rampMonths',this.value,'num')"> months</span></h3>
+    <div class="bd"><div class="months">${months}</div>
+    <p class="mini">Straight-line ramp from month 1 to the full monthly-revenue range above — a planning illustration, not a forecast model.</p></div></div>`;
+
+  h+=`<div class="card hl"><h3>Summary</h3><div class="bd">
+    <p style="margin:0">${f?esc(f.country):'This market'} has an estimated ${F.n(r.marketLow)}–${F.n(r.marketHigh)} businesses matching this ICP, of which
+    ${F.n(c.activeLow)}–${F.n(c.activeHigh)} are modelled as active in-market at any time (${F.pct(r.activeInMarketPct)} of the total).
+    At a ${F.pct(r.conversationRate)} conversation rate, ${F.pct(r.opportunityRate)} opportunity rate and ${F.pct(r.winRate)} win rate, that implies
+    ${F.n(c.winLow)}–${F.n(c.winHigh)} new clients per month${f?' at a '+F.mk(f.dealValue,ccy)+' average deal':''}, or
+    ${F.mk(revLow,ccy)}–${F.mk(revHigh,ccy)} in monthly revenue once the pipeline is running at steady state.</p>
+    <p class="mini" style="margin-top:8px">Every figure above is computed from the assumptions you entered on this page — edit any of them and the summary updates.</p>
+    </div></div>`;
+  return h;
+}
+
+function pageSync(){
+  let h=`<div class="phead"><div><h1>Shared configuration</h1>
+    <p>Tracking ID convention and LLM provider settings come from Norma.</p></div></div>`;
+  h+=`<div class="card"><h3>Import shared config from Norma <span class="sp"></span>
+      ${CFG.meta.normaSyncedAt?`<span class="pill ok">Last synced ${F.dt(CFG.meta.normaSyncedAt)} (v${CFG.meta.normaConfigVersion||'?'})</span>`:`<span class="pill warn">Never synced</span>`}
+      <a class="btn sm" href="Norma.html" target="tool_Norma">Open Norma</a></h3>
+    <div class="bd">
+      <label class="btn pri">Choose Norma export file…<input type="file" accept="application/json" style="display:none" onchange="handleNormaImportFile(this.files[0])"></label>
+    </div></div>`;
+  h+=`<div class="card"><h3>Local autosave</h3><div class="bd">
+    <p class="mini" style="margin:0 0 8px">Filters, reports and the target list save to this browser automatically. Local only —
+      export/import is still how data reaches other tools.</p>
+    <button class="btn sm dgr" onclick="clearLocal()">Clear local autosave</button></div></div>`;
+  h+=`<div class="card"><h3>LLM providers (from Norma)</h3><div class="bd flush">
+    ${!CFG.llmProviders.length?`<div class="empty">None synced yet.</div>`:`<table><thead><tr><th>Name</th><th>Kind</th><th>Enabled</th></tr></thead><tbody>
+    ${CFG.llmProviders.map(p=>`<tr><td class="lb">${esc(p.name)}</td><td>${esc(p.kind)}</td><td><span class="pill ${p.enabled?'ok':'n'}">${p.enabled?'Enabled':'Off'}</span></td></tr>`).join('')}
+    </tbody></table>`}
+    </div></div>`;
+  h+=`<div class="card"><h3>Activity log</h3><div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>When</th><th>What</th><th>Detail</th></tr></thead><tbody>
+      ${!CFG.audit.length?`<tr><td colspan="3" class="empty">Nothing yet.</td></tr>`:
+        CFG.audit.map(a=>`<tr><td class="mini">${esc(a.ts)}</td><td>${esc(a.what)}</td><td class="mini">${esc(a.detail)}</td></tr>`).join('')}
+      </tbody></table></div></div></div>`;
+  return h;
+}
+
+const PAGES=[
+  {id:'home',         ix:'0', label:'Home',       fn:pageHome},
+  {id:'filters',      ix:'1', label:'Filters',    fn:pageFilters},
+  {id:'targets',      ix:'2', label:'Target list', fn:pageTargets},
+  {id:'reports',      ix:'3', label:'Reports',    fn:pageReports},
+  {id:'reportDetail', ix:'3', label:'Reports',    fn:pageReportDetail, hidden:true},
+  {id:'compare',      ix:'4', label:'Compare',    fn:pageCompare},
+  {id:'sync',         ix:'5', label:'Shared config', fn:pageSync}
+];
+function renderSide(){
+  let h='<h4>Prospectus</h4>';
+  PAGES.filter(p=>!p.hidden).forEach(p=>{
+    const on=UI.page===p.id || (p.id==='reports'&&UI.page==='reportDetail');
+    h+=`<a class="navi ${on?'on':''}" href="#" onclick="go('${p.id}');return false">
+      <span class="ix">${p.ix}</span><span>${p.label}</span></a>`;
+  });
+  return h;
+}
+function renderTnAcct(){
+  const nm=_myProfile?_myProfile.name:'';
+  const initials=nm?nm.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase():'?';
+  return `<span class="tn-avatar">${esc(initials)}</span>
+    <div class="tn-who"><b>${esc(nm||'—')}</b><span>Prospectus</span></div>
+    <a class="tn-signout" href="#" onclick="doSignOut();return false;">Sign out</a>`;
+}
+/* Consistent cross-module bar: search jumps between the 8 tools, same list
+   and behavior as every other file -- not this tool's own filters/targets/reports. */
+const MODULES=[
+  {id:'Ordo',label:'Ordo',desc:'Funnel planning & forecasting',color:'#1F3AC7'},
+  {id:'Cursus',label:'Cursus',desc:'Campaign & activity execution',color:'#0E7C6B'},
+  {id:'Eventus',label:'Eventus',desc:'Event planning & logistics',color:'#B5480E'},
+  {id:'Custodia',label:'Custodia',desc:'Asset register',color:'#3B6E1F'},
+  {id:'Prospectus',label:'Prospectus',desc:'ICP filters & opportunity reports',color:'#9C2B3C'},
+  {id:'Augur',label:'Augur',desc:'Lead & deal scoring',color:'#5A3E9C'},
+  {id:'Schema',label:'Schema',desc:'Process maps & workflows',color:'#3A5A8C'},
+  {id:'Norma',label:'Norma',desc:'Shared configuration',color:'#B5730E'}
+];
+const THIS_MODULE='Prospectus';
+function renderTnModuleLinks(){
+  return MODULES.map(m=>m.id===THIS_MODULE
+    ? `<span class="tn-link on"><span class="mk" style="background:${m.color}">${m.label[0]}</span>${m.label}</span>`
+    : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}"><span class="mk" style="background:${m.color}">${m.label[0]}</span>${m.label}</a>`
+  ).join('');
+}
+function tnSearchResults(q){
+  q=(q||'').trim().toLowerCase(); if(!q) return [];
+  return MODULES.filter(m=>m.label.toLowerCase().includes(q)||m.desc.toLowerCase().includes(q)).slice(0,8);
+}
+let _tnResultList=[];
+function tnSearch(q){
+  _tnResultList=tnSearchResults(q);
+  const box=document.getElementById('tnResults');
+  if(!q||!q.trim()){ box.innerHTML=''; return; }
+  box.innerHTML = `<div class="tn-results">${
+    _tnResultList.length ? _tnResultList.map((m,i)=>`<a href="#" onclick="tnPick(${i});return false"><span class="ty">Module</span><div>${esc(m.label)}</div></a>`).join('')
+    : '<div class="none">No matches.</div>'
+  }</div>`;
+}
+window.tnSearch=tnSearch;
+function tnPick(i){
+  const m=_tnResultList[i]; if(!m) return;
+  window.open(m.id+'.html','tool_'+m.id);
+  document.getElementById('tnResults').innerHTML='';
+  document.getElementById('tnSearchInput').value='';
+}
+window.tnPick=tnPick;
+function tnSearchKey(ev){
+  if(ev.key==='Enter' && _tnResultList.length){ tnPick(0); }
+  if(ev.key==='Escape'){ document.getElementById('tnResults').innerHTML=''; ev.target.blur(); }
+}
+window.tnSearchKey=tnSearchKey;
+function render(){
+  const p=PAGES.find(x=>x.id===UI.page)||PAGES[0];
+  document.getElementById('side').innerHTML=renderSide();
+  document.getElementById('tnLinks').innerHTML=renderTnModuleLinks();
+  document.getElementById('tnAcct').innerHTML=renderTnAcct();
+  document.getElementById('main').innerHTML=p.fn();
+  saveLocal();
+  scheduleSupabaseSave();
+}
+sb.auth.onAuthStateChange((event)=>{
+  if(event==='SIGNED_OUT'){
+    if(_skipNextSignOutReload){ _skipNextSignOutReload=false; return; }
+    location.reload();
+  }
+});
+bootApp();
+</script>
+</body>
+</html>

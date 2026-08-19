@@ -1,0 +1,2494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cursus — Programme, Campaign & Activity Tool</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+  --nav:#0E7C6B; --nav-dk:#0A5C50; --ink:#10182B; --ink-2:#45506B; --ink-3:#7C879E;
+  --surface:#FFFFFF; --canvas:#F2F4F8; --canvas-2:#E9EDF4; --line:#DFE3EB; --line-2:#EEF1F6;
+  --input:#7B3FE4; --input-bg:#F7F2FE; --calc:#45506B;
+  --s1:#10AEBF; --s2:#3B4CB8; --s3:#E0447B; --s4:#F0A429; --s5:#7B3FE4; --s6:#0E8A5F;
+  --ok:#0E8A5F; --ok-bg:#E7F5EF; --warn:#C8791A; --warn-bg:#FDF4E7; --bad:#D0342C; --bad-bg:#FCEDEC;
+  --r:8px; --r-sm:5px;
+  --sh:0 1px 2px rgba(16,24,43,.05), 0 1px 3px rgba(16,24,43,.04);
+  --sh-2:0 4px 16px rgba(16,24,43,.10);
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:var(--sans); background:var(--canvas); color:var(--ink); font-size:13.5px;}
+.sp{flex:1}
+/* ---------- consistent top nav: cross-module switcher only ----------
+   Identical in shape across all 9 files -- brand mark for THIS tool, a row
+   of links to every module (current one shown inactive), a module search
+   box, and the account chip. Does not carry this tool's own page nav. */
+.topnav{background:var(--surface); border-bottom:1px solid var(--line); min-height:56px; display:flex; align-items:center; padding:0 18px; gap:16px; position:sticky; top:0; z-index:50; box-shadow:var(--sh); flex-wrap:wrap;}
+.tn-brand{display:flex; align-items:center; gap:9px; flex-shrink:0; padding:8px 0;}
+.tn-mk{width:34px;height:34px;border-radius:8px;background:var(--nav);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px;flex-shrink:0;}
+.tn-brandtext{line-height:1.15}
+.tn-name{font-weight:800; font-size:14.5px; color:var(--ink);}
+.tn-sub{font-size:9px; letter-spacing:.08em; color:var(--ink-3); font-weight:700; text-transform:uppercase;}
+.tn-links{display:flex; align-items:center; gap:2px; flex:1; overflow-x:auto; min-width:0;}
+.tn-link{padding:7px 12px; border-radius:6px; font-size:12.5px; font-weight:600; color:var(--ink-2); text-decoration:none; white-space:nowrap; flex-shrink:0; display:inline-flex; align-items:center; gap:6px;}
+.tn-link:hover{background:var(--canvas-2)}
+.tn-link.on{background:var(--canvas-2); color:var(--ink); cursor:default;}
+.tn-link .mk{width:16px;height:16px;border-radius:4px;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:9px;flex-shrink:0;}
+.tn-search{position:relative; flex-shrink:0;}
+.tn-search .bx{display:flex; align-items:center; gap:6px; background:var(--canvas); border:1px solid var(--line); border-radius:7px; padding:6px 10px; width:190px;}
+.tn-search input{border:none;background:transparent;outline:none;font-size:12.5px;flex:1;color:var(--ink); min-width:0;}
+.tn-kbd{font-size:10px;color:var(--ink-3);background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:1px 5px;flex-shrink:0;}
+.tn-results{position:absolute; top:calc(100% + 4px); left:0; width:260px; background:var(--surface); border:1px solid var(--line); border-radius:8px; box-shadow:var(--sh-2); z-index:60; max-height:320px; overflow-y:auto;}
+.tn-results a{display:block; padding:8px 12px; text-decoration:none; color:var(--ink); font-size:12.5px; border-bottom:1px solid var(--line-2);}
+.tn-results a:last-child{border-bottom:none}
+.tn-results a:hover{background:var(--canvas-2)}
+.tn-results .ty{font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-3); font-weight:700;}
+.tn-results .none{padding:10px 12px; font-size:12px; color:var(--ink-3);}
+.tn-acct{display:flex; align-items:center; gap:8px; flex-shrink:0; padding:8px 0;}
+.tn-avatar{width:30px;height:30px;border-radius:50%;background:var(--nav);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex-shrink:0;}
+.tn-who{font-size:11.5px; line-height:1.3;}
+.tn-who b{display:block; color:var(--ink); font-weight:700;}
+.tn-who span{color:var(--ink-3);}
+.tn-signout{font-size:10.5px; color:var(--ink-3); text-decoration:none;}
+.tn-signout:hover{color:var(--ink)}
+/* ---------- restored left-hand page nav (this tool's own pages) ---------- */
+.wrap{display:flex; min-height:calc(100vh - 56px);}
+.side{width:210px; background:var(--surface); border-right:1px solid var(--line); padding:10px 0; flex-shrink:0;}
+.side h4{font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3); margin:14px 14px 6px;}
+.navi{display:flex; align-items:center; gap:8px; padding:7px 14px; text-decoration:none; color:var(--ink-2); font-size:13px; border-left:3px solid transparent;}
+.navi:hover{background:var(--canvas-2)}
+.navi.on{background:var(--canvas-2);border-left-color:var(--nav);color:var(--ink);font-weight:700}
+.navi .ix{width:16px; text-align:center; font-size:11px; color:var(--ink-3);}
+.navi.on .ix{color:var(--nav)}
+.main{flex:1; padding:18px 22px; max-width:none;}
+.phead{display:flex; align-items:flex-start; gap:14px; margin-bottom:14px;}
+.phead h1{font-size:19px; margin:0 0 3px;}
+.phead p{margin:0; color:var(--ink-2); font-size:12.5px; max-width:640px;}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); margin-bottom:14px; box-shadow:var(--sh);}
+.card h3{display:flex; align-items:center; gap:8px; margin:0; padding:11px 14px; border-bottom:1px solid var(--line-2); font-size:13.5px;}
+.card .bd{padding:14px;}
+.card .bd.flush{padding:0;}
+.scroll{overflow-x:auto;}
+.scroll.cap{max-height:520px; overflow-y:auto;}
+table{width:100%; border-collapse:collapse; font-size:12.5px;}
+th{text-align:left; padding:8px 10px; background:var(--canvas); color:var(--ink-2); font-weight:700; font-size:11.5px; text-transform:uppercase; letter-spacing:.02em; position:sticky; top:0;}
+td{padding:6px 10px; border-bottom:1px solid var(--line-2); vertical-align:middle;}
+td.n,th.n{text-align:right;}
+td.lb{font-weight:600;}
+td.calc{color:var(--calc); font-style:italic;}
+tr.tot td{font-weight:800; border-top:2px solid var(--line);}
+.empty{padding:18px; text-align:center; color:var(--ink-3); font-size:12.5px;}
+.mini{font-size:11.5px; color:var(--ink-3);}
+.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px;}
+.kpi{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:11px 13px;}
+.kpi.hl{border-color:var(--nav); background:linear-gradient(180deg,#fff,rgba(14,124,107,.04));}
+.kpi .k{font-size:11px; color:var(--ink-3); margin-bottom:3px;}
+.kpi .kpi-v{font-size:19px; font-weight:800; font-variant-numeric:tabular-nums;}
+.kpi.hl .kpi-v{color:var(--nav)}
+.kpi .sub{font-size:11px; color:var(--ink-3); margin-top:2px;}
+.row{display:flex; align-items:center; gap:6px;}
+.btn{background:#fff; border:1px solid var(--line); border-radius:6px; padding:6px 11px; font-size:12.5px; cursor:pointer; color:var(--ink); text-decoration:none; display:inline-flex; align-items:center; gap:5px;}
+.btn:hover{background:var(--canvas-2)}
+.btn.sm{padding:4px 9px; font-size:11.5px;}
+.btn.pri{background:var(--nav);border-color:var(--nav);color:#fff}
+.btn.pri:hover{background:var(--nav-dk)}
+.btn.dgr{color:var(--bad); border-color:#F3C9C6;}
+.btn.dgr:hover{background:var(--bad-bg)}
+.pill{display:inline-block; padding:2px 8px; border-radius:20px; font-size:10.5px; font-weight:700; background:var(--canvas-2); color:var(--ink-2);}
+.pill.ok{background:var(--ok-bg); color:var(--ok);}
+.pill.warn{background:var(--warn-bg); color:var(--warn);}
+.pill.bad{background:var(--bad-bg); color:var(--bad);}
+.pill.n{background:var(--canvas-2); color:var(--ink-2);}
+.pill.v{background:var(--input-bg); color:var(--input);}
+/* Shared status (RAG) pill -- one semantic scale meant to look identical across all 9
+   tools: grey not-started, blue on-track, amber at-risk, red behind/blocked, green
+   completed, plus a gold star layered on green when actuals meaningfully beat plan.
+   Rolled out to Cursus + Eventus first (2026-08-13); reuse these same class names and
+   tones when extending to the other tools. */
+.rag{display:inline-flex; align-items:center; gap:3px; padding:2px 8px; border-radius:20px; font-size:10.5px; font-weight:700; white-space:nowrap;}
+.rag-grey{background:#E7EAF0; color:#5B6472;}
+.rag-blue{background:#E3E8FD; color:#1F3AC7;}
+.rag-amber{background:#FBEBD3; color:#B5730E;}
+.rag-red{background:#F8DEE0; color:#9C2B3C;}
+.rag-green{background:#DCF3E9; color:#0E8A5F;}
+.rag-exceed{color:#C9971A;}
+.note{background:#F7F9FC;border-left:3px solid var(--nav);border-radius:0 var(--r-sm) var(--r-sm) 0; padding:10px 14px; margin-bottom:14px; font-size:12px; color:var(--ink-2);}
+.in,input.in,select.in,.cel{border:1px solid #E1D3FA; border-radius:5px; padding:5px 7px; font-size:12.5px; background:var(--input-bg); color:var(--ink); font-family:inherit;}
+.in:focus,.cel:focus{outline:2px solid var(--input); outline-offset:0;}
+.cel.txt{width:100%;}
+.cel.w{width:70px;}
+input[type=date].cel{font-family:inherit;}
+.toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:9px 16px; border-radius:20px; font-size:12.5px; box-shadow:var(--sh-2); z-index:200; animation:fade .2s ease;}
+@keyframes fade{from{opacity:0; transform:translateX(-50%) translateY(6px)} to{opacity:1; transform:translateX(-50%) translateY(0)}}
+.dv{height:1px; background:var(--line-2); margin:12px 0;}
+.lbl{font-size:11px; color:var(--ink-3); font-weight:700; text-transform:uppercase; letter-spacing:.02em;}
+/* modal — same pattern as Ordo's .mask/.modal, widened for the multi-section wizard */
+.mask{position:fixed;inset:0;background:rgba(16,24,43,.42);z-index:80;display:grid;place-items:center;padding:18px}
+.modal{background:#fff;border-radius:10px;box-shadow:var(--sh-2);width:min(720px,100%);max-height:88vh;overflow:auto}
+.modal>h3{margin:0;padding:13px 16px;border-bottom:1px solid var(--line);font-size:14px;font-weight:700}
+.modal .bd{padding:16px}
+.modal .ft{padding:11px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;background:#FAFBFE}
+.wiz-sec{margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--line-2);}
+.wiz-sec:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0;}
+.wiz-sec h4{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-3);}
+.wiz-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;}
+.wiz-grid label{display:block;font-size:11.5px;color:var(--ink-2);margin-bottom:3px;}
+.wiz-grid .full{grid-column:1/-1;}
+.wiz-grid input.in,.wiz-grid select.in,.wiz-grid textarea.in{width:100%;}
+.wiz-preview{background:var(--canvas);border:1px dashed var(--line);border-radius:6px;padding:8px 10px;font-size:12.5px;margin-top:6px;}
+.wiz-preview b{font-family:monospace;color:var(--nav-dk);}
+.chiprow{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px;}
+.chip{border:1px solid var(--line);background:var(--canvas-2);border-radius:20px;padding:3px 10px;font-size:11.5px;cursor:pointer;}
+.chip.on{background:var(--nav);border-color:var(--nav);color:#fff;}
+.modetoggle{display:inline-block;width:36px;height:20px;border-radius:20px;background:var(--line);position:relative;cursor:pointer;flex:none;transition:background .15s;}
+.modetoggle i{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:left .15s;}
+.modetoggle.on{background:var(--nav);}
+.modetoggle.on i{left:18px;}
+.modetoggle.lock{cursor:not-allowed;opacity:.5;}
+.bar{background:var(--canvas-2);border-radius:4px;overflow:hidden;}
+.bar i{display:block;height:100%;border-radius:4px;transition:width .2s;}
+.authwrap{max-width:360px;margin:14vh auto;padding:32px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-2);}
+.authwrap h2{margin:0 0 4px;font-size:18px;}
+.authwrap p.sub{margin:0 0 20px;color:var(--ink-2);font-size:12.5px;}
+.authwrap input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;margin-bottom:10px;box-sizing:border-box;}
+.authwrap button{width:100%;padding:10px;border:none;border-radius:6px;background:var(--ink);color:#fff;font-weight:700;font-size:13px;cursor:pointer;}
+.authwrap .err{color:#B3261E;font-size:12px;margin:-4px 0 10px;min-height:14px;}
+</style>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<div id="authGate" style="display:none"></div>
+<div class="topnav" id="topnav">
+  <div class="tn-brand"><span class="tn-mk">C</span><div class="tn-brandtext"><div class="tn-name">Cursus</div><div class="tn-sub">All modules</div></div></div>
+  <nav class="tn-links" id="tnLinks"></nav>
+  <div class="tn-search">
+    <div class="bx"><input id="tnSearchInput" placeholder="Search modules..." oninput="tnSearch(this.value)" onkeydown="tnSearchKey(event)"><span class="tn-kbd">/</span></div>
+    <div id="tnResults"></div>
+  </div>
+  <div class="tn-acct" id="tnAcct"></div>
+  <script>document.addEventListener('click',function(e){var r=document.getElementById('tnResults');if(r&&!e.target.closest('.tn-search'))r.innerHTML='';});</script>
+</div>
+<div class="wrap" id="wrap">
+  <nav class="side" id="side"></nav>
+  <main class="main" id="main"></main>
+</div>
+<div id="layer"></div>
+<div id="wizardLayer"></div>
+<script>
+/* ============================================================================
+   CURSUS — standalone Programme > Campaign > Activity tool.
+   Deliberately separate from Ordo (a different self-contained HTML file, own CFG object):
+   marketing/sales log activity-level detail — suppliers, POs, day-to-day status, cost — here.
+   Ordo only ever shows the top-line roll-up. There is no server and no shared filesystem
+   between the two files, so "shared data" is a deliberate JSON export/import bridge, not a
+   live link — the same "external system, placeholder for now" pattern Ordo already uses for
+   its CRM feed. See pageSync() for both directions of that bridge.
+
+   Supabase note: campaigns/regions/programmes/cost_buckets now live in the same shared
+   database Ordo uses (see 2026-08-10-supabase-schema-pilot.sql). Cursus reads regions/
+   programmes/cost_buckets as read-only shared dimensions and owns tasks/templates; campaigns
+   is a shared table both apps upsert to. The old file-based Sync/export-import bridge below
+   is left in place as a manual fallback but is no longer the primary path.
+   ============================================================================ */
+const SUPABASE_URL = 'https://rcmocuubeajnqjltuwdv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjbW9jdXViZWFqbnFqbHR1d2R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzMTgzNTQsImV4cCI6MjEwMTg5NDM1NH0.rZuoKPmmkpNe8Ug8Gu_KmpoKyibigJccdpoRGcLt3pY';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* real UUIDs now — every DB primary key is uuid type. Prefix arg kept for call-site
+   compatibility (uid('c'), uid('tk') etc still work) but no longer affects the id itself. */
+const uid = _p => crypto.randomUUID();
+const F = {
+  n:(v,d=0)=>(v==null||isNaN(v))?'—':Number(v).toLocaleString('en-AU',{minimumFractionDigits:d,maximumFractionDigits:d}),
+  m:v=>(v==null||isNaN(v))?'—':'$'+Math.round(v).toLocaleString('en-AU'),
+  mk:v=>{ if(v==null||isNaN(v))return '—'; const a=Math.abs(v),s=v<0?'-':'';
+    if(a>=1e6) return s+'$'+(a/1e6).toFixed(a>=1e7?1:2)+'M';
+    if(a>=1e3) return s+'$'+Math.round(a/1e3)+'k'; return s+'$'+Math.round(a); },
+  d:iso=>{ if(!iso)return '—'; return new Date(iso+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'2-digit'}); },
+  dt:iso=>{ if(!iso)return '—'; return new Date(iso).toLocaleString('en-AU',{day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'}); }
+};
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const sum = a => a.reduce((x,y)=>x+(y||0),0);
+
+/* ---------- campaign naming-convention engine ----------
+   Identical copy of Norma's reference implementation (self-contained files, no shared
+   module system — same duplication pattern as F/esc/byId across the whole suite). This is
+   the copy that actually runs at campaign-creation time. */
+function fyPeriodFromDate(dateStr, fyStartMonth, periodType){
+  if(!dateStr) return {fy:'',period:''};
+  const d=new Date(dateStr+'T00:00:00'); const m=d.getMonth()+1, y=d.getFullYear();
+  const fsm=fyStartMonth||1;
+  let offset=m-fsm; if(offset<0) offset+=12;
+  const fyYear=(fsm>1 && m>=fsm)?y+1:y;
+  const fy=String(fyYear).slice(-2);
+  if(periodType==='Half') return {fy, period:'H'+(offset<6?1:2)};
+  return {fy, period:'Q'+(Math.floor(offset/3)+1)};
+}
+function podCodeFromRegion(region){
+  if(!region) return 'GEN';
+  return (region.code||region.name||'GEN').toString().slice(0,3).toUpperCase();
+}
+function buildCampaignTrackingRef(orgSettings, campaign, region, descriptor){
+  const {fy,period}=fyPeriodFromDate(campaign.start, orgSettings.fyStartMonth, campaign.periodType||'Quarter');
+  const pod=podCodeFromRegion(region);
+  const scope=orgSettings.campaignNamingSeqScope||'pod';
+  const key=scope==='global'?'ALL':scope==='year'?fy:(pod+'-'+fy);
+  const counters=Object.assign({},orgSettings.campaignNamingSeqCounters||{});
+  const seq=(counters[key]||0)+1;
+  counters[key]=seq;
+  const pattern=orgSettings.campaignNamingPattern||'{fy}{period}{pod}-{seq}_{descriptor}';
+  const ref=pattern.replace('{fy}',fy).replace('{period}',period).replace('{pod}',pod)
+    .replace('{seq}',String(seq)).replace('{descriptor}',(descriptor||'').replace(/\s+/g,''));
+  return {ref, counters, key};
+}
+const byId = (a,id) => a.find(x=>x.id===id);
+
+/* ---------- data ----------
+   Supabase-backed now — populated by loadFromSupabase() after sign-in. Empty shell here so
+   nothing downstream needs to change; only the population source moved. */
+const CFG = {};
+
+const UI = { page:'home', campaignId:null, wizard:null, moveDialog:null,
+  planScope:'campaign', planView:'table', planProgrammeId:null, planCampaignId:null, detail:null };
+
+const bucket = id => byId(CFG.costBuckets,id);
+const programme = id => byId(CFG.programmes,id);
+const region = id => byId(CFG.regions,id);
+const TASK = cid => CFG.tasks.filter(t=>t.campaignId===cid);
+const tasksTotal = (cid,field) => sum(TASK(cid).map(t=>t[field]||0));
+
+function logAudit(what,detail){
+  CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
+  if(CFG.audit.length>100)CFG.audit.pop();
+}
+function toast(msg){
+  const l=document.getElementById('layer');
+  const d=document.createElement('div'); d.className='toast'; d.textContent=msg;
+  l.appendChild(d); setTimeout(()=>d.remove(),2200);
+}
+function go(page,campaignId){ UI.page=page; if(campaignId)UI.campaignId=campaignId; render(); }
+window.go=go;
+
+/* ---------- local autosave (survives a refresh/close; export/import is still the
+   portable, cross-tool bridge) ---------- */
+const LS_KEY='cursus_autosave_v1';
+function saveLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(CFG)); }catch(e){} }
+function loadLocal(){
+  try{
+    const raw=localStorage.getItem(LS_KEY); if(!raw) return false;
+    const parsed=JSON.parse(raw);
+    Object.keys(parsed).forEach(k=>{ CFG[k]=parsed[k]; });
+    return true;
+  }catch(e){ return false; }
+}
+function clearLocal(){
+  localStorage.removeItem(LS_KEY);
+  toast('Local autosave cleared — reload the page to reset to the built-in defaults.');
+}
+window.clearLocal=clearLocal;
+
+/* ============================================================================
+   Supabase data layer — whole-plan load/save, mirrors Ordo.html's pattern exactly.
+   Regions/programmes/cost_buckets are shared read-only dimensions Ordo owns; campaigns is a
+   shared table both apps upsert to (each app sends only the fields it owns); tasks/templates
+   are Cursus's own tables; audit_log is shared. won_deals import (Augur) stays session-only —
+   the schema's won_deals table is reserved but "not wired up this pilot" per its own comment.
+
+   The "fast-follow" below: saves used to be UPSERT-only -- removing a row updated this
+   session's view immediately but the underlying database row was never deleted, so it
+   reappeared on next login. deleteRow() (2026-08-17, phase20) closes that gap with a real
+   DELETE, fired from each remove*() function alongside the local CFG filter.
+   ============================================================================ */
+let _orgId = null, _myProfile = null, _saveTimer = null, _realtimeChannel = null;
+/* Set right before an internal (non-user-initiated) signOut() -- e.g. bootApp()'s error path
+   below -- so the global onAuthStateChange listener knows to skip its reload-on-SIGNED_OUT and
+   let the error message stay on screen instead of wiping it out immediately. Without this, the
+   error flashes for a frame and then vanishes, which is exactly the "flash and it's gone" bug. */
+let _skipNextSignOutReload = false;
+
+async function upsertRows(table, rows, mapFn){
+  if(!rows || !rows.length) return;
+  try{
+    const payload = rows.map(r=>Object.assign(mapFn(r), {org_id:_orgId}));
+    const { error } = await sb.from(table).upsert(payload);
+    if(error) throw error;
+  }catch(e){ console.error('Save failed for '+table, e); toast('Could not save '+table+' to the database — see console.'); }
+}
+async function deleteRow(table, id){
+  if(!_orgId || !id) return;
+  try{
+    const { error } = await sb.from(table).delete().eq('id', id).eq('org_id', _orgId);
+    if(error) throw error;
+  }catch(e){ console.error('Delete failed for '+table, e); toast('Removed here, but could not delete from the database — see console.'); }
+}
+
+async function saveToSupabase(){
+  if(!_orgId) return;
+  await Promise.all([
+    /* campaigns is shared with Ordo — only send the fields Cursus owns/edits, so Ordo's
+       committed/actual planning-stage estimates aren't touched by this upsert. */
+    upsertRows('campaigns', CFG.campaigns, c=>({
+      id:c.id,name:c.name,programme_id:c.programmeId,region_id:c.regionId,
+      cost_bucket_id:c.costBucketId,start_date:c.start||null,end_date:c.end||null,
+      budget:c.budget||0,crm_ref:c.crmRef||null,
+      period_type:c.periodType||null,period_label:c.periodLabel||null,tracking_ref:c.trackingRef||null,
+      business_case:c.businessCase||'',signoff_status:c.signoffStatus||'Draft',po_number:c.poNumber||'',
+      registration_url:c.registrationUrl||'',project_folder_url:c.projectFolderUrl||'',
+      external_links:c.externalLinks||[],applicable_splits:c.applicableSplits||[],
+      partner_motion_tags:c.partnerMotionTags||[],cloned_from_id:c.clonedFromId||null,
+      contact_list_ref:c.contactListRef||'',icp_ref:c.icpRef||'',sort_order:c.sortOrder||0
+    })),
+    upsertRows('partners', CFG.partners, p=>({
+      id:p.id,name:p.name,type:p.type||'',contact_name:p.contactName||'',
+      contact_email:p.contactEmail||'',contact_phone:p.contactPhone||'',notes:p.notes||''
+    })),
+    upsertRows('campaign_partner_allocations', CFG.campaignPartnerAllocations, a=>({
+      id:a.id,campaign_id:a.campaignId,partner_id:a.partnerId,role:a.role||'',
+      budget_share_pct:a.budgetSharePct||0,lead_share_pct:a.leadSharePct||0
+    })),
+    upsertRows('tasks', CFG.tasks, t=>({
+      id:t.id,campaign_id:t.campaignId,name:t.name,type:t.type,owner:t.owner||'',
+      start_date:t.startDate||null,due_date:t.dueDate||null,status:t.status,notes:t.notes||'',
+      supplier:t.supplier||'',po:t.po||'',template_id:t.templateId,cost_bucket_id:t.costBucketId,
+      planned_cost:t.plannedCost||0,committed_cost:t.committedCost||0,actual_cost:t.actualCost||0,
+      tracking_ref:t.trackingRef||null,sort_order:t.sortOrder||0,event_id:t.eventId||null
+    })),
+    upsertRows('templates', CFG.templates, t=>({
+      id:t.id,name:t.name,type:t.type,default_cost_bucket_id:t.defaultCostBucketId,notes:t.notes||''
+    })),
+    upsertRows('audit_log', CFG.audit, a=>({ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null})),
+    (async()=>{
+      const cn = CFG.campaignNaming||{};
+      const row = { org_id:_orgId, webhook_url:(CFG.integrations&&CFG.integrations.webhookUrl)||'',
+                    webhook_enabled:!!(CFG.integrations&&CFG.integrations.webhookEnabled),
+                    fy_start_month: cn.fyStartMonth||1,
+                    campaign_naming_pattern: cn.campaignNamingPattern||'{fy}{period}{pod}-{seq}_{descriptor}',
+                    campaign_naming_seq_scope: cn.campaignNamingSeqScope||'pod',
+                    campaign_naming_seq_counters: cn.campaignNamingSeqCounters||{} };
+      const { error } = await sb.from('org_settings').upsert(row, {onConflict:'org_id'});
+      if(error){ console.error('Save failed for org_settings', error); }
+    })()
+  ]);
+}
+
+function scheduleSupabaseSave(){
+  if(!_orgId) return;
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(()=>{ saveToSupabase(); }, 900);
+}
+
+async function loadFromSupabase(){
+  const { data:{ user: authUser } } = await sb.auth.getUser();
+  if(!authUser) throw new Error('Not signed in.');
+  const { data: prof, error: profErr } = await sb.from('profiles')
+    .select('id,name,org_id,role_id,region_ids,cross_region').eq('id', authUser.id).single();
+  if(profErr || !prof){ const e = new Error('No profile linked yet.'); e.noProfile = true; throw e; }
+  _myProfile = prof; _orgId = prof.org_id;
+
+  const results = await Promise.all([
+    sb.from('roles').select('id,allow_expert_mode'),
+    sb.from('regions').select('id,name'),
+    sb.from('programmes').select('id,name'),
+    sb.from('cost_buckets').select('id,code,label'),
+    sb.from('campaigns').select('id,name,programme_id,region_id,cost_bucket_id,start_date,end_date,budget,crm_ref,period_type,period_label,tracking_ref,business_case,signoff_status,po_number,registration_url,project_folder_url,external_links,applicable_splits,partner_motion_tags,cloned_from_id,contact_list_ref,icp_ref,sort_order'),
+    sb.from('tasks').select('id,campaign_id,name,type,owner,start_date,due_date,status,notes,supplier,po,template_id,cost_bucket_id,planned_cost,committed_cost,actual_cost,tracking_ref,sort_order,event_id'),
+    sb.from('templates').select('id,name,type,default_cost_bucket_id,notes'),
+    /* Read-only reference into Eventus's eventus_events table -- Cursus never writes here, just
+       links an activity to an event and rolls up budget/pax/registered/attended for
+       reporting (phase16, Planning drill-down + Eventus cross-link). */
+    sb.from('eventus_events').select('id,name,type,status,campaign_id,budget,pax,registered,attended'),
+    sb.from('org_settings').select('webhook_url,webhook_enabled,fy_start_month,campaign_naming_pattern,campaign_naming_seq_scope,campaign_naming_seq_counters').eq('org_id',_orgId).maybeSingle(),
+    sb.from('audit_log').select('ts,what,detail').order('ts',{ascending:false}).limit(200),
+    sb.from('partners').select('id,name,type,contact_name,contact_email,contact_phone,notes'),
+    sb.from('campaign_partner_allocations').select('id,campaign_id,partner_id,role,budget_share_pct,lead_share_pct'),
+    sb.from('assets').select('id,name,category'),
+    sb.from('augur_deals').select('id,name,account,value,currency,close_date,campaign_id').eq('stage','Closed Won')
+  ]);
+  const [rolesR,regionsR,programmesR,costBucketsR,campaignsR,tasksR,templatesR,eventsIdxR,orgSettingsR,auditR,partnersR,partnerAllocR,assetsR,wonDealsR] = results;
+  for(const r of results){ if(r.error) throw r.error; }
+
+  const myRole = (rolesR.data||[]).find(r=>r.id===_myProfile.role_id);
+  CFG.canExpertMode = myRole ? !!myRole.allow_expert_mode : true;
+  const savedMode = (function(){ try{ return localStorage.getItem('cursus_mode'); }catch(e){ return null; } })();
+  UI.mode = (savedMode==='simple' || savedMode==='expert') ? savedMode : 'expert';
+  if(!CFG.canExpertMode) UI.mode = 'simple';
+  if(UI.mode==='simple' && !SIMPLE_PAGES.includes(UI.page)) UI.page = 'home';
+
+  CFG.regions = (regionsR.data||[]).map(r=>({id:r.id,name:r.name}));
+  CFG.programmes = (programmesR.data||[]).map(p=>({id:p.id,name:p.name}));
+  CFG.costBuckets = (costBucketsR.data||[]).map(c=>({id:c.id,code:c.code,label:c.label}));
+  CFG.campaigns = (campaignsR.data||[]).map(c=>({
+    id:c.id,name:c.name,programmeId:c.programme_id,budget:c.budget,start:c.start_date,end:c.end_date,
+    regionId:c.region_id,costBucketId:c.cost_bucket_id,crmRef:c.crm_ref||null,
+    periodType:c.period_type||'Quarter',periodLabel:c.period_label||'',trackingRef:c.tracking_ref||null,
+    businessCase:c.business_case||'',signoffStatus:c.signoff_status||'Draft',poNumber:c.po_number||'',
+    registrationUrl:c.registration_url||'',projectFolderUrl:c.project_folder_url||'',
+    externalLinks:c.external_links||[],applicableSplits:c.applicable_splits||[],
+    partnerMotionTags:c.partner_motion_tags||[],clonedFromId:c.cloned_from_id||null,
+    contactListRef:c.contact_list_ref||'',icpRef:c.icp_ref||'',sortOrder:c.sort_order||0
+  }));
+  CFG.tasks = (tasksR.data||[]).map(t=>({
+    id:t.id,campaignId:t.campaign_id,name:t.name,type:t.type,owner:t.owner||'',
+    startDate:t.start_date||'',dueDate:t.due_date||'',status:t.status,notes:t.notes||'',
+    supplier:t.supplier||'',po:t.po||'',templateId:t.template_id,costBucketId:t.cost_bucket_id,
+    plannedCost:t.planned_cost,committedCost:t.committed_cost,actualCost:t.actual_cost,
+    trackingRef:t.tracking_ref||null,sortOrder:t.sort_order||0,eventId:t.event_id||null
+  }));
+  CFG.templates = (templatesR.data||[]).map(t=>({
+    id:t.id,name:t.name,type:t.type,defaultCostBucketId:t.default_cost_bucket_id,notes:t.notes||''
+  }));
+  /* Read-only mirror of Eventus's events -- lets Cursus link an activity to a real event
+     and roll up budget/pax/registered/attended without owning that data (phase16). */
+  CFG.eventsIndex = (eventsIdxR.data||[]).map(e=>({
+    id:e.id,name:e.name,type:e.type||'',status:e.status||'',campaignId:e.campaign_id||null,
+    budget:e.budget||0,pax:e.pax||0,registered:e.registered||0,attended:e.attended||0
+  }));
+
+  const os = orgSettingsR.data || {};
+  CFG.integrations = { webhookUrl: os.webhook_url||'', webhookEnabled: !!os.webhook_enabled };
+  CFG.campaignNaming = {
+    fyStartMonth: os.fy_start_month||1,
+    campaignNamingPattern: os.campaign_naming_pattern||'{fy}{period}{pod}-{seq}_{descriptor}',
+    campaignNamingSeqScope: os.campaign_naming_seq_scope||'pod',
+    campaignNamingSeqCounters: os.campaign_naming_seq_counters||{}
+  };
+  CFG.audit = (auditR.data||[]).map(a=>({ts:a.ts,what:a.what,detail:a.detail}));
+  CFG.partners = (partnersR.data||[]).map(p=>({
+    id:p.id,name:p.name,type:p.type||'',contactName:p.contact_name||'',
+    contactEmail:p.contact_email||'',contactPhone:p.contact_phone||'',notes:p.notes||''
+  }));
+  CFG.campaignPartnerAllocations = (partnerAllocR.data||[]).map(a=>({
+    id:a.id,campaignId:a.campaign_id,partnerId:a.partner_id,role:a.role||'',
+    budgetSharePct:a.budget_share_pct||0,leadSharePct:a.lead_share_pct||0
+  }));
+  CFG.assets = (assetsR.data||[]).map(a=>({id:a.id,name:a.name,category:a.category||''}));
+  /* Closed-won deals, read straight from Augur's shared table now that a deal's campaign_id
+     is a real FK — this replaces the old file-based "import closed-won from Augur" bridge as
+     the primary path for Effectiveness's cost-per-outcome numbers. Only deals with a real
+     campaign link show up here; a deal with no link (or linked before this campaign existed)
+     still won't show up, same known gap as before, just sourced live now instead of by file. */
+  CFG.wonDeals = (wonDealsR.data||[]).filter(d=>d.campaign_id).map(d=>({
+    id:d.id,name:d.name,account:d.account||'',value:d.value||0,currency:d.currency||'AUD',
+    closeDate:d.close_date||'',campaignId:d.campaign_id
+  }));
+  /* trackingConfig (Norma's old generic {mod}-{type}-{seq} scheme) isn't wired to the
+     database this pilot — session-only, exactly like before, until that bridge is built. */
+  CFG.meta = { syncedAt:new Date().toISOString(), lastExportAt:null, lastPushAt:null, normaSyncedAt:null,
+               normaConfigVersion:null, lastWebhookPushAt:null, lastReferenceExportAt:null, augurSyncedAt:null };
+}
+
+/* Live notifications: subscribe to audit_log INSERTs for this org so an action
+   taken in another tab/tool shows up here as a toast without a reload. Own
+   actions are skipped (via user_id) since they're already toasted locally.
+   This is notification-only -- it does NOT live-sync the underlying record
+   (a campaign, a deal, etc); reload or navigate to see that reflected in place. */
+function subscribeRealtime(){
+  if(_realtimeChannel || !_orgId) return;
+  _realtimeChannel = sb.channel('audit_log_org_'+_orgId)
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'audit_log', filter:'org_id=eq.'+_orgId }, payload=>{
+      const row = payload.new || {};
+      if(_myProfile && row.user_id && row.user_id===_myProfile.id) return;
+      /* phase18: a targeted alert_people row carries a resolved target_user_ids list --
+         only toast a viewer whose own id is in it. Absent/empty (almost every row, and
+         any 'org'-targeted alert) keeps the original broadcast-to-everyone behaviour. The
+         row still joins the shared audit trail either way -- only the live toast is gated. */
+      const targeted = Array.isArray(row.target_user_ids) && row.target_user_ids.length>0;
+      const forMe = !targeted || (_myProfile && row.target_user_ids.includes(_myProfile.id));
+      if(forMe) toast((row.what||'Update')+(row.detail?' — '+row.detail:''));
+      if(CFG.audit){ CFG.audit.unshift({ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
+      render();
+    })
+    .subscribe();
+}
+function loginScreenHtml(err){
+  return '<div class="authwrap"><h2>Cursus</h2><p class="sub">Sign in to continue.</p>'+
+    '<div class="err">'+(err?esc(err):'')+'</div>'+
+    '<input id="authEmail" type="email" placeholder="Email" autocomplete="username">'+
+    '<input id="authPass" type="password" placeholder="Password" autocomplete="current-password">'+
+    '<button onclick="doSignIn()">Sign in</button>'+
+    '<p class="sub" style="margin-top:10px">New here? <a href="#" onclick="showSignUpGate();return false;">Create an account</a></p>'+
+    '</div>';
+}
+function signUpScreenHtml(err, notice){
+  return '<div class="authwrap"><h2>Cursus</h2><p class="sub">Create an account.</p>'+
+    '<div class="err">'+(err?esc(err):'')+'</div>'+
+    (notice ? '<div class="sub" style="margin-bottom:8px">'+esc(notice)+'</div>' : '')+
+    '<input id="suEmail" type="email" placeholder="Email" autocomplete="username">'+
+    '<input id="suPass" type="password" placeholder="Password (min 6 characters)" autocomplete="new-password">'+
+    '<input id="suPass2" type="password" placeholder="Confirm password" autocomplete="new-password">'+
+    '<button onclick="doSignUp()">Create account</button>'+
+    '<p class="sub" style="margin-top:10px">Already have an account? <a href="#" onclick="showAuthGate();return false;">Sign in</a></p>'+
+    '</div>';
+}
+function onboardingScreenHtml(err){
+  return '<div class="authwrap"><h2>Cursus</h2><p class="sub">You\'re signed in, but this login isn\'t linked to an organization yet.</p>'+
+    '<div class="err">'+(err?esc(err):'')+'</div>'+
+    '<div style="border:1px solid #ddd;border-radius:8px;padding:12px;margin-bottom:12px">'+
+      '<b>Create a new organization</b>'+
+      '<input id="orgName" type="text" placeholder="Organization name">'+
+      '<input id="orgYourName" type="text" placeholder="Your name">'+
+      '<button onclick="doCreateOrg()">Create organization</button>'+
+    '</div>'+
+    '<div style="border:1px solid #ddd;border-radius:8px;padding:12px">'+
+      '<b>I have an invite code</b>'+
+      '<input id="inviteCode" type="text" placeholder="Invite code" style="text-transform:uppercase">'+
+      '<input id="inviteYourName" type="text" placeholder="Your name">'+
+      '<button onclick="doRedeemInvite()">Join organization</button>'+
+    '</div>'+
+    '<p class="sub" style="margin-top:10px"><a href="#" onclick="doSignOut();return false;">Sign out</a></p>'+
+    '</div>';
+}
+async function doSignIn(){
+  const email = document.getElementById('authEmail').value.trim();
+  const pass = document.getElementById('authPass').value;
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if(error){ document.getElementById('authGate').innerHTML = loginScreenHtml(error.message); return; }
+  await bootApp();
+}
+window.doSignIn = doSignIn;
+async function doSignUp(){
+  const email = document.getElementById('suEmail').value.trim();
+  const pass = document.getElementById('suPass').value;
+  const pass2 = document.getElementById('suPass2').value;
+  if(pass.length < 6){ document.getElementById('authGate').innerHTML = signUpScreenHtml('Password must be at least 6 characters.'); return; }
+  if(pass !== pass2){ document.getElementById('authGate').innerHTML = signUpScreenHtml('Passwords do not match.'); return; }
+  const { data, error } = await sb.auth.signUp({ email, password: pass });
+  if(error){ document.getElementById('authGate').innerHTML = signUpScreenHtml(error.message); return; }
+  if(data.session){ await bootApp(); return; }
+  document.getElementById('authGate').innerHTML = signUpScreenHtml(null, 'Account created — check your email to confirm, then sign in.');
+}
+window.doSignUp = doSignUp;
+async function doSignOut(){ await sb.auth.signOut(); location.reload(); }
+window.doSignOut = doSignOut;
+async function doCreateOrg(){
+  const p_org_name = document.getElementById('orgName').value.trim();
+  const p_your_name = document.getElementById('orgYourName').value.trim();
+  const { error } = await sb.rpc('create_organization', { p_org_name, p_your_name });
+  if(error){ document.getElementById('authGate').innerHTML = onboardingScreenHtml(error.message); return; }
+  await bootApp();
+}
+window.doCreateOrg = doCreateOrg;
+async function doRedeemInvite(){
+  const p_code = document.getElementById('inviteCode').value.trim();
+  const p_your_name = document.getElementById('inviteYourName').value.trim();
+  const { error } = await sb.rpc('redeem_invite', { p_code, p_your_name });
+  if(error){ document.getElementById('authGate').innerHTML = onboardingScreenHtml(error.message); return; }
+  await bootApp();
+}
+window.doRedeemInvite = doRedeemInvite;
+
+function showAuthGate(err){
+  const gate = document.getElementById('authGate');
+  gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
+  gate.innerHTML = loginScreenHtml(err);
+  document.getElementById('topnav').style.display = 'none';
+  document.getElementById('wrap').style.display = 'none';
+}
+window.showAuthGate = showAuthGate;
+function showSignUpGate(err){
+  const gate = document.getElementById('authGate');
+  gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
+  gate.innerHTML = signUpScreenHtml(err);
+  document.getElementById('topnav').style.display = 'none';
+  document.getElementById('wrap').style.display = 'none';
+}
+window.showSignUpGate = showSignUpGate;
+function showOnboardingGate(err){
+  const gate = document.getElementById('authGate');
+  gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
+  gate.innerHTML = onboardingScreenHtml(err);
+  document.getElementById('topnav').style.display = 'none';
+  document.getElementById('wrap').style.display = 'none';
+}
+function hideAuthGate(){
+  const gate = document.getElementById('authGate');
+  gate.style.display = 'none'; gate.innerHTML = '';
+  document.getElementById('topnav').style.display = '';
+  document.getElementById('wrap').style.display = '';
+}
+async function bootApp(){
+  const { data:{ session } } = await sb.auth.getSession();
+  if(!session){ showAuthGate(); return; }
+  try{ await loadFromSupabase(); }
+  catch(e){
+    console.error(e);
+    if(e.noProfile){ showOnboardingGate(); return; }
+    _skipNextSignOutReload = true;
+    await sb.auth.signOut();
+    showAuthGate(e.message || 'Could not load your data. Contact an admin.');
+    return;
+  }
+  hideAuthGate();
+  applyHashRoute();
+  render();
+  subscribeRealtime();
+}
+
+/* ---------- CRUD ---------- */
+function addTask(campaignId){
+  const sib=TASK(campaignId);
+  CFG.tasks.push({id:uid('tk'),campaignId:campaignId,name:'New activity',type:'General',owner:'',
+    startDate:'',dueDate:'',status:'Planned',notes:'',supplier:'',po:'',templateId:null,
+    costBucketId:CFG.costBuckets[0].id,plannedCost:0,committedCost:0,actualCost:0,
+    trackingRef:nextTrackingRef('activity'),sortOrder:sib.length,eventId:null});
+  const camp=byId(CFG.campaigns,campaignId);
+  logAudit('add activity','New activity on '+(camp?camp.name:campaignId)); render(); toast('Activity added.');
+}
+function removeTask(id){
+  const t=byId(CFG.tasks,id); if(!t)return;
+  if(!confirm('Remove "'+t.name+'"? This cannot be undone.'))return;
+  CFG.tasks=CFG.tasks.filter(x=>x.id!==id); logAudit('remove activity',t.name); render();
+  deleteRow('tasks',id);
+}
+function commitTask(id){
+  const t=byId(CFG.tasks,id); if(!t)return;
+  if(!['Approved','In progress','Completed'].includes(t.status)){ toast('Only Approved-or-later activities can be committed.'); return; }
+  const camp=byId(CFG.campaigns,t.campaignId);
+  /* Sign-off gates execution, not planning (Stef's explicit call): a campaign that isn't
+     Approved can still be planned freely, it just can't have budget committed against it. */
+  if(camp && camp.signoffStatus && camp.signoffStatus!=='Approved'){
+    toast('This campaign is not signed off yet (status: '+camp.signoffStatus+'). Planning can continue, but activities can\'t be committed until it\'s Approved.');
+    return;
+  }
+  logAudit('commit activity',t.name+' · '+F.mk(t.committedCost||0)+' committed against '+(camp?camp.name:t.campaignId));
+  toast('Committed: '+t.name+'. Export a roll-up from Sync to push this into Ordo.');
+  render();
+}
+function saveTaskAsTemplate(id){
+  const t=byId(CFG.tasks,id); if(!t)return;
+  CFG.templates.push({id:uid('tpl'),name:t.name+' (template)',type:t.type,defaultCostBucketId:t.costBucketId,notes:t.notes||''});
+  logAudit('save template',t.name); render(); toast('Saved as a reusable template.');
+}
+function addTaskFromTemplate(campaignId,templateId){
+  const tpl=byId(CFG.templates,templateId); if(!tpl)return;
+  const sib=TASK(campaignId);
+  CFG.tasks.push({id:uid('tk'),campaignId:campaignId,name:tpl.name.replace(' (template)',''),type:tpl.type,owner:'',
+    startDate:'',dueDate:'',status:'Planned',notes:tpl.notes||'',supplier:'',po:'',templateId:tpl.id,
+    costBucketId:tpl.defaultCostBucketId,plannedCost:0,committedCost:0,actualCost:0,sortOrder:sib.length,eventId:null});
+  logAudit('add activity from template',tpl.name); render(); toast('Activity created from template.');
+}
+function removeTemplate(id){
+  if(!confirm('Remove this template?'))return;
+  CFG.templates=CFG.templates.filter(x=>x.id!==id); logAudit('remove template',id); render();
+  deleteRow('templates',id);
+}
+function addTemplate(){
+  CFG.templates.push({id:uid('tpl'),name:'New template',type:'General',defaultCostBucketId:CFG.costBuckets[0].id,notes:''});
+  logAudit('create template','New template'); render(); toast('Template created — edit its fields below.');
+}
+window.addTemplate=addTemplate;
+
+/* ---------- campaigns created here, not yet in Ordo ----------
+   Cursus can now originate a campaign instead of only receiving one. It is flagged _local
+   until pushed and accepted into Ordo, so the two never silently disagree about whether it
+   "really" exists yet. */
+function addCampaign(){
+  const c={id:uid('c'),name:'New campaign',programmeId:null,budget:0,start:'',end:'',regionId:CFG.regions[0].id,costBucketId:CFG.costBuckets[0].id,crmRef:null,_local:true,trackingRef:nextTrackingRef('campaign'),sortOrder:CFG.campaigns.length};
+  CFG.campaigns.push(c);
+  logAudit('create campaign','New campaign (local, not yet in Ordo)'); render(); toast('Campaign created — push it to Ordo from Sync when ready.');
+}
+window.addCampaign=addCampaign;
+function removeCampaign(id){
+  const c=byId(CFG.campaigns,id); if(!c)return;
+  if(!c._local){ toast('Only campaigns created here (not yet in Ordo) can be removed from Cursus.'); return; }
+  if(TASK(id).length && !confirm('This campaign has activities logged against it. Remove it and them anyway?'))return;
+  const goingTaskIds=TASK(id).map(t=>t.id);
+  CFG.tasks=CFG.tasks.filter(t=>t.campaignId!==id);
+  CFG.campaigns=CFG.campaigns.filter(x=>x.id!==id);
+  logAudit('remove campaign',c.name); render();
+  deleteRow('campaigns',id); goingTaskIds.forEach(tid=>deleteRow('tasks',tid));
+}
+window.removeCampaign=removeCampaign;
+
+/* ---------- campaign creation wizard ----------
+   Guided multi-section flow per Stef's spec: naming-convention ref is generated live from
+   buildCampaignTrackingRef() (same engine Norma configures), applicable %-split and partner
+   motion tags are free-form repeatable fields, partner allocations split both budget and
+   leads per partner, and sign-off status is captured but only gates execution (see
+   commitTask()) — planning continues regardless of sign-off state. */
+const PARTNER_MOTION_TAGS = ['Land','Expand','Partner-sourced','Net-new','Renewal','Co-sell'];
+
+function openCampaignWizard(){
+  UI.wizard = {
+    entryPath:null, qaStep:0, docNote:null,
+    name:'New campaign', programmeId:(CFG.programmes[0]&&CFG.programmes[0].id)||null,
+    regionId:CFG.regions[0].id, costBucketId:CFG.costBuckets[0].id,
+    periodType:'Quarter', start:'', end:'', descriptor:'', budget:0,
+    applicableSplits:[], partnerMotionTags:[], businessCase:'', signoffStatus:'Draft',
+    poNumber:'', registrationUrl:'', projectFolderUrl:'', externalLinks:[],
+    partnerAllocs:[], contactListRef:'', icpRef:''
+  };
+  render();
+}
+window.openCampaignWizard=openCampaignWizard;
+function closeCampaignWizard(){ UI.wizard=null; render(); }
+window.closeCampaignWizard=closeCampaignWizard;
+function wizChoosePath(path){ if(!UI.wizard)return; UI.wizard.entryPath=path; UI.wizard.qaStep=0; render(); }
+window.wizChoosePath=wizChoosePath;
+
+/* Guided Q&A — one question at a time, same underlying wizard state/submit as the form.
+   Deliberately covers the "quick create" field set (name/programme/region/dates/budget)
+   regardless of Simple/Expert mode — for the fuller field set, use "Fill the form" instead. */
+const QA_STEPS=[
+  {key:'name', q:'What should we call this campaign?', type:'text', ph:'e.g. APAC Partner Roadshow'},
+  {key:'programmeId', q:'Which programme is it part of?', type:'select', opts:()=>CFG.programmes.map(p=>({v:p.id,l:p.name}))},
+  {key:'regionId', q:'Which region or pod owns it?', type:'select', opts:()=>CFG.regions.map(r=>({v:r.id,l:r.name}))},
+  {key:'start', q:'When does it start?', type:'date'},
+  {key:'end', q:'When does it end?', type:'date'},
+  {key:'budget', q:'What\'s the budget?', type:'money'}
+];
+function wizQaAnswer(val){
+  const w=UI.wizard; if(!w)return;
+  const step=QA_STEPS[w.qaStep]; if(!step)return;
+  wizSet(step.key, val, step.type==='money'?'money':undefined);
+}
+window.wizQaAnswer=wizQaAnswer;
+function wizQaNext(){ const w=UI.wizard; if(!w)return; if(w.qaStep<QA_STEPS.length-1) w.qaStep++; render(); }
+window.wizQaNext=wizQaNext;
+function wizQaBack(){ const w=UI.wizard; if(!w)return; if(w.qaStep>0) w.qaStep--; else w.entryPath=null; render(); }
+window.wizQaBack=wizQaBack;
+
+/* Document ingest — basic client-side pattern matching, not AI. Plain text/CSV only for now
+   (no PDF/DOCX parsing library loaded); pulls a name guess, the first two dates, and the first
+   dollar amount, then drops into the normal form pre-filled so nothing is ever auto-created
+   without review. */
+function wizParseDocumentText(text){
+  const w=UI.wizard; if(!w)return;
+  const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  if(lines.length) w.name=lines[0].slice(0,120);
+  const dateMatches=[...text.matchAll(/\b(\d{4}-\d{2}-\d{2})\b/g)].map(m=>m[1]);
+  if(!dateMatches.length){
+    [...text.matchAll(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/g)].forEach(m=>{
+      dateMatches.push(`${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`);
+    });
+  }
+  if(dateMatches[0]) w.start=dateMatches[0];
+  if(dateMatches[1]) w.end=dateMatches[1];
+  const moneyMatch=text.match(/\$\s?([\d,]+(?:\.\d+)?)/);
+  if(moneyMatch) w.budget=parseFloat(moneyMatch[1].replace(/,/g,''))||0;
+  w.docNote='Prefilled from your document — double-check every field before creating.';
+  w.entryPath='form';
+  render();
+}
+async function wizHandleFileInput(input){
+  const file=input.files&&input.files[0]; if(!file) return;
+  if(!/\.(txt|csv)$/i.test(file.name)){
+    toast('For now, document prefill reads .txt or .csv files only — PDF/Word support is planned.');
+    return;
+  }
+  const text=await file.text();
+  wizParseDocumentText(text);
+}
+window.wizHandleFileInput=wizHandleFileInput;
+function wizHandleDrop(ev){
+  ev.preventDefault();
+  const file=ev.dataTransfer.files&&ev.dataTransfer.files[0]; if(!file) return;
+  if(!/\.(txt|csv)$/i.test(file.name)){
+    toast('For now, document prefill reads .txt or .csv files only — PDF/Word support is planned.');
+    return;
+  }
+  file.text().then(wizParseDocumentText);
+}
+window.wizHandleDrop=wizHandleDrop;
+function wizSet(key,val,type){
+  if(!UI.wizard)return; let v=val;
+  if(type==='num'||type==='money'){ v=parseFloat(String(val).replace(/[$,\s]/g,'')); if(isNaN(v))v=0; }
+  UI.wizard[key]=v; render();
+}
+window.wizSet=wizSet;
+function wizToggleTag(tag){
+  const w=UI.wizard; if(!w)return;
+  const i=w.partnerMotionTags.indexOf(tag);
+  if(i>=0) w.partnerMotionTags.splice(i,1); else w.partnerMotionTags.push(tag);
+  render();
+}
+window.wizToggleTag=wizToggleTag;
+function wizAddSplit(){ UI.wizard.applicableSplits.push({label:'',pct:0}); render(); }
+window.wizAddSplit=wizAddSplit;
+function wizSetSplit(i,key,val){ const s=UI.wizard.applicableSplits[i]; if(!s)return; s[key]= key==='pct'?(parseFloat(val)||0):val; render(); }
+window.wizSetSplit=wizSetSplit;
+function wizRemoveSplit(i){ UI.wizard.applicableSplits.splice(i,1); render(); }
+window.wizRemoveSplit=wizRemoveSplit;
+function wizAddLink(){ UI.wizard.externalLinks.push({label:'',url:''}); render(); }
+window.wizAddLink=wizAddLink;
+function wizSetLink(i,key,val){ const l=UI.wizard.externalLinks[i]; if(!l)return; l[key]=val; render(); }
+window.wizSetLink=wizSetLink;
+function wizRemoveLink(i){ UI.wizard.externalLinks.splice(i,1); render(); }
+window.wizRemoveLink=wizRemoveLink;
+function wizAddPartnerAlloc(){ UI.wizard.partnerAllocs.push({partnerId:(CFG.partners[0]&&CFG.partners[0].id)||null,role:'',budgetSharePct:0,leadSharePct:0}); render(); }
+window.wizAddPartnerAlloc=wizAddPartnerAlloc;
+function wizSetPartnerAlloc(i,key,val){
+  const p=UI.wizard.partnerAllocs[i]; if(!p)return;
+  p[key]= (key==='budgetSharePct'||key==='leadSharePct')?(parseFloat(val)||0):val; render();
+}
+window.wizSetPartnerAlloc=wizSetPartnerAlloc;
+function wizRemovePartnerAlloc(i){ UI.wizard.partnerAllocs.splice(i,1); render(); }
+window.wizRemovePartnerAlloc=wizRemovePartnerAlloc;
+
+function wizPreviewRef(){
+  const w=UI.wizard; if(!w||!w.start) return null;
+  const reg=byId(CFG.regions,w.regionId);
+  const cn=CFG.campaignNaming||{fyStartMonth:1,campaignNamingSeqScope:'pod',campaignNamingSeqCounters:{},campaignNamingPattern:'{fy}{period}{pod}-{seq}_{descriptor}'};
+  return buildCampaignTrackingRef(cn, {start:w.start,periodType:w.periodType}, reg, w.descriptor).ref;
+}
+
+function submitCampaignWizard(){
+  const w=UI.wizard; if(!w)return;
+  if(!w.name||!w.name.trim()){ toast('Campaign needs a name.'); return; }
+  if(!w.start){ toast('Set a start date so a tracking reference can be generated.'); return; }
+  const reg=byId(CFG.regions,w.regionId);
+  const cn=CFG.campaignNaming||{fyStartMonth:1,campaignNamingSeqScope:'pod',campaignNamingSeqCounters:{},campaignNamingPattern:'{fy}{period}{pod}-{seq}_{descriptor}'};
+  const {ref,counters}=buildCampaignTrackingRef(cn, {start:w.start,periodType:w.periodType}, reg, w.descriptor);
+  cn.campaignNamingSeqCounters=counters; CFG.campaignNaming=cn;
+  const periodInfo=fyPeriodFromDate(w.start,cn.fyStartMonth,w.periodType);
+  const id=uid('c');
+  const c={
+    id, name:w.name.trim(), programmeId:w.programmeId, budget:w.budget||0, start:w.start, end:w.end||'',
+    regionId:w.regionId, costBucketId:w.costBucketId, crmRef:null, _local:true,
+    periodType:w.periodType, periodLabel:periodInfo.period, trackingRef:ref,
+    businessCase:w.businessCase||'', signoffStatus:w.signoffStatus||'Draft', poNumber:w.poNumber||'',
+    registrationUrl:w.registrationUrl||'', projectFolderUrl:w.projectFolderUrl||'',
+    externalLinks:w.externalLinks||[], applicableSplits:w.applicableSplits||[],
+    partnerMotionTags:w.partnerMotionTags||[], clonedFromId:null,
+    contactListRef:w.contactListRef||'', icpRef:w.icpRef||''
+  };
+  CFG.campaigns.push(c);
+  (w.partnerAllocs||[]).forEach(pa=>{
+    if(!pa.partnerId) return;
+    CFG.campaignPartnerAllocations.push({id:uid('cpa'),campaignId:id,partnerId:pa.partnerId,role:pa.role||'',budgetSharePct:pa.budgetSharePct||0,leadSharePct:pa.leadSharePct||0});
+  });
+  logAudit('create campaign', c.name+' · '+ref);
+  UI.wizard=null;
+  render();
+  toast('Campaign created: '+ref);
+}
+window.submitCampaignWizard=submitCampaignWizard;
+
+function campaignWizardPanel(){
+  const w=UI.wizard; if(!w) return '';
+  const preview=wizPreviewRef();
+  const progOpts=CFG.programmes.map(p=>`<option value="${p.id}" ${p.id===w.programmeId?'selected':''}>${esc(p.name)}</option>`).join('');
+  const regOpts=CFG.regions.map(r=>`<option value="${r.id}" ${r.id===w.regionId?'selected':''}>${esc(r.name)}</option>`).join('');
+  const bucketOpts=CFG.costBuckets.map(b=>`<option value="${b.id}" ${b.id===w.costBucketId?'selected':''}>${esc(b.label)}</option>`).join('');
+  const splitPctTotal=sum(w.applicableSplits.map(s=>s.pct||0));
+
+  if(w.entryPath===null){
+    return `<div class="mask"><div class="modal" style="max-width:480px">
+      <h3>New campaign</h3>
+      <div class="bd">
+        <p class="mini" style="margin:0 0 12px">How do you want to create it?</p>
+        <div class="row" style="flex-direction:column;gap:8px">
+          <button class="btn" style="text-align:left;padding:12px" onclick="wizChoosePath('form')">
+            <b>Fill the form</b><div class="mini">Go straight to the full ${UI.mode==='simple'?'short':'detailed'} form.</div></button>
+          <button class="btn" style="text-align:left;padding:12px" onclick="wizChoosePath('guided')">
+            <b>Answer a few questions</b><div class="mini">One question at a time — good if you're not sure what's needed.</div></button>
+          <button class="btn" style="text-align:left;padding:12px" onclick="wizChoosePath('document')">
+            <b>Upload a document</b><div class="mini">Drop a brief or plan and we'll prefill what we can find (name, dates, budget).</div></button>
+        </div>
+      </div>
+      <div class="ft"><button class="btn" onclick="closeCampaignWizard()">Cancel</button></div>
+    </div></div>`;
+  }
+
+  if(w.entryPath==='document'){
+    return `<div class="mask"><div class="modal" style="max-width:480px">
+      <h3>Upload a document <span class="sp"></span><span class="pill n">Basic prefill</span></h3>
+      <div class="bd">
+        <p class="mini" style="margin:0 0 10px">Reads .txt or .csv today — we'll pull a name guess, the first
+          couple of dates, and a dollar amount if there is one. You'll review and can edit everything before creating.</p>
+        <div ondragover="event.preventDefault()" ondrop="wizHandleDrop(event)"
+          style="border:2px dashed var(--line);border-radius:8px;padding:28px;text-align:center;color:var(--ink-2)">
+          Drag a file here, or
+          <label class="btn sm" style="cursor:pointer">Browse<input type="file" accept=".txt,.csv" style="display:none" onchange="wizHandleFileInput(this)"></label>
+        </div>
+      </div>
+      <div class="ft"><button class="btn" onclick="wizChoosePath(null);UI.wizard.entryPath=null;render()">Back</button>
+        <button class="btn" onclick="closeCampaignWizard()">Cancel</button></div>
+    </div></div>`;
+  }
+
+  if(w.entryPath==='guided'){
+    const step=QA_STEPS[w.qaStep];
+    const val=w[step.key];
+    let field='';
+    if(step.type==='select'){
+      const opts=step.opts();
+      field=`<select class="in" autofocus onchange="wizQaAnswer(this.value)">${opts.length?opts.map(o=>`<option value="${o.v}" ${o.v===val?'selected':''}>${esc(o.l)}</option>`).join(''):'<option value="">— none yet —</option>'}</select>`;
+    } else if(step.type==='date'){
+      field=`<input class="in" type="date" value="${val||''}" onchange="wizQaAnswer(this.value)">`;
+    } else if(step.type==='money'){
+      field=`<input class="in" value="${val||''}" placeholder="0" oninput="wizQaAnswer(this.value)">`;
+    } else {
+      field=`<input class="in" value="${esc(val||'')}" placeholder="${step.ph||''}" oninput="wizQaAnswer(this.value)">`;
+    }
+    return `<div class="mask"><div class="modal" style="max-width:440px">
+      <h3>New campaign <span class="sp"></span><span class="pill n">Question ${w.qaStep+1} of ${QA_STEPS.length}</span></h3>
+      <div class="bd">
+        <div class="bar" style="width:100%;height:4px;margin-bottom:16px"><i style="width:${(w.qaStep+1)/QA_STEPS.length*100}%;background:var(--nav)"></i></div>
+        <label style="font-size:14px;font-weight:600;display:block;margin-bottom:8px">${step.q}</label>
+        ${field}
+      </div>
+      <div class="ft"><button class="btn" onclick="wizQaBack()">Back</button>
+        ${w.qaStep<QA_STEPS.length-1?`<button class="btn pri" onclick="wizQaNext()">Next</button>`:`<button class="btn pri" onclick="submitCampaignWizard()">Create campaign</button>`}
+      </div>
+    </div></div>`;
+  }
+
+  if(UI.mode==='simple'){
+    return `<div class="mask"><div class="modal">
+      <h3>New campaign <span class="sp"></span><span class="pill n">Simple mode</span></h3>
+      <div class="bd">
+        ${w.docNote?`<p class="mini" style="background:var(--canvas);border:1px dashed var(--line);border-radius:6px;padding:8px 10px;margin:0 0 12px">${esc(w.docNote)}</p>`:''}
+        <div class="wiz-sec"><h4>Campaign</h4>
+          <div class="wiz-grid">
+            <div class="full"><label>Campaign name</label><input class="in" value="${esc(w.name)}" oninput="wizSet('name',this.value)"></div>
+            <div><label>Programme</label><select class="in" onchange="wizSet('programmeId',this.value)">${progOpts||'<option value="">— none yet —</option>'}</select></div>
+            <div><label>Region / pod</label><select class="in" onchange="wizSet('regionId',this.value)">${regOpts}</select></div>
+            <div><label>Start date</label><input class="in" type="date" value="${w.start}" onchange="wizSet('start',this.value)"></div>
+            <div><label>End date</label><input class="in" type="date" value="${w.end}" onchange="wizSet('end',this.value)"></div>
+            <div><label>Budget</label><input class="in" value="${w.budget}" oninput="wizSet('budget',this.value,'money')"></div>
+          </div>
+          <div class="wiz-preview">Tracking ref: ${preview?`<b>${esc(preview)}</b>`:'<span class="mini">set a start date to preview</span>'}</div>
+        </div>
+        <p class="mini">Business case, sign-off, partner allocation, links and more are available in Expert mode —
+          switch any time from the toggle in the nav panel, without losing what you've entered here.</p>
+      </div>
+      <div class="ft">
+        <button class="btn" onclick="closeCampaignWizard()">Cancel</button>
+        <button class="btn pri" onclick="submitCampaignWizard()">Create campaign</button>
+      </div>
+    </div></div>`;
+  }
+
+  return `<div class="mask"><div class="modal">
+    <h3>New campaign <span class="sp"></span><span class="pill n">Draft</span></h3>
+    <div class="bd">
+      ${w.docNote?`<p class="mini" style="background:var(--canvas);border:1px dashed var(--line);border-radius:6px;padding:8px 10px;margin:0 0 12px">${esc(w.docNote)}</p>`:''}
+      <div class="wiz-sec"><h4>Campaign & hierarchy</h4>
+        <div class="wiz-grid">
+          <div class="full"><label>Campaign name</label><input class="in" value="${esc(w.name)}" oninput="wizSet('name',this.value)"></div>
+          <div><label>Programme</label><select class="in" onchange="wizSet('programmeId',this.value)">${progOpts||'<option value="">— none yet —</option>'}</select></div>
+          <div><label>Region / pod</label><select class="in" onchange="wizSet('regionId',this.value)">${regOpts}</select></div>
+        </div>
+        <p class="mini" style="margin-top:6px">A campaign belongs to exactly one programme. Need it somewhere else later? Clone it (once task&nbsp;#18 ships) rather than re-parenting by hand.</p>
+      </div>
+      <div class="wiz-sec"><h4>Timing & naming convention</h4>
+        <div class="wiz-grid">
+          <div><label>Period type</label><select class="in" onchange="wizSet('periodType',this.value)">
+            <option value="Quarter" ${w.periodType==='Quarter'?'selected':''}>Quarter</option>
+            <option value="Half" ${w.periodType==='Half'?'selected':''}>Half</option>
+          </select></div>
+          <div><label>Descriptor (free text)</label><input class="in" value="${esc(w.descriptor)}" placeholder="e.g. Syndication" oninput="wizSet('descriptor',this.value)"></div>
+          <div><label>Start date</label><input class="in" type="date" value="${w.start}" onchange="wizSet('start',this.value)"></div>
+          <div><label>End date</label><input class="in" type="date" value="${w.end}" onchange="wizSet('end',this.value)"></div>
+        </div>
+        <div class="wiz-preview">Tracking ref: ${preview?`<b>${esc(preview)}</b>`:'<span class="mini">set a start date to preview</span>'}</div>
+      </div>
+      <div class="wiz-sec"><h4>Budget & cost bucket</h4>
+        <div class="wiz-grid">
+          <div><label>Budget</label><input class="in" value="${w.budget}" oninput="wizSet('budget',this.value,'money')"></div>
+          <div><label>Cost bucket</label><select class="in" onchange="wizSet('costBucketId',this.value)">${bucketOpts}</select></div>
+        </div>
+        <div class="row" style="margin-top:8px;justify-content:space-between">
+          <span class="lbl">Applicable % split${splitPctTotal?` — ${splitPctTotal}% allocated`:''}</span>
+          <button class="btn sm" onclick="wizAddSplit()">+ Add split</button>
+        </div>
+        ${w.applicableSplits.map((s,i)=>`<div class="row" style="margin-top:5px">
+          <input class="in" style="flex:1" placeholder="Label" value="${esc(s.label)}" oninput="wizSetSplit(${i},'label',this.value)">
+          <input class="in cel w" value="${s.pct}" oninput="wizSetSplit(${i},'pct',this.value)">%
+          <button class="btn sm dgr" onclick="wizRemoveSplit(${i})">Remove</button></div>`).join('')}
+      </div>
+      <div class="wiz-sec"><h4>Partner motion</h4>
+        <div class="chiprow">${PARTNER_MOTION_TAGS.map(t=>`<span class="chip ${w.partnerMotionTags.includes(t)?'on':''}" onclick="wizToggleTag('${t}')">${t}</span>`).join('')}</div>
+      </div>
+      <div class="wiz-sec"><h4>Business case & sign-off</h4>
+        <div class="wiz-grid">
+          <div class="full"><label>Business case</label><textarea class="in" rows="2" oninput="wizSet('businessCase',this.value)">${esc(w.businessCase)}</textarea></div>
+          <div><label>Sign-off status</label><select class="in" onchange="wizSet('signoffStatus',this.value)">
+            ${['Draft','Submitted','Approved','Rejected'].map(s=>`<option value="${s}" ${w.signoffStatus===s?'selected':''}>${s}</option>`).join('')}
+          </select></div>
+          <div><label>PO number</label><input class="in" value="${esc(w.poNumber)}" oninput="wizSet('poNumber',this.value)"></div>
+        </div>
+        <p class="mini" style="margin-top:6px">Sign-off gates execution only — planning stays open regardless of status. Activities can't be committed until this campaign is Approved.</p>
+      </div>
+      <div class="wiz-sec"><h4>Registration & links</h4>
+        <div class="wiz-grid">
+          <div><label>Registration URL</label><input class="in" value="${esc(w.registrationUrl)}" oninput="wizSet('registrationUrl',this.value)"></div>
+          <div><label>Project folder URL</label><input class="in" value="${esc(w.projectFolderUrl)}" oninput="wizSet('projectFolderUrl',this.value)"></div>
+        </div>
+        <div class="row" style="margin-top:8px;justify-content:space-between">
+          <span class="lbl">Other links</span><button class="btn sm" onclick="wizAddLink()">+ Add link</button>
+        </div>
+        ${w.externalLinks.map((l,i)=>`<div class="row" style="margin-top:5px">
+          <input class="in" style="flex:1" placeholder="Label" value="${esc(l.label)}" oninput="wizSetLink(${i},'label',this.value)">
+          <input class="in" style="flex:2" placeholder="URL" value="${esc(l.url)}" oninput="wizSetLink(${i},'url',this.value)">
+          <button class="btn sm dgr" onclick="wizRemoveLink(${i})">Remove</button></div>`).join('')}
+      </div>
+      <div class="wiz-sec"><h4>Partner allocation</h4>
+        <div class="row" style="justify-content:space-between">
+          <span class="mini">${CFG.partners.length?'Split budget and leads per partner.':'No partners yet — add one from the Partners page, or leave this blank for now.'}</span>
+          <button class="btn sm" onclick="wizAddPartnerAlloc()" ${CFG.partners.length?'':'disabled'}>+ Add partner</button>
+        </div>
+        ${w.partnerAllocs.map((pa,i)=>`<div class="row" style="margin-top:5px">
+          <select class="in" style="flex:1" onchange="wizSetPartnerAlloc(${i},'partnerId',this.value)">
+            ${CFG.partners.map(p=>`<option value="${p.id}" ${p.id===pa.partnerId?'selected':''}>${esc(p.name)}</option>`).join('')}
+          </select>
+          <input class="in" style="flex:1" placeholder="Role" value="${esc(pa.role)}" oninput="wizSetPartnerAlloc(${i},'role',this.value)">
+          <input class="in cel w" value="${pa.budgetSharePct}" oninput="wizSetPartnerAlloc(${i},'budgetSharePct',this.value)">% budget
+          <input class="in cel w" value="${pa.leadSharePct}" oninput="wizSetPartnerAlloc(${i},'leadSharePct',this.value)">% leads
+          <button class="btn sm dgr" onclick="wizRemovePartnerAlloc(${i})">Remove</button></div>`).join('')}
+      </div>
+      <div class="wiz-sec"><h4>Contact list & ICP</h4>
+        <div class="wiz-grid">
+          <div><label>ICP reference</label><input class="in" value="${esc(w.icpRef)}" placeholder="placeholder until real ICP entities exist" oninput="wizSet('icpRef',this.value)"></div>
+          <div><label>Contact list reference</label><input class="in" value="${esc(w.contactListRef)}" placeholder="placeholder until CRM is built" oninput="wizSet('contactListRef',this.value)"></div>
+        </div>
+      </div>
+    </div>
+    <div class="ft">
+      <button class="btn" onclick="closeCampaignWizard()">Cancel</button>
+      <button class="btn pri" onclick="submitCampaignWizard()">Create campaign</button>
+    </div>
+  </div></div>`;
+}
+
+/* ---------- clone + move (task #18) ----------
+   Clone always makes a new row with cloned_from_id pointing at the source, so lineage is
+   traceable; a cloned campaign also deep-clones its activities and partner allocations
+   (sign-off/PO/registration reset to Draft/blank since those are specific to the original
+   execution, not the idea being reused). Move re-parents an existing row in place — no
+   copy, no new id — for the "this was misallocated, fix it without redoing it" case Stef
+   described. Programmes sit at the top of this hierarchy (nothing to re-parent them into
+   here), so only campaigns and activities get a Move action. */
+function cloneCampaign(id){
+  const src=byId(CFG.campaigns,id); if(!src)return;
+  const newId=uid('c');
+  const copy=Object.assign({}, src, {
+    id:newId, name:src.name+' (copy)', _local:true, clonedFromId:src.id, trackingRef:null,
+    signoffStatus:'Draft', signoffBy:null, signoffAt:null, poNumber:'', registrationUrl:'',
+    externalLinks:(src.externalLinks||[]).map(l=>Object.assign({},l)),
+    applicableSplits:(src.applicableSplits||[]).map(s=>Object.assign({},s)),
+    partnerMotionTags:(src.partnerMotionTags||[]).slice()
+  });
+  CFG.campaigns.push(copy);
+  TASK(id).forEach(t=>{
+    CFG.tasks.push(Object.assign({}, t, {id:uid('tk'), campaignId:newId, clonedFromId:t.id, trackingRef:null}));
+  });
+  CFG.campaignPartnerAllocations.filter(a=>a.campaignId===id).forEach(a=>{
+    CFG.campaignPartnerAllocations.push(Object.assign({}, a, {id:uid('cpa'), campaignId:newId}));
+  });
+  logAudit('clone campaign', src.name+' → '+copy.name+' ('+TASK(id).length+' activities cloned)');
+  render();
+  toast('Campaign cloned, including its activities. Sign-off reset to Draft — it needs its own approval.');
+}
+window.cloneCampaign=cloneCampaign;
+
+function cloneTask(id){
+  const t=byId(CFG.tasks,id); if(!t)return;
+  const copy=Object.assign({}, t, {id:uid('tk'), name:t.name+' (copy)', clonedFromId:t.id, trackingRef:null, committedCost:0, actualCost:0, status:'Planned'});
+  CFG.tasks.push(copy);
+  logAudit('clone activity', t.name+' → '+copy.name);
+  render();
+  toast('Activity cloned — status reset to Planned, committed/actual cost cleared.');
+}
+window.cloneTask=cloneTask;
+
+function openMoveCampaign(id){ UI.moveDialog={type:'campaign', id, targetId:''}; render(); }
+window.openMoveCampaign=openMoveCampaign;
+function openMoveTask(id){ UI.moveDialog={type:'task', id, targetId:''}; render(); }
+window.openMoveTask=openMoveTask;
+function closeMoveDialog(){ UI.moveDialog=null; render(); }
+window.closeMoveDialog=closeMoveDialog;
+function setMoveTarget(val){ if(UI.moveDialog) UI.moveDialog.targetId=val; }
+window.setMoveTarget=setMoveTarget;
+function confirmMove(){
+  const md=UI.moveDialog; if(!md)return;
+  if(!md.targetId){ toast('Pick a destination first.'); return; }
+  if(md.type==='campaign'){
+    const c=byId(CFG.campaigns,md.id); if(!c)return;
+    const oldProg=programme(c.programmeId), newProg=byId(CFG.programmes,md.targetId);
+    c.programmeId=md.targetId;
+    logAudit('move campaign', c.name+': '+(oldProg?oldProg.name:'no programme')+' → '+(newProg?newProg.name:'—'));
+    toast('Moved "'+c.name+'" to '+(newProg?newProg.name:'—')+'.');
+  } else if(md.type==='task'){
+    const t=byId(CFG.tasks,md.id); if(!t)return;
+    const oldCamp=byId(CFG.campaigns,t.campaignId), newCamp=byId(CFG.campaigns,md.targetId);
+    t.campaignId=md.targetId;
+    logAudit('move activity', t.name+': '+(oldCamp?oldCamp.name:'—')+' → '+(newCamp?newCamp.name:'—'));
+    toast('Moved "'+t.name+'" to '+(newCamp?newCamp.name:'—')+'.');
+  }
+  UI.moveDialog=null;
+  render();
+}
+window.confirmMove=confirmMove;
+
+function moveDialogPanel(){
+  const md=UI.moveDialog; if(!md) return '';
+  if(md.type==='campaign'){
+    const c=byId(CFG.campaigns,md.id); if(!c) return '';
+    const opts=CFG.programmes.map(p=>`<option value="${p.id}" ${p.id===md.targetId?'selected':''}>${esc(p.name)}</option>`).join('');
+    return `<div class="mask"><div class="modal" style="width:min(420px,100%)">
+      <h3>Move campaign</h3>
+      <div class="bd">
+        <p class="mini">Moving "<b>${esc(c.name)}</b>" re-parents it in place — its activities, budget and tracking ref move with it. This is not a copy.</p>
+        <label class="lbl">New programme</label>
+        <select class="in" style="width:100%" onchange="setMoveTarget(this.value)">
+          <option value="">— choose —</option>${opts}
+        </select>
+      </div>
+      <div class="ft"><button class="btn" onclick="closeMoveDialog()">Cancel</button><button class="btn pri" onclick="confirmMove()">Move</button></div>
+    </div></div>`;
+  }
+  if(md.type==='task'){
+    const t=byId(CFG.tasks,md.id); if(!t) return '';
+    const opts=CFG.campaigns.map(c=>`<option value="${c.id}" ${c.id===md.targetId?'selected':''}>${esc(c.name)}</option>`).join('');
+    return `<div class="mask"><div class="modal" style="width:min(420px,100%)">
+      <h3>Move activity</h3>
+      <div class="bd">
+        <p class="mini">Moving "<b>${esc(t.name)}</b>" re-parents it to a different campaign in place — no copy is made.</p>
+        <label class="lbl">New campaign</label>
+        <select class="in" style="width:100%" onchange="setMoveTarget(this.value)">
+          <option value="">— choose —</option>${opts}
+        </select>
+      </div>
+      <div class="ft"><button class="btn" onclick="closeMoveDialog()">Cancel</button><button class="btn pri" onclick="confirmMove()">Move</button></div>
+    </div></div>`;
+  }
+  return '';
+}
+
+function setIn(field,id,key,val,type){
+  const row=byId(CFG[field],id); if(!row)return;
+  let v=val;
+  if(type==='money'||type==='num'){ v=parseFloat(String(val).replace(/[$,\s]/g,'')); if(isNaN(v))v=0; }
+  row[key]=v; logAudit('edit',field+'.'+key); render();
+}
+window.setIn=setIn;
+
+/* ---------- Sync bridge with Ordo ---------- */
+function handleOrdoImportFile(file){
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>importCampaignsFromOrdo(e.target.result);
+  reader.onerror=()=>toast('Could not read that file.');
+  reader.readAsText(file);
+}
+window.handleOrdoImportFile=handleOrdoImportFile;
+function importCampaignsFromOrdo(jsonText){
+  let data;
+  try{ data=JSON.parse(jsonText); }
+  catch(e){ toast('That is not valid JSON — is it an Ordo campaign export?'); return; }
+  const camps=(data&&data.campaigns)||[], progs=(data&&data.programmes)||[], buckets=(data&&data.costBuckets)||[];
+  if(!camps.length){ toast('No campaigns found in that file.'); return; }
+  let added=0,updated=0;
+  const seenIds=camps.map(c=>c.id);
+  camps.forEach(row=>{
+    const existing=byId(CFG.campaigns,row.id);
+    if(existing){
+      Object.assign(existing,{name:row.name,programmeId:row.programmeId,budget:row.budget,start:row.start,end:row.end,regionId:row.regionId,costBucketId:row.costBucketId});
+      existing._stale=false; existing._local=false; updated++;
+    } else {
+      CFG.campaigns.push(Object.assign({_stale:false},row)); added++;
+    }
+  });
+  CFG.campaigns.forEach(c=>{ if(!seenIds.includes(c.id)) c._stale=true; });
+  progs.forEach(p=>{ const ex=byId(CFG.programmes,p.id); if(ex) ex.name=p.name; else CFG.programmes.push({id:p.id,name:p.name}); });
+  if(buckets.length){
+    buckets.forEach(b=>{ const ex=byId(CFG.costBuckets,b.id); if(ex) Object.assign(ex,b); else CFG.costBuckets.push(b); });
+  }
+  CFG.meta.syncedAt=new Date().toISOString();
+  logAudit('import from Ordo',added+' added, '+updated+' updated');
+  render();
+  toast('Synced from Ordo: '+added+' new campaign(s), '+updated+' updated.');
+}
+window.importCampaignsFromOrdo=importCampaignsFromOrdo;
+function exportRollupForOrdo(){
+  /* Only campaigns with at least one activity are included — an empty roll-up would otherwise
+     zero out a campaign's manually-entered Committed/Actual back in Ordo, which is exactly the
+     kind of silent-zero bug this app avoids everywhere else. */
+  const rows=CFG.campaigns.filter(c=>TASK(c.id).length>0).map(c=>({
+    id:c.id, committed:tasksTotal(c.id,'committedCost'), actual:tasksTotal(c.id,'actualCost')
+  }));
+  if(!rows.length){ toast('No campaigns have activities yet — nothing to export.'); return; }
+  const payload={exportedAt:new Date().toISOString(),campaigns:rows};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='cursus-rollup-for-ordo.json'; a.click();
+  CFG.meta.lastExportAt=payload.exportedAt;
+  logAudit('export for Ordo',rows.length+' campaign(s)');
+  toast('Roll-up exported — import it into Ordo (Admin > Campaigns).');
+}
+window.exportRollupForOrdo=exportRollupForOrdo;
+
+function exportNewCampaignsForOrdo(){
+  const rows=CFG.campaigns.filter(c=>c._local).map(c=>({
+    id:c.id,name:c.name,programmeId:c.programmeId,budget:c.budget,start:c.start,end:c.end,regionId:c.regionId,costBucketId:c.costBucketId
+  }));
+  if(!rows.length){ toast('No campaigns created here are waiting to be pushed.'); return; }
+  const payload={exportedAt:new Date().toISOString(),campaigns:rows};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='cursus-new-campaigns-for-ordo.json'; a.click();
+  CFG.meta.lastPushAt=payload.exportedAt;
+  logAudit('push new campaigns to Ordo',rows.length+' campaign(s)');
+  toast('Pushed '+rows.length+' campaign(s) — import into Ordo (Admin > Campaigns > "Import new campaigns from Cursus"). They\'ll stop showing as local once Ordo confirms them back.');
+}
+window.exportNewCampaignsForOrdo=exportNewCampaignsForOrdo;
+
+/* ---------- CSV export (Excel, Monday, Asana, ClickUp, Smartsheet -- anything that takes a
+   CSV import). Only real, existing fields go in these columns -- nothing derived or invented. ---------- */
+function csvCell(v){
+  const s=String(v==null?'':v);
+  return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+function downloadCsv(filename, headers, rows){
+  const lines=[headers.map(csvCell).join(',')].concat(rows.map(r=>r.map(csvCell).join(',')));
+  const blob=new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=filename; a.click();
+}
+function exportCampaignsCsv(){
+  const headers=['Campaign ID','Campaign name','Programme','Region','Cost bucket','Budget','Committed','Actual','Start date','End date','CRM ref','Tracking ref'];
+  const rows=CFG.campaigns.map(c=>{
+    const prog=byId(CFG.programmes,c.programmeId);
+    const reg=byId(CFG.regions,c.regionId);
+    const cb=byId(CFG.costBuckets,c.costBucketId);
+    return [c.id, c.name, prog?prog.name:'', reg?reg.name:'', cb?cb.label:'', c.budget||0,
+      tasksTotal(c.id,'committedCost'), tasksTotal(c.id,'actualCost'), c.start||'', c.end||'', c.crmRef||'', c.trackingRef||''];
+  });
+  downloadCsv('cursus-campaigns.csv', headers, rows);
+  logAudit('export campaigns CSV', rows.length+' campaign(s)');
+  toast('Campaigns exported as CSV — ready to import into Excel, Monday, ClickUp, or Smartsheet.');
+}
+window.exportCampaignsCsv=exportCampaignsCsv;
+function exportActivitiesCsv(){
+  const headers=['Activity ID','Activity name','Type','Campaign','Programme','Owner','Start date','Due date','Status','Cost bucket','Planned cost','Committed cost','Actual cost','Supplier','PO','Notes','Tracking ref'];
+  const rows=CFG.tasks.map(t=>{
+    const c=byId(CFG.campaigns,t.campaignId);
+    const prog=c?byId(CFG.programmes,c.programmeId):null;
+    const cb=byId(CFG.costBuckets,t.costBucketId);
+    return [t.id, t.name, t.type, c?c.name:'', prog?prog.name:'', t.owner||'', t.startDate||'', t.dueDate||'', t.status,
+      cb?cb.label:'', t.plannedCost||0, t.committedCost||0, t.actualCost||0, t.supplier||'', t.po||'', t.notes||'', t.trackingRef||''];
+  });
+  downloadCsv('cursus-activities.csv', headers, rows);
+  logAudit('export activities CSV', rows.length+' activit'+(rows.length===1?'y':'ies'));
+  toast('Activities exported as CSV — one row per activity, ready for Monday/Asana/ClickUp/Smartsheet task import.');
+}
+window.exportActivitiesCsv=exportActivitiesCsv;
+
+/* ---------- Generic outbound webhook (Zapier/Make/n8n -- see Norma > Integrations). One
+   standard JSON shape per campaign; the automation platform's own connectors do the vendor-
+   specific work for Monday/Asana/ClickUp/HubSpot/Salesforce/NetSuite/Smartsheet from there. ---------- */
+function buildCampaignPushPayload(campaignId){
+  const c=byId(CFG.campaigns,campaignId); if(!c) return null;
+  const prog=byId(CFG.programmes,c.programmeId);
+  const reg=byId(CFG.regions,c.regionId);
+  const cb=byId(CFG.costBuckets,c.costBucketId);
+  return {
+    event:'campaign.push', source:'Cursus', pushedAt:new Date().toISOString(),
+    campaign:{
+      id:c.id, name:c.name, programme:prog?prog.name:null, region:reg?reg.name:null,
+      costBucket:cb?cb.label:null, budget:c.budget||0,
+      committed:tasksTotal(c.id,'committedCost'), actual:tasksTotal(c.id,'actualCost'),
+      start:c.start||null, end:c.end||null, crmRef:c.crmRef||null, trackingRef:c.trackingRef||null
+    },
+    activities:TASK(c.id).map(t=>({
+      id:t.id, name:t.name, type:t.type, owner:t.owner||null, startDate:t.startDate||null, dueDate:t.dueDate||null,
+      status:t.status, plannedCost:t.plannedCost||0, committedCost:t.committedCost||0, actualCost:t.actualCost||0,
+      supplier:t.supplier||null, po:t.po||null, notes:t.notes||null, trackingRef:t.trackingRef||null
+    }))
+  };
+}
+window.buildCampaignPushPayload=buildCampaignPushPayload;
+function pushCampaignToWebhook(campaignId){
+  const url=(CFG.integrations&&CFG.integrations.webhookUrl)||'';
+  if(!CFG.integrations||!CFG.integrations.webhookEnabled||!url){
+    toast('No webhook configured — set one up in Norma > Integrations, then re-sync it here from Sync.');
+    return;
+  }
+  const payload=buildCampaignPushPayload(campaignId);
+  if(!payload){ toast('Could not find that campaign.'); return; }
+  fetch(url,{ method:'POST', mode:'cors', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) })
+    .then(()=>{
+      CFG.meta.lastWebhookPushAt=new Date().toISOString();
+      logAudit('push campaign to webhook', payload.campaign.name);
+      render();
+      toast('Pushed "'+payload.campaign.name+'" to your webhook.');
+    })
+    .catch(()=>{
+      /* Many webhook receivers don't send permissive CORS headers back to a browser caller --
+         that blocks reading the response, not necessarily the delivery itself. Fire a best-
+         effort no-cors request so the POST still has a chance of landing, and say so plainly
+         rather than claiming a confirmed success we can't actually verify. */
+      fetch(url,{ method:'POST', mode:'no-cors', body:JSON.stringify(payload) }).catch(()=>{});
+      CFG.meta.lastWebhookPushAt=new Date().toISOString();
+      logAudit('push campaign to webhook (unconfirmed)', payload.campaign.name);
+      render();
+      toast('Sent "'+payload.campaign.name+'" to your webhook — delivery isn\'t confirmable from here; check your Zapier/Make/n8n run history.');
+    });
+}
+window.pushCampaignToWebhook=pushCampaignToWebhook;
+
+/* ---------- Reference list export (for Custodia and Augur) -- identity only (ids + names),
+   not financials. This is what lets those two tools replace a free-text campaign label with a
+   real, selectable link back to the campaign/activity that actually exists here. ---------- */
+function exportReferenceListForOthers(){
+  const payload={
+    exportedAt:new Date().toISOString(),
+    campaigns:CFG.campaigns.map(c=>{
+      const prog=byId(CFG.programmes,c.programmeId);
+      return { id:c.id, name:c.name, programmeName:prog?prog.name:null };
+    }),
+    activities:CFG.tasks.map(t=>{
+      const c=byId(CFG.campaigns,t.campaignId);
+      return { id:t.id, name:t.name, campaignId:t.campaignId, campaignName:c?c.name:null };
+    })
+  };
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='cursus-reference-list.json'; a.click();
+  CFG.meta.lastReferenceExportAt=payload.exportedAt;
+  logAudit('export reference list', payload.campaigns.length+' campaigns, '+payload.activities.length+' activities');
+  toast('Reference list exported — import it into Custodia or Augur to link real campaigns/activities instead of free text.');
+}
+window.exportReferenceListForOthers=exportReferenceListForOthers;
+
+/* ---------- Import closed-won deals from Augur (reuses the export Augur already builds for
+   Ordo, which Ordo deliberately doesn't consume yet -- see requirements doc). Matches by the
+   real campaignId a deal was linked to in Augur, so this only works for deals linked after the
+   Phase 2 reference-list bridge was set up on that side. ---------- */
+function importClosedWonFromAugur(jsonText){
+  let data;
+  try{ data=JSON.parse(jsonText); }
+  catch(e){ toast('That is not valid JSON — is it an Augur closed-won export?'); return; }
+  CFG.wonDeals=data.deals||[];
+  CFG.meta.augurSyncedAt=new Date().toISOString();
+  const linked=CFG.wonDeals.filter(d=>d.campaignId).length;
+  logAudit('import closed-won from Augur', CFG.wonDeals.length+' deal(s), '+linked+' linked to a campaign');
+  render();
+  toast(CFG.wonDeals.length+' closed-won deal(s) imported ('+linked+' linked to a campaign here) — see Effectiveness.');
+}
+window.importClosedWonFromAugur=importClosedWonFromAugur;
+function handleAugurImportFile(file){
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>importClosedWonFromAugur(e.target.result);
+  reader.onerror=()=>toast('Could not read that file.');
+  reader.readAsText(file);
+}
+window.handleAugurImportFile=handleAugurImportFile;
+
+/* ---------- Norma bridge: shared config (cost buckets, tracking IDs) ---------- */
+function handleNormaImportFile(file){
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>importSharedConfigFromNorma(e.target.result);
+  reader.onerror=()=>toast('Could not read that file.');
+  reader.readAsText(file);
+}
+window.handleNormaImportFile=handleNormaImportFile;
+function importSharedConfigFromNorma(jsonText){
+  let data;
+  try{ data=JSON.parse(jsonText); }
+  catch(e){ toast('That is not valid JSON — is it a Norma shared-config export?'); return; }
+  if(data.costBuckets && data.costBuckets.length){
+    data.costBuckets.forEach(b=>{ const ex=byId(CFG.costBuckets,b.id); if(ex) Object.assign(ex,b); else CFG.costBuckets.push(b); });
+  }
+  if(data.trackingConfig){
+    CFG.trackingConfig=data.trackingConfig;
+    CFG.trackingConfig.mySeq=CFG.trackingConfig.mySeq||{};
+  }
+  if(data.integrations){ CFG.integrations=Object.assign({webhookUrl:'',webhookEnabled:false},data.integrations); }
+  if(data.configVersion!=null){ CFG.meta.normaConfigVersion=data.configVersion; }
+  CFG.meta.normaSyncedAt=new Date().toISOString();
+  logAudit('import shared config from Norma','cost buckets'+(data.trackingConfig?' + tracking convention':'')+(data.integrations?' + webhook target':''));
+  render();
+  toast('Shared config imported from Norma.');
+}
+window.importSharedConfigFromNorma=importSharedConfigFromNorma;
+function nextTrackingRef(type){
+  const tc=CFG.trackingConfig; if(!tc) return null;
+  const modCode=(tc.modCodes&&tc.modCodes.cursus)||'CUR';
+  const typeCode=(tc.typeCodes&&tc.typeCodes[type])||type.toUpperCase().slice(0,3);
+  tc.mySeq=tc.mySeq||{};
+  const key=typeCode;
+  tc.mySeq[key]=(tc.mySeq[key]||0)+1;
+  const seq=String(tc.mySeq[key]).padStart(tc.seqPadding||4,'0');
+  return tc.pattern.replace('{mod}',modCode).replace('{type}',typeCode).replace('{seq}',seq);
+}
+
+/* ---------- pages ---------- */
+function pageHome(){
+  const hr=new Date().getHours();
+  const greeting=hr<12?'Good morning':hr<18?'Good afternoon':'Good evening';
+  const name=(_myProfile&&_myProfile.name)?_myProfile.name.split(' ')[0]:'there';
+  const today=new Date().toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'long'});
+  const awaitingSignoff=CFG.campaigns.filter(c=>c.signoffStatus==='Submitted').length;
+  const overdue=CFG.tasks.filter(t=>t.status!=='Done'&&t.dueDate&&t.dueDate<new Date().toISOString().slice(0,10)).length;
+  const openItems=awaitingSignoff+overdue;
+  const totalBudget=sum(CFG.campaigns.map(c=>c.budget||0));
+  const inFlight=CFG.tasks.filter(t=>t.status==='Active'||t.status==='In progress'||t.status==='Planned').length;
+
+  const stages=['Draft','Submitted','Approved','Rejected'];
+  const stageCounts=stages.map(s=>CFG.campaigns.filter(c=>c.signoffStatus===s).length);
+  const stageMax=Math.max(1,...stageCounts);
+  const stageColor={Draft:'var(--ink-2)',Submitted:'var(--warn,#b8860b)',Approved:'var(--ok,#1a7f4e)',Rejected:'var(--bad,#b23)'};
+
+  let h=`<div class="phead"><div><h1>${greeting}, ${esc(name)}</h1>
+    <p>${today} · ${openItems?`<b>${openItems}</b> item${openItems===1?'':'s'} need${openItems===1?'s':''} your attention`:'Nothing urgent right now'}</p></div>
+    <div class="sp"></div>
+    <button class="btn pri" onclick="openCampaignWizard()">+ Quick add campaign</button></div>`;
+
+  h+=`<div class="kpis">
+    <div class="kpi"><div class="k">Campaigns</div><div class="kpi-v">${CFG.campaigns.length}</div><div class="sub">${CFG.programmes.length} programme${CFG.programmes.length===1?'':'s'}</div></div>
+    <div class="kpi"><div class="k">Total budget</div><div class="kpi-v">${F.mk(totalBudget)}</div><div class="sub">across all campaigns</div></div>
+    <div class="kpi"><div class="k">Activities in flight</div><div class="kpi-v">${inFlight}</div><div class="sub">${CFG.tasks.length} total</div></div>
+    <div class="kpi ${awaitingSignoff?'hl':''}"><div class="k">Awaiting sign-off</div><div class="kpi-v">${awaitingSignoff}</div><div class="sub">campaigns submitted</div></div>
+  </div>`;
+
+  h+=`<div style="display:flex;gap:14px;align-items:flex-start;margin-top:14px;flex-wrap:wrap">`;
+  h+=`<div style="flex:2;min-width:320px">
+    <div class="card"><h3>Your campaigns</h3><div class="bd flush"><table><thead><tr>
+      <th>Campaign</th><th>Sign-off</th><th class="n">Budget</th><th></th></tr></thead><tbody>
+      ${CFG.campaigns.slice(0,6).map(c=>{
+        const soClass=c.signoffStatus==='Approved'?'ok':c.signoffStatus==='Rejected'?'bad':c.signoffStatus==='Submitted'?'warn':'n';
+        return `<tr><td class="lb">${esc(c.name)}</td><td><span class="pill ${soClass}">${esc(c.signoffStatus||'Draft')}</span></td>
+        <td class="n calc">${F.mk(c.budget)}</td>
+        <td class="n"><a class="btn sm" href="#" onclick="goPlanActivitiesOfCampaign('${c.id}');return false">Open</a></td></tr>`;
+      }).join('') || '<tr><td colspan="4" class="empty">No campaigns yet — Quick Add to create the first one.</td></tr>'}
+      </tbody></table></div></div>
+  </div>`;
+
+  h+=`<div style="flex:1;min-width:260px">
+    <div class="card"><h3>Pipeline snapshot</h3><div class="bd">
+      ${stages.map((s,i)=>`<div style="margin-bottom:8px">
+        <div class="row" style="justify-content:space-between;font-size:11.5px"><span>${s}</span><b>${stageCounts[i]}</b></div>
+        <div class="bar" style="width:100%;height:6px;margin-top:2px"><i style="width:${(stageCounts[i]/stageMax*100)||0}%;background:${stageColor[s]}"></i></div>
+      </div>`).join('')}
+    </div></div>
+    <div class="card"><h3>Recent activity</h3><div class="bd flush">
+      ${CFG.audit.slice(0,8).map(a=>`<div style="padding:7px 14px;border-bottom:1px solid var(--line);font-size:11.5px">
+        <div>${esc(a.what)}</div><div class="mini" style="color:var(--ink-2)">${esc(a.detail||'')} · ${F.dt(a.ts)}</div></div>`).join('')
+        || '<div class="empty">No activity yet.</div>'}
+    </div></div>
+  </div>`;
+  h+=`</div>`;
+  return h;
+}
+
+const TASK_STATUSES=['Planned','Submitted','Approved','In progress','Completed'];
+
+/* Native HTML5 drag-and-drop, no library -- matches the rest of the suite's
+   "no dependency" approach (see Schema's process-map canvas for precedent). */
+function dragTask(ev,id){ ev.dataTransfer.setData('text/plain',id); ev.dataTransfer.effectAllowed='move'; }
+window.dragTask=dragTask;
+function allowDrop(ev){ ev.preventDefault(); }
+window.allowDrop=allowDrop;
+function dropTask(ev,status){
+  ev.preventDefault();
+  const id=ev.dataTransfer.getData('text/plain');
+  if(id) setIn('tasks',id,'status',status);
+}
+window.dropTask=dropTask;
+const ganttClamp=(v,a,b)=>Math.max(a,Math.min(b,(v==null||isNaN(v))?a:v));
+
+/* ==========================================================================
+   Unified Planning view (Programme > Campaign > Activity drill-down), phase16.
+   Replaces the old separate Programmes / Campaigns / Activities sidebar pages
+   with one consolidated page: pick a level, drill down by clicking an item,
+   switch between Table / Board / Gantt at any level.
+
+   Scope note: Programmes stay read-only here -- Cursus has never owned the
+   programmes table (no addProgramme(), no upsertRows('programmes', ...)
+   anywhere in this file, see the phase16 SQL migration comment) -- so
+   Programme-level views don't support editing or reordering, only drilling
+   into their campaigns. Campaign and Activity levels are fully interactive.
+
+   Click semantics (explicit design call, not hidden): clicking a Programme
+   or Campaign card/bar/row drills into its children, matching the "click a
+   programme, see its campaigns" hierarchy Stef described. Clicking an
+   Activity card/bar opens its detail panel, since Activity is the leaf --
+   there's nowhere further to drill. Every card/bar also gets a small
+   pencil (Edit) affordance that opens the detail panel directly at any
+   level, so "select an item in Board/Gantt to edit it" works everywhere,
+   not just at the leaf.
+   ========================================================================== */
+
+/* ==========================================================================
+   Planning view v2 -- combination-of-levels scope model (Stef's 2026-08-13
+   feedback), replacing v1's strict single-level-at-a-time drill-down.
+
+   You now pick a *scope* -- Programme / Programme+Campaign /
+   Programme+Campaign+Activity / Campaign / Campaign+Activity / Activity --
+   from one dropdown, rather than a single level. Programme+Activity without
+   Campaign is deliberately not offered: Campaign is what connects the two,
+   so skipping it would show two lists with no visible relationship, which
+   was exactly Stef's complaint about the old separate pages. A dropdown
+   (not checkboxes) enforces that by construction -- there's no invalid
+   state to click into, versus checkboxes needing extra disable/grey-out
+   logic to prevent Programme+Activity.
+
+   Two independent filter dropdowns (Programme, Campaign) narrow *which*
+   subtree populates whichever level(s) the scope shows -- they replace the
+   old click-a-row-to-drill breadcrumb. Clicking an item now always opens
+   its detail panel (no more drill-vs-edit ambiguity from the last round).
+
+   Table view renders every level in the scope nested (indented) in one
+   table, so the parent/child relationship Stef asked to see is visible at
+   a glance. Board and Gantt inherently show one level of cards/bars at a
+   time, so for a multi-level scope they show the deepest level (the most
+   actionable one) -- e.g. Programme+Campaign+Activity in Board/Gantt shows
+   Activities. Drag-to-reorder stays on the flat, single-level renders
+   (standalone Table, and Gantt/Board at whatever level they're showing);
+   the nested nested table is read-mostly (edit via the pencil) since
+   reordering across a tree of parents isn't a well-defined single action.
+   ========================================================================== */
+
+const PLAN_SCOPES=[
+  {id:'programme', label:'Programme', levels:['programme']},
+  {id:'programme-campaign', label:'Programme + Campaign', levels:['programme','campaign']},
+  {id:'programme-campaign-activity', label:'Programme + Campaign + Activity', levels:['programme','campaign','activity']},
+  {id:'campaign', label:'Campaign', levels:['campaign']},
+  {id:'campaign-activity', label:'Campaign + Activity', levels:['campaign','activity']},
+  {id:'activity', label:'Activity', levels:['activity']}
+];
+function planScopeLevels(){ return (PLAN_SCOPES.find(s=>s.id===UI.planScope)||PLAN_SCOPES[3]).levels; }
+function planDeepestLevel(){ const lv=planScopeLevels(); return lv[lv.length-1]; }
+
+function goPlanAll(scopeId){
+  UI.page='planning'; UI.planScope=scopeId||'campaign'; UI.planProgrammeId=null; UI.planCampaignId=null; render();
+}
+window.goPlanAll=goPlanAll;
+/* Quick-jump shortcuts (still used by the "View campaigns"/"Open activities" buttons
+   and the Ordo->Cursus deep link) -- now they set scope+filter instead of "level". */
+function goPlanCampaignsOfProgramme(programmeId){
+  UI.page='planning'; UI.planScope='campaign'; UI.planProgrammeId=programmeId; UI.planCampaignId=null; render();
+}
+window.goPlanCampaignsOfProgramme=goPlanCampaignsOfProgramme;
+function goPlanActivitiesOfCampaign(campaignId){
+  const camp=byId(CFG.campaigns,campaignId);
+  UI.page='planning'; UI.planScope='activity'; UI.planCampaignId=campaignId; UI.planProgrammeId=camp?camp.programmeId:null; render();
+}
+window.goPlanActivitiesOfCampaign=goPlanActivitiesOfCampaign;
+function setPlanView(view){ UI.planView=view; render(); }
+window.setPlanView=setPlanView;
+function setPlanScope(scopeId){
+  UI.planScope=scopeId;
+  const levels=planScopeLevels();
+  if(!levels.includes('programme')) UI.planProgrammeId=null;
+  if(!levels.includes('campaign') && !levels.includes('activity')) UI.planCampaignId=null;
+  render();
+}
+window.setPlanScope=setPlanScope;
+function setPlanFilterProgramme(id){
+  UI.planProgrammeId=id||null; UI.planCampaignId=null; render();
+}
+window.setPlanFilterProgramme=setPlanFilterProgramme;
+function setPlanFilterCampaign(id){
+  UI.planCampaignId=id||null;
+  if(UI.planCampaignId){ const c=byId(CFG.campaigns,UI.planCampaignId); if(c) UI.planProgrammeId=c.programmeId; }
+  render();
+}
+window.setPlanFilterCampaign=setPlanFilterCampaign;
+/* Selecting an item always opens its detail panel now -- drilling is handled by the
+   scope dropdown + filters, not by clicking into a row/card/bar. */
+function planSelect(kind,id){ openDetail(kind,id); }
+window.planSelect=planSelect;
+
+/* Items at a given level, respecting the current Programme/Campaign filters. */
+function planItemsAt(level){
+  if(level==='programme'){
+    let list=CFG.programmes.slice();
+    if(UI.planProgrammeId) list=list.filter(p=>p.id===UI.planProgrammeId);
+    return list;
+  }
+  if(level==='campaign'){
+    let list=CFG.campaigns.slice();
+    if(UI.planCampaignId) list=list.filter(c=>c.id===UI.planCampaignId);
+    else if(UI.planProgrammeId) list=list.filter(c=>c.programmeId===UI.planProgrammeId);
+    return list.sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));
+  }
+  let list=CFG.tasks.slice();
+  if(UI.planCampaignId) list=list.filter(t=>t.campaignId===UI.planCampaignId);
+  else if(UI.planProgrammeId){
+    const campIds=CFG.campaigns.filter(c=>c.programmeId===UI.planProgrammeId).map(c=>c.id);
+    list=list.filter(t=>campIds.includes(t.campaignId));
+  }
+  return list.sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));
+}
+/* Backward-compatible: items at the deepest level of the current scope (what Board/Gantt show). */
+function planItems(){ return planItemsAt(planDeepestLevel()); }
+
+/* Events (Eventus) linked to a set of activities via Activity.eventId. */
+function eventsForActivities(tasks){
+  const ids=tasks.map(t=>t.eventId).filter(Boolean);
+  return CFG.eventsIndex.filter(e=>ids.includes(e.id));
+}
+function eventRollup(events){
+  return { budget:sum(events.map(e=>e.budget||0)), pax:sum(events.map(e=>e.pax||0)),
+    registered:sum(events.map(e=>e.registered||0)), attended:sum(events.map(e=>e.attended||0)) };
+}
+/* Budget/committed/actual + event rollups for the current filter scope -- independent of
+   which levels are being displayed, so the KPI strip stays meaningful in every combo. */
+function planRollup(){
+  const camps=planItemsAt('campaign'), tasks=planItemsAt('activity');
+  const budget=sum(camps.map(c=>c.budget||0));
+  const committed=sum(tasks.map(t=>t.committedCost||0));
+  const actual=sum(tasks.map(t=>t.actualCost||0));
+  const ev=eventRollup(eventsForActivities(tasks));
+  return {campCount:camps.length,taskCount:tasks.length,budget,committed,actual,events:ev};
+}
+
+/* ---------- shared status (RAG) colour system ----------
+   One semantic scale, meant to look identical everywhere in the suite:
+   grey = not started, blue = on track, amber = at risk, red = behind/
+   blocked, green = completed -- plus a ★ "exceeding expectations" marker
+   layered on top of green when the actuals meaningfully beat plan. Simple,
+   documented rules of thumb, not a full RAG/EVM engine -- easy to retune.
+   Rolled out to Cursus + Eventus so far (2026-08-13); the .rag CSS classes
+   and this same tone naming are ready to reuse as-is in the other 6 tools. */
+const RAG_BAR_COLOR={grey:'#9AA3B5',blue:'#1F3AC7',amber:'#B5730E',red:'#9C2B3C',green:'#0E8A5F'};
+/* Named, non-magic-number thresholds (2026-08-13, task #6) -- pulled out of the rag
+   functions below so they're easy to find and tune in one place without hunting
+   through the logic. Same constant names reused across Cursus/Eventus/Ordo/Custodia/
+   Augur where the same concept applies. */
+const RAG_THRESHOLDS = {
+  exceedActualRatio: 0.9,    // actual cost under (plan * this) once complete => "exceeding" star
+  atRiskDaysWindow: 7,       // activity due within this many days, not yet in progress => amber
+  atRiskCommittedRatio: 1.0  // campaign committed >= (budget * this) while still running => amber
+};
+function ragPillHtml(rag){
+  return `<span class="rag rag-${rag.tone}">${esc(rag.label)}${rag.exceed?' <span class="rag-exceed">★</span>':''}</span>`;
+}
+function ragForActivity(t){
+  const today=new Date().toISOString().slice(0,10);
+  if(t.status==='Completed'){
+    const exceed=(t.plannedCost||0)>0 && (t.actualCost||0)>0 && t.actualCost<t.plannedCost*RAG_THRESHOLDS.exceedActualRatio;
+    return {tone:'green',label:'Completed',exceed};
+  }
+  if(t.dueDate && t.dueDate<today) return {tone:'red',label:'Behind'};
+  if(t.dueDate){
+    const daysLeft=Math.round((new Date(t.dueDate+'T00:00:00Z')-new Date(today+'T00:00:00Z'))/86400000);
+    if(daysLeft<=RAG_THRESHOLDS.atRiskDaysWindow && t.status!=='In progress') return {tone:'amber',label:'At risk'};
+  }
+  if(t.status==='In progress') return {tone:'blue',label:'On track'};
+  return {tone:'grey',label:'Not started'};
+}
+function ragForCampaign(c){
+  const today=new Date().toISOString().slice(0,10);
+  if(c.signoffStatus==='Rejected') return {tone:'red',label:'Off track'};
+  if(c.end && c.end<today){
+    if(c.signoffStatus==='Approved'){
+      const actual=tasksTotal(c.id,'actualCost');
+      const exceed=(c.budget||0)>0 && actual>0 && actual<c.budget*RAG_THRESHOLDS.exceedActualRatio;
+      return {tone:'green',label:'Completed',exceed};
+    }
+    return {tone:'red',label:'Behind'};
+  }
+  if(c.start && c.start>today) return {tone:'grey',label:'Not started'};
+  const committed=tasksTotal(c.id,'committedCost');
+  if((c.budget||0)>0 && committed>=c.budget*RAG_THRESHOLDS.atRiskCommittedRatio) return {tone:'amber',label:'At risk'};
+  return {tone:'blue',label:'On track'};
+}
+function ragForProgramme(p){
+  const camps=CFG.campaigns.filter(c=>c.programmeId===p.id);
+  if(!camps.length) return {tone:'grey',label:'Not started'};
+  if(camps.some(c=>c.signoffStatus==='Rejected')) return {tone:'red',label:'Needs attention'};
+  const today=new Date().toISOString().slice(0,10);
+  if(camps.every(c=>c.end && c.end<today && c.signoffStatus==='Approved')){
+    const actual=sum(camps.map(c=>tasksTotal(c.id,'actualCost'))), budget=sum(camps.map(c=>c.budget||0));
+    const exceed=budget>0 && actual>0 && actual<budget*RAG_THRESHOLDS.exceedActualRatio;
+    return {tone:'green',label:'Completed',exceed};
+  }
+  if(camps.some(c=>c.end && c.end<today && c.signoffStatus!=='Approved')) return {tone:'red',label:'Behind'};
+  return {tone:'blue',label:'On track'};
+}
+function ragFor(kind,item){
+  if(kind==='programme') return ragForProgramme(item);
+  if(kind==='campaign') return ragForCampaign(item);
+  return ragForActivity(item);
+}
+
+function planBreadcrumb(){
+  const parts=[];
+  const prog=UI.planProgrammeId?programme(UI.planProgrammeId):null;
+  const camp=UI.planCampaignId?byId(CFG.campaigns,UI.planCampaignId):null;
+  if(prog) parts.push('Programme: '+esc(prog.name));
+  if(camp) parts.push('Campaign: '+esc(camp.name));
+  return parts.length?`<div class="mini" style="margin-bottom:8px;color:var(--ink-3)">Filtered to ${parts.join(' · ')}</div>`:'';
+}
+
+/* ---------- drag-to-reorder (Table + Gantt row list), native HTML5 DnD, same
+   triad as the existing dragTask/allowDrop/dropTask on the Activities board. ---------- */
+function dragPlanRow(ev,id){ ev.dataTransfer.setData('text/plain',id); ev.dataTransfer.effectAllowed='move'; }
+window.dragPlanRow=dragPlanRow;
+function dropPlanRow(ev,targetId,level){
+  ev.preventDefault();
+  const dragId=ev.dataTransfer.getData('text/plain');
+  if(!dragId||dragId===targetId) return;
+  if(level==='programme'){ toast('Programmes are synced from Ordo — their order can\'t be changed here.'); return; }
+  const arr = level==='campaign' ? CFG.campaigns : CFG.tasks;
+  const ids = planItemsAt(level).map(x=>x.id);
+  const from=ids.indexOf(dragId), to=ids.indexOf(targetId);
+  if(from<0||to<0) return;
+  ids.splice(to,0,ids.splice(from,1)[0]);
+  ids.forEach((id,i)=>{ const row=byId(arr,id); if(row) row.sortOrder=i; });
+  logAudit('reorder '+level, dragId+' moved');
+  render();
+}
+window.dropPlanRow=dropPlanRow;
+function dropCampaignStage(ev,stage){
+  ev.preventDefault();
+  const id=ev.dataTransfer.getData('text/plain');
+  if(id) setIn('campaigns',id,'signoffStatus',stage);
+}
+window.dropCampaignStage=dropCampaignStage;
+
+/* ---------- Gantt drag-to-reschedule (commit-on-release, no library) ----------
+   Mirrors the mousedown/mousemove/mouseup node-drag pattern already used by
+   Schema's workflow canvas. mousedown captures the bar's rendered track
+   width to derive px-per-day; mouseup, if the pointer actually moved,
+   shifts both dates by the resulting day delta and persists via setIn (same
+   autosave-on-every-edit model as the rest of the app -- no separate Save
+   button). If the pointer never moved, it's treated as a plain click and
+   opens the detail panel instead, so a click still edits as expected.
+   There's no live "ghost bar" following the cursor during the drag -- the
+   bar snaps to its new position on release. */
+let _ganttDrag=null;
+function ganttBarMouseDown(ev,kind,id){
+  ev.preventDefault(); ev.stopPropagation();
+  const track=ev.currentTarget.closest('.gtrack'); if(!track) return;
+  const rec = kind==='campaign'?byId(CFG.campaigns,id):byId(CFG.tasks,id);
+  if(!rec) return;
+  const startField=kind==='campaign'?'start':'startDate', endField=kind==='campaign'?'end':'dueDate';
+  const rangeDays=parseFloat(track.dataset.rangeDays)||1;
+  const trackWidth=track.getBoundingClientRect().width||1;
+  _ganttDrag={kind,id,startX:ev.clientX,origStart:rec[startField],origEnd:rec[endField],
+    pxPerDay:trackWidth/rangeDays,moved:false};
+}
+window.ganttBarMouseDown=ganttBarMouseDown;
+document.addEventListener('mousemove',ev=>{
+  if(!_ganttDrag) return;
+  if(Math.abs(ev.clientX-_ganttDrag.startX)>3) _ganttDrag.moved=true;
+});
+document.addEventListener('mouseup',ev=>{
+  if(!_ganttDrag) return;
+  const g=_ganttDrag; _ganttDrag=null;
+  if(!g.moved){ openDetail(g.kind,g.id); return; }
+  const dayDelta=Math.round((ev.clientX-g.startX)/g.pxPerDay);
+  if(!dayDelta) return;
+  const table=g.kind==='campaign'?'campaigns':'tasks';
+  const startField=g.kind==='campaign'?'start':'startDate', endField=g.kind==='campaign'?'end':'dueDate';
+  /* UTC-anchored on purpose, not local-time -- new Date(iso+'T00:00:00') followed by a
+     .toISOString() round-trip silently loses/gains a day for any browser timezone that
+     isn't UTC+0 (confirmed while writing the regression test, running in Australia/Sydney).
+     Treating the date as a pure calendar date in UTC the whole way through avoids that. */
+  const shift=(iso,days)=>{ if(!iso) return iso; const d=new Date(iso+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+days); return d.toISOString().slice(0,10); };
+  const newStart=shift(g.origStart,dayDelta), newEnd=shift(g.origEnd,dayDelta);
+  if(g.origStart) setIn(table,g.id,startField,newStart);
+  if(g.origEnd) setIn(table,g.id,endField,newEnd);
+  const rec=byId(g.kind==='campaign'?CFG.campaigns:CFG.tasks,g.id);
+  logAudit('reschedule '+g.kind,(rec?rec.name:g.id)+' shifted '+dayDelta+' day'+(Math.abs(dayDelta)===1?'':'s'));
+});
+
+/* ---------- detail / edit panel (Programme read-only summary, Campaign + Activity full edit) ---------- */
+function openDetail(kind,id){ UI.detail={kind,id}; render(); }
+window.openDetail=openDetail;
+function closeDetail(){ UI.detail=null; render(); }
+window.closeDetail=closeDetail;
+
+function detailPanelHtml(){
+  const d=UI.detail; if(!d) return '';
+  if(d.kind==='programme') return detailProgrammeHtml(d.id);
+  if(d.kind==='campaign') return detailCampaignHtml(d.id);
+  if(d.kind==='activity') return detailActivityHtml(d.id);
+  return '';
+}
+
+function detailProgrammeHtml(id){
+  const p=programme(id); if(!p) return '';
+  const camps=CFG.campaigns.filter(c=>c.programmeId===id);
+  const budget=sum(camps.map(c=>c.budget||0)), committed=sum(camps.map(c=>tasksTotal(c.id,'committedCost')));
+  const actual=sum(camps.map(c=>tasksTotal(c.id,'actualCost')));
+  return `<div class="mask"><div class="modal" style="width:min(560px,100%)">
+    <h3>${esc(p.name)} <span class="pill n">Programme</span> ${ragPillHtml(ragForProgramme(p))}</h3>
+    <div class="bd">
+      <p class="mini">Programmes are synced from Ordo — read-only here. Fields, dates and ordering are edited in Ordo.</p>
+      <div class="kpis">
+        <div class="kpi"><div class="k">Campaigns</div><div class="kpi-v">${camps.length}</div></div>
+        <div class="kpi"><div class="k">Budget</div><div class="kpi-v">${F.mk(budget)}</div></div>
+        <div class="kpi"><div class="k">Committed</div><div class="kpi-v">${F.mk(committed)}</div></div>
+        <div class="kpi"><div class="k">Actual</div><div class="kpi-v">${F.mk(actual)}</div></div>
+      </div>
+      <label class="lbl">Campaigns in this programme</label>
+      ${!camps.length?'<div class="empty">No campaigns yet.</div>':camps.map(c=>
+        `<div class="row" style="justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line)">
+          <a href="#" onclick="closeDetail();goPlanActivitiesOfCampaign('${c.id}');return false">${esc(c.name)}</a>
+          <span>${ragPillHtml(ragForCampaign(c))} <span class="mini">${F.mk(c.budget)}</span></span>
+        </div>`).join('')}
+    </div>
+    <div class="ft"><button class="btn" onclick="closeDetail()">Close</button>
+      <button class="btn pri" onclick="closeDetail();goPlanCampaignsOfProgramme('${p.id}')">View in Table/Board/Gantt</button></div>
+  </div></div>`;
+}
+
+function detailCampaignHtml(id){
+  const c=byId(CFG.campaigns,id); if(!c) return '';
+  const tasks=TASK(c.id), events=eventsForActivities(tasks), evR=eventRollup(events);
+  return `<div class="mask"><div class="modal" style="width:min(620px,100%)">
+    <h3>${esc(c.name)} <span class="pill n">Campaign</span> ${ragPillHtml(ragForCampaign(c))}</h3>
+    <div class="bd" style="max-height:70vh;overflow:auto">
+      <div class="row" style="gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:180px"><label class="lbl">Name</label>
+          <input class="in" value="${esc(c.name)}" onchange="setIn('campaigns','${c.id}','name',this.value)"></div>
+        <div style="flex:1;min-width:150px"><label class="lbl">Programme</label>
+          <select class="in" onchange="setIn('campaigns','${c.id}','programmeId',this.value||null)">
+            <option value="">— none —</option>
+            ${CFG.programmes.map(p=>`<option value="${p.id}" ${p.id===c.programmeId?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
+      </div>
+      <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:8px">
+        <div style="flex:1;min-width:120px"><label class="lbl">Sign-off</label>
+          <select class="in" onchange="setIn('campaigns','${c.id}','signoffStatus',this.value)">
+            ${['Draft','Submitted','Approved','Rejected'].map(s=>`<option ${s===c.signoffStatus?'selected':''}>${s}</option>`).join('')}</select></div>
+        <div style="flex:1;min-width:110px"><label class="lbl">Start</label>
+          <input class="in" type="date" value="${c.start||''}" onchange="setIn('campaigns','${c.id}','start',this.value)"></div>
+        <div style="flex:1;min-width:110px"><label class="lbl">End</label>
+          <input class="in" type="date" value="${c.end||''}" onchange="setIn('campaigns','${c.id}','end',this.value)"></div>
+        <div style="flex:1;min-width:110px"><label class="lbl">Budget</label>
+          <input class="in" value="${c.budget||0}" onchange="setIn('campaigns','${c.id}','budget',this.value,'money')"></div>
+      </div>
+      <div class="kpis" style="margin-top:12px">
+        <div class="kpi"><div class="k">Activities</div><div class="kpi-v">${tasks.length}</div></div>
+        <div class="kpi"><div class="k">Committed</div><div class="kpi-v">${F.mk(tasksTotal(c.id,'committedCost'))}</div></div>
+        <div class="kpi"><div class="k">Actual</div><div class="kpi-v">${F.mk(tasksTotal(c.id,'actualCost'))}</div></div>
+        ${events.length?`<div class="kpi hl"><div class="k">Linked events</div><div class="kpi-v">${events.length}</div><div class="sub">${evR.attended}/${evR.registered} attended · ${F.mk(evR.budget)} budget</div></div>`:''}
+      </div>
+    </div>
+    <div class="ft"><button class="btn" onclick="closeDetail()">Close</button>
+      <button class="btn pri" onclick="closeDetail();goPlanActivitiesOfCampaign('${c.id}')">Open activities</button></div>
+  </div></div>`;
+}
+
+function detailActivityHtml(id){
+  const t=byId(CFG.tasks,id); if(!t) return '';
+  const camp=byId(CFG.campaigns,t.campaignId);
+  const linkedEvent=t.eventId?byId(CFG.eventsIndex,t.eventId):null;
+  const candidateEvents=camp?CFG.eventsIndex.filter(e=>e.campaignId===camp.id||!e.campaignId):CFG.eventsIndex;
+  return `<div class="mask"><div class="modal" style="width:min(620px,100%)">
+    <h3>${esc(t.name)} <span class="pill n">Activity</span> ${ragPillHtml(ragForActivity(t))}</h3>
+    <div class="bd" style="max-height:70vh;overflow:auto">
+      <div class="row" style="gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:180px"><label class="lbl">Name</label>
+          <input class="in" value="${esc(t.name)}" onchange="setIn('tasks','${t.id}','name',this.value)"></div>
+        <div style="flex:1;min-width:130px"><label class="lbl">Type</label>
+          <input class="in" list="activityTypeList" value="${esc(t.type)}" onchange="setIn('tasks','${t.id}','type',this.value)">
+          <datalist id="activityTypeList">${ACTIVITY_TYPE_SUGGESTIONS.map(s=>`<option value="${s}">`).join('')}</datalist></div>
+        <div style="flex:1;min-width:110px"><label class="lbl">Owner</label>
+          <input class="in" value="${esc(t.owner)}" onchange="setIn('tasks','${t.id}','owner',this.value)"></div>
+      </div>
+      <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:8px">
+        <div style="flex:1;min-width:110px"><label class="lbl">Start</label>
+          <input class="in" type="date" value="${t.startDate||''}" onchange="setIn('tasks','${t.id}','startDate',this.value)"></div>
+        <div style="flex:1;min-width:110px"><label class="lbl">Due</label>
+          <input class="in" type="date" value="${t.dueDate||''}" onchange="setIn('tasks','${t.id}','dueDate',this.value)"></div>
+        <div style="flex:1;min-width:120px"><label class="lbl">Status</label>
+          <select class="in" onchange="setIn('tasks','${t.id}','status',this.value)">
+            ${TASK_STATUSES.map(s=>`<option ${s===t.status?'selected':''}>${s}</option>`).join('')}</select></div>
+      </div>
+      <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:8px">
+        <div style="flex:1;min-width:100px"><label class="lbl">Planned</label>
+          <input class="in" value="${t.plannedCost||0}" onchange="setIn('tasks','${t.id}','plannedCost',this.value,'money')"></div>
+        <div style="flex:1;min-width:100px"><label class="lbl">Committed</label>
+          <input class="in" value="${t.committedCost||0}" onchange="setIn('tasks','${t.id}','committedCost',this.value,'money')"></div>
+        <div style="flex:1;min-width:100px"><label class="lbl">Actual</label>
+          <input class="in" value="${t.actualCost||0}" onchange="setIn('tasks','${t.id}','actualCost',this.value,'money')"></div>
+      </div>
+      <label class="lbl" style="margin-top:8px">Linked Eventus event</label>
+      <select class="in" onchange="setIn('tasks','${t.id}','eventId',this.value||null)">
+        <option value="">— none —</option>
+        ${candidateEvents.map(e=>`<option value="${e.id}" ${e.id===t.eventId?'selected':''}>${esc(e.name)}</option>`).join('')}</select>
+      ${linkedEvent?`<div class="row" style="justify-content:space-between;align-items:center;margin-top:6px">
+        <span class="mini">${linkedEvent.registered||0} registered · ${linkedEvent.attended||0} attended · ${F.mk(linkedEvent.budget||0)} budget</span>
+        <a class="btn sm pri" href="Eventus.html#event=${linkedEvent.id}" target="tool_Eventus">Open in Eventus →</a>
+      </div>`:`<div class="mini" style="margin-top:4px;color:var(--ink-3)">Pick an event to deep-link this activity to its record in Eventus.</div>`}
+    </div>
+    <div class="ft"><button class="btn" onclick="closeDetail()">Close</button></div>
+  </div></div>`;
+}
+
+const ACTIVITY_TYPE_SUGGESTIONS=['General','Event','Content','Paid Media','Email','Webinar','Other'];
+
+/* ---------- Table view ---------- */
+function planSingleLevelTableHtml(level, items){
+  if(level==='programme'){
+    let h=`<div class="card"><h3>Programmes <span class="sp"></span><span class="pill n">${items.length}</span></h3>
+      <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>Programme</th><th class="n">Campaigns</th><th class="n">Budget</th><th class="n">Committed</th><th class="n">Actual</th><th>Status</th><th></th></tr></thead><tbody>
+      ${!items.length?`<tr><td colspan="7" class="empty">No programmes yet — synced from Ordo.</td></tr>`:items.map(p=>{
+        const camps=CFG.campaigns.filter(c=>c.programmeId===p.id);
+        const budget=sum(camps.map(c=>c.budget||0)), committed=sum(camps.map(c=>tasksTotal(c.id,'committedCost'))), actual=sum(camps.map(c=>tasksTotal(c.id,'actualCost')));
+        return `<tr>
+          <td><b>${esc(p.name)}</b></td>
+          <td class="n calc">${camps.length}</td>
+          <td class="n calc">${F.mk(budget)}</td>
+          <td class="n calc">${F.mk(committed)}</td>
+          <td class="n calc">${F.mk(actual)}</td>
+          <td>${ragPillHtml(ragForProgramme(p))}</td>
+          <td class="n"><button class="btn sm pri" onclick="goPlanCampaignsOfProgramme('${p.id}')">View campaigns →</button>
+            <button class="btn sm" title="View details" onclick="openDetail('programme','${p.id}')">✎</button></td></tr>`;
+      }).join('')}
+      </tbody></table></div></div></div>`;
+    return h;
+  }
+  if(level==='campaign'){
+    let h=`<div class="card"><h3>Campaigns <span class="sp"></span><span class="pill n">${items.length}</span>
+        <button class="btn sm pri" onclick="openCampaignWizard()">Add campaign</button></h3>
+      <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th></th><th>Campaign</th><th>Tracking ref</th><th>Sign-off</th><th>Status</th><th>Programme</th><th>Region</th><th>Start</th><th>End</th><th class="n">Budget</th>
+      <th class="n">Activities</th><th class="n">Committed</th><th class="n">Actual</th><th></th></tr></thead><tbody>
+      ${!items.length?`<tr><td colspan="14" class="empty">No campaigns in this scope yet.</td></tr>`:items.map(c=>{
+        const tasks=TASK(c.id);
+        const soClass=c.signoffStatus==='Approved'?'ok':c.signoffStatus==='Rejected'?'bad':c.signoffStatus==='Submitted'?'warn':'n';
+        return `<tr draggable="true" ondragstart="dragPlanRow(event,'${c.id}')" ondragover="allowDrop(event)" ondrop="dropPlanRow(event,'${c.id}','campaign')">
+          <td class="mini" style="cursor:grab" title="Drag to reorder">⠿</td>
+          <td><input class="cel txt" style="width:170px" value="${esc(c.name)}" onchange="setIn('campaigns','${c.id}','name',this.value)">
+            ${c._stale?' <span class="pill warn">no longer in Ordo</span>':''}${c._local?' <span class="pill v">not yet in Ordo</span>':''}</td>
+          <td class="mini">${c.trackingRef?esc(c.trackingRef):'—'}</td>
+          <td><span class="pill ${soClass}">${esc(c.signoffStatus||'Draft')}</span></td>
+          <td>${ragPillHtml(ragForCampaign(c))}</td>
+          <td><select class="cel txt" style="width:140px" onchange="setIn('campaigns','${c.id}','programmeId',this.value||null)">
+            <option value="">— none —</option>
+            ${CFG.programmes.map(p=>`<option value="${p.id}" ${p.id===c.programmeId?'selected':''}>${esc(p.name)}</option>`).join('')}</select></td>
+          <td><select class="cel txt" style="width:90px" onchange="setIn('campaigns','${c.id}','regionId',this.value)">
+            ${CFG.regions.map(r=>`<option value="${r.id}" ${r.id===c.regionId?'selected':''}>${esc(r.name)}</option>`).join('')}</select></td>
+          <td><input class="cel txt" style="width:100px" type="date" value="${c.start||''}" onchange="setIn('campaigns','${c.id}','start',this.value)"></td>
+          <td><input class="cel txt" style="width:100px" type="date" value="${c.end||''}" onchange="setIn('campaigns','${c.id}','end',this.value)"></td>
+          <td class="n"><input class="cel" style="width:80px" value="${c.budget||0}" onchange="setIn('campaigns','${c.id}','budget',this.value,'money')"></td>
+          <td class="n calc">${tasks.length}</td>
+          <td class="n calc">${tasks.length?F.mk(tasksTotal(c.id,'committedCost')):'—'}</td>
+          <td class="n calc">${tasks.length?F.mk(tasksTotal(c.id,'actualCost')):'—'}</td>
+          <td class="n"><button class="btn sm pri" onclick="goPlanActivitiesOfCampaign('${c.id}')">Open activities →</button>
+            <button class="btn sm" title="View details" onclick="openDetail('campaign','${c.id}')">✎</button>
+            <button class="btn sm" onclick="cloneCampaign('${c.id}')" title="Deep-clones this campaign and its activities">Clone</button>
+            ${c._local?`<button class="btn sm dgr" onclick="removeCampaign('${c.id}')">Remove</button>`:''}</td></tr>`;
+      }).join('')}
+      </tbody></table></div></div></div>`;
+    return h;
+  }
+  // activity
+  const cSel = UI.planCampaignId ? byId(CFG.campaigns,UI.planCampaignId) : null;
+  let h=`<div class="card"><h3>Activities ${cSel?'— '+esc(cSel.name):''} <span class="sp"></span><span class="pill n">${items.length}</span>
+      ${cSel?`<button class="btn sm pri" onclick="addTask('${cSel.id}')">Add activity</button>`:''}</h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th></th><th>Name</th><th>Type</th><th>Owner</th><th>Start</th><th>Due</th><th>Status</th><th>Progress</th>
+      <th class="n">Planned</th><th class="n">Committed</th><th class="n">Actual</th><th>Event</th><th></th></tr></thead><tbody>
+    ${!items.length?`<tr><td colspan="13" class="empty">No activities in this scope yet.</td></tr>`:items.map(t=>{
+      const linkedEvent=t.eventId?byId(CFG.eventsIndex,t.eventId):null;
+      return `<tr draggable="true" ondragstart="dragPlanRow(event,'${t.id}')" ondragover="allowDrop(event)" ondrop="dropPlanRow(event,'${t.id}','activity')">
+        <td class="mini" style="cursor:grab" title="Drag to reorder">⠿</td>
+        <td><input class="cel txt" style="width:160px" value="${esc(t.name)}" onchange="setIn('tasks','${t.id}','name',this.value)"></td>
+        <td><input class="cel txt" style="width:100px" list="activityTypeList" value="${esc(t.type)}" onchange="setIn('tasks','${t.id}','type',this.value)"></td>
+        <td><input class="cel txt" style="width:100px" value="${esc(t.owner)}" onchange="setIn('tasks','${t.id}','owner',this.value)"></td>
+        <td><input class="cel txt" style="width:104px" type="date" value="${t.startDate||''}" onchange="setIn('tasks','${t.id}','startDate',this.value)"></td>
+        <td><input class="cel txt" style="width:104px" type="date" value="${t.dueDate||''}" onchange="setIn('tasks','${t.id}','dueDate',this.value)"></td>
+        <td><select class="cel txt" style="width:106px" onchange="setIn('tasks','${t.id}','status',this.value)">
+          ${TASK_STATUSES.map(s=>`<option ${s===t.status?'selected':''}>${s}</option>`).join('')}</select></td>
+        <td>${ragPillHtml(ragForActivity(t))}</td>
+        <td class="n"><input class="cel" value="${t.plannedCost||0}" onchange="setIn('tasks','${t.id}','plannedCost',this.value,'money')"></td>
+        <td class="n"><input class="cel" value="${t.committedCost||0}" onchange="setIn('tasks','${t.id}','committedCost',this.value,'money')"></td>
+        <td class="n"><input class="cel" value="${t.actualCost||0}" onchange="setIn('tasks','${t.id}','actualCost',this.value,'money')"></td>
+        <td class="mini">${linkedEvent?esc(linkedEvent.name):'—'}</td>
+        <td class="n"><button class="btn sm" title="View details / link an event" onclick="openDetail('activity','${t.id}')">✎</button>
+          <button class="btn sm dgr" onclick="removeTask('${t.id}')">Remove</button></td></tr>`;
+    }).join('')}
+    </tbody></table></div></div>
+    <datalist id="activityTypeList">${ACTIVITY_TYPE_SUGGESTIONS.map(s=>`<option value="${s}">`).join('')}</datalist>
+    </div>`;
+  return h;
+}
+
+/* Nested/indented table for a multi-level scope (Programme+Campaign[+Activity], or
+   Campaign+Activity) -- one row per item at any level, indented by depth, so the
+   parent/child relationship is visible in a single view. Read-mostly: editing happens
+   via the pencil -> detail panel, not inline, since reordering across a tree of
+   different parents isn't a single well-defined drag operation. */
+function planNestedRowHtml(kind,item,depth,rollup){
+  const indent=10+depth*22;
+  const typeLabel=kind==='programme'?'Programme':kind==='campaign'?'Campaign':'Activity';
+  return `<tr>
+    <td style="padding-left:${indent}px">${depth?'<span class="mini" style="color:var(--ink-3)">↳</span> ':''}<b>${esc(item.name)}</b> <span class="pill n" style="font-size:9.5px">${typeLabel}</span></td>
+    <td class="n calc">${F.mk(rollup.budget)}</td>
+    <td class="n calc">${F.mk(rollup.committed)}</td>
+    <td class="n calc">${F.mk(rollup.actual)}</td>
+    <td>${ragPillHtml(ragFor(kind,item))}</td>
+    <td class="n"><button class="btn sm" title="View details" onclick="openDetail('${kind}','${item.id}')">✎</button></td>
+  </tr>`;
+}
+function planNestedTableHtml(levels){
+  let rows='', count=0;
+  const top=levels[0];
+  planItemsAt(top).forEach(topItem=>{
+    count++;
+    if(top==='programme'){
+      const camps=CFG.campaigns.filter(c=>c.programmeId===topItem.id && (!UI.planCampaignId||c.id===UI.planCampaignId))
+        .sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));
+      const tasksAll=camps.flatMap(c=>TASK(c.id));
+      rows+=planNestedRowHtml('programme',topItem,0,{budget:sum(camps.map(c=>c.budget||0)),committed:sum(tasksAll.map(t=>t.committedCost||0)),actual:sum(tasksAll.map(t=>t.actualCost||0))});
+      if(levels.includes('campaign')){
+        camps.forEach(c=>{
+          count++;
+          const tasks=TASK(c.id);
+          rows+=planNestedRowHtml('campaign',c,1,{budget:c.budget||0,committed:sum(tasks.map(t=>t.committedCost||0)),actual:sum(tasks.map(t=>t.actualCost||0))});
+          if(levels.includes('activity')){
+            tasks.slice().sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0)).forEach(t=>{
+              count++;
+              rows+=planNestedRowHtml('activity',t,2,{budget:t.plannedCost||0,committed:t.committedCost||0,actual:t.actualCost||0});
+            });
+          }
+        });
+      }
+    } else { // top === 'campaign' (Campaign + Activity combo)
+      const c=topItem, tasks=TASK(c.id).slice().sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));
+      rows+=planNestedRowHtml('campaign',c,0,{budget:c.budget||0,committed:sum(tasks.map(t=>t.committedCost||0)),actual:sum(tasks.map(t=>t.actualCost||0))});
+      tasks.forEach(t=>{ count++; rows+=planNestedRowHtml('activity',t,1,{budget:t.plannedCost||0,committed:t.committedCost||0,actual:t.actualCost||0}); });
+    }
+  });
+  const scopeLabel=(PLAN_SCOPES.find(s=>s.id===UI.planScope)||{}).label||'';
+  return `<div class="card"><h3>${esc(scopeLabel)} <span class="sp"></span><span class="pill n">${count}</span></h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+    <th>Item</th><th class="n">Budget</th><th class="n">Committed</th><th class="n">Actual</th><th>Status</th><th></th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="6" class="empty">Nothing in this scope yet.</td></tr>'}</tbody></table></div></div></div>`;
+}
+function planTableHtml(){
+  const levels=planScopeLevels();
+  if(levels.length===1) return planSingleLevelTableHtml(levels[0], planItemsAt(levels[0]));
+  return planNestedTableHtml(levels);
+}
+
+/* ---------- Board view (always the deepest level of the current scope) ---------- */
+function planBoardHtml(level, items){
+  if(level==='activity'){
+    let h=`<div class="card"><h3>Board <span class="sp"></span><span class="pill n">${items.length}</span></h3>
+      <div class="bd flush"><div class="scroll" style="padding:12px"><div style="display:flex;gap:10px;min-width:900px">`;
+    TASK_STATUSES.forEach(status=>{
+      const inCol=items.filter(t=>t.status===status);
+      h+=`<div style="flex:1;min-width:160px" ondragover="allowDrop(event)" ondrop="dropTask(event,'${status}')">
+        <div class="mini" style="font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;color:var(--ink-3)">${esc(status)} <span class="pill n">${inCol.length}</span></div>
+        <div style="display:flex;flex-direction:column;gap:6px;min-height:60px;background:var(--canvas);border-radius:6px;padding:6px">
+        ${!inCol.length?'<div class="mini" style="text-align:center;padding:10px;color:var(--ink-3)">—</div>':inCol.map(t=>{
+          const rag=ragForActivity(t);
+          return `
+          <div draggable="true" ondragstart="dragTask(event,'${t.id}')" onclick="openDetail('activity','${t.id}')"
+            style="background:var(--surface);border:1px solid var(--line);border-left:4px solid ${RAG_BAR_COLOR[rag.tone]};border-radius:6px;padding:8px;cursor:pointer;box-shadow:var(--sh)">
+            <div style="font-weight:600;font-size:12.5px">${esc(t.name)}</div>
+            <div class="mini">${esc(t.owner||'unassigned')}${t.dueDate?' · due '+F.d(t.dueDate):''}</div>
+            <div class="mini calc">${F.mk(t.plannedCost||0)}</div>
+            <div style="margin-top:3px">${ragPillHtml(rag)}</div>
+          </div>`;}).join('')}
+        </div></div>`;
+    });
+    h+=`</div></div></div></div>`;
+    return h;
+  }
+  if(level==='campaign'){
+    const stages=['Draft','Submitted','Approved','Rejected'];
+    let h=`<div class="card"><h3>Board <span class="sp"></span><span class="pill n">${items.length}</span></h3>
+      <div class="bd flush"><div class="scroll" style="padding:12px"><div style="display:flex;gap:10px;min-width:900px">`;
+    stages.forEach(stage=>{
+      const inCol=items.filter(c=>(c.signoffStatus||'Draft')===stage);
+      h+=`<div style="flex:1;min-width:180px" ondragover="allowDrop(event)" ondrop="dropCampaignStage(event,'${stage}')">
+        <div class="mini" style="font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;color:var(--ink-3)">${esc(stage)} <span class="pill n">${inCol.length}</span></div>
+        <div style="display:flex;flex-direction:column;gap:6px;min-height:60px;background:var(--canvas);border-radius:6px;padding:6px">
+        ${!inCol.length?'<div class="mini" style="text-align:center;padding:10px;color:var(--ink-3)">—</div>':inCol.map(c=>{
+          const rag=ragForCampaign(c);
+          return `
+          <div draggable="true" ondragstart="dragTask(event,'${c.id}')" onclick="openDetail('campaign','${c.id}')"
+            style="background:var(--surface);border:1px solid var(--line);border-left:4px solid ${RAG_BAR_COLOR[rag.tone]};border-radius:6px;padding:8px;cursor:pointer;box-shadow:var(--sh)">
+            <div style="font-weight:600;font-size:12.5px">${esc(c.name)}</div>
+            <div class="mini">${TASK(c.id).length} activities · ${F.mk(c.budget||0)}</div>
+            <div style="margin-top:3px">${ragPillHtml(rag)}</div>
+          </div>`;}).join('')}
+        </div></div>`;
+    });
+    h+=`</div></div></div></div>`;
+    return h;
+  }
+  // programme -- read-only rollup grouping, no drag (Cursus doesn't own programmes)
+  const buckets={'Needs attention':[],'In progress':[],'All approved':[],'Empty':[]};
+  items.forEach(p=>{
+    const camps=CFG.campaigns.filter(c=>c.programmeId===p.id);
+    if(!camps.length) buckets['Empty'].push(p);
+    else if(camps.some(c=>c.signoffStatus==='Rejected')) buckets['Needs attention'].push(p);
+    else if(camps.every(c=>c.signoffStatus==='Approved')) buckets['All approved'].push(p);
+    else buckets['In progress'].push(p);
+  });
+  let h=`<div class="card"><h3>Board <span class="sp"></span><span class="pill n">${items.length}</span></h3>
+    <div class="bd"><p class="mini">Grouped by roll-up status computed from each programme's campaigns — read-only, since Programmes are synced from Ordo.</p>
+    <div class="scroll" style="padding:0 0 12px"><div style="display:flex;gap:10px;min-width:900px">`;
+  Object.keys(buckets).forEach(bkt=>{
+    const inCol=buckets[bkt];
+    h+=`<div style="flex:1;min-width:180px">
+      <div class="mini" style="font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;color:var(--ink-3)">${bkt} <span class="pill n">${inCol.length}</span></div>
+      <div style="display:flex;flex-direction:column;gap:6px;min-height:60px;background:var(--canvas);border-radius:6px;padding:6px">
+      ${!inCol.length?'<div class="mini" style="text-align:center;padding:10px;color:var(--ink-3)">—</div>':inCol.map(p=>{
+        const rag=ragForProgramme(p);
+        return `
+        <div onclick="openDetail('programme','${p.id}')" style="background:var(--surface);border:1px solid var(--line);border-left:4px solid ${RAG_BAR_COLOR[rag.tone]};border-radius:6px;padding:8px;cursor:pointer;box-shadow:var(--sh)">
+          <div style="font-weight:600;font-size:12.5px">${esc(p.name)}</div>
+          <div style="margin-top:3px">${ragPillHtml(rag)}</div>
+        </div>`;}).join('')}
+      </div></div>`;
+  });
+  h+=`</div></div></div></div>`;
+  return h;
+}
+
+/* ---------- Gantt view (always the deepest level of the current scope) ---------- */
+function planGanttRange(items, level){
+  let starts=[], ends=[];
+  if(level==='activity'){ starts=items.map(t=>t.startDate).filter(Boolean); ends=items.map(t=>t.dueDate).filter(Boolean); }
+  else if(level==='campaign'){ starts=items.map(c=>c.start).filter(Boolean); ends=items.map(c=>c.end).filter(Boolean); }
+  else { items.forEach(p=>{ CFG.campaigns.filter(c=>c.programmeId===p.id).forEach(c=>{ if(c.start)starts.push(c.start); if(c.end)ends.push(c.end); }); }); }
+  const all=[...starts,...ends].sort();
+  return { start: starts.length?starts.slice().sort()[0]:all[0], end: ends.length?ends.slice().sort().slice(-1)[0]:all[all.length-1] };
+}
+function planGanttHtml(level, items){
+  const cSel = level==='activity' && UI.planCampaignId ? byId(CFG.campaigns,UI.planCampaignId) : null;
+  const range = (cSel && cSel.start && cSel.end) ? {start:cSel.start,end:cSel.end} : planGanttRange(items, level);
+  let h=`<div class="card"><h3>Gantt <span class="sp"></span><span class="pill n">${items.length}</span></h3><div class="bd">`;
+  if(!range.start || !range.end || range.start>=range.end){
+    h+=`<div class="empty">Not enough dated items in this scope to draw a timeline.</div></div></div>`;
+    return h;
+  }
+  const rs=new Date(range.start+'T00:00:00').getTime(), re=new Date(range.end+'T00:00:00').getTime();
+  const span=Math.max(1,re-rs), rangeDays=Math.max(1,Math.round(span/86400000));
+  const draggable = level==='campaign' || level==='activity';
+  h+=`<div class="mini" style="margin-bottom:8px">${F.d(range.start)} → ${F.d(range.end)}${draggable?' · drag a bar to reschedule, drag the ⠿ handle to reorder':' · read-only (Programmes are synced from Ordo)'}</div>`;
+  h+=`<div style="display:flex;flex-direction:column;gap:6px">`;
+  items.forEach(it=>{
+    const isTask = level==='activity';
+    const s0 = isTask?it.startDate:it.start, e0 = isTask?it.dueDate:it.end;
+    const s=s0?new Date(s0+'T00:00:00').getTime():rs;
+    const e=e0?new Date(e0+'T00:00:00').getTime():s;
+    const left=ganttClamp((s-rs)/span,0,1)*100;
+    const width=Math.max(2,ganttClamp((e-s)/span,0,1)*100);
+    const rag=ragFor(level,it), color=RAG_BAR_COLOR[rag.tone];
+    h+=`<div class="row" style="gap:8px">
+      ${draggable?`<span class="mini" draggable="true" ondragstart="dragPlanRow(event,'${it.id}')" ondragover="allowDrop(event)" ondrop="dropPlanRow(event,'${it.id}','${level}')" style="width:14px;flex-shrink:0;cursor:grab" title="Drag to reorder">⠿</span>`:'<span style="width:14px;flex-shrink:0"></span>'}
+      <div class="mini" style="width:150px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" onclick="openDetail('${level}','${it.id}')">${esc(it.name)}</div>
+      <div class="gtrack" data-range-days="${rangeDays}" style="flex:1;position:relative;height:20px;background:var(--canvas);border-radius:4px">
+        <div ${draggable?`onmousedown="ganttBarMouseDown(event,'${level}','${it.id}')"`:`onclick="openDetail('${level}','${it.id}')"`}
+          style="position:absolute;top:2px;height:16px;left:${left}%;width:${width}%;background:${color};border-radius:3px;${draggable?'cursor:grab':'cursor:pointer'}"
+          title="${esc(it.name)} — ${esc(rag.label)}"></div>
+      </div>
+      ${ragPillHtml(rag)}
+    </div>`;
+  });
+  h+=`</div></div></div>`;
+  return h;
+}
+
+/* ---------- page shell ---------- */
+function pagePlanning(){
+  const r=planRollup();
+  let h=`<div class="phead"><div><h1>Planning</h1>
+    <p>Programme, Campaign and Activity — view any one on its own, or a combination so the parent/child relationship is visible. Colours show status: grey not started, blue on track, amber at risk, red behind, green completed (★ = beat plan).</p></div></div>`;
+
+  h+=planBreadcrumb();
+
+  h+=`<div class="row" style="gap:6px;margin-bottom:6px;flex-wrap:wrap;align-items:center">
+    <button class="btn sm ${UI.planView==='table'?'pri':''}" onclick="setPlanView('table')">Table</button>
+    <button class="btn sm ${UI.planView==='board'?'pri':''}" onclick="setPlanView('board')">Board</button>
+    <button class="btn sm ${UI.planView==='gantt'?'pri':''}" onclick="setPlanView('gantt')">Gantt</button>
+    <span class="mini" style="color:var(--ink-3);padding:0 4px;font-weight:700">|</span>
+    <select class="in" style="width:auto" onchange="setPlanScope(this.value)">
+      ${PLAN_SCOPES.map(s=>`<option value="${s.id}" ${s.id===UI.planScope?'selected':''}>${esc(s.label)}</option>`).join('')}
+    </select>
+    <select class="in" style="width:auto" onchange="setPlanFilterProgramme(this.value)" title="Narrow to one programme">
+      <option value="">All programmes</option>
+      ${CFG.programmes.map(p=>`<option value="${p.id}" ${p.id===UI.planProgrammeId?'selected':''}>${esc(p.name)}</option>`).join('')}
+    </select>
+    <select class="in" style="width:auto" onchange="setPlanFilterCampaign(this.value)" title="Narrow to one campaign">
+      <option value="">All campaigns</option>
+      ${(UI.planProgrammeId?CFG.campaigns.filter(c=>c.programmeId===UI.planProgrammeId):CFG.campaigns).map(c=>`<option value="${c.id}" ${c.id===UI.planCampaignId?'selected':''}>${esc(c.name)}</option>`).join('')}
+    </select>
+  </div>`;
+
+  h+=`<div class="kpis" style="margin-bottom:12px">
+    <div class="kpi"><div class="k">Campaigns in scope</div><div class="kpi-v">${r.campCount}</div></div>
+    <div class="kpi"><div class="k">Activities in scope</div><div class="kpi-v">${r.taskCount}</div></div>
+    <div class="kpi"><div class="k">Budget</div><div class="kpi-v">${F.mk(r.budget)}</div></div>
+    <div class="kpi hl"><div class="k">Committed</div><div class="kpi-v">${F.mk(r.committed)}</div></div>
+    <div class="kpi hl"><div class="k">Actual</div><div class="kpi-v">${F.mk(r.actual)}</div></div>
+    ${(r.events.registered||r.events.attended||r.events.budget)?`<div class="kpi"><div class="k">Linked events</div><div class="kpi-v">${r.events.attended}/${r.events.registered}</div><div class="sub">attended/registered · ${F.mk(r.events.budget)} budget</div></div>`:''}
+  </div>`;
+
+  if(UI.planView==='table'){ h+=planTableHtml(); return h; }
+  const level=planDeepestLevel(), items=planItemsAt(level);
+  if(UI.planView==='board') h+=planBoardHtml(level, items);
+  else h+=planGanttHtml(level, items);
+  return h;
+}
+
+
+
+
+function pageEffectiveness(){
+  const hasWonData=CFG.wonDeals.length>0;
+  let h=`<div class="phead"><div><h1>Effectiveness</h1>
+    <p>Cost-per-outcome and revenue contribution, computed from real numbers rather than a made-up score:
+      each campaign's actual cost against the closed-won deals actually linked to it. Needs two things synced first
+      — a reference list export/import so deals can link to a real campaign (Sync), and a closed-won import from Augur.</p></div></div>`;
+  if(!hasWonData){
+    h+=`<div class="note"><strong>No closed-won data imported yet.</strong> In Augur: Deals page → "Export closed-won for Ordo"
+      (the same export works here). Then Sync → "Import closed-won from Augur" below.</div>`;
+  }
+  const rows=CFG.campaigns.map(c=>{
+    const cost=tasksTotal(c.id,'actualCost');
+    const won=CFG.wonDeals.filter(d=>d.campaignId===c.id);
+    const wonValue=sum(won.map(d=>d.value||0));
+    return { c, cost, wonCount:won.length, wonValue,
+      costPerWon: won.length?cost/won.length:null,
+      revenueRatio: cost?wonValue/cost:null };
+  }).filter(r=>r.cost>0 || r.wonCount>0);
+  h+=`<div class="card"><h3>By campaign <span class="sp"></span><span class="pill n">${rows.length}</span></h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>Campaign</th><th class="n">Actual cost</th><th class="n">Won deals</th><th class="n">Won value</th>
+      <th class="n">Cost per won deal</th><th class="n">Value : cost</th></tr></thead><tbody>
+    ${!rows.length?`<tr><td colspan="6" class="empty">No campaigns with cost or linked won deals yet.</td></tr>`:
+      rows.map(r=>`<tr>
+        <td>${esc(r.c.name)}</td>
+        <td class="n calc">${F.mk(r.cost)}</td>
+        <td class="n calc">${r.wonCount}</td>
+        <td class="n calc">${F.mk(r.wonValue)}</td>
+        <td class="n calc">${r.costPerWon!=null?F.mk(r.costPerWon):'—'}</td>
+        <td class="n calc">${r.revenueRatio!=null?r.revenueRatio.toFixed(2)+'×':'—'}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="mini" style="padding:8px 14px 0">"Won deals" only counts deals that were linked to this exact campaign in Augur
+      (Phase 2's reference-list bridge) — a deal with no link, or linked before this campaign existed there, won't show up
+      here even if it really did come from this campaign. That's a real gap, not a rounding error — it means these numbers
+      are a floor, not a guarantee of completeness.</p></div>`;
+  return h;
+}
+
+function pageTemplates(){
+  let h=`<div class="phead"><div><h1>Templates</h1>
+    <p>Reusable activity shapes — create one from scratch here, or save one from any activity in Activities, then drop it into a new campaign in one click.</p></div></div>`;
+  h+=`<div class="card"><h3>Templates <span class="sp"></span><span class="pill n">${CFG.templates.length} saved</span>
+      <button class="btn sm pri" onclick="addTemplate()">Create template</button></h3>
+    <div class="bd flush"><table><thead><tr><th>Name</th><th>Type</th><th>Default cost bucket</th><th>Notes</th><th></th></tr></thead><tbody>
+    ${!CFG.templates.length?`<tr><td colspan="5" class="empty">No templates yet — create one, or save one from an activity in Activities.</td></tr>`:
+      CFG.templates.map(t=>{
+      return `<tr>
+        <td><input class="cel txt" style="width:180px" value="${esc(t.name)}" onchange="setIn('templates','${t.id}','name',this.value)"></td>
+        <td><input class="cel txt" style="width:110px" value="${esc(t.type)}" onchange="setIn('templates','${t.id}','type',this.value)"></td>
+        <td><select class="cel txt" style="width:170px" onchange="setIn('templates','${t.id}','defaultCostBucketId',this.value)">
+          ${CFG.costBuckets.map(b=>`<option value="${b.id}" ${b.id===t.defaultCostBucketId?'selected':''}>${esc(b.label)}</option>`).join('')}</select></td>
+        <td><input class="cel txt" style="width:220px" value="${esc(t.notes||'')}" onchange="setIn('templates','${t.id}','notes',this.value)"></td>
+        <td class="n"><button class="btn sm dgr" onclick="removeTemplate('${t.id}')">Remove</button></td></tr>`;}).join('')}
+    </tbody></table></div></div>`;
+  return h;
+}
+
+function pageSync(){
+  const withTasks=CFG.campaigns.filter(c=>TASK(c.id).length>0);
+  let h=`<div class="phead"><div><h1>Sync with Ordo</h1>
+    <p>Ordo and Cursus are separate files with no shared server, so keeping them aligned is a deliberate two-way
+      export/import, not a live link.</p></div></div>`;
+  h+=`<div class="card"><h3>1. Import campaigns from Ordo <span class="sp"></span>
+      ${CFG.meta.syncedAt?`<span class="pill ok">Last synced ${F.dt(CFG.meta.syncedAt)}</span>`:`<span class="pill warn">Never synced — using demo data</span>`}</h3>
+    <div class="bd">
+      <p class="mini">In Ordo: Admin &amp; config → Campaigns tab → "Export campaign list for Cursus". Then pick that file here.</p>
+      <label class="btn pri">Choose Ordo export file…<input type="file" accept="application/json" style="display:none" onchange="handleOrdoImportFile(this.files[0])"></label>
+    </div></div>`;
+  h+=`<div class="card"><h3>2. Export cost roll-up for Ordo <span class="sp"></span>
+      ${CFG.meta.lastExportAt?`<span class="pill ok">Last exported ${F.dt(CFG.meta.lastExportAt)}</span>`:`<span class="pill n">Not yet exported</span>`}</h3>
+    <div class="bd">
+      <p class="mini">Sums each campaign's committed/actual cost from its activities and produces a file for Ordo to import
+        (Admin &amp; config → Campaigns tab → "Import roll-up from Cursus"). Only campaigns with at least one activity are
+        included — that's what stops an empty roll-up from wiping out a manually-entered figure in Ordo.</p>
+      <button class="btn pri" onclick="exportRollupForOrdo()">Export cost roll-up (${withTasks.length} campaign${withTasks.length===1?'':'s'} with activity)</button>
+    </div></div>`;
+  h+=`<div class="card"><h3>3. Push new campaigns to Ordo <span class="sp"></span>
+      ${CFG.meta.lastPushAt?`<span class="pill ok">Last pushed ${F.dt(CFG.meta.lastPushAt)}</span>`:`<span class="pill n">Nothing pushed yet</span>`}</h3>
+    <div class="bd">
+      <p class="mini">Campaigns created here (marked "not yet in Ordo" on the Campaigns page) can be sent to Ordo as brand-new
+        records — full shape, not just a cost roll-up. In Ordo: Admin &amp; config → Campaigns tab → "Import new campaigns from Cursus".
+        Once Ordo confirms it has them (by including them in its next campaign-list export), they stop being flagged local here.</p>
+      <button class="btn pri" onclick="exportNewCampaignsForOrdo()">Push new campaigns (${CFG.campaigns.filter(c=>c._local).length})</button>
+    </div></div>`;
+  h+=`<div class="card"><h3>4. Import shared config from Norma <span class="sp"></span>
+      ${CFG.meta.normaSyncedAt?`<span class="pill ok">Last synced ${F.dt(CFG.meta.normaSyncedAt)} (v${CFG.meta.normaConfigVersion||'?'})</span>`:`<span class="pill warn">Never synced</span>`}
+      <a class="btn sm" href="Norma.html" target="tool_Norma">Open Norma</a></h3>
+    <div class="bd">
+      <p class="mini">Cost buckets and the tracking ID naming convention are owned centrally in Norma, not here or in Ordo.
+        Import Norma's export to bring Cursus's cost bucket list and ID pattern up to date.</p>
+      <label class="btn sm">Choose Norma export file…<input type="file" accept="application/json" style="display:none" onchange="handleNormaImportFile(this.files[0])"></label>
+    </div></div>`;
+  h+=`<div class="card"><h3>5. Push &amp; export to external systems <span class="sp"></span>
+      ${(CFG.integrations&&CFG.integrations.webhookEnabled&&CFG.integrations.webhookUrl)?`<span class="pill ok">Webhook configured</span>`:`<span class="pill n">Webhook not configured</span>`}
+      ${CFG.meta.lastWebhookPushAt?`<span class="pill v">Last pushed ${F.dt(CFG.meta.lastWebhookPushAt)}</span>`:''}</h3>
+    <div class="bd">
+      <p class="mini">Two ways to get campaigns and activities out of Cursus and into Monday, Asana, ClickUp, HubSpot, Salesforce,
+        NetSuite, Smartsheet, or Excel — neither of them requires this tool to hold a single vendor API key.</p>
+      <p class="mini" style="margin-top:10px"><b>Push (webhook).</b> Every campaign row on the Campaigns page gets a "Push →" button
+        once a webhook is enabled. It POSTs one JSON payload (campaign fields + its activities) to the URL configured in
+        Norma &gt; Integrations. Point that URL at a Zapier, Make, or n8n webhook and route it on from there — this tool
+        doesn't know or care which of the seven systems it ends up in. ${(CFG.integrations&&CFG.integrations.webhookEnabled&&CFG.integrations.webhookUrl)?'':'Not set up yet — configure it in Norma, export shared config, then re-import it here.'}</p>
+      <p class="mini" style="margin-top:10px"><b>Export (CSV).</b> No webhook needed — downloads a plain CSV you can drop straight
+        into Excel, or use as the import file for Monday, ClickUp, Asana, or Smartsheet.</p>
+      <div style="margin-top:8px">
+        <button class="btn pri" onclick="exportCampaignsCsv()">Export campaigns (CSV)</button>
+        <button class="btn pri" onclick="exportActivitiesCsv()">Export activities (CSV)</button>
+      </div>
+    </div></div>`;
+  h+=`<div class="card"><h3>6. Reference list for Custodia &amp; Augur <span class="sp"></span>
+      ${CFG.meta.lastReferenceExportAt?`<span class="pill ok">Last exported ${F.dt(CFG.meta.lastReferenceExportAt)}</span>`:`<span class="pill n">Not yet exported</span>`}</h3>
+    <div class="bd">
+      <p class="mini">Custodia (asset usage) and Augur (deal-to-campaign linking) both used to only take a free-text campaign
+        name. This exports the real campaign and activity ids and names so those two tools can offer an actual dropdown
+        instead — that's what makes cost-per-outcome and revenue-contribution reporting possible later, since a label
+        can't be rolled up but a real id can. Re-export whenever campaigns or activities change meaningfully.</p>
+      <button class="btn pri" onclick="exportReferenceListForOthers()">Export reference list</button>
+    </div></div>`;
+  h+=`<div class="card"><h3>7. Import closed-won from Augur <span class="sp"></span>
+      ${CFG.meta.augurSyncedAt?`<span class="pill ok">Last synced ${F.dt(CFG.meta.augurSyncedAt)} (${CFG.wonDeals.length} deals)</span>`:`<span class="pill warn">Never synced</span>`}
+      <a class="btn sm" href="Augur.html" target="tool_Augur">Open Augur</a></h3>
+    <div class="bd">
+      <p class="mini">In Augur: Deals page → "Export closed-won for Ordo" (the same file works here). This is what powers
+        the Effectiveness page — cost-per-outcome and revenue contribution against deals actually linked to a campaign here.</p>
+      <label class="btn pri">Choose Augur export file…<input type="file" accept="application/json" style="display:none" onchange="handleAugurImportFile(this.files[0])"></label>
+    </div></div>`;
+  h+=`<div class="card"><h3>Local autosave</h3><div class="bd">
+    <p class="mini" style="margin:0 0 8px">Campaigns, activities and templates save to this browser automatically. Local only —
+      export/import is still how data reaches Ordo and Norma.</p>
+    <button class="btn sm dgr" onclick="clearLocal()">Clear local autosave</button></div></div>`;
+  h+=`<div class="card"><h3>Activity log</h3><div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>When</th><th>What</th><th>Detail</th></tr></thead><tbody>
+      ${!CFG.audit.length?`<tr><td colspan="3" class="empty">Nothing yet.</td></tr>`:
+        CFG.audit.map(a=>`<tr><td class="mini">${esc(a.ts)}</td><td>${esc(a.what)}</td><td class="mini">${esc(a.detail)}</td></tr>`).join('')}
+      </tbody></table></div></div></div>`;
+  return h;
+}
+
+const PAGES=[
+  {id:'home',      ix:'0', label:'Home',       fn:pageHome},
+  {id:'planning',  ix:'1', label:'Planning',   fn:pagePlanning},
+  {id:'effectiveness',ix:'2',label:'Effectiveness',fn:pageEffectiveness},
+  {id:'templates', ix:'3', label:'Templates',  fn:pageTemplates},
+  {id:'sync',      ix:'4', label:'Sync',       fn:pageSync}
+];
+
+const SIMPLE_PAGES = ['home','planning'];
+function setMode(mode){
+  if(mode==='expert' && !CFG.canExpertMode){ toast('Your role is limited to Simple mode — ask an admin in Norma to change it.'); return; }
+  UI.mode = mode;
+  try{ localStorage.setItem('cursus_mode', mode); }catch(e){}
+  if(mode==='simple' && !SIMPLE_PAGES.includes(UI.page)) UI.page='home';
+  render();
+}
+window.setMode=setMode;
+function renderSide(){
+  let h='<h4>Cursus</h4>';
+  h+=`<div style="padding:6px 14px 10px">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <span class="mini" style="font-weight:600">${UI.mode==='simple'?'Simple mode':'Expert mode'}</span>
+      <span class="modetoggle ${UI.mode==='expert'?'on':''} ${CFG.canExpertMode?'':'lock'}" title="${CFG.canExpertMode?'Switch between Simple and Expert mode':'Your role cannot use Expert mode'}"
+        onclick="setMode('${UI.mode==='expert'?'simple':'expert'}')"><i></i></span>
+    </div>
+    ${!CFG.canExpertMode?'<div class="mini" style="color:var(--ink-2);margin-top:3px">Locked to Simple by your role</div>':''}
+  </div>`;
+  const pages = UI.mode==='simple' ? PAGES.filter(p=>SIMPLE_PAGES.includes(p.id)) : PAGES;
+  pages.forEach(p=>{
+    h+=`<a class="navi ${UI.page===p.id?'on':''}" href="#" onclick="go('${p.id}');return false">
+      <span class="ix">${p.ix}</span><span>${p.label}</span></a>`;
+  });
+  h+=`<h4>Status</h4><div style="padding:2px 14px"><div class="mini" style="line-height:1.6">
+    ${CFG.campaigns.length} campaigns · ${CFG.tasks.length} activities · ${CFG.templates.length} templates<br>
+    ${CFG.meta.syncedAt?'Synced from Ordo':'Demo data'}
+  </div></div>`;
+  return h;
+}
+function renderTnAcct(){
+  const nm=_myProfile?_myProfile.name:'';
+  const initials=nm?nm.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase():'?';
+  return `<span class="tn-avatar">${esc(initials)}</span>
+    <div class="tn-who"><b>${esc(nm||'—')}</b><span>${CFG.org&&CFG.org.name?esc(CFG.org.name):'Cursus'}</span></div>
+    <a class="tn-signout" href="#" onclick="doSignOut();return false;">Sign out</a>`;
+}
+/* Consistent cross-module bar: search jumps between the 8 tools, same list
+   and behavior as every other file -- not this tool's own content. */
+const MODULES=[
+  {id:'Ordo',label:'Ordo',desc:'Funnel planning & forecasting',color:'#1F3AC7'},
+  {id:'Cursus',label:'Cursus',desc:'Campaign & activity execution',color:'#0E7C6B'},
+  {id:'Eventus',label:'Eventus',desc:'Event planning & logistics',color:'#B5480E'},
+  {id:'Custodia',label:'Custodia',desc:'Asset register',color:'#3B6E1F'},
+  {id:'Prospectus',label:'Prospectus',desc:'ICP filters & opportunity reports',color:'#9C2B3C'},
+  {id:'Augur',label:'Augur',desc:'Lead & deal scoring',color:'#5A3E9C'},
+  {id:'Schema',label:'Schema',desc:'Process maps & workflows',color:'#3A5A8C'},
+  {id:'Norma',label:'Norma',desc:'Shared configuration',color:'#B5730E'}
+];
+const THIS_MODULE='Cursus';
+function renderTnModuleLinks(){
+  return MODULES.map(m=>m.id===THIS_MODULE
+    ? `<span class="tn-link on"><span class="mk" style="background:${m.color}">${m.label[0]}</span>${m.label}</span>`
+    : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}"><span class="mk" style="background:${m.color}">${m.label[0]}</span>${m.label}</a>`
+  ).join('');
+}
+function tnSearchResults(q){
+  q=(q||'').trim().toLowerCase(); if(!q) return [];
+  return MODULES.filter(m=>m.label.toLowerCase().includes(q)||m.desc.toLowerCase().includes(q)).slice(0,8);
+}
+let _tnResultList=[];
+function tnSearch(q){
+  _tnResultList=tnSearchResults(q);
+  const box=document.getElementById('tnResults');
+  if(!q||!q.trim()){ box.innerHTML=''; return; }
+  box.innerHTML = `<div class="tn-results">${
+    _tnResultList.length ? _tnResultList.map((m,i)=>`<a href="#" onclick="tnPick(${i});return false"><span class="ty">Module</span><div>${esc(m.label)}</div></a>`).join('')
+    : '<div class="none">No matches.</div>'
+  }</div>`;
+}
+window.tnSearch=tnSearch;
+function tnPick(i){
+  const m=_tnResultList[i]; if(!m) return;
+  window.open(m.id+'.html','tool_'+m.id);
+  document.getElementById('tnResults').innerHTML='';
+  document.getElementById('tnSearchInput').value='';
+}
+window.tnPick=tnPick;
+function tnSearchKey(ev){
+  if(ev.key==='Enter' && _tnResultList.length){ tnPick(0); }
+  if(ev.key==='Escape'){ document.getElementById('tnResults').innerHTML=''; ev.target.blur(); }
+}
+window.tnSearchKey=tnSearchKey;
+function render(){
+  const p=PAGES.find(x=>x.id===UI.page)||PAGES[0];
+  document.getElementById('side').innerHTML=renderSide();
+  document.getElementById('tnLinks').innerHTML=renderTnModuleLinks();
+  document.getElementById('tnAcct').innerHTML=renderTnAcct();
+  document.getElementById('main').innerHTML=p.fn();
+  document.getElementById('wizardLayer').innerHTML=campaignWizardPanel()+moveDialogPanel()+detailPanelHtml();
+  saveLocal();
+  scheduleSupabaseSave();
+}
+
+/* deep link from Ordo: Cursus.html#campaign=c_01 opens straight into that campaign's activities */
+function applyHashRoute(){
+  const m=/campaign=([^&]+)/.exec(location.hash);
+  if(m){
+    const camp=byId(CFG.campaigns,decodeURIComponent(m[1]));
+    if(camp){ UI.page='planning'; UI.planScope='activity'; UI.planCampaignId=camp.id; UI.planProgrammeId=camp.programmeId||null; UI.campaignId=camp.id; }
+  }
+}
+window.addEventListener('hashchange',()=>{ applyHashRoute(); render(); });
+sb.auth.onAuthStateChange((event)=>{
+  if(event==='SIGNED_OUT'){
+    if(_skipNextSignOutReload){ _skipNextSignOutReload=false; return; }
+    location.reload();
+  }
+});
+bootApp();
+</script>
+</body>
+</html>

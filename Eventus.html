@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Eventus — Event Planning Tool</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+  --nav:#B5480E; --nav-dk:#8A3808; --ink:#10182B; --ink-2:#45506B; --ink-3:#7C879E;
+  --surface:#FFFFFF; --canvas:#F2F4F8; --canvas-2:#E9EDF4; --line:#DFE3EB; --line-2:#EEF1F6;
+  --input:#7B3FE4; --input-bg:#F7F2FE; --calc:#45506B;
+  --ok:#0E8A5F; --ok-bg:#E7F5EF; --warn:#C8791A; --warn-bg:#FDF4E7; --bad:#D0342C; --bad-bg:#FCEDEC;
+  --r:8px; --r-sm:5px;
+  --sh:0 1px 2px rgba(16,24,43,.05), 0 1px 3px rgba(16,24,43,.04);
+  --sh-2:0 4px 16px rgba(16,24,43,.10);
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:var(--sans); background:var(--canvas); color:var(--ink); font-size:13.5px;}
+.sp{flex:1}
+.topnav{background:var(--surface); border-bottom:1px solid var(--line); min-height:56px; display:flex; align-items:center; padding:0 18px; gap:16px; position:sticky; top:0; z-index:50; box-shadow:var(--sh); flex-wrap:wrap;}
+.tn-brand{display:flex; align-items:center; gap:9px; flex-shrink:0; padding:8px 0;}
+.tn-mk{width:34px;height:34px;border-radius:8px;background:var(--nav);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px;flex-shrink:0;}
+.tn-brandtext{line-height:1.15}
+.tn-name{font-weight:800; font-size:14.5px; color:var(--ink);}
+.tn-sub{font-size:9px; letter-spacing:.08em; color:var(--ink-3); font-weight:700; text-transform:uppercase;}
+.tn-links{display:flex; align-items:center; gap:2px; flex:1; overflow-x:auto; min-width:0;}
+.tn-link{padding:7px 12px; border-radius:6px; font-size:12.5px; font-weight:600; color:var(--ink-2); text-decoration:none; white-space:nowrap; flex-shrink:0; display:inline-flex; align-items:center; gap:6px;}
+.tn-link:hover{background:var(--canvas-2)}
+.tn-link.on{background:var(--canvas-2); color:var(--ink); cursor:default;}
+.tn-link .mk{width:16px;height:16px;border-radius:4px;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:9px;flex-shrink:0;}
+.tn-search{position:relative; flex-shrink:0;}
+.tn-search .bx{display:flex; align-items:center; gap:6px; background:var(--canvas); border:1px solid var(--line); border-radius:7px; padding:6px 10px; width:190px;}
+.tn-search input{border:none;background:transparent;outline:none;font-size:12.5px;flex:1;color:var(--ink); min-width:0;}
+.tn-kbd{font-size:10px;color:var(--ink-3);background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:1px 5px;flex-shrink:0;}
+.tn-results{position:absolute; top:calc(100% + 4px); left:0; width:260px; background:var(--surface); border:1px solid var(--line); border-radius:8px; box-shadow:var(--sh-2); z-index:60; max-height:320px; overflow-y:auto;}
+.tn-results a{display:block; padding:8px 12px; text-decoration:none; color:var(--ink); font-size:12.5px; border-bottom:1px solid var(--line-2);}
+.tn-results a:last-child{border-bottom:none}
+.tn-results a:hover{background:var(--canvas-2)}
+.tn-results .ty{font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-3); font-weight:700;}
+.tn-results .none{padding:10px 12px; font-size:12px; color:var(--ink-3);}
+.tn-acct{display:flex; align-items:center; gap:8px; flex-shrink:0; padding:8px 0;}
+.tn-avatar{width:30px;height:30px;border-radius:50%;background:var(--nav);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex-shrink:0;}
+.tn-who{font-size:11.5px; line-height:1.3;}
+.tn-who b{display:block; color:var(--ink); font-weight:700;}
+.tn-who span{color:var(--ink-3);}
+.tn-signout{font-size:10.5px; color:var(--ink-3); text-decoration:none;}
+.tn-signout:hover{color:var(--ink)}
+/* ---------- restored left-hand page nav (this tool's own pages) ---------- */
+.wrap{display:flex; min-height:calc(100vh - 56px);}
+.side{width:210px; background:var(--surface); border-right:1px solid var(--line); padding:10px 0; flex-shrink:0;}
+.side h4{font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3); margin:14px 14px 6px;}
+.navi{display:flex; align-items:center; gap:8px; padding:7px 14px; text-decoration:none; color:var(--ink-2); font-size:13px; border-left:3px solid transparent;}
+.navi:hover{background:var(--canvas-2)}
+.navi.on{background:var(--canvas-2);border-left-color:var(--nav);color:var(--ink);font-weight:700}
+.navi .ix{width:16px; text-align:center; font-size:11px; color:var(--ink-3);}
+.navi.on .ix{color:var(--nav)}
+.main{flex:1; padding:18px 22px; max-width:none;}
+.phead{display:flex; align-items:flex-start; gap:14px; margin-bottom:14px;}
+.phead h1{font-size:19px; margin:0 0 3px;}
+.phead p{margin:0; color:var(--ink-2); font-size:12.5px; max-width:680px;}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); margin-bottom:14px; box-shadow:var(--sh);}
+.card h3{display:flex; align-items:center; gap:8px; margin:0; padding:11px 14px; border-bottom:1px solid var(--line-2); font-size:13.5px;}
+.card .bd{padding:14px;}
+.card .bd.flush{padding:0;}
+.scroll{overflow-x:auto;}
+.scroll.cap{max-height:520px; overflow-y:auto;}
+table{width:100%; border-collapse:collapse; font-size:12.5px;}
+th{text-align:left; padding:8px 10px; background:var(--canvas); color:var(--ink-2); font-weight:700; font-size:11.5px; text-transform:uppercase; letter-spacing:.02em; position:sticky; top:0;}
+td{padding:6px 10px; border-bottom:1px solid var(--line-2); vertical-align:middle;}
+td.n,th.n{text-align:right;}
+td.lb{font-weight:600;}
+td.calc{color:var(--calc); font-style:italic;}
+tr.tot td{font-weight:800; border-top:2px solid var(--line);}
+.empty{padding:18px; text-align:center; color:var(--ink-3); font-size:12.5px;}
+.mini{font-size:11.5px; color:var(--ink-3);}
+.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px;}
+.kpi{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:11px 13px;}
+.kpi.hl{border-color:var(--nav); background:linear-gradient(180deg,#fff,rgba(181,72,14,.04));}
+.kpi .k{font-size:11px; color:var(--ink-3); margin-bottom:3px;}
+.kpi .kpi-v{font-size:19px; font-weight:800; font-variant-numeric:tabular-nums;}
+.kpi.hl .kpi-v{color:var(--nav)}
+.kpi .sub{font-size:11px; color:var(--ink-3); margin-top:2px;}
+.row{display:flex; align-items:center; gap:6px;}
+.btn{background:#fff; border:1px solid var(--line); border-radius:6px; padding:6px 11px; font-size:12.5px; cursor:pointer; color:var(--ink); text-decoration:none; display:inline-flex; align-items:center; gap:5px;}
+.btn:hover{background:var(--canvas-2)}
+.btn.sm{padding:4px 9px; font-size:11.5px;}
+.btn.pri{background:var(--nav);border-color:var(--nav);color:#fff}
+.btn.pri:hover{background:var(--nav-dk)}
+.btn.dgr{color:var(--bad); border-color:#F3C9C6;}
+.btn.dgr:hover{background:var(--bad-bg)}
+.pill{display:inline-block; padding:2px 8px; border-radius:20px; font-size:10.5px; font-weight:700; background:var(--canvas-2); color:var(--ink-2);}
+.pill.ok{background:var(--ok-bg); color:var(--ok);}
+.pill.warn{background:var(--warn-bg); color:var(--warn);}
+.pill.bad{background:var(--bad-bg); color:var(--bad);}
+.pill.n{background:var(--canvas-2); color:var(--ink-2);}
+.pill.v{background:var(--input-bg); color:var(--input);}
+/* Shared status (RAG) pill -- same semantic scale + class names as Cursus's Planning
+   page (2026-08-13): grey not-started, blue on-track, amber at-risk, red behind/
+   blocked, green completed, plus a gold star when actuals meaningfully beat plan.
+   Reuse these class names when extending to the other tools. */
+.rag{display:inline-flex; align-items:center; gap:3px; padding:2px 8px; border-radius:20px; font-size:10.5px; font-weight:700; white-space:nowrap;}
+.rag-grey{background:#E7EAF0; color:#5B6472;}
+.rag-blue{background:#E3E8FD; color:#1F3AC7;}
+.rag-amber{background:#FBEBD3; color:#B5730E;}
+.rag-red{background:#F8DEE0; color:#9C2B3C;}
+.rag-green{background:#DCF3E9; color:#0E8A5F;}
+.rag-exceed{color:#C9971A;}
+.note{background:#FCEFE9;border-left:3px solid var(--nav);border-radius:0 var(--r-sm) var(--r-sm) 0; padding:10px 14px; margin-bottom:14px; font-size:12px; color:var(--ink-2);}
+.in,input.in,select.in,.cel{border:1px solid #E1D3FA; border-radius:5px; padding:5px 7px; font-size:12.5px; background:var(--input-bg); color:var(--ink); font-family:inherit;}
+.in:focus,.cel:focus{outline:2px solid var(--input); outline-offset:0;}
+.cel.txt{width:100%;}
+.cel.w{width:70px;}
+.toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:9px 16px; border-radius:20px; font-size:12.5px; box-shadow:var(--sh-2); z-index:200; animation:fade .2s ease;}
+@keyframes fade{from{opacity:0; transform:translateX(-50%) translateY(6px)} to{opacity:1; transform:translateX(-50%) translateY(0)}}
+.dv{height:1px; background:var(--line-2); margin:12px 0;}
+.lbl{font-size:11px; color:var(--ink-3); font-weight:700; text-transform:uppercase; letter-spacing:.02em;}
+.bar{height:8px;background:var(--canvas-2);border-radius:5px;overflow:hidden;position:relative}
+.bar i{position:absolute;left:0;top:0;bottom:0;background:var(--nav);display:block}
+.authwrap{max-width:360px;margin:14vh auto;padding:32px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-2);}
+.authwrap h2{margin:0 0 4px;font-size:18px;}
+.authwrap p.sub{margin:0 0 20px;color:var(--ink-2);font-size:12.5px;}
+.authwrap input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;margin-bottom:10px;box-sizing:border-box;}
+.authwrap button{width:100%;padding:10px;border:none;border-radius:6px;background:var(--ink);color:#fff;font-weight:700;font-size:13px;cursor:pointer;}
+.authwrap .err{color:#B3261E;font-size:12px;margin:-4px 0 10px;min-height:14px;}
+</style>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<div id="authGate" style="display:none"></div>
+<div class="topnav" id="topnav">
+  <div class="tn-brand"><span class="tn-mk">E</span><div class="tn-brandtext"><div class="tn-name">Eventus</div><div class="tn-sub">All modules</div></div></div>
+  <nav class="tn-links" id="tnLinks"></nav>
+  <div class="tn-search">
+    <div class="bx"><input id="tnSearchInput" placeholder="Search modules..." oninput="tnSearch(this.value)" onkeydown="tnSearchKey(event)"><span class="tn-kbd">/</span></div>
+    <div id="tnResults"></div>
+  </div>
+  <div class="tn-acct" id="tnAcct"></div>
+  <script>document.addEventListener('click',function(e){var r=document.getElementById('tnResults');if(r&&!e.target.closest('.tn-search'))r.innerHTML='';});</script>
+</div>
+<div class="wrap" id="wrap">
+  <nav class="side" id="side"></nav>
+  <main class="main" id="main"></main>
+</div>
+<div id="layer"></div>
+<script>
+/* ============================================================================
+   EVENTUS — high-level event planning tool. Latin for "event, outcome."
+   Built from a real event-planning reference workbook (venue/catering/AV/handouts/
+   accommodation/travel/awards/speakers, task allocation, checklists, post-event debrief,
+   budget tracking, and per-city master templates) but deliberately collapsed to a leaner
+   shape for v1: one events list, one categorized cost-line table per event (using the
+   same planned/committed/actual convention as Ordo and Cursus), a checklist, a speaker
+   list, and registration/attendance -- rather than replicating the workbook's ~30 sheets.
+   Standalone file, own CFG, no server -- same Norma bridge pattern as Ordo and Cursus for
+   shared cost buckets / tracking IDs.
+
+   Supabase note: events/cost lines/checklist/speakers now live in the shared database
+   (2026-08-11-supabase-schema-phase6-eventus.sql). campaignRef stays free text for now --
+   turning it into a real FK is part of the larger multi-venue rework, not this pass.
+   ============================================================================ */
+const SUPABASE_URL = 'https://rcmocuubeajnqjltuwdv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjbW9jdXViZWFqbnFqbHR1d2R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzMTgzNTQsImV4cCI6MjEwMTg5NDM1NH0.rZuoKPmmkpNe8Ug8Gu_KmpoKyibigJccdpoRGcLt3pY';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const uid = _p => crypto.randomUUID();
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const sum = a => a.reduce((x,y)=>x+(y||0),0);
+const byId = (a,id) => a.find(x=>x.id===id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,(v==null||isNaN(v))?0:v));
+const F = {
+  n:(v,d=0)=>(v==null||isNaN(v))?'—':Number(v).toLocaleString('en-AU',{minimumFractionDigits:d,maximumFractionDigits:d}),
+  mk:v=>{ if(v==null||isNaN(v))return '—'; const a=Math.abs(v),s=v<0?'-':'';
+    if(a>=1e6) return s+'$'+(a/1e6).toFixed(a>=1e7?1:2)+'M';
+    if(a>=1e3) return s+'$'+Math.round(a/1e3)+'k'; return s+'$'+Math.round(a); },
+  p:(v,d=0)=>(v==null||isNaN(v))?'—':(v*100).toFixed(d)+'%',
+  d:iso=>{ if(!iso)return '—'; return new Date(iso+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'2-digit'}); },
+  dt:iso=>{ if(!iso)return '—'; return new Date(iso).toLocaleString('en-AU',{day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'}); }
+};
+
+const EVENT_TYPES=['Trade Show / Seminar','Webinar','3rd Party','NGA Event','Client Day','Prospect Session'];
+const COST_CATEGORIES=['Venue','Catering','AV','Handouts & Promo','Accommodation','Travel','Awards & Prizes','Speaker fees','Other'];
+
+/* ---------- data ----------
+   Supabase-backed now — populated by loadFromSupabase() after sign-in. Empty shell here so
+   nothing downstream needs to change; only the population source moved. */
+const CFG = {};
+
+const UI = { page:'home', eventId:null, rollupLevel:'programme', rollupProgrammeId:null, rollupCampaignId:null };
+
+function logAudit(what,detail){
+  CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
+  if(CFG.audit.length>150)CFG.audit.pop();
+}
+function toast(msg){
+  const l=document.getElementById('layer');
+  const d=document.createElement('div'); d.className='toast'; d.textContent=msg;
+  l.appendChild(d); setTimeout(()=>d.remove(),2200);
+}
+function go(page,eventId){ UI.page=page; if(eventId)UI.eventId=eventId; render(); }
+window.go=go;
+function setIn(field,id,key,val,type){
+  const row=byId(CFG[field],id); if(!row)return;
+  let v=val;
+  if(type==='money'||type==='num'){ v=parseFloat(String(val).replace(/[$,\\s]/g,'')); if(isNaN(v))v=0; }
+  else if(type==='bool'){ v=!!val; }
+  row[key]=v; logAudit('edit',field+'.'+key); render();
+}
+window.setIn=setIn;
+
+/* ---------- local autosave (survives a refresh/close; export/import is still the
+   portable, cross-tool bridge) ---------- */
+const LS_KEY='eventus_autosave_v1';
+function saveLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(CFG)); }catch(e){} }
+function loadLocal(){
+  try{
+    const raw=localStorage.getItem(LS_KEY); if(!raw) return false;
+    const parsed=JSON.parse(raw);
+    Object.keys(parsed).forEach(k=>{ CFG[k]=parsed[k]; });
+    return true;
+  }catch(e){ return false; }
+}
+function clearLocal(){
+  localStorage.removeItem(LS_KEY);
+  toast('Local autosave cleared — reload the page to reset to the built-in defaults.');
+}
+window.clearLocal=clearLocal;
+
+/* ============================================================================
+   Supabase data layer — whole-plan load/save, same pattern as every other tool.
+   Cost buckets are a shared read-only dimension Norma configures; events/cost lines/
+   checklist/speakers are Eventus's own tables; audit_log is shared.
+
+   The "fast-follow" below: saves used to be UPSERT-only -- removing a row updated this
+   session's view immediately but the underlying database row was never deleted, so it
+   reappeared on next login. deleteRow() (2026-08-17, phase20) closes that gap with a real
+   DELETE, fired from each remove*() function alongside the local CFG filter.
+   ============================================================================ */
+let _orgId = null, _myProfile = null, _saveTimer = null, _realtimeChannel = null;
+/* Set right before an internal (non-user-initiated) signOut() -- e.g. bootApp()'s error path
+   below -- so the global onAuthStateChange listener knows to skip its reload-on-SIGNED_OUT and
+   let the error message stay on screen instead of wiping it out immediately. Without this, the
+   error flashes for a frame and then vanishes, which is exactly the "flash and it's gone" bug. */
+let _skipNextSignOutReload = false;
+
+async function upsertRows(table, rows, mapFn){
+  if(!rows || !rows.length) return;
+  try{
+    const payload = rows.map(r=>Object.assign(mapFn(r), {org_id:_orgId}));
+    const { error } = await sb.from(table).upsert(payload);
+    if(error) throw error;
+  }catch(e){ console.error('Save failed for '+table, e); toast('Could not save '+table+' to the database — see console.'); }
+}
+async function deleteRow(table, id){
+  if(!_orgId || !id) return;
+  try{
+    const { error } = await sb.from(table).delete().eq('id', id).eq('org_id', _orgId);
+    if(error) throw error;
+  }catch(e){ console.error('Delete failed for '+table, e); toast('Removed here, but could not delete from the database — see console.'); }
+}
+
+async function saveToSupabase(){
+  if(!_orgId) return;
+  await Promise.all([
+    upsertRows('eventus_events', CFG.events, e=>({
+      id:e.id,name:e.name,type:e.type||'',status:e.status||'Planned',start_date:e.start||null,end_date:e.end||null,
+      country:e.country||'',venue:e.venue||'',location:e.location||'',pax:e.pax||0,requester:e.requester||'',
+      campaign_ref:e.campaignRef||'',campaign_id:e.campaignId||null,budget:e.budget||0,registered:e.registered||0,attended:e.attended||0,
+      tracking_ref:e.trackingRef||null
+    })),
+    upsertRows('eventus_event_venues', CFG.eventVenues, v=>({
+      id:v.id,event_id:v.eventId,name:v.name||'',country:v.country||'',location:v.location||'',address:v.address||'',
+      pax:v.pax||0,start_date:v.start||null,end_date:v.end||null,status:v.status||'Planned',sort_order:v.sortOrder||0
+    })),
+    upsertRows('eventus_cost_lines', CFG.costLines, c=>({
+      id:c.id,event_id:c.eventId,category:c.category||'',supplier:c.supplier||'',description:c.description||'',
+      planned_cost:c.plannedCost||0,committed_cost:c.committedCost||0,actual_cost:c.actualCost||0
+    })),
+    upsertRows('eventus_checklist', CFG.checklist, c=>({
+      id:c.id,event_id:c.eventId,item:c.item,done:!!c.done,due_date:c.dueDate||null
+    })),
+    upsertRows('eventus_speakers', CFG.speakers, s=>({
+      id:s.id,event_id:s.eventId,name:s.name||'',company:s.company||'',topic:s.topic||'',contact:s.contact||''
+    })),
+    upsertRows('audit_log', CFG.audit, a=>({ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null}))
+  ]);
+}
+
+function scheduleSupabaseSave(){
+  if(!_orgId) return;
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(()=>{ saveToSupabase(); }, 900);
+}
+
+async function loadFromSupabase(){
+  const { data:{ user: authUser } } = await sb.auth.getUser();
+  if(!authUser) throw new Error('Not signed in.');
+  const { data: prof, error: profErr } = await sb.from('profiles')
+    .select('id,name,org_id,role_id,region_ids,cross_region').eq('id', authUser.id).single();
+  if(profErr || !prof){ const e = new Error('No profile linked yet.'); e.noProfile = true; throw e; }
+  _myProfile = prof; _orgId = prof.org_id;
+
+  const results = await Promise.all([
+    sb.from('eventus_events').select('id,name,type,status,start_date,end_date,country,venue,location,pax,requester,campaign_ref,campaign_id,budget,registered,attended,tracking_ref'),
+    sb.from('eventus_event_venues').select('id,event_id,name,country,location,address,pax,start_date,end_date,status,sort_order'),
+    sb.from('eventus_cost_lines').select('id,event_id,category,supplier,description,planned_cost,committed_cost,actual_cost'),
+    sb.from('eventus_checklist').select('id,event_id,item,done,due_date'),
+    sb.from('eventus_speakers').select('id,event_id,name,company,topic,contact'),
+    sb.from('cost_buckets').select('id,code,label'),
+    sb.from('campaigns').select('id,name,programme_id'),
+    /* Read-only, for the Programme/Campaign roll-up dashboard (phase16) -- Eventus never
+       writes to programmes, same "reference only" pattern as Cursus's eventsIndex mirror. */
+    sb.from('programmes').select('id,name'),
+    /* Read-only lookup so the roll-up can show which Cursus activity (if any) an event is
+       linked to, without Eventus owning that relationship -- the link itself lives on the
+       Cursus side (tasks.event_id, phase16). */
+    sb.from('tasks').select('id,name,campaign_id,event_id'),
+    sb.from('audit_log').select('ts,what,detail').order('ts',{ascending:false}).limit(200)
+  ]);
+  const [eventsR,venuesR,costLinesR,checklistR,speakersR,costBucketsR,campaignsR,programmesR,tasksR,auditR] = results;
+  for(const r of results){ if(r.error) throw r.error; }
+
+  CFG.events = (eventsR.data||[]).map(e=>({
+    id:e.id,name:e.name,type:e.type||'',status:e.status||'Planned',start:e.start_date||'',end:e.end_date||'',
+    country:e.country||'',venue:e.venue||'',location:e.location||'',pax:e.pax||0,requester:e.requester||'',
+    campaignRef:e.campaign_ref||'',campaignId:e.campaign_id||null,budget:e.budget||0,registered:e.registered||0,attended:e.attended||0,
+    trackingRef:e.tracking_ref||null
+  }));
+  CFG.eventVenues = (venuesR.data||[]).map(v=>({
+    id:v.id,eventId:v.event_id,name:v.name||'',country:v.country||'',location:v.location||'',address:v.address||'',
+    pax:v.pax||0,start:v.start_date||'',end:v.end_date||'',status:v.status||'Planned',sortOrder:v.sort_order||0
+  }));
+  CFG.costLines = (costLinesR.data||[]).map(c=>({
+    id:c.id,eventId:c.event_id,category:c.category||'',supplier:c.supplier||'',description:c.description||'',
+    plannedCost:c.planned_cost,committedCost:c.committed_cost,actualCost:c.actual_cost
+  }));
+  CFG.checklist = (checklistR.data||[]).map(c=>({id:c.id,eventId:c.event_id,item:c.item,done:!!c.done,dueDate:c.due_date||''}));
+  CFG.speakers = (speakersR.data||[]).map(s=>({id:s.id,eventId:s.event_id,name:s.name||'',company:s.company||'',topic:s.topic||'',contact:s.contact||''}));
+  CFG.costBuckets = (costBucketsR.data||[]).map(c=>({id:c.id,code:c.code,label:c.label}));
+  CFG.campaigns = (campaignsR.data||[]).map(c=>({id:c.id,name:c.name,programmeId:c.programme_id||null}));
+  CFG.programmes = (programmesR.data||[]).map(p=>({id:p.id,name:p.name}));
+  /* Cursus activities that reference an event, purely for display (e.g. "linked to: Venue booking"). */
+  CFG.linkedActivities = (tasksR.data||[]).filter(t=>t.event_id).map(t=>({id:t.id,name:t.name,campaignId:t.campaign_id,eventId:t.event_id}));
+  CFG.audit = (auditR.data||[]).map(a=>({ts:a.ts,what:a.what,detail:a.detail}));
+  /* trackingConfig (Norma's old generic {mod}-{type}-{seq} scheme) isn't wired to the
+     database this pilot — session-only, exactly like before, until that bridge is built. */
+  CFG.trackingConfig = null;
+  CFG.meta = { normaSyncedAt:null, normaConfigVersion:null };
+}
+
+/* Live notifications: subscribe to audit_log INSERTs for this org so an action
+   taken in another tab/tool shows up here as a toast without a reload. Own
+   actions are skipped (via user_id) since they're already toasted locally.
+   This is notification-only -- it does NOT live-sync the underlying record
+   (a campaign, a deal, etc); reload or navigate to see that reflected in place. */
+function subscribeRealtime(){
+  if(_realtimeChannel || !_orgId) return;
+  _realtimeChannel = sb.channel('audit_log_org_'+_orgId)
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'audit_log', filter:'org_id=eq.'+_orgId }, payload=>{
+      const row = payload.new || {};
+      if(_myProfile && row.user_id && row.user_id===_myProfile.id) return;
+      /* phase18: a targeted alert_people row carries a resolved target_user_ids list --
+         only toast a viewer whose own id is in it. Absent/empty (almost every row, and
+         any 'org'-targeted alert) keeps the original broadcast-to-everyone behaviour. The
+         row still joins the shared audit trail either way -- only the live toast is gated. */
+      const targeted = Array.isArray(row.target_user_ids) && row.target_user_ids.length>0;
+      const forMe = !targeted || (_myProfile && row.target_user_ids.includes(_myProfile.id));
+      if(forMe) toast((row.what||'Update')+(row.detail?' — '+row.detail:''));
+      if(CFG.audit){ CFG.audit.unshift({ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
+      render();
+    })
+    .subscribe();
+}
+function loginScreenHtml(err){
+  return '<div class="authwrap"><h2>Eventus</h2><p class="sub">Sign in to continue.</p>'+
+    '<div class="err">'+(err?esc(err):'')+'</div>'+
+    '<input id="authEmail" type="email" placeholder="Email" autocomplete="username">'+
+    '<input id="authPass" type="password" placeholder="Password" autocomplete="current-password">'+
+    '<button onclick="doSignIn()">Sign in</button>'+
+    '<p class="sub" style="margin-top:10px">New here? <a href="#" onclick="showSignUpGate();return false;">Create an account</a></p>'+
+    '</div>';
+}
+function signUpScreenHtml(err, notice){
+  return '<div class="authwrap"><h2>Eventus</h2><p class="sub">Create an account.</p>'+
+    '<div class="err">'+(err?esc(err):'')+'</div>'+
+    (notice ? '<div class="sub" style="margin-bottom:8px">'+esc(notice)+'</div>' : '')+
+    '<input id="suEmail" type="email" placeholder="Email" autocomplete="username">'+
+    '<input id="suPass" type="password" placeholder="Password (min 6 characters)" autocomplete="new-password">'+
+    '<input id="suPass2" type="password" placeholder="Confirm password" autocomplete="new-password">'+
+    '<button onclick="doSignUp()">Create account</button>'+
+    '<p class="sub" style="margin-top:10px">Already have an account? <a href="#" onclick="showAuthGate();return false;">Sign in</a></p>'+
+    '</div>';
+}
+function onboardingScreenHtml(err){
+  return '<div class="authwrap"><h2>Eventus</h2><p class="sub">You\'re signed in, but this login isn\'t linked to an organization yet.</p>'+
+    '<div class="err">'+(err?esc(err):'')+'</div>'+
+    '<div style="border:1px solid #ddd;border-radius:8px;padding:12px;margin-bottom:12px">'+
+      '<b>Create a new organization</b>'+
+      '<input id="orgName" type="text" placeholder="Organization name">'+
+      '<input id="orgYourName" type="text" placeholder="Your name">'+
+      '<button onclick="doCreateOrg()">Create organization</button>'+
+    '</div>'+
+    '<div style="border:1px solid #ddd;border-radius:8px;padding:12px">'+
+      '<b>I have an invite code</b>'+
+      '<input id="inviteCode" type="text" placeholder="Invite code" style="text-transform:uppercase">'+
+      '<input id="inviteYourName" type="text" placeholder="Your name">'+
+      '<button onclick="doRedeemInvite()">Join organization</button>'+
+    '</div>'+
+    '<p class="sub" style="margin-top:10px"><a href="#" onclick="doSignOut();return false;">Sign out</a></p>'+
+    '</div>';
+}
+async function doSignIn(){
+  const email = document.getElementById('authEmail').value.trim();
+  const pass = document.getElementById('authPass').value;
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if(error){ document.getElementById('authGate').innerHTML = loginScreenHtml(error.message); return; }
+  await bootApp();
+}
+window.doSignIn = doSignIn;
+async function doSignUp(){
+  const email = document.getElementById('suEmail').value.trim();
+  const pass = document.getElementById('suPass').value;
+  const pass2 = document.getElementById('suPass2').value;
+  if(pass.length < 6){ document.getElementById('authGate').innerHTML = signUpScreenHtml('Password must be at least 6 characters.'); return; }
+  if(pass !== pass2){ document.getElementById('authGate').innerHTML = signUpScreenHtml('Passwords do not match.'); return; }
+  const { data, error } = await sb.auth.signUp({ email, password: pass });
+  if(error){ document.getElementById('authGate').innerHTML = signUpScreenHtml(error.message); return; }
+  if(data.session){ await bootApp(); return; }
+  document.getElementById('authGate').innerHTML = signUpScreenHtml(null, 'Account created — check your email to confirm, then sign in.');
+}
+window.doSignUp = doSignUp;
+async function doSignOut(){ await sb.auth.signOut(); location.reload(); }
+window.doSignOut = doSignOut;
+async function doCreateOrg(){
+  const p_org_name = document.getElementById('orgName').value.trim();
+  const p_your_name = document.getElementById('orgYourName').value.trim();
+  const { error } = await sb.rpc('create_organization', { p_org_name, p_your_name });
+  if(error){ document.getElementById('authGate').innerHTML = onboardingScreenHtml(error.message); return; }
+  await bootApp();
+}
+window.doCreateOrg = doCreateOrg;
+async function doRedeemInvite(){
+  const p_code = document.getElementById('inviteCode').value.trim();
+  const p_your_name = document.getElementById('inviteYourName').value.trim();
+  const { error } = await sb.rpc('redeem_invite', { p_code, p_your_name });
+  if(error){ document.getElementById('authGate').innerHTML = onboardingScreenHtml(error.message); return; }
+  await bootApp();
+}
+window.doRedeemInvite = doRedeemInvite;
+
+function showAuthGate(err){
+  const gate = document.getElementById('authGate');
+  gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
+  gate.innerHTML = loginScreenHtml(err);
+  document.getElementById('topnav').style.display = 'none';
+  document.getElementById('wrap').style.display = 'none';
+}
+window.showAuthGate = showAuthGate;
+function showSignUpGate(err){
+  const gate = document.getElementById('authGate');
+  gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
+  gate.innerHTML = signUpScreenHtml(err);
+  document.getElementById('topnav').style.display = 'none';
+  document.getElementById('wrap').style.display = 'none';
+}
+window.showSignUpGate = showSignUpGate;
+function showOnboardingGate(err){
+  const gate = document.getElementById('authGate');
+  gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
+  gate.innerHTML = onboardingScreenHtml(err);
+  document.getElementById('topnav').style.display = 'none';
+  document.getElementById('wrap').style.display = 'none';
+}
+function hideAuthGate(){
+  const gate = document.getElementById('authGate');
+  gate.style.display = 'none'; gate.innerHTML = '';
+  document.getElementById('topnav').style.display = '';
+  document.getElementById('wrap').style.display = '';
+}
+async function bootApp(){
+  const { data:{ session } } = await sb.auth.getSession();
+  if(!session){ showAuthGate(); return; }
+  try{ await loadFromSupabase(); }
+  catch(e){
+    console.error(e);
+    if(e.noProfile){ showOnboardingGate(); return; }
+    _skipNextSignOutReload = true;
+    await sb.auth.signOut();
+    showAuthGate(e.message || 'Could not load your data. Contact an admin.');
+    return;
+  }
+  hideAuthGate();
+  applyHashRoute();
+  render();
+  subscribeRealtime();
+}
+
+/* Deep link from Cursus: Eventus.html#event=<id> opens straight into that event's
+   detail page. Mirrors the Ordo -> Cursus #campaign= pattern already proven in this
+   suite (Cursus.html applyHashRoute()) -- same hash-parse + named-window-target shape. */
+function applyHashRoute(){
+  const m=/event=([^&]+)/.exec(location.hash);
+  if(m){
+    const ev=byId(CFG.events,decodeURIComponent(m[1]));
+    if(ev){ UI.page='event'; UI.eventId=ev.id; }
+  }
+}
+window.addEventListener('hashchange',()=>{ applyHashRoute(); render(); });
+
+const COSTS=eid=>CFG.costLines.filter(c=>c.eventId===eid);
+const costsTotal=(eid,field)=>sum(COSTS(eid).map(c=>c[field]||0));
+const CHECKLIST=eid=>CFG.checklist.filter(c=>c.eventId===eid);
+const SPEAKERS=eid=>CFG.speakers.filter(s=>s.eventId===eid);
+/* VENUES: one event can now have several venue "legs" (roadshow cities, a main
+   venue plus satellites, etc). Sorted for stable display order. */
+const VENUES=eid=>CFG.eventVenues.filter(v=>v.eventId===eid).sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));
+/* Roll-ups fall back to the event's own legacy pax/start/end whenever it has
+   no venue rows yet (a brand-new event, or before the phase10 backfill has
+   run) — so nothing looks blank mid-migration. */
+function eventPax(e){
+  const vs=VENUES(e.id);
+  return vs.length ? sum(vs.map(v=>v.pax||0)) : (e.pax||0);
+}
+function eventDateRange(e){
+  const vs=VENUES(e.id).filter(v=>v.start||v.end);
+  if(!vs.length) return {start:e.start||'',end:e.end||''};
+  const starts=vs.map(v=>v.start).filter(Boolean).sort();
+  const ends=vs.map(v=>v.end||v.start).filter(Boolean).sort();
+  return {start:starts[0]||'',end:ends[ends.length-1]||''};
+}
+function eventVenueSummary(e){
+  const vs=VENUES(e.id);
+  if(!vs.length) return e.venue||'venue TBC';
+  if(vs.length===1) return vs[0].name||'venue TBC';
+  return vs.length+' venues ('+vs.map(v=>v.name||'—').slice(0,2).join(', ')+(vs.length>2?', …':'')+')';
+}
+
+/* ---------- shared status (RAG) colour system ----------
+   Same semantic scale + class names as Cursus's Planning page (2026-08-13):
+   grey not started, blue on track, amber at risk, red behind/blocked, green
+   completed, plus a ★ "exceeding expectations" marker layered on green.
+   Rule of thumb for an event: cancelled/overdue-and-not-completed is red;
+   completed with attendance meeting or beating what was registered is green
+   (attended >= registered is flagged as exceeding -- more people showed up
+   than had signed up for, a good problem); completed but under-attended is
+   amber; a future event with no registrations yet is grey; otherwise blue.
+
+   Named, non-magic-number thresholds (2026-08-13, task #6) -- pulled out of the rag
+   function so they're easy to find and tune without hunting through the logic. */
+const RAG_THRESHOLDS = {
+  amberAttendanceRatio: 0.5 // attended/registered below this once finished => amber
+};
+function ragForEvent(e){
+  const today=new Date().toISOString().slice(0,10);
+  const range=eventDateRange(e);
+  if(e.status==='Cancelled') return {tone:'red',label:'Cancelled'};
+  const isPast = range.end ? range.end<today : (range.start ? range.start<today : false);
+  if(e.status==='Completed' || isPast){
+    const registered=e.registered||0, attended=e.attended||0;
+    if(!registered) return {tone:'green',label:'Completed'};
+    const rate=attended/registered;
+    const exceed=attended>=registered;
+    if(rate<RAG_THRESHOLDS.amberAttendanceRatio) return {tone:'amber',label:'Completed',exceed:false};
+    return {tone:'green',label:'Completed',exceed};
+  }
+  if(!e.registered && range.start && range.start>today) return {tone:'grey',label:'Not started'};
+  return {tone:'blue',label:'On track'};
+}
+function ragPillHtml(rag){
+  return `<span class="rag rag-${rag.tone}">${esc(rag.label)}${rag.exceed?' <span class="rag-exceed">★</span>':''}</span>`;
+}
+
+/* ---------- Norma bridge ---------- */
+function handleNormaImportFile(file){
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>importSharedConfigFromNorma(e.target.result);
+  reader.onerror=()=>toast('Could not read that file.');
+  reader.readAsText(file);
+}
+window.handleNormaImportFile=handleNormaImportFile;
+function importSharedConfigFromNorma(jsonText){
+  let data;
+  try{ data=JSON.parse(jsonText); }
+  catch(e){ toast('That is not valid JSON — is it a Norma shared-config export?'); return; }
+  if(data.costBuckets && data.costBuckets.length){
+    data.costBuckets.forEach(b=>{ const ex=byId(CFG.costBuckets,b.id); if(ex) Object.assign(ex,b); else CFG.costBuckets.push(b); });
+  }
+  if(data.trackingConfig){ CFG.trackingConfig=data.trackingConfig; CFG.trackingConfig.mySeq=CFG.trackingConfig.mySeq||{}; }
+  if(data.configVersion!=null){ CFG.meta.normaConfigVersion=data.configVersion; }
+  CFG.meta.normaSyncedAt=new Date().toISOString();
+  logAudit('import shared config from Norma','cost buckets'+(data.trackingConfig?' + tracking convention':''));
+  render();
+  toast('Shared config imported from Norma.');
+}
+window.importSharedConfigFromNorma=importSharedConfigFromNorma;
+function nextTrackingRef(type){
+  const tc=CFG.trackingConfig; if(!tc) return null;
+  const modCode=(tc.modCodes&&tc.modCodes.eventus)||'EVT';
+  const typeCode=(tc.typeCodes&&tc.typeCodes[type])||type.toUpperCase().slice(0,3);
+  tc.mySeq=tc.mySeq||{};
+  tc.mySeq[typeCode]=(tc.mySeq[typeCode]||0)+1;
+  const seq=String(tc.mySeq[typeCode]).padStart(tc.seqPadding||4,'0');
+  return tc.pattern.replace('{mod}',modCode).replace('{type}',typeCode).replace('{seq}',seq);
+}
+
+/* ---------- CRUD ---------- */
+function addEvent(){
+  const e={id:uid('evt'),name:'New event',type:EVENT_TYPES[0],status:'Planned',start:'',end:'',country:'',venue:'',
+    location:'',pax:0,requester:'',campaignRef:'',budget:0,registered:0,attended:0,trackingRef:nextTrackingRef('event')};
+  CFG.events.push(e);
+  logAudit('add event','New event'); render(); toast('Event created.');
+}
+window.addEvent=addEvent;
+function removeEvent(id){
+  if(!confirm('Remove this event and all its venues, cost lines, checklist items and speakers?'))return;
+  const goingVenues=CFG.eventVenues.filter(v=>v.eventId===id).map(v=>v.id);
+  const goingCostLines=CFG.costLines.filter(c=>c.eventId===id).map(c=>c.id);
+  const goingChecklist=CFG.checklist.filter(c=>c.eventId===id).map(c=>c.id);
+  const goingSpeakers=CFG.speakers.filter(s=>s.eventId===id).map(s=>s.id);
+  CFG.eventVenues=CFG.eventVenues.filter(v=>v.eventId!==id);
+  CFG.costLines=CFG.costLines.filter(c=>c.eventId!==id);
+  CFG.checklist=CFG.checklist.filter(c=>c.eventId!==id);
+  CFG.speakers=CFG.speakers.filter(s=>s.eventId!==id);
+  CFG.events=CFG.events.filter(e=>e.id!==id);
+  logAudit('remove event',id); render();
+  deleteRow('eventus_events',id);
+  goingVenues.forEach(x=>deleteRow('eventus_event_venues',x));
+  goingCostLines.forEach(x=>deleteRow('eventus_cost_lines',x));
+  goingChecklist.forEach(x=>deleteRow('eventus_checklist',x));
+  goingSpeakers.forEach(x=>deleteRow('eventus_speakers',x));
+}
+window.removeEvent=removeEvent;
+function addCostLine(eventId){
+  CFG.costLines.push({id:uid('cl'),eventId:eventId,category:COST_CATEGORIES[0],supplier:'',description:'',plannedCost:0,committedCost:0,actualCost:0});
+  logAudit('add cost line','on event '+eventId); render();
+}
+window.addCostLine=addCostLine;
+function removeCostLine(id){ CFG.costLines=CFG.costLines.filter(c=>c.id!==id); logAudit('remove cost line',id); render(); deleteRow('eventus_cost_lines',id); }
+window.removeCostLine=removeCostLine;
+function addVenue(eventId){
+  const e=byId(CFG.events,eventId);
+  const n=VENUES(eventId).length;
+  CFG.eventVenues.push({
+    id:uid('venue'),eventId:eventId,name:n===0?'Venue 1':'Venue '+(n+1),country:'',location:'',address:'',
+    pax:0,start:e?e.start:'',end:e?e.end:'',status:'Planned',sortOrder:n
+  });
+  logAudit('add venue','on event '+eventId); render(); toast('Venue added.');
+}
+window.addVenue=addVenue;
+function removeVenue(id){ CFG.eventVenues=CFG.eventVenues.filter(v=>v.id!==id); logAudit('remove venue',id); render(); deleteRow('eventus_event_venues',id); }
+window.removeVenue=removeVenue;
+function addChecklistItem(eventId){
+  CFG.checklist.push({id:uid('chk'),eventId:eventId,item:'New task',done:false,dueDate:''});
+  logAudit('add checklist item','on event '+eventId); render();
+}
+window.addChecklistItem=addChecklistItem;
+function removeChecklistItem(id){ CFG.checklist=CFG.checklist.filter(c=>c.id!==id); logAudit('remove checklist item',id); render(); deleteRow('eventus_checklist',id); }
+window.removeChecklistItem=removeChecklistItem;
+function addSpeaker(eventId){
+  CFG.speakers.push({id:uid('spk'),eventId:eventId,name:'',company:'',topic:'',contact:''});
+  logAudit('add speaker','on event '+eventId); render();
+}
+window.addSpeaker=addSpeaker;
+function removeSpeaker(id){ CFG.speakers=CFG.speakers.filter(s=>s.id!==id); logAudit('remove speaker',id); render(); deleteRow('eventus_speakers',id); }
+window.removeSpeaker=removeSpeaker;
+
+/* ---------- pages ---------- */
+function pageHome(){
+  const hr=new Date().getHours();
+  const greeting=hr<12?'Good morning':hr<18?'Good afternoon':'Good evening';
+  const name=(_myProfile&&_myProfile.name)?_myProfile.name.split(' ')[0]:'there';
+  const today=new Date().toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'long'});
+  const todayIso=new Date().toISOString().slice(0,10);
+  const upcoming=CFG.events.filter(e=>e.status!=='Completed'&&e.status!=='Cancelled'&&eventDateRange(e).start&&eventDateRange(e).start>=todayIso);
+  const totalBudget=sum(CFG.events.map(e=>e.budget));
+
+  let h=`<div class="phead"><div><h1>${greeting}, ${esc(name)}</h1>
+    <p>${today} · ${upcoming.length?`<b>${upcoming.length}</b> upcoming event${upcoming.length===1?'':'s'}`:'No upcoming events'}</p></div>
+    <div class="sp"></div>
+    <button class="btn pri" onclick="go('events');addEvent()">+ Quick add event</button></div>`;
+
+  h+=`<div class="kpis">
+    <div class="kpi hl"><div class="k">Events</div><div class="kpi-v">${CFG.events.length}</div><div class="sub">${upcoming.length} upcoming</div></div>
+    <div class="kpi"><div class="k">Total budget</div><div class="kpi-v">${F.mk(totalBudget)}</div></div>
+    <div class="kpi"><div class="k">Total actual spend</div><div class="kpi-v">${F.mk(sum(CFG.events.map(e=>costsTotal(e.id,'actualCost'))))}</div></div>
+  </div>`;
+
+  h+=`<div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">`;
+  h+=`<div style="flex:2;min-width:320px">
+    <div class="card"><h3>Events <span class="sp"></span><button class="btn sm" onclick="go('events')">Open Events</button></h3><div class="bd flush"><table><thead><tr>
+      <th>Event</th><th>Status</th><th>Dates</th><th class="n">Budget</th></tr></thead><tbody>
+      ${CFG.events.slice(0,6).map(e=>{ const range=eventDateRange(e); return `<tr><td class="lb"><a href="#" onclick="go('event','${e.id}');return false">${esc(e.name)}</a></td>
+        <td>${ragPillHtml(ragForEvent(e))}</td>
+        <td class="mini">${F.d(range.start)}${range.end&&range.end!==range.start?' → '+F.d(range.end):''}</td>
+        <td class="n calc">${F.mk(e.budget)}</td></tr>`; }).join('')
+        || '<tr><td colspan="4" class="empty">No events yet — Quick Add to create the first one.</td></tr>'}
+      </tbody></table></div></div>
+  </div>`;
+
+  h+=`<div style="flex:1;min-width:260px">
+    <div class="card"><h3>Recent activity</h3><div class="bd flush">
+      ${CFG.audit.slice(0,8).map(a=>`<div style="padding:7px 14px;border-bottom:1px solid var(--line);font-size:11.5px">
+        <div>${esc(a.what)}</div><div class="mini" style="color:var(--ink-2)">${esc(a.detail||'')} · ${F.dt(a.ts)}</div></div>`).join('')
+        || '<div class="empty">No activity yet.</div>'}
+    </div></div>
+  </div>`;
+  h+=`</div>`;
+  return h;
+}
+function pageEvents(){
+  const totalBudget=sum(CFG.events.map(e=>e.budget));
+  const totalActual=sum(CFG.events.map(e=>costsTotal(e.id,'actualCost')||e.budget*0));
+  let h=`<div class="phead"><div><h1>Events</h1>
+    <p>High-level event list. Open one to manage its cost lines, checklist, speakers and registration.</p></div></div>`;
+  h+=`<div class="kpis">
+    <div class="kpi hl"><div class="k">Events</div><div class="kpi-v">${CFG.events.length}</div><div class="sub">tracked here</div></div>
+    <div class="kpi"><div class="k">Total budget</div><div class="kpi-v">${F.mk(totalBudget)}</div></div>
+    <div class="kpi"><div class="k">Total actual spend</div><div class="kpi-v">${F.mk(sum(CFG.events.map(e=>costsTotal(e.id,'actualCost'))))}</div></div>
+  </div>`;
+  h+=`<div class="card"><h3>Events <span class="sp"></span><span class="pill n">${CFG.events.length}</span>
+      <button class="btn sm pri" onclick="addEvent()">Add event</button></h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>Event</th><th>Type</th><th>Status</th><th>Progress</th><th>Venue / location</th><th>Dates</th>
+      <th class="n">PAX</th><th class="n">Budget</th><th class="n">Committed</th><th class="n">Actual</th><th></th></tr></thead><tbody>
+    ${!CFG.events.length?`<tr><td colspan="11" class="empty">No events yet.</td></tr>`:CFG.events.map(e=>{
+      const committed=costsTotal(e.id,'committedCost'), actual=costsTotal(e.id,'actualCost');
+      const range=eventDateRange(e);
+      return `<tr><td class="lb">${esc(e.name)}${e.trackingRef?`<div class="mini">${esc(e.trackingRef)}</div>`:''}</td>
+        <td>${esc(e.type)}</td>
+        <td><span class="pill ${e.status==='Completed'?'ok':e.status==='Cancelled'?'bad':e.status==='Confirmed'?'ok':'n'}">${esc(e.status)}</span></td>
+        <td>${ragPillHtml(ragForEvent(e))}</td>
+        <td class="mini">${esc(eventVenueSummary(e))}</td>
+        <td class="mini">${F.d(range.start)}${range.end&&range.end!==range.start?' → '+F.d(range.end):''}</td>
+        <td class="n calc">${F.n(eventPax(e))}</td>
+        <td class="n calc">${F.mk(e.budget)}</td>
+        <td class="n calc">${F.mk(committed)}</td>
+        <td class="n calc">${F.mk(actual)}</td>
+        <td><button class="btn sm pri" onclick="go('event','${e.id}')">Open →</button></td></tr>`;}).join('')}
+    </tbody></table></div></div></div>`;
+  return h;
+}
+
+/* ==========================================================================
+   Programme / Campaign roll-up dashboard for Events (phase16). Cursus asked
+   for "Programme / Campaign / Activity event dashboards ... also for Events
+   in Eventus" -- since an Event's parent in Eventus is a Campaign (not an
+   Activity; the Activity is the thing on the Cursus side that optionally
+   links TO an event, see tasks.event_id), the drill-down here is Programme
+   -> Campaign -> Events, with the linked Cursus activity (if any) shown
+   inline on each event so activity-level context is visible without a
+   third drill level that wouldn't have more than one event under it in
+   practice. Read-only rollups: Eventus never writes to programmes or
+   campaigns.
+   ========================================================================== */
+
+function goRollupAll(level){
+  UI.rollupLevel=level; UI.rollupProgrammeId=null; UI.rollupCampaignId=null; render();
+}
+window.goRollupAll=goRollupAll;
+function goRollupCampaignsOfProgramme(programmeId){
+  UI.rollupLevel='campaign'; UI.rollupProgrammeId=programmeId; UI.rollupCampaignId=null; render();
+}
+window.goRollupCampaignsOfProgramme=goRollupCampaignsOfProgramme;
+function goRollupEventsOfCampaign(campaignId){
+  const camp=byId(CFG.campaigns,campaignId);
+  UI.rollupLevel='events'; UI.rollupCampaignId=campaignId; UI.rollupProgrammeId=camp?camp.programmeId:null; render();
+}
+window.goRollupEventsOfCampaign=goRollupEventsOfCampaign;
+
+function rollupStats(events){
+  return {
+    count: events.length,
+    budget: sum(events.map(e=>e.budget||0)),
+    pax: sum(events.map(e=>eventPax(e))),
+    registered: sum(events.map(e=>e.registered||0)),
+    attended: sum(events.map(e=>e.attended||0)),
+    actual: sum(events.map(e=>costsTotal(e.id,'actualCost')))
+  };
+}
+function eventsUnderCampaign(campaignId){ return CFG.events.filter(e=>e.campaignId===campaignId); }
+function eventsUnderProgramme(programmeId){
+  const campIds=CFG.campaigns.filter(c=>c.programmeId===programmeId).map(c=>c.id);
+  return CFG.events.filter(e=>campIds.includes(e.campaignId));
+}
+function linkedActivityFor(eventId){ return CFG.linkedActivities.find(a=>a.eventId===eventId)||null; }
+
+function rollupBreadcrumb(){
+  const parts=[{label:'All programmes',onclick:"goRollupAll('programme')",active:UI.rollupLevel==='programme'}];
+  const prog=UI.rollupProgrammeId?byId(CFG.programmes,UI.rollupProgrammeId):null;
+  if(prog) parts.push({label:esc(prog.name),onclick:`goRollupCampaignsOfProgramme('${prog.id}')`,active:UI.rollupLevel==='campaign'});
+  const camp=UI.rollupCampaignId?byId(CFG.campaigns,UI.rollupCampaignId):null;
+  if(camp) parts.push({label:esc(camp.name),onclick:`goRollupEventsOfCampaign('${camp.id}')`,active:true});
+  return `<div class="row" style="gap:5px;margin-bottom:10px;flex-wrap:wrap">${parts.map((p,i)=>
+    `${i>0?'<span class="mini" style="color:var(--ink-3)">/</span>':''}<a href="#" class="mini" style="${p.active?'font-weight:700;color:var(--ink-1)':''}" onclick="${p.onclick};return false">${p.label}</a>`
+  ).join('')}</div>`;
+}
+
+function rollupKpisHtml(events){
+  const s=rollupStats(events);
+  return `<div class="kpis" style="margin-bottom:12px">
+    <div class="kpi"><div class="k">Events</div><div class="kpi-v">${s.count}</div></div>
+    <div class="kpi"><div class="k">Budget</div><div class="kpi-v">${F.mk(s.budget)}</div></div>
+    <div class="kpi hl"><div class="k">Actual spend</div><div class="kpi-v">${F.mk(s.actual)}</div></div>
+    <div class="kpi"><div class="k">Registered</div><div class="kpi-v">${s.registered}</div></div>
+    <div class="kpi ${s.registered&&s.attended<s.registered*0.5?'hl':''}"><div class="k">Attended</div><div class="kpi-v">${s.attended}</div><div class="sub">${s.registered?Math.round(s.attended/s.registered*100)+'% of registered':'—'}</div></div>
+  </div>`;
+}
+
+function pageRollups(){
+  let h=`<div class="phead"><div><h1>Programme / Campaign roll-ups</h1>
+    <p>Budget, attendee and actual-vs-projected reporting for events, rolled up by Programme and Campaign. Programmes and campaigns are synced from Ordo/Cursus — read-only here.</p></div></div>`;
+  h+=rollupBreadcrumb();
+
+  if(UI.rollupLevel==='events'){
+    const camp=byId(CFG.campaigns,UI.rollupCampaignId);
+    const events=UI.rollupCampaignId?eventsUnderCampaign(UI.rollupCampaignId):[];
+    h+=rollupKpisHtml(events);
+    h+=`<div class="card"><h3>Events${camp?' — '+esc(camp.name):''} <span class="sp"></span><span class="pill n">${events.length}</span></h3>
+      <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>Event</th><th>Type</th><th>Status</th><th>Progress</th><th>Dates</th><th class="n">Budget</th><th class="n">Actual</th>
+      <th class="n">Registered</th><th class="n">Attended</th><th>Linked activity</th><th></th></tr></thead><tbody>
+      ${!events.length?`<tr><td colspan="11" class="empty">No events under this campaign yet.</td></tr>`:events.map(e=>{
+        const range=eventDateRange(e), act=linkedActivityFor(e.id);
+        return `<tr>
+          <td><b>${esc(e.name)}</b></td>
+          <td class="mini">${esc(e.type)}</td>
+          <td><span class="pill n">${esc(e.status)}</span></td>
+          <td>${ragPillHtml(ragForEvent(e))}</td>
+          <td class="mini">${F.d(range.start)}${range.end&&range.end!==range.start?' → '+F.d(range.end):''}</td>
+          <td class="n calc">${F.mk(e.budget||0)}</td>
+          <td class="n calc">${F.mk(costsTotal(e.id,'actualCost'))}</td>
+          <td class="n calc">${e.registered||0}</td>
+          <td class="n calc">${e.attended||0}</td>
+          <td class="mini">${act?esc(act.name):'—'}</td>
+          <td class="n"><button class="btn sm pri" onclick="go('event','${e.id}')">Open →</button></td></tr>`;
+      }).join('')}
+      </tbody></table></div></div></div>`;
+    return h;
+  }
+
+  if(UI.rollupLevel==='campaign'){
+    const prog=byId(CFG.programmes,UI.rollupProgrammeId);
+    const camps=UI.rollupProgrammeId?CFG.campaigns.filter(c=>c.programmeId===UI.rollupProgrammeId):CFG.campaigns;
+    const allEvents=camps.flatMap(c=>eventsUnderCampaign(c.id));
+    h+=rollupKpisHtml(allEvents);
+    h+=`<div class="card"><h3>Campaigns${prog?' — '+esc(prog.name):''} <span class="sp"></span><span class="pill n">${camps.length}</span></h3>
+      <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>Campaign</th><th class="n">Events</th><th class="n">Budget</th><th class="n">Actual</th>
+      <th class="n">Registered</th><th class="n">Attended</th><th></th></tr></thead><tbody>
+      ${!camps.length?`<tr><td colspan="7" class="empty">No campaigns in this scope.</td></tr>`:camps.map(c=>{
+        const s=rollupStats(eventsUnderCampaign(c.id));
+        return `<tr>
+          <td><b>${esc(c.name)}</b></td>
+          <td class="n calc">${s.count}</td>
+          <td class="n calc">${F.mk(s.budget)}</td>
+          <td class="n calc">${F.mk(s.actual)}</td>
+          <td class="n calc">${s.registered}</td>
+          <td class="n calc">${s.attended}</td>
+          <td class="n">${s.count?`<button class="btn sm pri" onclick="goRollupEventsOfCampaign('${c.id}')">View events →</button>`:'<span class="mini">no events</span>'}</td></tr>`;
+      }).join('')}
+      </tbody></table></div></div></div>`;
+    return h;
+  }
+
+  // programme
+  const allEvents=CFG.events;
+  h+=rollupKpisHtml(allEvents);
+  h+=`<div class="card"><h3>Programmes <span class="sp"></span><span class="pill n">${CFG.programmes.length}</span></h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+    <th>Programme</th><th class="n">Campaigns</th><th class="n">Events</th><th class="n">Budget</th><th class="n">Actual</th>
+    <th class="n">Registered</th><th class="n">Attended</th><th></th></tr></thead><tbody>
+    ${!CFG.programmes.length?`<tr><td colspan="8" class="empty">No programmes synced yet.</td></tr>`:CFG.programmes.map(p=>{
+      const camps=CFG.campaigns.filter(c=>c.programmeId===p.id);
+      const s=rollupStats(eventsUnderProgramme(p.id));
+      return `<tr>
+        <td><b>${esc(p.name)}</b></td>
+        <td class="n calc">${camps.length}</td>
+        <td class="n calc">${s.count}</td>
+        <td class="n calc">${F.mk(s.budget)}</td>
+        <td class="n calc">${F.mk(s.actual)}</td>
+        <td class="n calc">${s.registered}</td>
+        <td class="n calc">${s.attended}</td>
+        <td class="n">${camps.length?`<button class="btn sm pri" onclick="goRollupCampaignsOfProgramme('${p.id}')">View campaigns →</button>`:'<span class="mini">no campaigns</span>'}</td></tr>`;
+    }).join('')}
+    </tbody></table></div></div></div>`;
+  const unassigned=CFG.events.filter(e=>{
+    const c=byId(CFG.campaigns,e.campaignId); return !e.campaignId || !c || !c.programmeId;
+  });
+  if(unassigned.length){
+    const s=rollupStats(unassigned);
+    h+=`<div class="card"><h3>Not under a programme <span class="sp"></span><span class="pill warn">${unassigned.length}</span></h3>
+      <div class="bd"><p class="mini">${unassigned.length} event${unassigned.length===1?'':'s'} — ${unassigned.map(e=>esc(e.name)).join(', ')} —
+        ${unassigned.length===1?"isn't":"aren't"} linked to a campaign under any programme, so ${unassigned.length===1?"it doesn't":"they don't"} show up in the roll-up above.
+        Total: ${F.mk(s.budget)} budget, ${s.registered} registered, ${s.attended} attended.</p></div></div>`;
+  }
+  return h;
+}
+
+
+function pageEvent(){
+  const e=byId(CFG.events,UI.eventId)||CFG.events[0];
+  if(!e) return `<div class="card"><div class="bd"><div class="empty">No events yet — add one from Events.</div></div></div>`;
+  UI.eventId=e.id;
+  const costs=COSTS(e.id), planned=costsTotal(e.id,'plannedCost'), committed=costsTotal(e.id,'committedCost'), actual=costsTotal(e.id,'actualCost');
+  const checklist=CHECKLIST(e.id), doneCount=checklist.filter(c=>c.done).length;
+  const speakers=SPEAKERS(e.id);
+  const attendRate=e.registered?clamp(e.attended/e.registered,0,1):null;
+  const venues=VENUES(e.id), totalPax=eventPax(e), range=eventDateRange(e);
+  let h=`<div class="phead"><div><h1>${esc(e.name)}</h1>
+    <p>${esc(e.type)} · ${esc(eventVenueSummary(e))} · ${F.d(range.start)}${range.end&&range.end!==range.start?' → '+F.d(range.end):''}</p></div>
+    <div class="sp"></div>
+    <select class="in" style="width:auto" onchange="go('event',this.value)">
+      ${CFG.events.map(x=>`<option value="${x.id}" ${x.id===e.id?'selected':''}>${esc(x.name)}</option>`).join('')}
+    </select>
+    <button class="btn dgr" onclick="removeEvent('${e.id}')">Remove event</button></div>`;
+
+  h+=`<div class="card"><h3>Event details</h3><div class="bd">
+    <div class="row" style="gap:16px;flex-wrap:wrap">
+      <div><span class="lbl">Name</span><br><input class="cel txt" style="width:260px" value="${esc(e.name)}" onchange="setIn('events','${e.id}','name',this.value)"></div>
+      <div><span class="lbl">Type</span><br><select class="cel txt" style="width:180px" onchange="setIn('events','${e.id}','type',this.value)">
+        ${EVENT_TYPES.map(t=>`<option ${t===e.type?'selected':''}>${t}</option>`).join('')}</select></div>
+      <div><span class="lbl">Status</span><br><select class="cel txt" style="width:130px" onchange="setIn('events','${e.id}','status',this.value)">
+        ${['Planned','Approved','Confirmed','Completed','Cancelled'].map(s=>`<option ${s===e.status?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div><span class="lbl">Requester</span><br><input class="cel txt" style="width:150px" value="${esc(e.requester)}" onchange="setIn('events','${e.id}','requester',this.value)"></div>
+      <div><span class="lbl">Budget</span><br><input class="cel w" value="${e.budget}" onchange="setIn('events','${e.id}','budget',this.value,'money')"></div>
+    </div>
+    <div class="row" style="gap:16px;flex-wrap:wrap;margin-top:10px">
+      <div><span class="lbl">Linked campaign</span><br><select class="cel txt" style="width:220px" onchange="setIn('events','${e.id}','campaignId',this.value||null)">
+        <option value="">— not linked —</option>
+        ${CFG.campaigns.map(c=>`<option value="${c.id}" ${c.id===e.campaignId?'selected':''}>${esc(c.name)}</option>`).join('')}
+      </select></div>
+      <div><span class="lbl">Or a reference (if not tracked here)</span><br><input class="cel txt" style="width:220px" placeholder="campaign name or tracking ref" value="${esc(e.campaignRef||'')}" onchange="setIn('events','${e.id}','campaignRef',this.value)"></div>
+    </div>
+    <p class="mini" style="margin-top:8px">Venue, location, PAX and dates now live per-venue below — an event can span several venues (a roadshow, or a main venue plus satellite sites).</p>
+    </div></div>`;
+
+  h+=`<div class="kpis">
+    <div class="kpi"><div class="k">Total PAX</div><div class="kpi-v">${totalPax}</div><div class="sub">${venues.length} venue${venues.length===1?'':'s'}</div></div>
+    <div class="kpi"><div class="k">Planned</div><div class="kpi-v">${F.mk(planned)}</div><div class="sub">${costs.length} cost line${costs.length===1?'':'s'}</div></div>
+    <div class="kpi hl"><div class="k">Committed</div><div class="kpi-v">${F.mk(committed)}</div><div class="sub">${F.p(e.budget?committed/e.budget:0)} of budget</div></div>
+    <div class="kpi"><div class="k">Actual</div><div class="kpi-v">${F.mk(actual)}</div>
+      <div class="sub" style="color:${actual>e.budget?'var(--bad)':'var(--ink-3)'}">${e.budget?F.p((actual-e.budget)/e.budget)+' vs budget':'—'}</div></div>
+    <div class="kpi"><div class="k">Checklist</div><div class="kpi-v">${doneCount}/${checklist.length}</div><div class="sub">tasks done</div></div>
+  </div>`;
+
+  h+=`<div class="card"><h3>Venues <span class="sp"></span>
+      <button class="btn sm pri" onclick="addVenue('${e.id}')">Add venue</button></h3>
+    <div class="bd flush"><div class="scroll"><table><thead><tr>
+      <th>Name</th><th>Country</th><th>Location</th><th class="n">PAX</th><th>Start</th><th>End</th><th>Status</th><th></th></tr></thead><tbody>
+    ${!venues.length?`<tr><td colspan="8" class="empty">No venues yet — add one (or run the phase10 backfill if this event predates multi-venue).</td></tr>`:venues.map(v=>`<tr>
+      <td><input class="cel txt" style="width:150px" value="${esc(v.name)}" onchange="setIn('eventVenues','${v.id}','name',this.value)"></td>
+      <td><input class="cel txt" style="width:110px" value="${esc(v.country)}" onchange="setIn('eventVenues','${v.id}','country',this.value)"></td>
+      <td><input class="cel txt" style="width:150px" value="${esc(v.location)}" onchange="setIn('eventVenues','${v.id}','location',this.value)"></td>
+      <td class="n"><input class="cel w" value="${v.pax||0}" onchange="setIn('eventVenues','${v.id}','pax',this.value,'num')"></td>
+      <td><input class="cel txt" type="date" value="${v.start||''}" onchange="setIn('eventVenues','${v.id}','start',this.value)"></td>
+      <td><input class="cel txt" type="date" value="${v.end||''}" onchange="setIn('eventVenues','${v.id}','end',this.value)"></td>
+      <td><select class="cel txt" style="width:110px" onchange="setIn('eventVenues','${v.id}','status',this.value)">
+        ${['Planned','Confirmed','Cancelled'].map(s=>`<option ${s===v.status?'selected':''}>${s}</option>`).join('')}</select></td>
+      <td class="n"><button class="btn sm dgr" onclick="removeVenue('${v.id}')">Remove</button></td></tr>`).join('')}
+    ${venues.length?`<tr class="tot"><td colspan="3">Total</td><td class="n">${totalPax}</td><td colspan="4"></td></tr>`:''}
+    </tbody></table></div></div></div>`;
+
+  h+=`<div class="card"><h3>Cost lines <span class="sp"></span>
+      <button class="btn sm pri" onclick="addCostLine('${e.id}')">Add cost line</button></h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>Category</th><th>Supplier</th><th>Description</th><th class="n">Planned</th><th class="n">Committed</th><th class="n">Actual</th><th></th></tr></thead><tbody>
+    ${!costs.length?`<tr><td colspan="7" class="empty">No cost lines yet.</td></tr>`:costs.map(c=>`<tr>
+      <td><select class="cel txt" style="width:150px" onchange="setIn('costLines','${c.id}','category',this.value)">
+        ${COST_CATEGORIES.map(cat=>`<option ${cat===c.category?'selected':''}>${cat}</option>`).join('')}</select></td>
+      <td><input class="cel txt" style="width:150px" value="${esc(c.supplier)}" onchange="setIn('costLines','${c.id}','supplier',this.value)"></td>
+      <td><input class="cel txt" style="width:200px" value="${esc(c.description)}" onchange="setIn('costLines','${c.id}','description',this.value)"></td>
+      <td class="n"><input class="cel w" value="${c.plannedCost||0}" onchange="setIn('costLines','${c.id}','plannedCost',this.value,'money')"></td>
+      <td class="n"><input class="cel w" value="${c.committedCost||0}" onchange="setIn('costLines','${c.id}','committedCost',this.value,'money')"></td>
+      <td class="n"><input class="cel w" value="${c.actualCost||0}" onchange="setIn('costLines','${c.id}','actualCost',this.value,'money')"></td>
+      <td class="n"><button class="btn sm dgr" onclick="removeCostLine('${c.id}')">Remove</button></td></tr>`).join('')}
+    <tr class="tot"><td colspan="3">Total</td><td class="n">${F.mk(planned)}</td><td class="n">${F.mk(committed)}</td><td class="n">${F.mk(actual)}</td><td></td></tr>
+    </tbody></table></div></div></div>`;
+
+  h+=`<div class="card"><h3>Checklist <span class="sp"></span>
+      <button class="btn sm pri" onclick="addChecklistItem('${e.id}')">Add task</button></h3>
+    <div class="bd flush"><table><thead><tr><th>Done</th><th>Task</th><th>Due</th><th></th></tr></thead><tbody>
+    ${!checklist.length?`<tr><td colspan="4" class="empty">No checklist items yet.</td></tr>`:checklist.map(c=>`<tr>
+      <td><input type="checkbox" ${c.done?'checked':''} onchange="setIn('checklist','${c.id}','done',this.checked,'bool')"></td>
+      <td><input class="cel txt" style="width:260px" value="${esc(c.item)}" onchange="setIn('checklist','${c.id}','item',this.value)"></td>
+      <td><input class="cel txt" type="date" value="${c.dueDate||''}" onchange="setIn('checklist','${c.id}','dueDate',this.value)"></td>
+      <td class="n"><button class="btn sm dgr" onclick="removeChecklistItem('${c.id}')">Remove</button></td></tr>`).join('')}
+    </tbody></table></div></div>`;
+
+  h+=`<div class="card"><h3>Speakers <span class="sp"></span>
+      <button class="btn sm pri" onclick="addSpeaker('${e.id}')">Add speaker</button></h3>
+    <div class="bd flush"><table><thead><tr><th>Name</th><th>Company</th><th>Topic</th><th>Contact</th><th></th></tr></thead><tbody>
+    ${!speakers.length?`<tr><td colspan="5" class="empty">No speakers logged yet.</td></tr>`:speakers.map(s=>`<tr>
+      <td><input class="cel txt" style="width:150px" value="${esc(s.name)}" onchange="setIn('speakers','${s.id}','name',this.value)"></td>
+      <td><input class="cel txt" style="width:150px" value="${esc(s.company)}" onchange="setIn('speakers','${s.id}','company',this.value)"></td>
+      <td><input class="cel txt" style="width:200px" value="${esc(s.topic)}" onchange="setIn('speakers','${s.id}','topic',this.value)"></td>
+      <td><input class="cel txt" style="width:180px" value="${esc(s.contact)}" onchange="setIn('speakers','${s.id}','contact',this.value)"></td>
+      <td class="n"><button class="btn sm dgr" onclick="removeSpeaker('${s.id}')">Remove</button></td></tr>`).join('')}
+    </tbody></table></div></div>`;
+
+  h+=`<div class="card"><h3>Registration & attendance</h3><div class="bd">
+    <div class="row" style="gap:16px;flex-wrap:wrap">
+      <div><span class="lbl">Registered</span><br><input class="cel w" value="${e.registered||0}" onchange="setIn('events','${e.id}','registered',this.value,'num')"></div>
+      <div><span class="lbl">Attended</span><br><input class="cel w" value="${e.attended||0}" onchange="setIn('events','${e.id}','attended',this.value,'num')"></div>
+      <div style="flex:1;min-width:200px"><span class="lbl">Attendance rate</span>
+        <div class="bar" style="margin-top:6px"><i style="width:${attendRate!=null?clamp(attendRate*100,0,100):0}%"></i></div>
+        <div class="mini" style="margin-top:4px">${attendRate!=null?F.p(attendRate):'—'} of registered attended</div></div>
+    </div></div></div>`;
+  return h;
+}
+
+function pageSync(){
+  let h=`<div class="phead"><div><h1>Shared configuration</h1>
+    <p>Cost buckets and the tracking ID convention come from Norma, not owned here.</p></div></div>`;
+  h+=`<div class="card"><h3>Import shared config from Norma <span class="sp"></span>
+      ${CFG.meta.normaSyncedAt?`<span class="pill ok">Last synced ${F.dt(CFG.meta.normaSyncedAt)} (v${CFG.meta.normaConfigVersion||'?'})</span>`:`<span class="pill warn">Never synced</span>`}
+      <a class="btn sm" href="Norma.html" target="tool_Norma">Open Norma</a></h3>
+    <div class="bd">
+      <label class="btn pri">Choose Norma export file…<input type="file" accept="application/json" style="display:none" onchange="handleNormaImportFile(this.files[0])"></label>
+      <p class="mini" style="margin-top:8px">Cost lines here use their own event-specific categories (Venue, Catering, AV…) rather than
+        Norma's marketing cost buckets — kept deliberately separate for v1. Norma's bucket list still syncs above for whenever a
+        cross-tool cost roll-up is worth building.</p>
+    </div></div>`;
+  h+=`<div class="card"><h3>Local autosave</h3><div class="bd">
+    <p class="mini" style="margin:0 0 8px">Events, cost lines, checklists and speakers save to this browser automatically. Local only —
+      export/import is still how data reaches other tools.</p>
+    <button class="btn sm dgr" onclick="clearLocal()">Clear local autosave</button></div></div>`;
+  h+=`<div class="card"><h3>Activity log</h3><div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>When</th><th>What</th><th>Detail</th></tr></thead><tbody>
+      ${!CFG.audit.length?`<tr><td colspan="3" class="empty">Nothing yet.</td></tr>`:
+        CFG.audit.map(a=>`<tr><td class="mini">${esc(a.ts)}</td><td>${esc(a.what)}</td><td class="mini">${esc(a.detail)}</td></tr>`).join('')}
+      </tbody></table></div></div></div>`;
+  return h;
+}
+
+const PAGES=[
+  {id:'home',   ix:'0', label:'Home',   fn:pageHome},
+  {id:'events', ix:'1', label:'Events',  fn:pageEvents},
+  {id:'event',  ix:'2', label:'Event detail', fn:pageEvent},
+  {id:'rollups',ix:'3', label:'Programme roll-ups', fn:pageRollups},
+  {id:'sync',   ix:'4', label:'Shared config', fn:pageSync}
+];
+function renderSide(){
+  let h='<h4>Eventus</h4>';
+  PAGES.forEach(p=>{ h+=`<a class="navi ${UI.page===p.id?'on':''}" href="#" onclick="go('${p.id}');return false">
+    <span class="ix">${p.ix}</span><span>${p.label}</span></a>`; });
+  return h;
+}
+function renderTnAcct(){
+  const nm=_myProfile?_myProfile.name:'';
+  const initials=nm?nm.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase():'?';
+  return `<span class="tn-avatar">${esc(initials)}</span>
+    <div class="tn-who"><b>${esc(nm||'—')}</b><span>Eventus</span></div>
+    <a class="tn-signout" href="#" onclick="doSignOut();return false;">Sign out</a>`;
+}
+/* Consistent cross-module bar: search jumps between the 8 tools, same list
+   and behavior as every other file -- not this tool's own events. */
+const MODULES=[
+  {id:'Ordo',label:'Ordo',desc:'Funnel planning & forecasting',color:'#1F3AC7'},
+  {id:'Cursus',label:'Cursus',desc:'Campaign & activity execution',color:'#0E7C6B'},
+  {id:'Eventus',label:'Eventus',desc:'Event planning & logistics',color:'#B5480E'},
+  {id:'Custodia',label:'Custodia',desc:'Asset register',color:'#3B6E1F'},
+  {id:'Prospectus',label:'Prospectus',desc:'ICP filters & opportunity reports',color:'#9C2B3C'},
+  {id:'Augur',label:'Augur',desc:'Lead & deal scoring',color:'#5A3E9C'},
+  {id:'Schema',label:'Schema',desc:'Process maps & workflows',color:'#3A5A8C'},
+  {id:'Norma',label:'Norma',desc:'Shared configuration',color:'#B5730E'}
+];
+const THIS_MODULE='Eventus';
+function renderTnModuleLinks(){
+  return MODULES.map(m=>m.id===THIS_MODULE
+    ? `<span class="tn-link on"><span class="mk" style="background:${m.color}">${m.label[0]}</span>${m.label}</span>`
+    : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}"><span class="mk" style="background:${m.color}">${m.label[0]}</span>${m.label}</a>`
+  ).join('');
+}
+function tnSearchResults(q){
+  q=(q||'').trim().toLowerCase(); if(!q) return [];
+  return MODULES.filter(m=>m.label.toLowerCase().includes(q)||m.desc.toLowerCase().includes(q)).slice(0,8);
+}
+let _tnResultList=[];
+function tnSearch(q){
+  _tnResultList=tnSearchResults(q);
+  const box=document.getElementById('tnResults');
+  if(!q||!q.trim()){ box.innerHTML=''; return; }
+  box.innerHTML = `<div class="tn-results">${
+    _tnResultList.length ? _tnResultList.map((m,i)=>`<a href="#" onclick="tnPick(${i});return false"><span class="ty">Module</span><div>${esc(m.label)}</div></a>`).join('')
+    : '<div class="none">No matches.</div>'
+  }</div>`;
+}
+window.tnSearch=tnSearch;
+function tnPick(i){
+  const m=_tnResultList[i]; if(!m) return;
+  window.open(m.id+'.html','tool_'+m.id);
+  document.getElementById('tnResults').innerHTML='';
+  document.getElementById('tnSearchInput').value='';
+}
+window.tnPick=tnPick;
+function tnSearchKey(ev){
+  if(ev.key==='Enter' && _tnResultList.length){ tnPick(0); }
+  if(ev.key==='Escape'){ document.getElementById('tnResults').innerHTML=''; ev.target.blur(); }
+}
+window.tnSearchKey=tnSearchKey;
+function render(){
+  const p=PAGES.find(x=>x.id===UI.page)||PAGES[0];
+  document.getElementById('side').innerHTML=renderSide();
+  document.getElementById('tnLinks').innerHTML=renderTnModuleLinks();
+  document.getElementById('tnAcct').innerHTML=renderTnAcct();
+  document.getElementById('main').innerHTML=p.fn();
+  saveLocal();
+  scheduleSupabaseSave();
+}
+sb.auth.onAuthStateChange((event)=>{
+  if(event==='SIGNED_OUT'){
+    if(_skipNextSignOutReload){ _skipNextSignOutReload=false; return; }
+    location.reload();
+  }
+});
+bootApp();
+</script>
+</body>
+</html>

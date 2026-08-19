@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Schema — Process Maps & Workflows</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+  --nav:#3A5A8C; --nav-dk:#2B436A; --ink:#10182B; --ink-2:#45506B; --ink-3:#7C879E;
+  --surface:#FFFFFF; --canvas:#F2F4F8; --canvas-2:#E9EDF4; --line:#DFE3EB; --line-2:#EEF1F6;
+  --input:#7B3FE4; --input-bg:#F7F2FE; --calc:#45506B;
+  --ok:#0E8A5F; --ok-bg:#E7F5EF; --warn:#C8791A; --warn-bg:#FDF4E7; --bad:#D0342C; --bad-bg:#FCEDEC;
+  --r:8px; --r-sm:5px;
+  --sh:0 1px 2px rgba(16,24,43,.05), 0 1px 3px rgba(16,24,43,.04);
+  --sh-2:0 4px 16px rgba(16,24,43,.10);
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:var(--sans); background:var(--canvas); color:var(--ink); font-size:13.5px;}
+.sp{flex:1}
+.topnav{background:var(--surface); border-bottom:1px solid var(--line); min-height:56px; display:flex; align-items:center; padding:0 18px; gap:16px; position:sticky; top:0; z-index:50; box-shadow:var(--sh); flex-wrap:wrap;}
+.tn-brand{display:flex; align-items:center; gap:9px; flex-shrink:0; padding:8px 0;}
+.tn-mk{width:34px;height:34px;border-radius:8px;background:var(--nav);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px;flex-shrink:0;}
+.tn-brandtext{line-height:1.15}
+.tn-name{font-weight:800; font-size:14.5px; color:var(--ink);}
+.tn-sub{font-size:9px; letter-spacing:.08em; color:var(--ink-3); font-weight:700; text-transform:uppercase;}
+.tn-links{display:flex; align-items:center; gap:2px; flex:1; overflow-x:auto; min-width:0;}
+.tn-link{padding:7px 12px; border-radius:6px; font-size:12.5px; font-weight:600; color:var(--ink-2); text-decoration:none; white-space:nowrap; flex-shrink:0; display:inline-flex; align-items:center; gap:6px;}
+.tn-link:hover{background:var(--canvas-2)}
+.tn-link.on{background:var(--canvas-2); color:var(--ink); cursor:default;}
+.tn-link .mk{width:16px;height:16px;border-radius:4px;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:9px;flex-shrink:0;}
+.tn-search{position:relative; flex-shrink:0;}
+.tn-search .bx{display:flex; align-items:center; gap:6px; background:var(--canvas); border:1px solid var(--line); border-radius:7px; padding:6px 10px; width:190px;}
+.tn-search input{border:none;background:transparent;outline:none;font-size:12.5px;flex:1;color:var(--ink); min-width:0;}
+.tn-kbd{font-size:10px;color:var(--ink-3);background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:1px 5px;flex-shrink:0;}
+.tn-results{position:absolute; top:calc(100% + 4px); left:0; width:260px; background:var(--surface); border:1px solid var(--line); border-radius:8px; box-shadow:var(--sh-2); z-index:60; max-height:320px; overflow-y:auto;}
+.tn-results a{display:block; padding:8px 12px; text-decoration:none; color:var(--ink); font-size:12.5px; border-bottom:1px solid var(--line-2);}
+.tn-results a:last-child{border-bottom:none}
+.tn-results a:hover{background:var(--canvas-2)}
+.tn-results .ty{font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-3); font-weight:700;}
+.tn-results .none{padding:10px 12px; font-size:12px; color:var(--ink-3);}
+.tn-acct{display:flex; align-items:center; gap:8px; flex-shrink:0; padding:8px 0;}
+.tn-avatar{width:30px;height:30px;border-radius:50%;background:var(--nav);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex-shrink:0;}
+.tn-who{font-size:11.5px; line-height:1.3;}
+.tn-who b{display:block; color:var(--ink); font-weight:700;}
+.tn-who span{color:var(--ink-3);}
+.tn-signout{font-size:10.5px; color:var(--ink-3); text-decoration:none;}
+.tn-signout:hover{color:var(--ink)}
+/* ---------- restored left-hand page nav (this tool's own pages) ---------- */
+.wrap{display:flex; min-height:calc(100vh - 56px);}
+.side{width:210px; background:var(--surface); border-right:1px solid var(--line); padding:10px 0; flex-shrink:0;}
+.side h4{font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3); margin:14px 14px 6px;}
+.navi{display:flex; align-items:center; gap:8px; padding:7px 14px; text-decoration:none; color:var(--ink-2); font-size:13px; border-left:3px solid transparent;}
+.navi:hover{background:var(--canvas-2)}
+.navi.on{background:var(--canvas-2);border-left-color:var(--nav);color:var(--ink);font-weight:700}
+.navi .ix{width:16px; text-align:center; font-size:11px; color:var(--ink-3);}
+.navi.on .ix{color:var(--nav)}
+.main{flex:1; padding:18px 22px; max-width:1280px;}
+.main.tight{padding:0; max-width:none;}
+.phead{display:flex; align-items:flex-start; gap:14px; margin-bottom:14px;}
+.phead h1{font-size:19px; margin:0 0 3px;}
+.phead p{margin:0; color:var(--ink-2); font-size:12.5px; max-width:680px;}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); margin-bottom:14px; box-shadow:var(--sh);}
+.card h3{display:flex; align-items:center; gap:8px; margin:0; padding:11px 14px; border-bottom:1px solid var(--line-2); font-size:13.5px;}
+.card .bd{padding:14px;}
+.card .bd.flush{padding:0;}
+table{width:100%; border-collapse:collapse; font-size:12.5px;}
+th{text-align:left; padding:8px 10px; background:var(--canvas); color:var(--ink-2); font-weight:700; font-size:11.5px; text-transform:uppercase; letter-spacing:.02em;}
+td{padding:6px 10px; border-bottom:1px solid var(--line-2); vertical-align:middle;}
+td.n,th.n{text-align:right;}
+.empty{padding:18px; text-align:center; color:var(--ink-3); font-size:12.5px;}
+.mini{font-size:11.5px; color:var(--ink-3);}
+.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px;}
+.kpi{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:11px 13px;}
+.kpi.hl{border-color:var(--nav); background:linear-gradient(180deg,#fff,rgba(58,90,140,.05));}
+.kpi .k{font-size:11px; color:var(--ink-3); margin-bottom:3px;}
+.kpi .kpi-v{font-size:19px; font-weight:800; font-variant-numeric:tabular-nums;}
+.kpi.hl .kpi-v{color:var(--nav)}
+.kpi .sub{font-size:11px; color:var(--ink-3); margin-top:2px;}
+.row{display:flex; align-items:center; gap:6px;}
+.btn{background:#fff; border:1px solid var(--line); border-radius:6px; padding:6px 11px; font-size:12.5px; cursor:pointer; color:var(--ink); text-decoration:none; display:inline-flex; align-items:center; gap:5px;}
+.btn:hover{background:var(--canvas-2)}
+.btn.sm{padding:4px 9px; font-size:11.5px;}
+.btn.pri{background:var(--nav);border-color:var(--nav);color:#fff}
+.btn.pri:hover{background:var(--nav-dk)}
+.btn.on{background:var(--nav);border-color:var(--nav);color:#fff}
+.btn.dgr{color:var(--bad); border-color:#F3C9C6;}
+.btn.dgr:hover{background:var(--bad-bg)}
+.btn:disabled{opacity:.45; cursor:not-allowed;}
+.pill{display:inline-block; padding:2px 8px; border-radius:20px; font-size:10.5px; font-weight:700; background:var(--canvas-2); color:var(--ink-2);}
+.pill.n{background:var(--canvas-2); color:var(--ink-2);}
+/* Shared status (RAG) pill -- same semantic scale + class names as the other tools
+   (2026-08-13). */
+.rag{display:inline-flex; align-items:center; gap:3px; padding:2px 8px; border-radius:20px; font-size:10.5px; font-weight:700; white-space:nowrap;}
+.rag-grey{background:#E7EAF0; color:#5B6472;}
+.rag-blue{background:#E3E8FD; color:#1F3AC7;}
+.rag-amber{background:#FBEBD3; color:#B5730E;}
+.rag-red{background:#F8DEE0; color:#9C2B3C;}
+.rag-green{background:#DCF3E9; color:#0E8A5F;}
+.rag-exceed{color:#C9971A;}
+.note{background:#EEF2F8;border-left:3px solid var(--nav);border-radius:0 var(--r-sm) var(--r-sm) 0; padding:10px 14px; margin-bottom:14px; font-size:12px; color:var(--ink-2);}
+.in,input.in,select.in,.cel{border:1px solid #E1D3FA; border-radius:5px; padding:5px 7px; font-size:12.5px; background:var(--input-bg); color:var(--ink); font-family:inherit;}
+.in:focus,.cel:focus{outline:2px solid var(--input); outline-offset:0;}
+.cel.txt{width:100%;}
+.toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:9px 16px; border-radius:20px; font-size:12.5px; box-shadow:var(--sh-2); z-index:200; animation:fade .2s ease;}
+@keyframes fade{from{opacity:0; transform:translateX(-50%) translateY(6px)} to{opacity:1; transform:translateX(-50%) translateY(0)}}
+.lbl{font-size:11px; color:var(--ink-3); font-weight:700; text-transform:uppercase; letter-spacing:.02em;}
+
+.editor{display:flex; height:calc(100vh - 44px);}
+.toolbar{display:flex; align-items:center; gap:6px; padding:8px 12px; background:var(--surface); border-bottom:1px solid var(--line); flex-wrap:wrap;}
+.toolbar .dv{width:1px; height:22px; background:var(--line); margin:0 4px;}
+.canvaswrap{flex:1; overflow:auto; background:
+  linear-gradient(var(--line-2) 1px,transparent 1px) 0 0/24px 24px,
+  linear-gradient(90deg,var(--line-2) 1px,transparent 1px) 0 0/24px 24px,
+  var(--canvas);}
+svg.canvas{display:block; cursor:default;}
+.node rect,.node polygon,.node ellipse{stroke:var(--nav); stroke-width:1.6; fill:#fff;}
+.node.sel rect,.node.sel polygon,.node.sel ellipse{stroke:var(--bad); stroke-width:2.4;}
+.node.pending rect,.node.pending polygon,.node.pending ellipse{stroke:var(--ok); stroke-dasharray:5,3;}
+.node text{font-family:var(--sans); font-size:12px; fill:var(--ink); pointer-events:none;}
+.node{cursor:grab;}
+.edge path{stroke:var(--ink-2); stroke-width:1.6; fill:none;}
+.edge.sel path{stroke:var(--bad); stroke-width:2.4;}
+.edge text{font-family:var(--sans); font-size:11px; fill:var(--ink-2);}
+.edge{cursor:pointer;}
+.lane text{font-family:var(--sans); font-size:11px; fill:var(--ink-3);}
+.inspector{width:260px; background:var(--surface); border-left:1px solid var(--line); padding:14px; flex-shrink:0; overflow-y:auto;}
+.inspector h4{margin:0 0 10px; font-size:13px;}
+.field{margin-bottom:12px;}
+.field label{display:block; margin-bottom:4px;}
+.authwrap{max-width:360px;margin:14vh auto;padding:32px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-2);}
+.authwrap h2{margin:0 0 4px;font-size:18px;}
+.authwrap p.sub{margin:0 0 20px;color:var(--ink-2);font-size:12.5px;}
+.authwrap input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;margin-bottom:10px;box-sizing:border-box;}
+.authwrap button{width:100%;padding:10px;border:none;border-radius:6px;background:var(--ink);color:#fff;font-weight:700;font-size:13px;cursor:pointer;}
+.authwrap .err{color:#B3261E;font-size:12px;margin:-4px 0 10px;min-height:14px;}
+</style>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<div id="authGate" style="display:none"></div>
+<div class="topnav" id="topnav">
+  <div class="tn-brand"><span class="tn-mk">S</span><div class="tn-brandtext"><div class="tn-name">Schema</div><div class="tn-sub">All modules</div></div></div>
+  <nav class="tn-links" id="tnLinks"></nav>
+  <div class="tn-search">
+    <div class="bx"><input id="tnSearchInput" placeholder="Search modules..." oninput="tnSearch(this.value)" onkeydown="tnSearchKey(event)"><span class="tn-kbd">/</span></div>
+    <div id="tnResults"></div>
+  </div>
+  <div class="tn-acct" id="tnAcct"></div>
+  <script>document.addEventListener('click',function(e){var r=document.getElementById('tnResults');if(r&&!e.target.closest('.tn-search'))r.innerHTML='';});</script>
+</div>
+<div class="wrap" id="wrap">
+  <nav class="side" id="side"></nav>
+  <main class="main" id="main"></main>
+</div>
+<div id="layer"></div>
+<script>
+/* ============================================================================
+   SCHEMA — high-level process-mapping / workflow-diagram tool. "Visio-style":
+   boxes, decisions, arrows, drag to arrange, click-click to connect. No canvas
+   library dependency (kept fully offline-capable) -- native SVG, hand-rolled
+   drag and connect interactions.
+
+   Data model is deliberately simple for v1: a workflow is just nodes[] (id, type,
+   x, y, label) and edges[] (id, fromId, toId, label). Positions are plain numbers
+   in SVG user-space, not tied to any layout engine, so a saved diagram always
+   reopens exactly as arranged.
+
+   Mouse-drag and click-to-connect are real UI interactions and can't be
+   meaningfully exercised by the jsdom regression harness (no SVG geometry
+   support there) -- so moveNodeTo(), addEdge(), etc. are implemented as plain,
+   independently callable functions that both the mouse handlers AND the test
+   harness call directly. That mirrors how every other module in this toolset is
+   tested: call the state-mutating function, assert on CFG, not on pixels.
+
+   Same Norma bridge pattern as every other module (tracking ID convention only --
+   this tool doesn't track spend, so no cost-bucket import).
+
+   Supabase note: workflows now live in the shared database (2026-08-11-supabase-schema-
+   phase5-schema.sql) — lanes/nodes/edges stay as jsonb on the workflow row itself (matches
+   the app's own "deliberately simple" data model, same choice Ordo made for snapshots.data).
+   ============================================================================ */
+const SUPABASE_URL = 'https://rcmocuubeajnqjltuwdv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjbW9jdXViZWFqbnFqbHR1d2R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzMTgzNTQsImV4cCI6MjEwMTg5NDM1NH0.rZuoKPmmkpNe8Ug8Gu_KmpoKyibigJccdpoRGcLt3pY';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const uid = _p => crypto.randomUUID();
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const byId = (a,id) => a.find(x=>x.id===id);
+/* Generic field setter, same shape as every other tool's setIn() -- Schema's
+   diagram canvas has its own bespoke setters (renameWorkflow etc.) since node
+   editing needs undo/redo support, but the flat Automations rows added in
+   phase13 use this like a normal CRUD table. */
+function setIn(field,id,key,val,type){
+  const row=byId(CFG[field],id); if(!row)return;
+  let v=val;
+  if(type==='money'||type==='num'){ v=parseFloat(String(val).replace(/[$,\s]/g,'')); if(isNaN(v))v=0; }
+  else if(type==='bool'){ v=!!val; }
+  row[key]=v; logAudit('edit',field+'.'+key); render();
+}
+window.setIn=setIn;
+const F = { dt:iso=>{ if(!iso)return '—'; return new Date(iso).toLocaleString('en-AU',{day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'}); } };
+
+const NODE_TYPES = {
+  'start-end': {label:'Start / End', w:120, h:52},
+  'process':   {label:'Process',     w:140, h:56},
+  'decision':  {label:'Decision',    w:150, h:90}
+};
+
+/* ---------- data ----------
+   Supabase-backed now — populated by loadFromSupabase() after sign-in. Empty shell here so
+   nothing downstream needs to change; only the population source moved. */
+const CFG = {};
+
+const UI = { page:'home', workflowId:null, mode:'select', selKind:null, selId:null, connectFromId:null, zoom:1 };
+let drag=null; /* {id,dx,dy} -- transient, not part of CFG */
+let undoStack=[]; /* {nodes,edges} snapshots for the open workflow -- transient, not persisted */
+const UNDO_LIMIT=25;
+
+function logAudit(what,detail,targetUserIds){
+  CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail,targetUserIds:targetUserIds||null});
+  if(CFG.audit.length>150)CFG.audit.pop();
+}
+function toast(msg){
+  const l=document.getElementById('layer');
+  const d=document.createElement('div'); d.className='toast'; d.textContent=msg;
+  l.appendChild(d); setTimeout(()=>d.remove(),2200);
+}
+function go(page){ UI.page=page; render(); }
+window.go=go;
+function currentWorkflow(){ return byId(CFG.workflows,UI.workflowId); }
+
+/* ---------- local autosave (survives a refresh/close; export/import is still the
+   portable, cross-tool bridge) ---------- */
+const LS_KEY='schema_autosave_v1';
+function saveLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(CFG)); }catch(e){} }
+function loadLocal(){
+  try{
+    const raw=localStorage.getItem(LS_KEY); if(!raw) return false;
+    const parsed=JSON.parse(raw);
+    Object.keys(parsed).forEach(k=>{ CFG[k]=parsed[k]; });
+    return true;
+  }catch(e){ return false; }
+}
+function clearLocal(){
+  localStorage.removeItem(LS_KEY);
+  toast('Local autosave cleared — reload the page to reset to the built-in defaults.');
+}
+window.clearLocal=clearLocal;
+
+/* ============================================================================
+   Supabase data layer — whole-plan load/save, same pattern as every other tool.
+   Workflows are Schema's only table; audit_log is shared.
+   ============================================================================ */
+let _orgId = null, _myProfile = null, _saveTimer = null, _realtimeChannel = null;
+/* Set right before an internal (non-user-initiated) signOut() -- e.g. bootApp()'s error path
+   below -- so the global onAuthStateChange listener knows to skip its reload-on-SIGNED_OUT and
+   let the error message stay on screen instead of wiping it out immediately. Without this, the
+   error flashes for a frame and then vanishes, which is exactly the "flash and it's gone" bug. */
+let _skipNextSignOutReload = false;
+
+async function upsertRows(table, rows, mapFn){
+  if(!rows || !rows.length) return;
+  try{
+    const payload = rows.map(r=>Object.assign(mapFn(r), {org_id:_orgId}));
+    const { error } = await sb.from(table).upsert(payload);
+    if(error) throw error;
+  }catch(e){ console.error('Save failed for '+table, e); toast('Could not save '+table+' to the database — see console.'); }
+}
+
+/* Fire-and-forget real delete, paired with upsertRows above. Called immediately after the
+   local CFG array filter in every remove*() function so the UI stays instant while the row
+   actually leaves the database (previously these were UPSERT-only, so removed rows silently
+   reappeared on next load). Note: lanes/nodes/edges live inside a workflow's own jsonb
+   columns, not separate tables, so removeLane/removeNode/removeEdge don't need this -- they
+   persist correctly through the normal schema_workflows upsert. Only removeWorkflow,
+   removeAutomation, and removeAgentDestination touch real standalone rows. */
+async function deleteRow(table, id){
+  if(!_orgId || !id) return;
+  try{
+    const { error } = await sb.from(table).delete().eq('id', id).eq('org_id', _orgId);
+    if(error) throw error;
+  }catch(e){ console.error('Delete failed for '+table, e); toast('Removed here, but could not delete from the database — see console.'); }
+}
+
+async function saveToSupabase(){
+  if(!_orgId) return;
+  await Promise.all([
+    upsertRows('schema_workflows', CFG.workflows, w=>({
+      id:w.id,name:w.name,description:w.description||'',updated_at:w.updatedAt||null,
+      tracking_ref:w.trackingRef||null,lanes:w.lanes||[],nodes:w.nodes||[],edges:w.edges||[]
+    })),
+    upsertRows('schema_automations', CFG.automations, a=>({
+      id:a.id,name:a.name||'',trigger_type:a.triggerType||'campaign_signoff_status',trigger_value:a.triggerValue||'',
+      action_type:a.actionType||'log_note',action_message:a.actionMessage||'',enabled:!!a.enabled,
+      action_target_agent:!!a.actionTargetAgent,fired_ids:a.firedIds||[],last_run_at:a.lastRunAt||null,
+      action_target_type:a.actionTargetType||'org',action_target_ids:a.actionTargetIds||[]
+    })),
+    upsertRows('audit_log', CFG.audit, a=>({ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null,target_user_ids:a.targetUserIds||null})),
+    upsertRows('agent_destinations', CFG.agentDestinations, d=>({
+      id:d.id,name:d.name||'',type:d.type||'webhook',target:d.target||'',is_org_default:!!d.isOrgDefault
+    })),
+    upsertRows('agent_dispatches', CFG.agentDispatches, d=>({
+      id:d.id,automation_id:d.automationId||null,brief:d.brief||'',destination_id:d.destinationId||null,
+      destination_name:d.destinationName||'',status:d.status||'pending',result_detail:d.resultDetail||'',
+      pushed_by:d.pushedBy||null,pushed_at:d.pushedAt||null
+    }))
+  ]);
+}
+
+function scheduleSupabaseSave(){
+  if(!_orgId) return;
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(()=>{ saveToSupabase(); }, 900);
+}
+
+async function loadFromSupabase(){
+  const { data:{ user: authUser } } = await sb.auth.getUser();
+  if(!authUser) throw new Error('Not signed in.');
+  const { data: prof, error: profErr } = await sb.from('profiles')
+    .select('id,name,org_id,role_id,region_ids,cross_region').eq('id', authUser.id).single();
+  if(profErr || !prof){ const e = new Error('No profile linked yet.'); e.noProfile = true; throw e; }
+  _myProfile = prof; _orgId = prof.org_id;
+
+  const results = await Promise.all([
+    sb.from('schema_workflows').select('id,name,description,updated_at,tracking_ref,lanes,nodes,edges'),
+    sb.from('schema_automations').select('id,name,trigger_type,trigger_value,action_type,action_message,action_target_agent,enabled,fired_ids,last_run_at'),
+    sb.from('campaigns').select('id,name,signoff_status'),
+    sb.from('tasks').select('id,name,campaign_id,due_date,status'),
+    sb.from('audit_log').select('ts,what,detail').order('ts',{ascending:false}).limit(200),
+    sb.from('agent_destinations').select('id,name,type,target,is_org_default'),
+    sb.from('agent_dispatches').select('id,automation_id,brief,destination_id,destination_name,status,result_detail,pushed_by,pushed_at,created_at').order('created_at',{ascending:false}).limit(200),
+    /* Read-only, for the "Alert people" target picker (phase18) -- Schema doesn't own any
+       of these three tables, it only resolves them down to a concrete list of user ids at
+       fire time so the target can be stamped onto the audit_log row it writes. */
+    sb.from('profiles').select('id,name,region_ids,cross_region'),
+    sb.from('regions').select('id,name'),
+    sb.from('teams').select('id,name,member_ids')
+  ]);
+  const [workflowsR,automationsR,campaignsR,tasksR,auditR,agentDestR,agentDispR,profilesR,regionsR,teamsR] = results;
+  for(const r of results){ if(r.error) throw r.error; }
+
+  CFG.workflows = (workflowsR.data||[]).map(w=>({
+    id:w.id,name:w.name,description:w.description||'',updatedAt:w.updated_at||'',
+    trackingRef:w.tracking_ref||null,lanes:w.lanes||[],nodes:w.nodes||[],edges:w.edges||[]
+  }));
+  CFG.automations = (automationsR.data||[]).map(a=>({
+    id:a.id,name:a.name||'',triggerType:a.trigger_type||'campaign_signoff_status',triggerValue:a.trigger_value||'',
+    actionType:a.action_type||'log_note',actionMessage:a.action_message||'',actionTargetAgent:!!a.action_target_agent,enabled:a.enabled!==false,
+    firedIds:a.fired_ids||[],lastRunAt:a.last_run_at||'',
+    actionTargetType:a.action_target_type||'org',actionTargetIds:a.action_target_ids||[]
+  }));
+  /* Read-only, for evaluating automation triggers against live state -- Schema
+     doesn't own these tables and never writes back to them in this pass. */
+  CFG.evalCampaigns = (campaignsR.data||[]).map(c=>({id:c.id,name:c.name,signoffStatus:c.signoff_status||''}));
+  CFG.evalTasks = (tasksR.data||[]).map(t=>({id:t.id,name:t.name,campaignId:t.campaign_id,dueDate:t.due_date||'',status:t.status||''}));
+  CFG.audit = (auditR.data||[]).map(a=>({ts:a.ts,what:a.what,detail:a.detail}));
+  CFG.agentDestinations = (agentDestR.data||[]).map(d=>({
+    id:d.id,name:d.name||'',type:d.type||'webhook',target:d.target||'',isOrgDefault:!!d.is_org_default
+  }));
+  CFG.agentDispatches = (agentDispR.data||[]).map(d=>({
+    id:d.id,automationId:d.automation_id,brief:d.brief||'',destinationId:d.destination_id,
+    destinationName:d.destination_name||'',status:d.status||'pending',resultDetail:d.result_detail||'',
+    pushedBy:d.pushed_by,pushedAt:d.pushed_at,createdAt:d.created_at
+  }));
+  CFG.orgUsers = (profilesR.data||[]).map(p=>({id:p.id,name:p.name||'',regionIds:p.region_ids||[],crossRegion:!!p.cross_region}));
+  CFG.orgRegions = (regionsR.data||[]).map(r=>({id:r.id,name:r.name}));
+  CFG.teams = (teamsR.data||[]).map(t=>({id:t.id,name:t.name||'',memberIds:t.member_ids||[]}));
+  /* trackingConfig (Norma's old generic {mod}-{type}-{seq} scheme) isn't wired to the
+     database this pilot — session-only, exactly like before, until that bridge is built. */
+  CFG.trackingConfig = null;
+  CFG.meta = { normaSyncedAt:null, normaConfigVersion:null };
+}
+
+/* Live notifications: subscribe to audit_log INSERTs for this org so an action
+   taken in another tab/tool shows up here as a toast without a reload. Own
+   actions are skipped (via user_id) since they're already toasted locally.
+   This is notification-only -- it does NOT live-sync the underlying record
+   (a campaign, a deal, etc); reload or navigate to see that reflected in place. */
+function subscribeRealtime(){
+  if(_realtimeChannel || !_orgId) return;
+  _realtimeChannel = sb.channel('audit_log_org_'+_orgId)
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'audit_log', filter:'org_id=eq.'+_orgId }, payload=>{
+      const row = payload.new || {};
+      if(_myProfile && row.user_id && row.user_id===_myProfile.id) return;
+      /* phase18: a targeted alert_people row carries a resolved target_user_ids list --
+         only toast a viewer whose own id is in it. Absent/empty (almost every row, and
+         any 'org'-targeted alert) keeps the original broadcast-to-everyone behaviour. The
+         row still joins the shared audit trail either way -- only the live toast is gated. */
+      const targeted = Array.isArray(row.target_user_ids) && row.target_user_ids.length>0;
+      const forMe = !targeted || (_myProfile && row.target_user_ids.includes(_myProfile.id));
+      if(forMe) toast((row.what||'Update')+(row.detail?' — '+row.detail:''));
+      if(CFG.audit){ CFG.audit.unshift({ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
+      render();
+    })
+    .subscribe();
+}
+function loginScreenHtml(err){
+  return '<div class="authwrap"><h2>Schema</h2><p class="sub">Sign in to continue.</p>'+
+    '<div class="err">'+(err?esc(err):'')+'</div>'+
+    '<input id="authEmail" type="email" placeholder="Email" autocomplete="username">'+
+    '<input id="authPass" type="password" placeholder="Password" autocomplete="current-password">'+
+    '<button onclick="doSignIn()">Sign in</button>'+
+    '<p class="sub" style="margin-top:10px">New here? <a href="#" onclick="showSignUpGate();return false;">Create an account</a></p>'+
+    '</div>';
+}
+function signUpScreenHtml(err, notice){
+  return '<div class="authwrap"><h2>Schema</h2><p class="sub">Create an account.</p>'+
+    '<div class="err">'+(err?esc(err):'')+'</div>'+
+    (notice ? '<div class="sub" style="margin-bottom:8px">'+esc(notice)+'</div>' : '')+
+    '<input id="suEmail" type="email" placeholder="Email" autocomplete="username">'+
+    '<input id="suPass" type="password" placeholder="Password (min 6 characters)" autocomplete="new-password">'+
+    '<input id="suPass2" type="password" placeholder="Confirm password" autocomplete="new-password">'+
+    '<button onclick="doSignUp()">Create account</button>'+
+    '<p class="sub" style="margin-top:10px">Already have an account? <a href="#" onclick="showAuthGate();return false;">Sign in</a></p>'+
+    '</div>';
+}
+function onboardingScreenHtml(err){
+  return '<div class="authwrap"><h2>Schema</h2><p class="sub">You\'re signed in, but this login isn\'t linked to an organization yet.</p>'+
+    '<div class="err">'+(err?esc(err):'')+'</div>'+
+    '<div style="border:1px solid #ddd;border-radius:8px;padding:12px;margin-bottom:12px">'+
+      '<b>Create a new organization</b>'+
+      '<input id="orgName" type="text" placeholder="Organization name">'+
+      '<input id="orgYourName" type="text" placeholder="Your name">'+
+      '<button onclick="doCreateOrg()">Create organization</button>'+
+    '</div>'+
+    '<div style="border:1px solid #ddd;border-radius:8px;padding:12px">'+
+      '<b>I have an invite code</b>'+
+      '<input id="inviteCode" type="text" placeholder="Invite code" style="text-transform:uppercase">'+
+      '<input id="inviteYourName" type="text" placeholder="Your name">'+
+      '<button onclick="doRedeemInvite()">Join organization</button>'+
+    '</div>'+
+    '<p class="sub" style="margin-top:10px"><a href="#" onclick="doSignOut();return false;">Sign out</a></p>'+
+    '</div>';
+}
+async function doSignIn(){
+  const email = document.getElementById('authEmail').value.trim();
+  const pass = document.getElementById('authPass').value;
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if(error){ document.getElementById('authGate').innerHTML = loginScreenHtml(error.message); return; }
+  await bootApp();
+}
+window.doSignIn = doSignIn;
+async function doSignUp(){
+  const email = document.getElementById('suEmail').value.trim();
+  const pass = document.getElementById('suPass').value;
+  const pass2 = document.getElementById('suPass2').value;
+  if(pass.length < 6){ document.getElementById('authGate').innerHTML = signUpScreenHtml('Password must be at least 6 characters.'); return; }
+  if(pass !== pass2){ document.getElementById('authGate').innerHTML = signUpScreenHtml('Passwords do not match.'); return; }
+  const { data, error } = await sb.auth.signUp({ email, password: pass });
+  if(error){ document.getElementById('authGate').innerHTML = signUpScreenHtml(error.message); return; }
+  if(data.session){ await bootApp(); return; }
+  document.getElementById('authGate').innerHTML = signUpScreenHtml(null, 'Account created — check your email to confirm, then sign in.');
+}
+window.doSignUp = doSignUp;
+async function doSignOut(){ await sb.auth.signOut(); location.reload(); }
+window.doSignOut = doSignOut;
+async function doCreateOrg(){
+  const p_org_name = document.getElementById('orgName').value.trim();
+  const p_your_name = document.getElementById('orgYourName').value.trim();
+  const { error } = await sb.rpc('create_organization', { p_org_name, p_your_name });
+  if(error){ document.getElementById('authGate').innerHTML = onboardingScreenHtml(error.message); return; }
+  await bootApp();
+}
+window.doCreateOrg = doCreateOrg;
+async function doRedeemInvite(){
+  const p_code = document.getElementById('inviteCode').value.trim();
+  const p_your_name = document.getElementById('inviteYourName').value.trim();
+  const { error } = await sb.rpc('redeem_invite', { p_code, p_your_name });
+  if(error){ document.getElementById('authGate').innerHTML = onboardingScreenHtml(error.message); return; }
+  await bootApp();
+}
+window.doRedeemInvite = doRedeemInvite;
+
+function showAuthGate(err){
+  const gate = document.getElementById('authGate');
+  gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
+  gate.innerHTML = loginScreenHtml(err);
+  document.getElementById('topnav').style.display = 'none';
+  document.getElementById('wrap').style.display = 'none';
+}
+window.showAuthGate = showAuthGate;
+function showSignUpGate(err){
+  const gate = document.getElementById('authGate');
+  gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
+  gate.innerHTML = signUpScreenHtml(err);
+  document.getElementById('topnav').style.display = 'none';
+  document.getElementById('wrap').style.display = 'none';
+}
+window.showSignUpGate = showSignUpGate;
+function showOnboardingGate(err){
+  const gate = document.getElementById('authGate');
+  gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
+  gate.innerHTML = onboardingScreenHtml(err);
+  document.getElementById('topnav').style.display = 'none';
+  document.getElementById('wrap').style.display = 'none';
+}
+function hideAuthGate(){
+  const gate = document.getElementById('authGate');
+  gate.style.display = 'none'; gate.innerHTML = '';
+  document.getElementById('topnav').style.display = '';
+  document.getElementById('wrap').style.display = '';
+}
+async function bootApp(){
+  const { data:{ session } } = await sb.auth.getSession();
+  if(!session){ showAuthGate(); return; }
+  try{ await loadFromSupabase(); }
+  catch(e){
+    console.error(e);
+    if(e.noProfile){ showOnboardingGate(); return; }
+    _skipNextSignOutReload = true;
+    await sb.auth.signOut();
+    showAuthGate(e.message || 'Could not load your data. Contact an admin.');
+    return;
+  }
+  hideAuthGate();
+  render();
+  subscribeRealtime();
+}
+
+/* ---------- undo (per open workflow, in-memory only) ---------- */
+function pushUndo(){
+  const w=currentWorkflow(); if(!w) return;
+  undoStack.push(JSON.parse(JSON.stringify({nodes:w.nodes, edges:w.edges})));
+  if(undoStack.length>UNDO_LIMIT) undoStack.shift();
+}
+function undo(){
+  const w=currentWorkflow(); if(!w){ return; }
+  if(!undoStack.length){ toast('Nothing to undo.'); return; }
+  const snap=undoStack.pop();
+  w.nodes=snap.nodes; w.edges=snap.edges;
+  if(UI.selId && !byId(w.nodes,UI.selId) && !byId(w.edges,UI.selId)){ UI.selId=null; UI.selKind=null; }
+  render();
+}
+window.undo=undo;
+
+/* ---------- zoom ---------- */
+function setZoom(delta){
+  UI.zoom=Math.max(0.4, Math.min(2, Math.round((UI.zoom+delta)*100)/100));
+  render();
+}
+window.setZoom=setZoom;
+function resetZoom(){ UI.zoom=1; render(); }
+window.resetZoom=resetZoom;
+
+/* ---------- export as a standalone SVG (colors inlined -- the page's CSS variables
+   don't exist once this file is opened on its own) ---------- */
+function exportDiagramSvg(){
+  const w=currentWorkflow(); if(!w) return;
+  const svgEl=document.getElementById('schemaCanvas'); if(!svgEl) return;
+  const clone=svgEl.cloneNode(true);
+  clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  const style=document.createElementNS('http://www.w3.org/2000/svg','style');
+  style.textContent='.node rect,.node polygon,.node ellipse{stroke:#3A5A8C;stroke-width:1.6;fill:#fff;}'
+    +'.node text{font-family:sans-serif;font-size:12px;fill:#10182B;}'
+    +'.edge path{stroke:#45506B;stroke-width:1.6;fill:none;}'
+    +'.edge text{font-family:sans-serif;font-size:11px;fill:#45506B;}'
+    +'.lane rect{fill:none;stroke:#DFE3EB;stroke-dasharray:4,3;}'
+    +'.lane text{font-family:sans-serif;font-size:11px;fill:#7C879E;}';
+  clone.insertBefore(style, clone.firstChild);
+  clone.querySelectorAll('marker path').forEach(p=>p.setAttribute('fill','#45506B'));
+  let svgMarkup;
+  try{ svgMarkup='<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n'+new XMLSerializer().serializeToString(clone); }
+  catch(e){ svgMarkup=clone.outerHTML; }
+  const blob=new Blob([svgMarkup],{type:'image/svg+xml'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=(w.name||'diagram').replace(/[^a-z0-9]+/gi,'-').toLowerCase()+'.svg';
+  a.click();
+  logAudit('export diagram as SVG',w.name);
+  toast('Diagram exported as SVG.');
+}
+window.exportDiagramSvg=exportDiagramSvg;
+
+/* ---------- swimlanes ---------- */
+function addLane(){
+  const w=currentWorkflow(); if(!w) return;
+  w.lanes=w.lanes||[];
+  const y=w.lanes.length?Math.max(...w.lanes.map(l=>l.y+l.height)):0;
+  w.lanes.push({id:uid('lane'),name:'Lane '+(w.lanes.length+1),y:y,height:160});
+  render();
+}
+window.addLane=addLane;
+function removeLane(id){
+  const w=currentWorkflow(); if(!w) return;
+  w.lanes=(w.lanes||[]).filter(l=>l.id!==id);
+  w.nodes.forEach(n=>{ if(n.laneId===id) n.laneId=null; });
+  render();
+}
+window.removeLane=removeLane;
+function setLane(id,key,val){
+  const w=currentWorkflow(); if(!w) return;
+  const l=byId(w.lanes||[],id); if(!l) return;
+  l[key]=(key==='y'||key==='height')?(parseFloat(val)||0):val;
+  render();
+}
+window.setLane=setLane;
+function setNodeLane(nodeId,laneId){
+  const w=currentWorkflow(); if(!w) return;
+  const n=byId(w.nodes,nodeId); if(!n) return;
+  n.laneId=laneId||null;
+  render();
+}
+window.setNodeLane=setNodeLane;
+
+/* ---------- Norma bridge ---------- */
+function handleNormaImportFile(file){
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>importSharedConfigFromNorma(e.target.result);
+  reader.onerror=()=>toast('Could not read that file.');
+  reader.readAsText(file);
+}
+window.handleNormaImportFile=handleNormaImportFile;
+function importSharedConfigFromNorma(jsonText){
+  let data;
+  try{ data=JSON.parse(jsonText); }
+  catch(e){ toast('That is not valid JSON — is it a Norma shared-config export?'); return; }
+  if(data.trackingConfig){ CFG.trackingConfig=data.trackingConfig; CFG.trackingConfig.mySeq=CFG.trackingConfig.mySeq||{}; }
+  if(data.configVersion!=null){ CFG.meta.normaConfigVersion=data.configVersion; }
+  CFG.meta.normaSyncedAt=new Date().toISOString();
+  logAudit('import shared config from Norma','tracking convention');
+  render();
+  toast('Shared config imported from Norma.');
+}
+window.importSharedConfigFromNorma=importSharedConfigFromNorma;
+function nextTrackingRef(type){
+  const tc=CFG.trackingConfig; if(!tc) return null;
+  const modCode=(tc.modCodes&&tc.modCodes.schema)||'SCH';
+  const typeCode=(tc.typeCodes&&tc.typeCodes[type])||type.toUpperCase().slice(0,3);
+  tc.mySeq=tc.mySeq||{};
+  tc.mySeq[typeCode]=(tc.mySeq[typeCode]||0)+1;
+  const seq=String(tc.mySeq[typeCode]).padStart(tc.seqPadding||4,'0');
+  return tc.pattern.replace('{mod}',modCode).replace('{type}',typeCode).replace('{seq}',seq);
+}
+
+/* ---------- workflow CRUD ---------- */
+function addWorkflow(){
+  const w={id:uid('wf'),name:'New workflow',description:'',updatedAt:new Date().toISOString().slice(0,10),nodes:[],edges:[]};
+  w.trackingRef=nextTrackingRef('workflow');
+  CFG.workflows.push(w); logAudit('add workflow','New workflow'); render(); toast('Workflow created.');
+  return w.id;
+}
+window.addWorkflow=addWorkflow;
+function removeWorkflow(id){
+  if(!confirm('Delete this workflow diagram? This cannot be undone.'))return;
+  CFG.workflows=CFG.workflows.filter(w=>w.id!==id);
+  if(UI.workflowId===id){ UI.workflowId=null; UI.page='list'; }
+  logAudit('remove workflow',id); render();
+  deleteRow('schema_workflows',id);
+}
+window.removeWorkflow=removeWorkflow;
+function renameWorkflow(id,name){
+  const w=byId(CFG.workflows,id); if(!w)return; w.name=name; w.updatedAt=new Date().toISOString().slice(0,10); render();
+}
+window.renameWorkflow=renameWorkflow;
+function setWorkflowDescription(id,desc){
+  const w=byId(CFG.workflows,id); if(!w)return; w.description=desc; render();
+}
+window.setWorkflowDescription=setWorkflowDescription;
+/* ---------- automations (workflow-execution engine, MVP) ----------
+   Deliberately separate from the diagram canvas -- see the phase13 migration
+   note for why. Triggers are evaluated on demand ("Run checks"), not on a
+   background schedule (that needs a serverless function -- a backend-infra
+   decision that's already flagged and deferred elsewhere, not assumed here). */
+function addAutomation(){
+  const a={id:uid('auto'),name:'New automation',triggerType:'campaign_signoff_status',triggerValue:'Submitted',
+    actionType:'log_note',actionMessage:'',actionTargetAgent:false,enabled:true,firedIds:[],lastRunAt:'',
+    actionTargetType:'org',actionTargetIds:[]};
+  CFG.automations.push(a); logAudit('add automation','New automation'); render(); toast('Automation created.');
+}
+window.addAutomation=addAutomation;
+function removeAutomation(id){
+  if(!confirm('Remove this automation?'))return;
+  CFG.automations=CFG.automations.filter(a=>a.id!==id); logAudit('remove automation',id); render();
+  deleteRow('schema_automations',id);
+}
+window.removeAutomation=removeAutomation;
+function setAutomationTargetType(id,type){
+  const a=byId(CFG.automations,id); if(!a)return;
+  a.actionTargetType=type; a.actionTargetIds=[]; /* ids from the old type don't carry over meaningfully */
+  logAudit('edit automation','target type → '+type); render();
+}
+window.setAutomationTargetType=setAutomationTargetType;
+function toggleAutomationTargetId(id,targetId){
+  const a=byId(CFG.automations,id); if(!a)return;
+  a.actionTargetIds=a.actionTargetIds||[];
+  if(a.actionTargetIds.includes(targetId)) a.actionTargetIds=a.actionTargetIds.filter(x=>x!==targetId);
+  else a.actionTargetIds.push(targetId);
+  render();
+}
+window.toggleAutomationTargetId=toggleAutomationTargetId;
+
+/* Resolves an automation's alert target down to a concrete list of user ids, or null
+   for 'org' (today's broadcast-to-everyone behaviour, unchanged). Called at fire time,
+   not at config time, so a region/team's membership as of right now is what's used --
+   editing a team after the fact doesn't retroactively change who was alerted. */
+function resolveTargetUserIds(a){
+  const type=a.actionTargetType||'org';
+  if(type==='org') return null;
+  const ids=a.actionTargetIds||[];
+  if(!ids.length) return [];
+  if(type==='users') return ids.slice();
+  if(type==='regions'){
+    return (CFG.orgUsers||[]).filter(u=>u.crossRegion || (u.regionIds||[]).some(r=>ids.includes(r))).map(u=>u.id);
+  }
+  if(type==='teams'){
+    const memberSet=new Set();
+    (CFG.teams||[]).filter(t=>ids.includes(t.id)).forEach(t=>(t.memberIds||[]).forEach(uid=>memberSet.add(uid)));
+    return Array.from(memberSet);
+  }
+  return null;
+}
+window.resolveTargetUserIds=resolveTargetUserIds;
+
+function targetSummary(a){
+  const type=a.actionTargetType||'org';
+  if(type==='org') return 'Everyone';
+  const ids=a.actionTargetIds||[];
+  if(!ids.length) return 'Nobody selected yet';
+  if(type==='users') return ids.map(id=>{ const u=byId(CFG.orgUsers,id); return u?u.name:'—'; }).join(', ');
+  if(type==='regions') return ids.map(id=>{ const r=byId(CFG.orgRegions,id); return r?r.name:'—'; }).join(', ');
+  if(type==='teams') return ids.map(id=>{ const t=byId(CFG.teams,id); return t?t.name:'—'; }).join(', ');
+  return '—';
+}
+window.targetSummary=targetSummary;
+
+function automationMatches(a){
+  if(a.triggerType==='campaign_signoff_status'){
+    return CFG.evalCampaigns.filter(c=>c.signoffStatus===a.triggerValue).map(c=>({id:'camp:'+c.id,label:c.name}));
+  }
+  if(a.triggerType==='task_overdue'){
+    const today=new Date().toISOString().slice(0,10);
+    return CFG.evalTasks.filter(t=>t.dueDate && t.dueDate<today && t.status!=='Completed').map(t=>({id:'task:'+t.id,label:t.name}));
+  }
+  return [];
+}
+
+/* Runs every enabled automation once: finds matches not already in firedIds,
+   logs one audit_log entry per new match (which, since phase12, also toasts
+   live to anyone with this org open), and records what fired so re-running
+   doesn't repeat it. Returns how many new actions fired, across all rules. */
+function runAutomations(){
+  let totalFired=0;
+  CFG.automations.forEach(a=>{
+    if(!a.enabled) return;
+    const matches=automationMatches(a);
+    const newMatches=matches.filter(m=>!(a.firedIds||[]).includes(m.id));
+    newMatches.forEach(m=>{
+      let msg=a.actionMessage?a.actionMessage:('"'+a.name+'" matched: '+m.label);
+      let targetUserIds=null;
+      /* 'alert_people' rides the same realtime toast every audit_log row already gets
+         (phase12), but as of phase18 it's resolved to a concrete list of user ids at
+         fire time (see resolveTargetUserIds) and stamped onto the row. Every tool's
+         realtime subscription only toasts a viewer whose id is in that list; 'org'
+         (the default) resolves to null, which keeps the original broadcast-to-everyone
+         behaviour exactly as it was. actionTargetAgent is a separate flag: it also
+         drafts an Agent Brief, independent of who the human alert reaches. */
+      if(a.actionType==='alert_people'){
+        targetUserIds=resolveTargetUserIds(a);
+        const targetNote = (a.actionTargetType&&a.actionTargetType!=='org') ? (' → '+targetSummary(a)) : '';
+        msg='🔔 Alert: '+msg+targetNote+(a.actionTargetAgent?' (flagged for AI agent)':'');
+        if(a.actionTargetAgent) createAgentDispatch(a,m);
+      }
+      logAudit('automation: '+a.name, msg, targetUserIds);
+      a.firedIds=(a.firedIds||[]).concat(m.id);
+      totalFired++;
+    });
+    a.lastRunAt=new Date().toISOString();
+  });
+  render();
+  toast(totalFired ? totalFired+' automation action'+(totalFired===1?'':'s')+' fired.' : 'Ran checks — nothing new to fire.');
+  return totalFired;
+}
+window.runAutomations=runAutomations;
+
+/* ---------- Agent Brief system (2026-08-13, phase17) ----------
+   When an alert_people automation with actionTargetAgent fires, this drafts a
+   structured "Agent Brief" and files it as a pending dispatch. A person then picks
+   a destination (pre-filled to the org default, if one's set) and clicks Push --
+   for a webhook destination that's a direct POST from the browser, for a deep_link
+   destination it opens the URL in a new tab and copies the brief to the clipboard
+   (most agent apps have no way to accept a prefilled URL, so clipboard + open is the
+   honest fallback). Every attempt is logged to agent_dispatches with a status, so
+   Norma's Agent Activity dashboard has something real to show. */
+function generateAgentBrief(a,m){
+  return ['Agent Brief','============',
+    'Automation: '+a.name,
+    'Trigger: '+(a.triggerType==='campaign_signoff_status' ? ('Campaign sign-off status = '+a.triggerValue) : 'Task overdue'),
+    'Matched: '+m.label,
+    'Message: '+(a.actionMessage || ('"'+a.name+'" matched: '+m.label)),
+    'Generated: '+new Date().toISOString()
+  ].join('\n');
+}
+function createAgentDispatch(a,m){
+  const dest=CFG.agentDestinations.find(d=>d.isOrgDefault);
+  const d={ id:uid('disp'), automationId:a.id, brief:generateAgentBrief(a,m),
+    destinationId:dest?dest.id:null, destinationName:dest?dest.name:'', status:'pending', resultDetail:'',
+    pushedBy:null, pushedAt:null, createdAt:new Date().toISOString() };
+  CFG.agentDispatches.unshift(d);
+  return d;
+}
+function addAgentDestination(){
+  const d={id:uid('dest'),name:'New destination',type:'webhook',target:'',isOrgDefault:CFG.agentDestinations.length===0};
+  CFG.agentDestinations.push(d); logAudit('add agent destination',d.name); render(); toast('Destination added.');
+}
+window.addAgentDestination=addAgentDestination;
+function removeAgentDestination(id){
+  if(!confirm('Remove this destination?'))return;
+  CFG.agentDestinations=CFG.agentDestinations.filter(d=>d.id!==id);
+  logAudit('remove agent destination',id); render();
+  deleteRow('agent_destinations',id);
+}
+window.removeAgentDestination=removeAgentDestination;
+function setAgentDestinationDefault(id){
+  CFG.agentDestinations.forEach(d=>{ d.isOrgDefault=(d.id===id); });
+  render();
+}
+window.setAgentDestinationDefault=setAgentDestinationDefault;
+function setDispatchDestination(dispatchId,destinationId){
+  const d=byId(CFG.agentDispatches,dispatchId); if(!d)return;
+  const dest=byId(CFG.agentDestinations,destinationId);
+  d.destinationId=dest?dest.id:null; d.destinationName=dest?dest.name:'';
+  render();
+}
+window.setDispatchDestination=setDispatchDestination;
+/* Real push. Webhook: a direct cross-origin POST from the browser -- if the receiver
+   doesn't allow that, this fails with a CORS error and gets logged as a failure (see
+   the phase17 SQL migration note; a server-side relay is the fix if that turns out to
+   matter for what Stef actually pushes to). Deep-link: no reliable way to hand a long
+   brief to an arbitrary external app via URL, so this copies it to the clipboard and
+   opens the destination, and counts that hand-off as success. */
+async function pushAgentDispatch(dispatchId){
+  const d=byId(CFG.agentDispatches,dispatchId); if(!d)return;
+  const dest=byId(CFG.agentDestinations,d.destinationId);
+  if(!dest){ toast('Pick a destination first.'); return; }
+  d.pushedBy=_myProfile?_myProfile.id:null; d.pushedAt=new Date().toISOString();
+  if(dest.type==='deep_link'){
+    try{
+      if(typeof navigator!=='undefined' && navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(d.brief);
+      if(typeof window!=='undefined' && window.open) window.open(dest.target,'_blank');
+      d.status='success'; d.resultDetail='Opened '+dest.target+' — brief copied to clipboard.';
+    }catch(e){ d.status='failure'; d.resultDetail='Could not open destination: '+e.message; }
+    logAudit('agent dispatch pushed',d.destinationName+' — '+d.status); render(); return;
+  }
+  try{
+    const res=await fetch(dest.target,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({brief:d.brief,automationId:d.automationId,orgId:_orgId,pushedAt:d.pushedAt})});
+    d.status = res.ok ? 'success' : 'failure';
+    d.resultDetail = 'HTTP '+res.status+(res.ok?'':' — receiving service reported an error');
+  }catch(e){
+    d.status='failure';
+    d.resultDetail='Request failed — likely blocked by CORS, or the destination is unreachable: '+e.message;
+  }
+  logAudit('agent dispatch pushed',d.destinationName+' — '+d.status); render();
+}
+window.pushAgentDispatch=pushAgentDispatch;
+
+function pageAutomations(){
+  let h=`<div class="phead"><div><h1>Automations</h1>
+    <p>Simple rules: when a campaign reaches a sign-off status, or a task goes overdue, either log a quiet note or
+      raise an alert — both write to the shared audit log, which (as of phase12) also toasts live to anyone with
+      this org open right now. As of phase18, an "Alert people" action can be targeted at everyone (the original
+      behaviour), specific people, a region, or a dedicated team (managed in Norma → Roles &amp; users) — only
+      people who match get the live toast. You can additionally flag an alert for AI-agent attention — that drafts
+      an Agent Brief below, which a person can review and push to whichever agent/app destination is configured
+      (defaulting to the org default, if one's set). Click "Run checks" to evaluate now — there's no background
+      scheduler yet, so this only runs when you (or a teammate) trigger it.</p></div>
+    <div class="sp"></div><button class="btn pri" onclick="runAutomations()">Run checks now</button></div>`;
+
+  h+=`<div class="card"><h3>Rules <span class="sp"></span><span class="pill n">${CFG.automations.length}</span>
+      <button class="btn sm pri" onclick="addAutomation()">Add automation</button></h3>
+    <div class="bd flush"><div class="scroll"><table><thead><tr>
+      <th>Name</th><th>Trigger</th><th>When</th><th>Action</th><th>Message</th><th>Alert target</th><th>AI Agent</th><th>Enabled</th><th>Last run</th><th>Fired</th><th></th></tr></thead><tbody>
+    ${!CFG.automations.length?`<tr><td colspan="11" class="empty">No automations yet.</td></tr>`:CFG.automations.map(a=>{
+      const targetType=a.actionTargetType||'org';
+      const isAlert=a.actionType==='alert_people';
+      let targetPickerHtml='<span class="mini">n/a</span>';
+      if(isAlert){
+        const optionsHtml = targetType==='users'
+          ? (CFG.orgUsers||[]).map(u=>`<label style="display:block;white-space:nowrap"><input type="checkbox" ${(a.actionTargetIds||[]).includes(u.id)?'checked':''} onchange="toggleAutomationTargetId('${a.id}','${u.id}')"> ${esc(u.name)}</label>`).join('')
+          : targetType==='regions'
+          ? (CFG.orgRegions||[]).map(r=>`<label style="display:block;white-space:nowrap"><input type="checkbox" ${(a.actionTargetIds||[]).includes(r.id)?'checked':''} onchange="toggleAutomationTargetId('${a.id}','${r.id}')"> ${esc(r.name)}</label>`).join('')
+          : targetType==='teams'
+          ? (CFG.teams||[]).map(t=>`<label style="display:block;white-space:nowrap"><input type="checkbox" ${(a.actionTargetIds||[]).includes(t.id)?'checked':''} onchange="toggleAutomationTargetId('${a.id}','${t.id}')"> ${esc(t.name)}</label>`).join('')
+          : '';
+        targetPickerHtml = `<select class="cel txt" style="width:120px" onchange="setAutomationTargetType('${a.id}',this.value)">
+            <option value="org" ${targetType==='org'?'selected':''}>Everyone</option>
+            <option value="users" ${targetType==='users'?'selected':''}>Specific people</option>
+            <option value="regions" ${targetType==='regions'?'selected':''}>Region</option>
+            <option value="teams" ${targetType==='teams'?'selected':''}>Team</option>
+          </select>
+          ${targetType==='org'?'':`<div class="mini" style="max-height:90px;overflow:auto;margin-top:4px;border:1px solid var(--line-2);padding:4px;border-radius:4px;min-width:130px">
+            ${optionsHtml||'<span class="mini">none configured</span>'}</div>`}
+          <div class="mini" style="margin-top:2px;color:var(--ink-2)">${esc(targetSummary(a))}</div>`;
+      }
+      return `<tr>
+      <td><input class="cel txt" style="width:150px" value="${esc(a.name)}" onchange="setIn('automations','${a.id}','name',this.value)"></td>
+      <td><select class="cel txt" style="width:170px" onchange="setIn('automations','${a.id}','triggerType',this.value)">
+        <option value="campaign_signoff_status" ${a.triggerType==='campaign_signoff_status'?'selected':''}>Campaign sign-off status</option>
+        <option value="task_overdue" ${a.triggerType==='task_overdue'?'selected':''}>Task overdue</option>
+      </select></td>
+      <td>${a.triggerType==='campaign_signoff_status'
+        ?`<select class="cel txt" style="width:130px" onchange="setIn('automations','${a.id}','triggerValue',this.value)">
+            ${['Draft','Submitted','Approved','Rejected'].map(s=>`<option ${s===a.triggerValue?'selected':''}>${s}</option>`).join('')}</select>`
+        :`<span class="mini">past due date</span>`}</td>
+      <td><select class="cel txt" style="width:120px" onchange="setIn('automations','${a.id}','actionType',this.value)">
+        <option value="log_note" ${a.actionType==='log_note'?'selected':''}>Log a note</option>
+        <option value="alert_people" ${a.actionType==='alert_people'?'selected':''}>Alert people</option>
+      </select></td>
+      <td><input class="cel txt" style="width:190px" placeholder="default message" value="${esc(a.actionMessage)}" onchange="setIn('automations','${a.id}','actionMessage',this.value)"></td>
+      <td>${targetPickerHtml}</td>
+      <td class="n"><input type="checkbox" title="Also draft an Agent Brief when this fires, ready to push to an agent/app destination" ${a.actionTargetAgent?'checked':''} ${a.actionType!=='alert_people'?'disabled':''} onchange="setIn('automations','${a.id}','actionTargetAgent',this.checked,'bool')"></td>
+      <td><input type="checkbox" ${a.enabled?'checked':''} onchange="setIn('automations','${a.id}','enabled',this.checked,'bool')"></td>
+      <td class="mini">${a.lastRunAt?F.dt(a.lastRunAt):'never'}</td>
+      <td class="n calc">${(a.firedIds||[]).length}</td>
+      <td class="n"><button class="btn sm dgr" onclick="removeAutomation('${a.id}')">Remove</button></td></tr>`;
+    }).join('')}
+    </tbody></table></div></div></div>`;
+
+  h+=`<div class="card"><h3>Agent destinations <span class="sp"></span><span class="pill n">${CFG.agentDestinations.length}</span>
+      <button class="btn sm pri" onclick="addAgentDestination()">Add destination</button></h3>
+    <div class="bd flush"><table><thead><tr><th>Name</th><th>Type</th><th>Target</th><th>Org default</th><th></th></tr></thead><tbody>
+    ${!CFG.agentDestinations.length?`<tr><td colspan="5" class="empty">No destinations yet — add one to push Agent Briefs somewhere.</td></tr>`:CFG.agentDestinations.map(d=>`<tr>
+      <td><input class="cel txt" style="width:150px" value="${esc(d.name)}" onchange="setIn('agentDestinations','${d.id}','name',this.value)"></td>
+      <td><select class="cel txt" style="width:110px" onchange="setIn('agentDestinations','${d.id}','type',this.value)">
+        <option value="webhook" ${d.type==='webhook'?'selected':''}>Webhook</option>
+        <option value="deep_link" ${d.type==='deep_link'?'selected':''}>Deep link</option>
+      </select></td>
+      <td><input class="cel txt" style="width:260px" placeholder="https://…" value="${esc(d.target)}" onchange="setIn('agentDestinations','${d.id}','target',this.value)"></td>
+      <td class="n"><button class="btn sm ${d.isOrgDefault?'pri':''}" onclick="setAgentDestinationDefault('${d.id}')">${d.isOrgDefault?'Default':'Make default'}</button></td>
+      <td class="n"><button class="btn sm dgr" onclick="removeAgentDestination('${d.id}')">Remove</button></td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="bd" style="border-top:1px solid var(--line-2)"><p class="mini" style="margin:0">Webhook destinations get a direct POST from the browser — if the receiving
+      service doesn't allow cross-origin requests, the push will fail with a CORS error and log as a failure. Deep-link destinations open in a new tab with the
+      brief copied to your clipboard, since most agent apps have no way to accept a prefilled brief via URL.</p></div></div>`;
+
+  const pendingDispatches=CFG.agentDispatches.filter(d=>d.status==='pending');
+  h+=`<div class="card"><h3>Agent briefs <span class="sp"></span><span class="pill ${pendingDispatches.length?'warn':'n'}">${pendingDispatches.length} pending</span></h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>Brief</th><th>Destination</th><th>Status</th><th>Result</th><th>Pushed</th><th></th></tr></thead><tbody>
+    ${!CFG.agentDispatches.length?`<tr><td colspan="6" class="empty">No agent briefs yet — flag an alert_people automation with "AI Agent" and run checks.</td></tr>`:CFG.agentDispatches.slice(0,30).map(d=>{
+      const rag = d.status==='success'?{tone:'green',label:'Pushed'}:d.status==='failure'?{tone:'red',label:'Failed'}:{tone:'amber',label:'Pending'};
+      return `<tr>
+      <td class="mini" style="max-width:260px;white-space:pre-wrap">${esc((d.brief||'').split('\n').slice(0,3).join(' · '))}</td>
+      <td><select class="cel txt" style="width:150px" ${d.status!=='pending'?'disabled':''} onchange="setDispatchDestination('${d.id}',this.value)">
+        <option value="">— pick a destination —</option>
+        ${CFG.agentDestinations.map(dest=>`<option value="${dest.id}" ${dest.id===d.destinationId?'selected':''}>${esc(dest.name)}</option>`).join('')}</select></td>
+      <td>${ragPillHtml(rag)}</td>
+      <td class="mini">${esc(d.resultDetail||'—')}</td>
+      <td class="mini">${d.pushedAt?F.dt(d.pushedAt):'—'}</td>
+      <td class="n">${d.status==='pending'?`<button class="btn sm pri" ${d.destinationId?'':'disabled'} onclick="pushAgentDispatch('${d.id}')">Push</button>`:''}</td></tr>`;
+    }).join('')}
+    </tbody></table></div></div></div>`;
+  return h;
+}
+
+function openWorkflow(id){
+  UI.workflowId=id; UI.page='editor'; UI.selKind=null; UI.selId=null; UI.mode='select'; UI.connectFromId=null; UI.zoom=1;
+  undoStack=[];
+  render();
+}
+window.openWorkflow=openWorkflow;
+
+/* ---------- node/edge editing (plain, independently testable functions) ---------- */
+function addNode(type){
+  const w=currentWorkflow(); if(!w)return;
+  pushUndo();
+  const def=NODE_TYPES[type]||NODE_TYPES.process;
+  const n={id:uid('n'), type:type, x:60+ (w.nodes.length*30)%400, y:60+((w.nodes.length*70)%300), label:def.label, laneId:null,
+    actionType:'none', actionMessage:'', actionTargetAgent:false, actionTargetType:'org', actionTargetIds:[]};
+  w.nodes.push(n); UI.selKind='node'; UI.selId=n.id; render();
+  return n.id;
+}
+window.addNode=addNode;
+function removeNode(id){
+  const w=currentWorkflow(); if(!w)return;
+  pushUndo();
+  w.nodes=w.nodes.filter(n=>n.id!==id);
+  w.edges=w.edges.filter(e=>e.fromId!==id && e.toId!==id);
+  if(UI.selId===id){ UI.selId=null; UI.selKind=null; }
+  render();
+}
+window.removeNode=removeNode;
+function moveNodeTo(id,x,y){
+  const w=currentWorkflow(); if(!w)return;
+  const n=byId(w.nodes,id); if(!n)return;
+  n.x=Math.round(x); n.y=Math.round(y);
+}
+window.moveNodeTo=moveNodeTo;
+function setNodeLabel(id,label){
+  const w=currentWorkflow(); if(!w)return;
+  const n=byId(w.nodes,id); if(!n)return; pushUndo(); n.label=label; render();
+}
+window.setNodeLabel=setNodeLabel;
+
+/* ---------- node actions (phase19, task #11) ----------
+   The canvas already supported real node-to-node connections (addEdge/removeEdge above) --
+   what it didn't have was anything happening when you click a node. This gives a node the
+   same action vocabulary as an Automation rule (log a note / alert people, targetable at
+   Everyone, specific people, a region, or a team, same as phase18; optionally also flagged
+   for an AI Agent Brief) but fired manually via a button instead of a trigger condition.
+   Deliberately reuses resolveTargetUserIds/targetSummary/logAudit's targeting machinery
+   rather than duplicating it -- those already work on any object with actionTargetType/
+   actionTargetIds fields, node or automation. Not connected to schema_automations (there's
+   no natural trigger for "someone clicked a shape"), so node action config lives entirely
+   inside the workflow's own nodes jsonb blob -- no new SQL migration needed for this. */
+function setNodeActionType(id,type){
+  const w=currentWorkflow(); if(!w)return;
+  const n=byId(w.nodes,id); if(!n)return;
+  pushUndo(); n.actionType=type; if(type!=='alert_people') n.actionTargetAgent=false; render();
+}
+window.setNodeActionType=setNodeActionType;
+function setNodeActionMessage(id,msg){
+  const w=currentWorkflow(); if(!w)return;
+  const n=byId(w.nodes,id); if(!n)return;
+  n.actionMessage=msg; render();
+}
+window.setNodeActionMessage=setNodeActionMessage;
+function setNodeActionTargetAgent(id,val){
+  const w=currentWorkflow(); if(!w)return;
+  const n=byId(w.nodes,id); if(!n)return;
+  n.actionTargetAgent=!!val; render();
+}
+window.setNodeActionTargetAgent=setNodeActionTargetAgent;
+function setNodeActionTargetType(id,type){
+  const w=currentWorkflow(); if(!w)return;
+  const n=byId(w.nodes,id); if(!n)return;
+  n.actionTargetType=type; n.actionTargetIds=[]; render();
+}
+window.setNodeActionTargetType=setNodeActionTargetType;
+function toggleNodeActionTargetId(id,targetId){
+  const w=currentWorkflow(); if(!w)return;
+  const n=byId(w.nodes,id); if(!n)return;
+  n.actionTargetIds=n.actionTargetIds||[];
+  if(n.actionTargetIds.includes(targetId)) n.actionTargetIds=n.actionTargetIds.filter(x=>x!==targetId);
+  else n.actionTargetIds.push(targetId);
+  render();
+}
+window.toggleNodeActionTargetId=toggleNodeActionTargetId;
+function generateNodeAgentBrief(w,n){
+  return ['Agent Brief','============',
+    'Automation: '+w.name+' — '+n.label+' (workflow node, run manually)',
+    'Trigger: Manual — a person clicked "Run action" on this node',
+    'Matched: '+n.label,
+    'Message: '+(n.actionMessage || ('Node "'+n.label+'" run in "'+w.name+'"')),
+    'Generated: '+new Date().toISOString()
+  ].join('\n');
+}
+function createNodeAgentDispatch(w,n){
+  const dest=CFG.agentDestinations.find(d=>d.isOrgDefault);
+  const d={ id:uid('disp'), automationId:null, brief:generateNodeAgentBrief(w,n),
+    destinationId:dest?dest.id:null, destinationName:dest?dest.name:'', status:'pending', resultDetail:'',
+    pushedBy:null, pushedAt:null, createdAt:new Date().toISOString() };
+  CFG.agentDispatches.unshift(d);
+  return d;
+}
+function runNodeAction(id){
+  const w=currentWorkflow(); if(!w)return;
+  const n=byId(w.nodes,id); if(!n)return;
+  if(!n.actionType || n.actionType==='none'){ toast('This node has no action configured.'); return; }
+  let targetUserIds=null;
+  let msg=n.actionMessage?n.actionMessage:('Node "'+n.label+'" run in "'+w.name+'"');
+  if(n.actionType==='alert_people'){
+    targetUserIds=resolveTargetUserIds(n);
+    const targetNote=(n.actionTargetType&&n.actionTargetType!=='org')?(' → '+targetSummary(n)):'';
+    msg='🔔 Alert: '+msg+targetNote+(n.actionTargetAgent?' (flagged for AI agent)':'');
+    if(n.actionTargetAgent) createNodeAgentDispatch(w,n);
+  }
+  logAudit('workflow node: '+w.name+' — '+n.label, msg, targetUserIds);
+  render();
+  toast('Action run.');
+}
+window.runNodeAction=runNodeAction;
+function addEdge(fromId,toId,label){
+  const w=currentWorkflow(); if(!w)return null;
+  if(fromId===toId) return null;
+  const exists=w.edges.some(e=>e.fromId===fromId&&e.toId===toId);
+  if(exists) return null;
+  pushUndo();
+  const e={id:uid('e'),fromId:fromId,toId:toId,label:label||''};
+  w.edges.push(e); return e.id;
+}
+window.addEdge=addEdge;
+function removeEdge(id){
+  const w=currentWorkflow(); if(!w)return;
+  pushUndo();
+  w.edges=w.edges.filter(e=>e.id!==id);
+  if(UI.selId===id){ UI.selId=null; UI.selKind=null; }
+  render();
+}
+window.removeEdge=removeEdge;
+function setEdgeLabel(id,label){
+  const w=currentWorkflow(); if(!w)return;
+  const e=byId(w.edges,id); if(!e)return; pushUndo(); e.label=label; render();
+}
+window.setEdgeLabel=setEdgeLabel;
+
+/* ---------- interaction glue (mouse-driven, thin wrappers around the functions above) ---------- */
+function setMode(mode){ UI.mode=mode; UI.connectFromId=null; render(); }
+window.setMode=setMode;
+function svgPoint(svg,ctmEl,evt){
+  try{
+    const pt=svg.createSVGPoint(); pt.x=evt.clientX; pt.y=evt.clientY;
+    const ctm=ctmEl.getScreenCTM();
+    if(ctm) return pt.matrixTransform(ctm.inverse());
+  }catch(e){}
+  const rect=ctmEl.getBoundingClientRect?ctmEl.getBoundingClientRect():{left:0,top:0};
+  return {x:evt.clientX-rect.left, y:evt.clientY-rect.top};
+}
+function nodeMouseDown(evt,id){
+  evt.preventDefault();
+  if(UI.mode==='connect'){ nodeClickedForConnect(id); return; }
+  UI.selKind='node'; UI.selId=id;
+  const svg=document.getElementById('schemaCanvas');
+  const zg=document.getElementById('zoomLayer')||svg;
+  const w=currentWorkflow(); const n=byId(w.nodes,id);
+  const pt=svgPoint(svg,zg,evt);
+  pushUndo();
+  drag={id:id, dx:pt.x-n.x, dy:pt.y-n.y};
+  render();
+}
+window.nodeMouseDown=nodeMouseDown;
+function nodeClickedForConnect(id){
+  if(!UI.connectFromId){ UI.connectFromId=id; render(); return; }
+  if(UI.connectFromId===id){ UI.connectFromId=null; render(); return; }
+  const newId=addEdge(UI.connectFromId,id,'');
+  UI.connectFromId=null;
+  if(newId){ UI.selKind='edge'; UI.selId=newId; }
+  render();
+}
+function edgeClicked(id){
+  if(UI.mode==='connect')return;
+  UI.selKind='edge'; UI.selId=id; render();
+}
+window.edgeClicked=edgeClicked;
+function canvasBackgroundClicked(){
+  if(UI.mode==='connect'){ UI.connectFromId=null; render(); return; }
+  UI.selKind=null; UI.selId=null; render();
+}
+window.canvasBackgroundClicked=canvasBackgroundClicked;
+function deleteSelected(){
+  if(!UI.selKind||!UI.selId)return;
+  if(UI.selKind==='node') removeNode(UI.selId); else removeEdge(UI.selId);
+}
+window.deleteSelected=deleteSelected;
+
+document.addEventListener('mousemove', evt=>{
+  if(!drag)return;
+  const svg=document.getElementById('schemaCanvas'); if(!svg)return;
+  const zg=document.getElementById('zoomLayer')||svg;
+  const pt=svgPoint(svg,zg,evt);
+  moveNodeTo(drag.id, pt.x-drag.dx, pt.y-drag.dy);
+  renderCanvasOnly();
+});
+document.addEventListener('mouseup', ()=>{ if(drag){ drag=null; render(); } });
+document.addEventListener('keydown', evt=>{
+  if(UI.page!=='editor') return;
+  if((evt.ctrlKey||evt.metaKey) && (evt.key==='z'||evt.key==='Z')){ evt.preventDefault(); undo(); }
+});
+
+/* ---------- rendering ---------- */
+function edgePath(w,e){
+  const a=byId(w.nodes,e.fromId), b=byId(w.nodes,e.toId);
+  if(!a||!b) return {d:'',mx:0,my:0};
+  const defA=NODE_TYPES[a.type]||NODE_TYPES.process, defB=NODE_TYPES[b.type]||NODE_TYPES.process;
+  const ax=a.x+defA.w/2, ay=a.y+defA.h/2, bx=b.x+defB.w/2, by=b.y+defB.h/2;
+  const mx=(ax+bx)/2, my=(ay+by)/2;
+  return {d:`M ${ax} ${ay} L ${bx} ${by}`, mx, my};
+}
+function renderNode(w,n){
+  const def=NODE_TYPES[n.type]||NODE_TYPES.process;
+  const cls='node'+(UI.selKind==='node'&&UI.selId===n.id?' sel':'')+(UI.connectFromId===n.id?' pending':'');
+  let shape;
+  if(n.type==='decision'){
+    const cx=def.w/2, cy=def.h/2;
+    shape=`<polygon points="${cx},0 ${def.w},${cy} ${cx},${def.h} 0,${cy}"></polygon>`;
+  } else if(n.type==='start-end'){
+    shape=`<ellipse cx="${def.w/2}" cy="${def.h/2}" rx="${def.w/2}" ry="${def.h/2}"></ellipse>`;
+  } else {
+    shape=`<rect width="${def.w}" height="${def.h}" rx="8"></rect>`;
+  }
+  const hasAction = n.actionType && n.actionType!=='none';
+  return `<g class="${cls}" transform="translate(${n.x},${n.y})" onmousedown="nodeMouseDown(event,'${n.id}')">
+    ${shape}
+    <text x="${def.w/2}" y="${def.h/2}" text-anchor="middle" dominant-baseline="middle">${esc(n.label).slice(0,22)}</text>
+    ${hasAction?`<text x="${def.w-6}" y="14" text-anchor="end" font-size="13" title="Has an action configured">⚡</text>`:''}
+  </g>`;
+}
+function renderEdge(w,e){
+  const p=edgePath(w,e);
+  const cls='edge'+(UI.selKind==='edge'&&UI.selId===e.id?' sel':'');
+  return `<g class="${cls}" onmousedown="edgeClicked('${e.id}')">
+    <path d="${p.d}" marker-end="url(#arrow)"></path>
+    ${e.label?`<text x="${p.mx}" y="${p.my-6}" text-anchor="middle">${esc(e.label)}</text>`:''}
+  </g>`;
+}
+function renderCanvasOnly(){
+  const w=currentWorkflow(); if(!w)return;
+  const svgEl=document.getElementById('schemaCanvas'); if(!svgEl)return;
+  svgEl.querySelector('#edgesLayer').innerHTML=w.edges.map(e=>renderEdge(w,e)).join('');
+  svgEl.querySelector('#nodesLayer').innerHTML=w.nodes.map(n=>renderNode(w,n)).join('');
+}
+
+function pageHome(){
+  const hr=new Date().getHours();
+  const greeting=hr<12?'Good morning':hr<18?'Good afternoon':'Good evening';
+  const name=(_myProfile&&_myProfile.name)?_myProfile.name.split(' ')[0]:'there';
+  const today=new Date().toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'long'});
+  const enabledAutomations=CFG.automations.filter(a=>a.enabled).length;
+  const totalNodes=CFG.workflows.reduce((n,w)=>n+w.nodes.length,0);
+
+  let h=`<div class="phead"><div><h1>${greeting}, ${esc(name)}</h1>
+    <p>${today} · ${CFG.workflows.length?`<b>${CFG.workflows.length}</b> diagram${CFG.workflows.length===1?'':'s'} in this org`:'No diagrams yet'}</p></div>
+    <div class="sp"></div>
+    <button class="btn pri" onclick="openWorkflow(addWorkflow())">+ New diagram</button></div>`;
+
+  h+=`<div class="kpis">
+    <div class="kpi hl"><div class="k">Diagrams</div><div class="kpi-v">${CFG.workflows.length}</div></div>
+    <div class="kpi"><div class="k">Total nodes</div><div class="kpi-v">${totalNodes}</div></div>
+    <div class="kpi"><div class="k">Automation rules</div><div class="kpi-v">${CFG.automations.length}</div><div class="sub">${enabledAutomations} enabled</div></div>
+  </div>`;
+
+  h+=`<div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">`;
+  h+=`<div style="flex:2;min-width:320px">
+    <div class="card"><h3>Diagrams <span class="sp"></span><button class="btn sm" onclick="go('list')">Open Diagrams</button></h3><div class="bd flush"><table><thead><tr>
+      <th>Name</th><th class="n">Nodes</th><th class="n">Connectors</th><th>Updated</th></tr></thead><tbody>
+      ${CFG.workflows.slice(0,6).map(w=>`<tr><td class="lb"><a href="#" onclick="openWorkflow('${w.id}');return false">${esc(w.name)}</a></td>
+        <td class="n">${w.nodes.length}</td><td class="n">${w.edges.length}</td><td class="mini">${esc(w.updatedAt||'—')}</td></tr>`).join('')
+        || '<tr><td colspan="4" class="empty">No diagrams yet — New diagram to create the first one.</td></tr>'}
+      </tbody></table></div></div>
+  </div>`;
+
+  h+=`<div style="flex:1;min-width:260px">
+    <div class="card"><h3>Automations <span class="sp"></span><button class="btn sm" onclick="go('automations')">Open</button></h3><div class="bd flush">
+      ${CFG.automations.slice(0,6).map(a=>`<div style="padding:7px 14px;border-bottom:1px solid var(--line);font-size:11.5px">
+        ${esc(a.name)} <span class="pill ${a.enabled?'ok':'n'}">${a.enabled?'Enabled':'Off'}</span></div>`).join('')
+        || '<div class="empty">No automation rules yet.</div>'}
+    </div></div>
+    <div class="card"><h3>Recent activity</h3><div class="bd flush">
+      ${CFG.audit.slice(0,8).map(a=>`<div style="padding:7px 14px;border-bottom:1px solid var(--line);font-size:11.5px">
+        <div>${esc(a.what)}</div><div class="mini" style="color:var(--ink-2)">${esc(a.detail||'')} · ${F.dt(a.ts)}</div></div>`).join('')
+        || '<div class="empty">No activity yet.</div>'}
+    </div></div>
+  </div>`;
+  h+=`</div>`;
+  return h;
+}
+/* ---------- shared status (RAG) colour system ----------
+   Same semantic scale + class names as the other tools (2026-08-13). Workflows don't
+   have a lifecycle status field, so this is structurally derived from the diagram
+   itself: an empty canvas is grey, multiple nodes with no connectors at all is amber
+   (a real, meaningful "this diagram isn't wired up yet" signal), every node reachable
+   by at least one connector is green, anything in between is blue. No "exceeding" star
+   here -- there's no plan/actual pair for a diagram to beat. */
+function ragForWorkflow(w){
+  const nodes=w.nodes||[], edges=w.edges||[];
+  if(!nodes.length) return {tone:'grey',label:'Empty'};
+  if(nodes.length>1 && !edges.length) return {tone:'amber',label:'Disconnected'};
+  const connected=new Set();
+  edges.forEach(e=>{ connected.add(e.fromId); connected.add(e.toId); });
+  const allConnected = nodes.length===1 || nodes.every(n=>connected.has(n.id));
+  return allConnected ? {tone:'green',label:'Connected'} : {tone:'blue',label:'Partially connected'};
+}
+function ragPillHtml(rag){
+  return `<span class="rag rag-${rag.tone}">${esc(rag.label)}${rag.exceed?' <span class="rag-exceed">★</span>':''}</span>`;
+}
+
+function pageList(){
+  let h=`<div class="phead"><div><h1>Diagrams</h1>
+    <p>Boxes, decisions, arrows — drag to arrange, click one node then another to connect them.</p></div></div>`;
+  h+=`<div class="card"><h3>Workflows <span class="sp"></span><span class="pill n">${CFG.workflows.length}</span>
+      <button class="btn sm pri" onclick="openWorkflow(addWorkflow())">New diagram</button></h3>
+    <div class="bd flush"><table><thead><tr><th>Name</th><th>Status</th><th>Description</th><th class="n">Nodes</th><th class="n">Connectors</th><th>Updated</th><th></th></tr></thead><tbody>
+    ${!CFG.workflows.length?`<tr><td colspan="7" class="empty">No diagrams yet.</td></tr>`:CFG.workflows.map(w=>`<tr>
+      <td class="lb"><a href="#" onclick="openWorkflow('${w.id}');return false">${esc(w.name)}</a>${w.trackingRef?`<div class="mini">${esc(w.trackingRef)}</div>`:''}</td>
+      <td>${ragPillHtml(ragForWorkflow(w))}</td>
+      <td class="mini">${esc(w.description||'—')}</td>
+      <td class="n">${w.nodes.length}</td><td class="n">${w.edges.length}</td>
+      <td class="mini">${esc(w.updatedAt||'—')}</td>
+      <td class="n"><div class="row">
+        <button class="btn sm" onclick="openWorkflow('${w.id}')">Open</button>
+        <button class="btn sm dgr" onclick="removeWorkflow('${w.id}')">Delete</button></div></td></tr>`).join('')}
+    </tbody></table></div></div>`;
+  h+=`<div class="card"><h3>Shared configuration</h3><div class="bd">
+    <div class="row" style="justify-content:space-between">
+      <span class="mini">${CFG.meta.normaSyncedAt?'Last synced '+F.dt(CFG.meta.normaSyncedAt)+' (Norma config v'+(CFG.meta.normaConfigVersion||'?')+')':'Never synced with Norma'}</span>
+      <div class="row">
+        <a class="btn sm" href="Norma.html" target="tool_Norma">Open Norma</a>
+        <label class="btn sm pri">Import from Norma…<input type="file" accept="application/json" style="display:none" onchange="handleNormaImportFile(this.files[0])"></label>
+      </div></div></div></div>`;
+  h+=`<div class="card"><h3>Local autosave</h3><div class="bd">
+    <p class="mini" style="margin:0 0 8px">Your diagrams save to this browser automatically. Local only — use Import/Export for anything that needs to travel.</p>
+    <button class="btn sm dgr" onclick="clearLocal()">Clear local autosave</button></div></div>`;
+  return h;
+}
+
+function renderLanes(w){
+  return (w.lanes||[]).map((l,i)=>`<g class="lane">
+    <rect x="0" y="${l.y}" width="4000" height="${l.height}" fill="${i%2===0?'rgba(58,90,140,0.04)':'rgba(58,90,140,0.08)'}"></rect>
+    <text x="10" y="${l.y+16}">${esc(l.name)}</text>
+  </g>`).join('');
+}
+function pageEditor(){
+  const w=currentWorkflow();
+  if(!w) return `<div class="empty">Diagram not found.</div><a class="btn" href="#" onclick="go('list');return false">← Back to diagrams</a>`;
+  const sel = UI.selKind==='node' ? byId(w.nodes,UI.selId) : (UI.selKind==='edge' ? byId(w.edges,UI.selId) : null);
+  const lanes=w.lanes||[];
+  let inspector='';
+  if(UI.selKind==='node' && sel){
+    const nType=sel.actionType||'none';
+    let nTargetHtml='';
+    if(nType==='alert_people'){
+      const nTargetType=sel.actionTargetType||'org';
+      const nOptionsHtml = nTargetType==='users'
+        ? (CFG.orgUsers||[]).map(u=>`<label style="display:block"><input type="checkbox" ${(sel.actionTargetIds||[]).includes(u.id)?'checked':''} onchange="toggleNodeActionTargetId('${sel.id}','${u.id}')"> ${esc(u.name)}</label>`).join('')
+        : nTargetType==='regions'
+        ? (CFG.orgRegions||[]).map(r=>`<label style="display:block"><input type="checkbox" ${(sel.actionTargetIds||[]).includes(r.id)?'checked':''} onchange="toggleNodeActionTargetId('${sel.id}','${r.id}')"> ${esc(r.name)}</label>`).join('')
+        : nTargetType==='teams'
+        ? (CFG.teams||[]).map(t=>`<label style="display:block"><input type="checkbox" ${(sel.actionTargetIds||[]).includes(t.id)?'checked':''} onchange="toggleNodeActionTargetId('${sel.id}','${t.id}')"> ${esc(t.name)}</label>`).join('')
+        : '';
+      nTargetHtml=`<div class="field"><label class="lbl">Alert target</label>
+        <select class="cel txt" onchange="setNodeActionTargetType('${sel.id}',this.value)">
+          <option value="org" ${nTargetType==='org'?'selected':''}>Everyone</option>
+          <option value="users" ${nTargetType==='users'?'selected':''}>Specific people</option>
+          <option value="regions" ${nTargetType==='regions'?'selected':''}>Region</option>
+          <option value="teams" ${nTargetType==='teams'?'selected':''}>Team</option>
+        </select>
+        ${nTargetType==='org'?'':`<div class="mini" style="max-height:90px;overflow:auto;margin-top:4px;border:1px solid var(--line-2);padding:4px;border-radius:4px">
+          ${nOptionsHtml||'<span class="mini">none configured</span>'}</div>`}
+        <div class="mini" style="margin-top:2px;color:var(--ink-2)">${esc(targetSummary(sel))}</div></div>
+        <div class="field"><label><input type="checkbox" ${sel.actionTargetAgent?'checked':''} onchange="setNodeActionTargetAgent('${sel.id}',this.checked)"> Also draft an Agent Brief</label></div>`;
+    }
+    inspector=`<h4>Node</h4>
+      <div class="field"><label class="lbl">Label</label><input class="cel txt" value="${esc(sel.label)}" onchange="setNodeLabel('${sel.id}',this.value)"></div>
+      <div class="field"><label class="lbl">Type</label><div class="mini">${esc(NODE_TYPES[sel.type].label)}</div></div>
+      <div class="field"><label class="lbl">Position</label><div class="mini">x ${sel.x}, y ${sel.y}</div></div>
+      <div class="field"><label class="lbl">Lane</label><select class="cel txt" onchange="setNodeLane('${sel.id}',this.value)">
+        <option value="">— none —</option>
+        ${lanes.map(l=>`<option value="${l.id}" ${l.id===sel.laneId?'selected':''}>${esc(l.name)}</option>`).join('')}
+      </select></div>
+      <div class="dv"></div>
+      <h4>Action <span class="mini">— run manually, not on a trigger</span></h4>
+      <div class="field"><label class="lbl">On "Run action"</label><select class="cel txt" onchange="setNodeActionType('${sel.id}',this.value)">
+        <option value="none" ${nType==='none'?'selected':''}>Nothing</option>
+        <option value="log_note" ${nType==='log_note'?'selected':''}>Log a note</option>
+        <option value="alert_people" ${nType==='alert_people'?'selected':''}>Alert people</option>
+      </select></div>
+      ${nType!=='none'?`<div class="field"><label class="lbl">Message</label><input class="cel txt" placeholder="default message" value="${esc(sel.actionMessage||'')}" onchange="setNodeActionMessage('${sel.id}',this.value)"></div>`:''}
+      ${nTargetHtml}
+      ${nType!=='none'?`<button class="btn sm pri" onclick="runNodeAction('${sel.id}')">▶ Run action</button>`:''}
+      <div class="dv"></div>
+      <button class="btn sm dgr" onclick="deleteSelected()">Delete node</button>`;
+  } else if(UI.selKind==='edge' && sel){
+    inspector=`<h4>Connector</h4>
+      <div class="field"><label class="lbl">Label</label><input class="cel txt" placeholder="e.g. Yes / No" value="${esc(sel.label)}" onchange="setEdgeLabel('${sel.id}',this.value)"></div>
+      <button class="btn sm dgr" onclick="deleteSelected()">Delete connector</button>`;
+  } else {
+    inspector=`<h4>Nothing selected</h4><p class="mini">Click a node or connector to edit it. In Connect mode, click one node then another to draw an arrow between them.</p>
+      <div class="dv"></div>
+      <h4>Lanes</h4>
+      ${lanes.length?lanes.map(l=>`<div class="field"><div class="row">
+        <input class="cel txt" style="width:130px" value="${esc(l.name)}" onchange="setLane('${l.id}','name',this.value)">
+        <button class="btn sm dgr" onclick="removeLane('${l.id}')">✕</button></div>
+        <div class="mini row" style="margin-top:4px">y <input class="cel" style="width:50px" value="${l.y}" onchange="setLane('${l.id}','y',this.value)">
+        h <input class="cel" style="width:50px" value="${l.height}" onchange="setLane('${l.id}','height',this.value)"></div></div>`).join(''):'<p class="mini">No lanes yet.</p>'}
+      <button class="btn sm" onclick="addLane()">Add lane</button>`;
+  }
+  const w0=Math.max(900, ...w.nodes.map(n=>n.x+220), ...lanes.map(()=>0));
+  const h0=Math.max(500, ...w.nodes.map(n=>n.y+180), ...lanes.map(l=>l.y+l.height+20));
+  const zoom=UI.zoom||1;
+  let html=`<div class="editor">
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+      <div class="toolbar">
+        <a class="btn sm" href="#" onclick="go('list');return false">← Diagrams</a>
+        <div class="dv"></div>
+        <input class="cel" style="width:200px" value="${esc(w.name)}" onchange="renameWorkflow('${w.id}',this.value)">
+        <div class="dv"></div>
+        <button class="btn sm" onclick="addNode('start-end')">+ Start/End</button>
+        <button class="btn sm" onclick="addNode('process')">+ Process</button>
+        <button class="btn sm" onclick="addNode('decision')">+ Decision</button>
+        <button class="btn sm" onclick="addLane()">+ Lane</button>
+        <div class="dv"></div>
+        <button class="btn sm ${UI.mode==='select'?'on':''}" onclick="setMode('select')">Select</button>
+        <button class="btn sm ${UI.mode==='connect'?'on':''}" onclick="setMode('connect')">Connect${UI.mode==='connect'&&UI.connectFromId?' (pick target)':''}</button>
+        <div class="dv"></div>
+        <button class="btn sm" onclick="undo()" ${undoStack.length?'':'disabled'} title="Ctrl/Cmd+Z">Undo</button>
+        <button class="btn sm dgr" onclick="deleteSelected()" ${!UI.selId?'disabled':''}>Delete selected</button>
+        <div class="dv"></div>
+        <button class="btn sm" onclick="setZoom(-0.1)">−</button>
+        <button class="btn sm" onclick="resetZoom()">${Math.round(zoom*100)}%</button>
+        <button class="btn sm" onclick="setZoom(0.1)">+</button>
+        <div class="dv"></div>
+        <button class="btn sm" onclick="exportDiagramSvg()">Export SVG</button>
+        <div class="sp"></div>
+        <span class="mini">${w.nodes.length} nodes · ${w.edges.length} connectors</span>
+      </div>
+      <div class="canvaswrap">
+        <svg class="canvas" id="schemaCanvas" xmlns="http://www.w3.org/2000/svg" width="${w0*zoom}" height="${h0*zoom}" onmousedown="canvasBackgroundClicked()">
+          <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="var(--ink-2)"></path></marker></defs>
+          <g id="zoomLayer" transform="scale(${zoom})">
+            <g id="lanesLayer">${renderLanes(w)}</g>
+            <g id="edgesLayer">${w.edges.map(e=>renderEdge(w,e)).join('')}</g>
+            <g id="nodesLayer">${w.nodes.map(n=>renderNode(w,n)).join('')}</g>
+          </g>
+        </svg>
+      </div>
+    </div>
+    <div class="inspector">${inspector}</div>
+  </div>`;
+  return html;
+}
+
+const NAV_PAGES=[
+  {id:'home',        ix:'0', label:'Home'},
+  {id:'list',        ix:'1', label:'Diagrams'},
+  {id:'automations', ix:'2', label:'Automations'}
+];
+function renderSide(){
+  if(UI.page==='editor') return '';
+  let h='<h4>Schema</h4>';
+  NAV_PAGES.forEach(p=>{
+    const on=UI.page===p.id || (p.id==='list'&&UI.page==='editor');
+    h+=`<a class="navi ${on?'on':''}" href="#" onclick="go('${p.id}');return false">
+      <span class="ix">${p.ix}</span><span>${p.label}</span></a>`;
+  });
+  return h;
+}
+function renderTnAcct(){
+  const nm=_myProfile?_myProfile.name:'';
+  const initials=nm?nm.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase():'?';
+  return `<span class="tn-avatar">${esc(initials)}</span>
+    <div class="tn-who"><b>${esc(nm||'—')}</b><span>Schema</span></div>
+    <a class="tn-signout" href="#" onclick="doSignOut();return false;">Sign out</a>`;
+}
+/* Consistent cross-module bar: search jumps between the 8 tools, same list
+   and behavior as every other file -- not this tool's own diagrams. */
+const MODULES=[
+  {id:'Ordo',label:'Ordo',desc:'Funnel planning & forecasting',color:'#1F3AC7'},
+  {id:'Cursus',label:'Cursus',desc:'Campaign & activity execution',color:'#0E7C6B'},
+  {id:'Eventus',label:'Eventus',desc:'Event planning & logistics',color:'#B5480E'},
+  {id:'Custodia',label:'Custodia',desc:'Asset register',color:'#3B6E1F'},
+  {id:'Prospectus',label:'Prospectus',desc:'ICP filters & opportunity reports',color:'#9C2B3C'},
+  {id:'Augur',label:'Augur',desc:'Lead & deal scoring',color:'#5A3E9C'},
+  {id:'Schema',label:'Schema',desc:'Process maps & workflows',color:'#3A5A8C'},
+  {id:'Norma',label:'Norma',desc:'Shared configuration',color:'#B5730E'}
+];
+const THIS_MODULE='Schema';
+function renderTnModuleLinks(){
+  return MODULES.map(m=>m.id===THIS_MODULE
+    ? `<span class="tn-link on"><span class="mk" style="background:${m.color}">${m.label[0]}</span>${m.label}</span>`
+    : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}"><span class="mk" style="background:${m.color}">${m.label[0]}</span>${m.label}</a>`
+  ).join('');
+}
+function tnSearchResults(q){
+  q=(q||'').trim().toLowerCase(); if(!q) return [];
+  return MODULES.filter(m=>m.label.toLowerCase().includes(q)||m.desc.toLowerCase().includes(q)).slice(0,8);
+}
+let _tnResultList=[];
+function tnSearch(q){
+  _tnResultList=tnSearchResults(q);
+  const box=document.getElementById('tnResults');
+  if(!q||!q.trim()){ box.innerHTML=''; return; }
+  box.innerHTML = `<div class="tn-results">${
+    _tnResultList.length ? _tnResultList.map((m,i)=>`<a href="#" onclick="tnPick(${i});return false"><span class="ty">Module</span><div>${esc(m.label)}</div></a>`).join('')
+    : '<div class="none">No matches.</div>'
+  }</div>`;
+}
+window.tnSearch=tnSearch;
+function tnPick(i){
+  const m=_tnResultList[i]; if(!m) return;
+  window.open(m.id+'.html','tool_'+m.id);
+  document.getElementById('tnResults').innerHTML='';
+  document.getElementById('tnSearchInput').value='';
+}
+window.tnPick=tnPick;
+function tnSearchKey(ev){
+  if(ev.key==='Enter' && _tnResultList.length){ tnPick(0); }
+  if(ev.key==='Escape'){ document.getElementById('tnResults').innerHTML=''; ev.target.blur(); }
+}
+window.tnSearchKey=tnSearchKey;
+function render(){
+  const side=document.getElementById('side'), main=document.getElementById('main');
+  document.getElementById('tnLinks').innerHTML=renderTnModuleLinks();
+  document.getElementById('tnAcct').innerHTML=renderTnAcct();
+  side.innerHTML=renderSide();
+  side.style.display=UI.page==='editor'?'none':'';
+  if(UI.page==='editor'){
+    main.className='main tight'; main.innerHTML=pageEditor();
+  } else if(UI.page==='automations'){
+    main.className='main'; main.innerHTML=pageAutomations();
+  } else if(UI.page==='home'){
+    main.className='main'; main.innerHTML=pageHome();
+  } else {
+    main.className='main'; main.innerHTML=pageList();
+  }
+  saveLocal();
+  scheduleSupabaseSave();
+}
+sb.auth.onAuthStateChange((event)=>{
+  if(event==='SIGNED_OUT'){
+    if(_skipNextSignOutReload){ _skipNextSignOutReload=false; return; }
+    location.reload();
+  }
+});
+bootApp();
+</script>
+</body>
+</html>

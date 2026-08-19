@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Augur — Lead & Deal Scoring</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+  --nav:#5A3E9C; --nav-dk:#432E78; --ink:#10182B; --ink-2:#45506B; --ink-3:#7C879E;
+  --surface:#FFFFFF; --canvas:#F2F4F8; --canvas-2:#E9EDF4; --line:#DFE3EB; --line-2:#EEF1F6;
+  --input:#7B3FE4; --input-bg:#F7F2FE; --calc:#45506B;
+  --ok:#0E8A5F; --ok-bg:#E7F5EF; --warn:#C8791A; --warn-bg:#FDF4E7; --bad:#D0342C; --bad-bg:#FCEDEC;
+  --r:8px; --r-sm:5px;
+  --sh:0 1px 2px rgba(16,24,43,.05), 0 1px 3px rgba(16,24,43,.04);
+  --sh-2:0 4px 16px rgba(16,24,43,.10);
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:var(--sans); background:var(--canvas); color:var(--ink); font-size:13.5px;}
+.sp{flex:1}
+.topnav{background:var(--surface); border-bottom:1px solid var(--line); min-height:56px; display:flex; align-items:center; padding:0 18px; gap:16px; position:sticky; top:0; z-index:50; box-shadow:var(--sh); flex-wrap:wrap;}
+.tn-brand{display:flex; align-items:center; gap:9px; flex-shrink:0; padding:8px 0;}
+.tn-mk{width:34px;height:34px;border-radius:8px;background:var(--nav);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px;flex-shrink:0;}
+.tn-brandtext{line-height:1.15}
+.tn-name{font-weight:800; font-size:14.5px; color:var(--ink);}
+.tn-sub{font-size:9px; letter-spacing:.08em; color:var(--ink-3); font-weight:700; text-transform:uppercase;}
+.tn-links{display:flex; align-items:center; gap:2px; flex:1; overflow-x:auto; min-width:0;}
+.tn-link{padding:7px 12px; border-radius:6px; font-size:12.5px; font-weight:600; color:var(--ink-2); text-decoration:none; white-space:nowrap; flex-shrink:0; display:inline-flex; align-items:center; gap:6px;}
+.tn-link:hover{background:var(--canvas-2)}
+.tn-link.on{background:var(--canvas-2); color:var(--ink); cursor:default;}
+.tn-link .mk{width:16px;height:16px;border-radius:4px;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:9px;flex-shrink:0;}
+.tn-search{position:relative; flex-shrink:0;}
+.tn-search .bx{display:flex; align-items:center; gap:6px; background:var(--canvas); border:1px solid var(--line); border-radius:7px; padding:6px 10px; width:190px;}
+.tn-search input{border:none;background:transparent;outline:none;font-size:12.5px;flex:1;color:var(--ink); min-width:0;}
+.tn-kbd{font-size:10px;color:var(--ink-3);background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:1px 5px;flex-shrink:0;}
+.tn-results{position:absolute; top:calc(100% + 4px); left:0; width:260px; background:var(--surface); border:1px solid var(--line); border-radius:8px; box-shadow:var(--sh-2); z-index:60; max-height:320px; overflow-y:auto;}
+.tn-results a{display:block; padding:8px 12px; text-decoration:none; color:var(--ink); font-size:12.5px; border-bottom:1px solid var(--line-2);}
+.tn-results a:last-child{border-bottom:none}
+.tn-results a:hover{background:var(--canvas-2)}
+.tn-results .ty{font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-3); font-weight:700;}
+.tn-results .none{padding:10px 12px; font-size:12px; color:var(--ink-3);}
+.tn-acct{display:flex; align-items:center; gap:8px; flex-shrink:0; padding:8px 0;}
+.tn-avatar{width:30px;height:30px;border-radius:50%;background:var(--nav);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex-shrink:0;}
+.tn-who{font-size:11.5px; line-height:1.3;}
+.tn-who b{display:block; color:var(--ink); font-weight:700;}
+.tn-who span{color:var(--ink-3);}
+.tn-signout{font-size:10.5px; color:var(--ink-3); text-decoration:none;}
+.tn-signout:hover{color:var(--ink)}
+/* ---------- restored left-hand page nav (this tool's own pages) ---------- */
+.wrap{display:flex; min-height:calc(100vh - 56px);}
+.side{width:210px; background:var(--surface); border-right:1px solid var(--line); padding:10px 0; flex-shrink:0;}
+.side h4{font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3); margin:14px 14px 6px;}
+.navi{display:flex; align-items:center; gap:8px; padding:7px 14px; text-decoration:none; color:var(--ink-2); font-size:13px; border-left:3px solid transparent;}
+.navi:hover{background:var(--canvas-2)}
+.navi.on{background:var(--canvas-2);border-left-color:var(--nav);color:var(--ink);font-weight:700}
+.navi .ix{width:16px; text-align:center; font-size:11px; color:var(--ink-3);}
+.navi.on .ix{color:var(--nav)}
+.main{flex:1; padding:18px 22px; max-width:1220px;}
+.phead{display:flex; align-items:flex-start; gap:14px; margin-bottom:14px;}
+.phead h1{font-size:19px; margin:0 0 3px;}
+.phead p{margin:0; color:var(--ink-2); font-size:12.5px; max-width:680px;}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); margin-bottom:14px; box-shadow:var(--sh);}
+.card.hl{border-color:var(--nav); box-shadow:0 0 0 1px var(--nav) inset, var(--sh);}
+.card h3{display:flex; align-items:center; gap:8px; margin:0; padding:11px 14px; border-bottom:1px solid var(--line-2); font-size:13.5px;}
+.card .bd{padding:14px;}
+.card .bd.flush{padding:0;}
+.scroll{overflow-x:auto;}
+.scroll.cap{max-height:520px; overflow-y:auto;}
+table{width:100%; border-collapse:collapse; font-size:12.5px;}
+th{text-align:left; padding:8px 10px; background:var(--canvas); color:var(--ink-2); font-weight:700; font-size:11.5px; text-transform:uppercase; letter-spacing:.02em; position:sticky; top:0;}
+td{padding:6px 10px; border-bottom:1px solid var(--line-2); vertical-align:middle;}
+td.n,th.n{text-align:right;}
+td.lb{font-weight:600;}
+.empty{padding:18px; text-align:center; color:var(--ink-3); font-size:12.5px;}
+.mini{font-size:11.5px; color:var(--ink-3);}
+.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; margin-bottom:14px;}
+.kpi{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:11px 13px;}
+.kpi.hl{border-color:var(--nav); background:linear-gradient(180deg,#fff,rgba(90,62,156,.05));}
+.kpi .k{font-size:11px; color:var(--ink-3); margin-bottom:3px;}
+.kpi .kpi-v{font-size:19px; font-weight:800; font-variant-numeric:tabular-nums;}
+.kpi.hl .kpi-v{color:var(--nav)}
+.kpi .sub{font-size:11px; color:var(--ink-3); margin-top:2px;}
+.row{display:flex; align-items:center; gap:6px;}
+.btn{background:#fff; border:1px solid var(--line); border-radius:6px; padding:6px 11px; font-size:12.5px; cursor:pointer; color:var(--ink); text-decoration:none; display:inline-flex; align-items:center; gap:5px;}
+.btn:hover{background:var(--canvas-2)}
+.btn.sm{padding:4px 9px; font-size:11.5px;}
+.btn.pri{background:var(--nav);border-color:var(--nav);color:#fff}
+.btn.pri:hover{background:var(--nav-dk)}
+.btn.dgr{color:var(--bad); border-color:#F3C9C6;}
+.btn.dgr:hover{background:var(--bad-bg)}
+.pill{display:inline-block; padding:2px 8px; border-radius:20px; font-size:10.5px; font-weight:700; background:var(--canvas-2); color:var(--ink-2);}
+.pill.hot{background:var(--bad-bg); color:var(--bad);}
+.pill.warm{background:var(--warn-bg); color:var(--warn);}
+.pill.cold{background:var(--canvas-2); color:var(--ink-3);}
+.pill.ok{background:var(--ok-bg); color:var(--ok);}
+.pill.n{background:var(--canvas-2); color:var(--ink-2);}
+/* Shared status (RAG) pill -- same semantic scale + class names as Cursus/Eventus/Ordo/
+   Custodia/Prospectus (2026-08-13). */
+.rag{display:inline-flex; align-items:center; gap:3px; padding:2px 8px; border-radius:20px; font-size:10.5px; font-weight:700; white-space:nowrap;}
+.rag-grey{background:#E7EAF0; color:#5B6472;}
+.rag-blue{background:#E3E8FD; color:#1F3AC7;}
+.rag-amber{background:#FBEBD3; color:#B5730E;}
+.rag-red{background:#F8DEE0; color:#9C2B3C;}
+.rag-green{background:#DCF3E9; color:#0E8A5F;}
+.rag-exceed{color:#C9971A;}
+.note{background:#F1EEFA;border-left:3px solid var(--nav);border-radius:0 var(--r-sm) var(--r-sm) 0; padding:10px 14px; margin-bottom:14px; font-size:12px; color:var(--ink-2);}
+.in,input.in,select.in,.cel{border:1px solid #E1D3FA; border-radius:5px; padding:5px 7px; font-size:12.5px; background:var(--input-bg); color:var(--ink); font-family:inherit;}
+.in:focus,.cel:focus{outline:2px solid var(--input); outline-offset:0;}
+.cel.txt{width:100%;}
+.cel.w{width:56px;}
+.toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:9px 16px; border-radius:20px; font-size:12.5px; box-shadow:var(--sh-2); z-index:200; animation:fade .2s ease;}
+@keyframes fade{from{opacity:0; transform:translateX(-50%) translateY(6px)} to{opacity:1; transform:translateX(-50%) translateY(0)}}
+.lbl{font-size:11px; color:var(--ink-3); font-weight:700; text-transform:uppercase; letter-spacing:.02em;}
+.bar{background:var(--canvas-2); border-radius:20px; height:8px; overflow:hidden; margin:4px 0;}
+.bar i{display:block; height:100%; background:var(--nav); border-radius:20px;}
+.bucketrow{display:grid; grid-template-columns:140px 1fr 90px 110px; align-items:center; gap:10px; padding:7px 0;}
+.authwrap{max-width:360px;margin:14vh auto;padding:32px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-2);}
+.authwrap h2{margin:0 0 4px;font-size:18px;}
+.authwrap p.sub{margin:0 0 20px;color:var(--ink-2);font-size:12.5px;}
+.authwrap input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;margin-bottom:10px;box-sizing:border-box;}
+.authwrap button{width:100%;padding:10px;border:none;border-radius:6px;background:var(--ink);color:#fff;font-weight:700;font-size:13px;cursor:pointer;}
+.authwrap .err{color:#B3261E;font-size:12px;margin:-4px 0 10px;min-height:14px;}
+</style>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<div id="authGate" style="display:none"></div>
+<div class="topnav" id="topnav">
+  <div class="tn-brand"><span class="tn-mk">A</span><div class="tn-brandtext"><div class="tn-name">Augur</div><div class="tn-sub">All modules</div></div></div>
+  <nav class="tn-links" id="tnLinks"></nav>
+  <div class="tn-search">
+    <div class="bx"><input id="tnSearchInput" placeholder="Search modules..." oninput="tnSearch(this.value)" onkeydown="tnSearchKey(event)"><span class="tn-kbd">/</span></div>
+    <div id="tnResults"></div>
+  </div>
+  <div class="tn-acct" id="tnAcct"></div>
+  <script>document.addEventListener('click',function(e){var r=document.getElementById('tnResults');if(r&&!e.target.closest('.tn-search'))r.innerHTML='';});</script>
+</div>
+<div class="wrap" id="wrap">
+  <nav class="side" id="side"></nav>
+  <main class="main" id="main"></main>
+</div>
+<div id="layer"></div>
+<script>
+/* ============================================================================
+   AUGUR — Latin for a diviner who reads signs; the deliberately un-mystical point
+   here is that nothing is actually divined. Every score and every forecast number
+   is a transparent weighted sum of assumptions the user enters and can see, in the
+   same spirit as Prospectus's opportunity math and Ordo's funnel math. No model is
+   fit to data, nothing is predicted by an LLM -- this is a calculator with a
+   pipeline view on top.
+
+   Deals can be entered directly or imported from Prospectus's target list (a
+   one-way JSON export/import, same bridge pattern as everywhere else -- no server,
+   no live link). Scoring factors and weights are fully editable; tiers (Hot/Warm/
+   Cold) map a weighted score to a win probability, and that probability is what
+   drives the weighted-pipeline forecast.
+
+   High-level v1 per Stef's brief. Standalone file, own CFG, Norma bridge for the
+   tracking ID convention only (no cost buckets here).
+
+   Supabase note: scoring factors/tiers/deals now live in the shared database (2026-08-11-
+   supabase-schema-phase4-augur.sql). campaign_id on a deal is a REAL foreign key into the
+   shared campaigns table now -- CFG.referenceList.campaigns is loaded live from Supabase
+   (like Custodia does), so the old Cursus-export/Augur-import JSON bridge is a fallback,
+   not the primary path. That real FK is also what lets Cursus/Ordo read closed-won deals
+   straight out of the database for their Effectiveness pages, instead of needing Augur's
+   manual "export closed-won" JSON file -- see Cursus's loadFromSupabase().
+   ============================================================================ */
+const SUPABASE_URL = 'https://rcmocuubeajnqjltuwdv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjbW9jdXViZWFqbnFqbHR1d2R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzMTgzNTQsImV4cCI6MjEwMTg5NDM1NH0.rZuoKPmmkpNe8Ug8Gu_KmpoKyibigJccdpoRGcLt3pY';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const uid = _p => crypto.randomUUID();
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const byId = (a,id) => a.find(x=>x.id===id);
+const sum = a => a.reduce((x,y)=>x+(y||0),0);
+const F = {
+  n:(v,d=0)=>(v==null||isNaN(v))?'—':Number(v).toLocaleString('en-AU',{minimumFractionDigits:d,maximumFractionDigits:d}),
+  mk:(v,ccy)=>{ if(v==null||isNaN(v))return '—'; const a=Math.abs(v),s=v<0?'-':''; const c=ccy||'$';
+    if(a>=1e6) return s+c+(a/1e6).toFixed(a>=1e7?1:2)+'M';
+    if(a>=1e3) return s+c+Math.round(a/1e3)+'k'; return s+c+Math.round(a); },
+  pct:v=>(v==null||isNaN(v))?'—':Math.round(v*100)+'%',
+  dt:iso=>{ if(!iso)return '—'; return new Date(iso).toLocaleString('en-AU',{day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'}); },
+  d:iso=>{ if(!iso)return '—'; return new Date(iso+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'2-digit'}); }
+};
+const CCY_SYM={AUD:'A$',USD:'US$',GBP:'£',EUR:'€',SGD:'S$',NZD:'NZ$'};
+const STAGES=['Prospecting','Qualifying','Proposal','Negotiation','Closed Won','Closed Lost'];
+
+/* ---------- data ----------
+   Supabase-backed now — populated by loadFromSupabase() after sign-in. Empty shell here so
+   nothing downstream needs to change; only the population source moved. */
+const CFG = {};
+
+const UI = { page:'home' };
+
+function logAudit(what,detail){
+  CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
+  if(CFG.audit.length>150)CFG.audit.pop();
+}
+function toast(msg){
+  const l=document.getElementById('layer');
+  const d=document.createElement('div'); d.className='toast'; d.textContent=msg;
+  l.appendChild(d); setTimeout(()=>d.remove(),2200);
+}
+function go(page){ UI.page=page; render(); }
+window.go=go;
+function setIn(field,id,key,val,type){
+  const row=byId(CFG[field],id); if(!row)return;
+  let v=val;
+  if(type==='num'){ v=val===''?null:parseFloat(val); if(v!=null&&isNaN(v))v=null; }
+  if(type==='pct'){ v=val===''?null:parseFloat(val)/100; if(v!=null&&isNaN(v))v=null; }
+  row[key]=v; logAudit('edit',field+'.'+key); render();
+}
+window.setIn=setIn;
+function setFactorScore(dealId,factorId,val){
+  const d=byId(CFG.deals,dealId); if(!d)return;
+  let v=parseFloat(val); if(isNaN(v))v=0; v=Math.max(0,Math.min(100,v));
+  d.factorScores=d.factorScores||{}; d.factorScores[factorId]=v; render();
+}
+window.setFactorScore=setFactorScore;
+
+/* ---------- local autosave (survives a refresh/close; export/import is still the
+   portable, cross-tool bridge) ---------- */
+const LS_KEY='augur_autosave_v1';
+function saveLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(CFG)); }catch(e){} }
+function loadLocal(){
+  try{
+    const raw=localStorage.getItem(LS_KEY); if(!raw) return false;
+    const parsed=JSON.parse(raw);
+    Object.keys(parsed).forEach(k=>{ CFG[k]=parsed[k]; });
+    return true;
+  }catch(e){ return false; }
+}
+function clearLocal(){
+  localStorage.removeItem(LS_KEY);
+  toast('Local autosave cleared — reload the page to reset to the built-in defaults.');
+}
+window.clearLocal=clearLocal;
+
+/* ============================================================================
+   Supabase data layer — whole-plan load/save, same pattern as every other tool.
+   Campaigns is a shared read-only dimension (Ordo/Cursus own it); scoring_factors/tiers/
+   deals are Augur's own tables; audit_log is shared.
+   ============================================================================ */
+let _orgId = null, _myProfile = null, _saveTimer = null, _realtimeChannel = null;
+/* Set right before an internal (non-user-initiated) signOut() -- e.g. bootApp()'s error path
+   below -- so the global onAuthStateChange listener knows to skip its reload-on-SIGNED_OUT and
+   let the error message stay on screen instead of wiping it out immediately. Without this, the
+   error flashes for a frame and then vanishes, which is exactly the "flash and it's gone" bug. */
+let _skipNextSignOutReload = false;
+
+async function upsertRows(table, rows, mapFn){
+  if(!rows || !rows.length) return;
+  try{
+    const payload = rows.map(r=>Object.assign(mapFn(r), {org_id:_orgId}));
+    const { error } = await sb.from(table).upsert(payload);
+    if(error) throw error;
+  }catch(e){ console.error('Save failed for '+table, e); toast('Could not save '+table+' to the database — see console.'); }
+}
+
+/* Fire-and-forget real delete, paired with upsertRows above. Called immediately after the
+   local CFG array filter in every remove*() function so the UI stays instant while the row
+   actually leaves the database (previously these were UPSERT-only, so removed rows silently
+   reappeared on next load). */
+async function deleteRow(table, id){
+  if(!_orgId || !id) return;
+  try{
+    const { error } = await sb.from(table).delete().eq('id', id).eq('org_id', _orgId);
+    if(error) throw error;
+  }catch(e){ console.error('Delete failed for '+table, e); toast('Removed here, but could not delete from the database — see console.'); }
+}
+
+async function saveToSupabase(){
+  if(!_orgId) return;
+  await Promise.all([
+    upsertRows('augur_scoring_factors', CFG.scoringFactors, f=>({id:f.id,name:f.name,weight:f.weight||0})),
+    upsertRows('augur_tiers', CFG.tiers, t=>({id:t.id,name:t.name,min_score:t.minScore||0,probability:t.probability||0})),
+    upsertRows('augur_deals', CFG.deals, d=>({
+      id:d.id,name:d.name,account:d.account||'',value:d.value||0,currency:d.currency||'AUD',
+      stage:d.stage||'Prospecting',close_date:d.closeDate||null,source:d.source||'Manual',
+      campaign_ref:d.campaignRef||'',campaign_id:d.campaignId||null,
+      factor_scores:d.factorScores||{},tracking_ref:d.trackingRef||null
+    })),
+    upsertRows('crm_contacts', CFG.contacts, c=>({
+      id:c.id,name:c.name||'',title:c.title||'',account:c.account||'',email:c.email||'',phone:c.phone||'',notes:c.notes||''
+    })),
+    upsertRows('crm_activities', CFG.activities, a=>({
+      id:a.id,contact_id:a.contactId,deal_id:a.dealId||null,type:a.type||'Call',summary:a.summary||'',
+      occurred_at:a.occurredAt||null,logged_by:a.loggedBy||''
+    })),
+    upsertRows('audit_log', CFG.audit, a=>({ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null}))
+  ]);
+}
+
+function scheduleSupabaseSave(){
+  if(!_orgId) return;
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(()=>{ saveToSupabase(); }, 900);
+}
+
+async function loadFromSupabase(){
+  const { data:{ user: authUser } } = await sb.auth.getUser();
+  if(!authUser) throw new Error('Not signed in.');
+  const { data: prof, error: profErr } = await sb.from('profiles')
+    .select('id,name,org_id,role_id,region_ids,cross_region').eq('id', authUser.id).single();
+  if(profErr || !prof){ const e = new Error('No profile linked yet.'); e.noProfile = true; throw e; }
+  _myProfile = prof; _orgId = prof.org_id;
+
+  const results = await Promise.all([
+    sb.from('augur_scoring_factors').select('id,name,weight'),
+    sb.from('augur_tiers').select('id,name,min_score,probability'),
+    sb.from('augur_deals').select('id,name,account,value,currency,stage,close_date,source,campaign_ref,campaign_id,factor_scores,tracking_ref'),
+    sb.from('campaigns').select('id,name'),
+    sb.from('crm_contacts').select('id,name,title,account,email,phone,notes'),
+    sb.from('crm_activities').select('id,contact_id,deal_id,type,summary,occurred_at,logged_by'),
+    sb.from('audit_log').select('ts,what,detail').order('ts',{ascending:false}).limit(200)
+  ]);
+  const [factorsR,tiersR,dealsR,campaignsR,contactsR,activitiesR,auditR] = results;
+  for(const r of results){ if(r.error) throw r.error; }
+
+  CFG.scoringFactors = (factorsR.data||[]).map(f=>({id:f.id,name:f.name,weight:f.weight}));
+  CFG.tiers = (tiersR.data||[]).map(t=>({id:t.id,name:t.name,minScore:t.min_score,probability:t.probability}));
+  CFG.deals = (dealsR.data||[]).map(d=>({
+    id:d.id,name:d.name,account:d.account||'',value:d.value,currency:d.currency||'AUD',
+    stage:d.stage||'Prospecting',closeDate:d.close_date||'',source:d.source||'Manual',
+    campaignRef:d.campaign_ref||'',campaignId:d.campaign_id||null,
+    factorScores:d.factor_scores||{},trackingRef:d.tracking_ref||null
+  }));
+  CFG.contacts = (contactsR.data||[]).map(c=>({id:c.id,name:c.name||'',title:c.title||'',account:c.account||'',email:c.email||'',phone:c.phone||'',notes:c.notes||''}));
+  CFG.activities = (activitiesR.data||[]).map(a=>({id:a.id,contactId:a.contact_id,dealId:a.deal_id||null,type:a.type||'Call',summary:a.summary||'',occurredAt:a.occurred_at||'',loggedBy:a.logged_by||''}));
+  CFG.referenceList = { campaigns:(campaignsR.data||[]).map(c=>({id:c.id,name:c.name})), activities:[] };
+  CFG.audit = (auditR.data||[]).map(a=>({ts:a.ts,what:a.what,detail:a.detail}));
+  /* trackingConfig (Norma's old generic {mod}-{type}-{seq} scheme) isn't wired to the
+     database this pilot, same as every other tool — session-only until that bridge exists. */
+  CFG.trackingConfig = null;
+  CFG.meta = { normaSyncedAt:null, normaConfigVersion:null, prospectusSyncedAt:null, cursusRefSyncedAt:null };
+}
+
+/* Live notifications: subscribe to audit_log INSERTs for this org so an action
+   taken in another tab/tool shows up here as a toast without a reload. Own
+   actions are skipped (via user_id) since they're already toasted locally.
+   This is notification-only -- it does NOT live-sync the underlying record
+   (a campaign, a deal, etc); reload or navigate to see that reflected in place. */
+function subscribeRealtime(){
+  if(_realtimeChannel || !_orgId) return;
+  _realtimeChannel = sb.channel('audit_log_org_'+_orgId)
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'audit_log', filter:'org_id=eq.'+_orgId }, payload=>{
+      const row = payload.new || {};
+      if(_myProfile && row.user_id && row.user_id===_myProfile.id) return;
+      /* phase18: a targeted alert_people row carries a resolved target_user_ids list --
+         only toast a viewer whose own id is in it. Absent/empty (almost every row, and
+         any 'org'-targeted alert) keeps the original broadcast-to-everyone behaviour. The
+         row still joins the shared audit trail either way -- only the live toast is gated. */
+      const targeted = Array.isArray(row.target_user_ids) && row.target_user_ids.length>0;
+      const forMe = !targeted || (_myProfile && row.target_user_ids.includes(_myProfile.id));
+      if(forMe) toast((row.what||'Update')+(row.detail?' — '+row.detail:''));
+      if(CFG.audit){ CFG.audit.unshift({ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
+      render();
+    })
+    .subscribe();
+}
+function loginScreenHtml(err){
+  return '<div class="authwrap"><h2>Augur</h2><p class="sub">Sign in to continue.</p>'+
+    '<div class="err">'+(err?esc(err):'')+'</div>'+
+    '<input id="authEmail" type="email" placeholder="Email" autocomplete="username">'+
+    '<input id="authPass" type="password" placeholder="Password" autocomplete="current-password">'+
+    '<button onclick="doSignIn()">Sign in</button>'+
+    '<p class="sub" style="margin-top:10px">New here? <a href="#" onclick="showSignUpGate();return false;">Create an account</a></p>'+
+    '</div>';
+}
+function signUpScreenHtml(err, notice){
+  return '<div class="authwrap"><h2>Augur</h2><p class="sub">Create an account.</p>'+
+    '<div class="err">'+(err?esc(err):'')+'</div>'+
+    (notice ? '<div class="sub" style="margin-bottom:8px">'+esc(notice)+'</div>' : '')+
+    '<input id="suEmail" type="email" placeholder="Email" autocomplete="username">'+
+    '<input id="suPass" type="password" placeholder="Password (min 6 characters)" autocomplete="new-password">'+
+    '<input id="suPass2" type="password" placeholder="Confirm password" autocomplete="new-password">'+
+    '<button onclick="doSignUp()">Create account</button>'+
+    '<p class="sub" style="margin-top:10px">Already have an account? <a href="#" onclick="showAuthGate();return false;">Sign in</a></p>'+
+    '</div>';
+}
+function onboardingScreenHtml(err){
+  return '<div class="authwrap"><h2>Augur</h2><p class="sub">You\'re signed in, but this login isn\'t linked to an organization yet.</p>'+
+    '<div class="err">'+(err?esc(err):'')+'</div>'+
+    '<div style="border:1px solid #ddd;border-radius:8px;padding:12px;margin-bottom:12px">'+
+      '<b>Create a new organization</b>'+
+      '<input id="orgName" type="text" placeholder="Organization name">'+
+      '<input id="orgYourName" type="text" placeholder="Your name">'+
+      '<button onclick="doCreateOrg()">Create organization</button>'+
+    '</div>'+
+    '<div style="border:1px solid #ddd;border-radius:8px;padding:12px">'+
+      '<b>I have an invite code</b>'+
+      '<input id="inviteCode" type="text" placeholder="Invite code" style="text-transform:uppercase">'+
+      '<input id="inviteYourName" type="text" placeholder="Your name">'+
+      '<button onclick="doRedeemInvite()">Join organization</button>'+
+    '</div>'+
+    '<p class="sub" style="margin-top:10px"><a href="#" onclick="doSignOut();return false;">Sign out</a></p>'+
+    '</div>';
+}
+async function doSignIn(){
+  const email = document.getElementById('authEmail').value.trim();
+  const pass = document.getElementById('authPass').value;
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if(error){ document.getElementById('authGate').innerHTML = loginScreenHtml(error.message); return; }
+  await bootApp();
+}
+window.doSignIn = doSignIn;
+async function doSignUp(){
+  const email = document.getElementById('suEmail').value.trim();
+  const pass = document.getElementById('suPass').value;
+  const pass2 = document.getElementById('suPass2').value;
+  if(pass.length < 6){ document.getElementById('authGate').innerHTML = signUpScreenHtml('Password must be at least 6 characters.'); return; }
+  if(pass !== pass2){ document.getElementById('authGate').innerHTML = signUpScreenHtml('Passwords do not match.'); return; }
+  const { data, error } = await sb.auth.signUp({ email, password: pass });
+  if(error){ document.getElementById('authGate').innerHTML = signUpScreenHtml(error.message); return; }
+  if(data.session){ await bootApp(); return; }
+  document.getElementById('authGate').innerHTML = signUpScreenHtml(null, 'Account created — check your email to confirm, then sign in.');
+}
+window.doSignUp = doSignUp;
+async function doSignOut(){ await sb.auth.signOut(); location.reload(); }
+window.doSignOut = doSignOut;
+async function doCreateOrg(){
+  const p_org_name = document.getElementById('orgName').value.trim();
+  const p_your_name = document.getElementById('orgYourName').value.trim();
+  const { error } = await sb.rpc('create_organization', { p_org_name, p_your_name });
+  if(error){ document.getElementById('authGate').innerHTML = onboardingScreenHtml(error.message); return; }
+  await bootApp();
+}
+window.doCreateOrg = doCreateOrg;
+async function doRedeemInvite(){
+  const p_code = document.getElementById('inviteCode').value.trim();
+  const p_your_name = document.getElementById('inviteYourName').value.trim();
+  const { error } = await sb.rpc('redeem_invite', { p_code, p_your_name });
+  if(error){ document.getElementById('authGate').innerHTML = onboardingScreenHtml(error.message); return; }
+  await bootApp();
+}
+window.doRedeemInvite = doRedeemInvite;
+
+function showAuthGate(err){
+  const gate = document.getElementById('authGate');
+  gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
+  gate.innerHTML = loginScreenHtml(err);
+  document.getElementById('topnav').style.display = 'none';
+  document.getElementById('wrap').style.display = 'none';
+}
+window.showAuthGate = showAuthGate;
+function showSignUpGate(err){
+  const gate = document.getElementById('authGate');
+  gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
+  gate.innerHTML = signUpScreenHtml(err);
+  document.getElementById('topnav').style.display = 'none';
+  document.getElementById('wrap').style.display = 'none';
+}
+window.showSignUpGate = showSignUpGate;
+function showOnboardingGate(err){
+  const gate = document.getElementById('authGate');
+  gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
+  gate.innerHTML = onboardingScreenHtml(err);
+  document.getElementById('topnav').style.display = 'none';
+  document.getElementById('wrap').style.display = 'none';
+}
+function hideAuthGate(){
+  const gate = document.getElementById('authGate');
+  gate.style.display = 'none'; gate.innerHTML = '';
+  document.getElementById('topnav').style.display = '';
+  document.getElementById('wrap').style.display = '';
+}
+async function bootApp(){
+  const { data:{ session } } = await sb.auth.getSession();
+  if(!session){ showAuthGate(); return; }
+  try{ await loadFromSupabase(); }
+  catch(e){
+    console.error(e);
+    if(e.noProfile){ showOnboardingGate(); return; }
+    _skipNextSignOutReload = true;
+    await sb.auth.signOut();
+    showAuthGate(e.message || 'Could not load your data. Contact an admin.');
+    return;
+  }
+  hideAuthGate();
+  render();
+  subscribeRealtime();
+}
+
+/* ---------- Norma bridge ---------- */
+function handleNormaImportFile(file){
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>importSharedConfigFromNorma(e.target.result);
+  reader.onerror=()=>toast('Could not read that file.');
+  reader.readAsText(file);
+}
+window.handleNormaImportFile=handleNormaImportFile;
+function importSharedConfigFromNorma(jsonText){
+  let data;
+  try{ data=JSON.parse(jsonText); }
+  catch(e){ toast('That is not valid JSON — is it a Norma shared-config export?'); return; }
+  if(data.trackingConfig){ CFG.trackingConfig=data.trackingConfig; CFG.trackingConfig.mySeq=CFG.trackingConfig.mySeq||{}; }
+  if(data.configVersion!=null){ CFG.meta.normaConfigVersion=data.configVersion; }
+  CFG.meta.normaSyncedAt=new Date().toISOString();
+  logAudit('import shared config from Norma','tracking convention');
+  render();
+  toast('Shared config imported from Norma.');
+}
+window.importSharedConfigFromNorma=importSharedConfigFromNorma;
+function nextTrackingRef(type){
+  const tc=CFG.trackingConfig; if(!tc) return null;
+  const modCode=(tc.modCodes&&tc.modCodes.augur)||'AUG';
+  const typeCode=(tc.typeCodes&&tc.typeCodes[type])||type.toUpperCase().slice(0,3);
+  tc.mySeq=tc.mySeq||{};
+  tc.mySeq[typeCode]=(tc.mySeq[typeCode]||0)+1;
+  const seq=String(tc.mySeq[typeCode]).padStart(tc.seqPadding||4,'0');
+  return tc.pattern.replace('{mod}',modCode).replace('{type}',typeCode).replace('{seq}',seq);
+}
+
+/* ---------- Prospectus bridge (one-way import of the target list) ---------- */
+function handleProspectusImportFile(file){
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>importLeadsFromProspectus(e.target.result);
+  reader.onerror=()=>toast('Could not read that file.');
+  reader.readAsText(file);
+}
+window.handleProspectusImportFile=handleProspectusImportFile;
+function importLeadsFromProspectus(jsonText){
+  let data;
+  try{ data=JSON.parse(jsonText); }
+  catch(e){ toast('That is not valid JSON — is it a Prospectus target-list export?'); return; }
+  if(!data.leads || !data.leads.length){ toast('No leads found in that file.'); return; }
+  const stageByStatus={New:'Prospecting',Contacted:'Qualifying',Qualified:'Proposal',Disqualified:'Closed Lost'};
+  let created=0;
+  data.leads.forEach(l=>{
+    const d={id:uid('d'), name:l.company+(l.filterName?' — '+l.filterName:''), account:l.company,
+      value:l.dealValue||0, currency:l.currency||'AUD', stage:stageByStatus[l.status]||'Prospecting',
+      closeDate:'', source:'Prospectus', campaignRef:'', campaignId:null, factorScores:{}};
+    CFG.scoringFactors.forEach(f=>d.factorScores[f.id]=0);
+    d.trackingRef=nextTrackingRef('deal');
+    CFG.deals.push(d); created++;
+  });
+  CFG.meta.prospectusSyncedAt=new Date().toISOString();
+  logAudit('import target list from Prospectus',created+' deals created');
+  render();
+  toast(created+' deal(s) imported from Prospectus — score them to bring them into the forecast.');
+}
+window.importLeadsFromProspectus=importLeadsFromProspectus;
+
+/* ---------- CRUD: deals ---------- */
+function addDeal(){
+  const d={id:uid('d'),name:'New deal',account:'',value:0,currency:'AUD',stage:'Prospecting',closeDate:'',source:'Manual',campaignRef:'',campaignId:null,factorScores:{}};
+  CFG.scoringFactors.forEach(f=>d.factorScores[f.id]=0);
+  d.trackingRef=nextTrackingRef('deal');
+  CFG.deals.push(d); logAudit('add deal','New deal'); render(); toast('Deal added.');
+}
+window.addDeal=addDeal;
+/* ---------- reference list import from Cursus (real campaign ids -- see Custodia for the same
+   pattern). Lets a deal link to a real campaign instead of only a free-text campaignRef. ---------- */
+function importReferenceListFromCursus(jsonText){
+  let data;
+  try{ data=JSON.parse(jsonText); }
+  catch(e){ toast('That is not valid JSON — is it a Cursus reference-list export?'); return; }
+  CFG.referenceList={ campaigns:data.campaigns||[], activities:data.activities||[] };
+  CFG.meta.cursusRefSyncedAt=new Date().toISOString();
+  logAudit('import reference list from Cursus', CFG.referenceList.campaigns.length+' campaigns');
+  render();
+  toast('Reference list imported — deals can now link to a real campaign.');
+}
+window.importReferenceListFromCursus=importReferenceListFromCursus;
+function handleCursusRefFile(file){
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>importReferenceListFromCursus(e.target.result);
+  reader.onerror=()=>toast('Could not read that file.');
+  reader.readAsText(file);
+}
+window.handleCursusRefFile=handleCursusRefFile;
+function exportClosedWonForOrdo(){
+  const won=CFG.deals.filter(d=>d.stage==='Closed Won');
+  if(!won.length){ toast('No Closed Won deals to export yet.'); return; }
+  const payload={ exportedAt:new Date().toISOString(), source:'Augur',
+    deals:won.map(d=>({name:d.name,account:d.account,value:d.value,currency:d.currency,
+      closeDate:d.closeDate,campaignId:d.campaignId||null,campaignRef:d.campaignRef||null,trackingRef:d.trackingRef||null}))
+  };
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='augur-closed-won-for-ordo.json'; a.click();
+  logAudit('export closed-won for Ordo',won.length+' deals');
+  toast(won.length+' closed-won deal(s) exported. Note: Ordo does not import this yet -- '
+    +'that link is intentionally left for later so its win/actuals engine gets a proper look first.');
+}
+window.exportClosedWonForOrdo=exportClosedWonForOrdo;
+function removeDeal(id){
+  if(!confirm('Remove this deal?'))return;
+  CFG.deals=CFG.deals.filter(d=>d.id!==id);
+  /* Unlink, don't delete — the touchpoint (call/email/meeting) still happened
+     and is real relationship history even if the deal record itself goes away.
+     Unlinked activities get pushed via the normal upsert cycle, not a delete. */
+  CFG.activities.forEach(a=>{ if(a.dealId===id) a.dealId=null; });
+  logAudit('remove deal',id); render();
+  deleteRow('augur_deals',id);
+}
+window.removeDeal=removeDeal;
+
+/* ---------- Contacts (minimal CRM layer) ----------
+   account is free text, matching augur_deals.account by convention rather than
+   a hard FK — see the phase11 migration note for why a full accounts entity
+   is deliberately out of scope for this pass. */
+function addContact(){
+  const c={id:uid('ct'),name:'New contact',title:'',account:'',email:'',phone:'',notes:''};
+  CFG.contacts.push(c); logAudit('add contact','New contact'); render(); toast('Contact added.');
+}
+window.addContact=addContact;
+function removeContact(id){
+  if(!confirm('Remove this contact and its touchpoint history?'))return;
+  const goingActivityIds=CFG.activities.filter(a=>a.contactId===id).map(a=>a.id);
+  CFG.contacts=CFG.contacts.filter(c=>c.id!==id);
+  CFG.activities=CFG.activities.filter(a=>a.contactId!==id);
+  logAudit('remove contact',id); render();
+  deleteRow('crm_contacts',id);
+  goingActivityIds.forEach(aid=>deleteRow('crm_activities',aid));
+}
+window.removeContact=removeContact;
+function addActivity(contactId){
+  if(!contactId){ toast('Add a contact first.'); return; }
+  const a={id:uid('act'),contactId:contactId,dealId:null,type:'Call',summary:'',occurredAt:new Date().toISOString().slice(0,10),loggedBy:_myProfile?_myProfile.name:''};
+  CFG.activities.push(a); logAudit('add touchpoint','on contact '+contactId); render();
+}
+window.addActivity=addActivity;
+function removeActivity(id){ CFG.activities=CFG.activities.filter(a=>a.id!==id); logAudit('remove touchpoint',id); render(); deleteRow('crm_activities',id); }
+window.removeActivity=removeActivity;
+
+/* ---------- CRUD: scoring model ---------- */
+function addFactor(){
+  CFG.scoringFactors.push({id:uid('f'),name:'New factor',weight:10});
+  CFG.deals.forEach(d=>{ d.factorScores=d.factorScores||{}; d.factorScores[CFG.scoringFactors[CFG.scoringFactors.length-1].id]=0; });
+  render(); toast('Factor added.');
+}
+window.addFactor=addFactor;
+function removeFactor(id){
+  CFG.scoringFactors=CFG.scoringFactors.filter(f=>f.id!==id);
+  CFG.deals.forEach(d=>{ if(d.factorScores) delete d.factorScores[id]; });
+  render();
+  deleteRow('augur_scoring_factors',id);
+}
+window.removeFactor=removeFactor;
+function setFactor(id,key,val){
+  const f=byId(CFG.scoringFactors,id); if(!f)return;
+  f[key]= key==='weight' ? (parseFloat(val)||0) : val;
+  render();
+}
+window.setFactor=setFactor;
+function setTier(id,key,val){
+  const t=byId(CFG.tiers,id); if(!t)return;
+  if(key==='probability') t.probability=parseFloat(val)/100||0;
+  else if(key==='minScore') t.minScore=parseFloat(val)||0;
+  else t[key]=val;
+  render();
+}
+window.setTier=setTier;
+
+/* ---------- scoring & forecast math (transparent, deterministic) ---------- */
+function weightedScore(deal){
+  const totalW=sum(CFG.scoringFactors.map(f=>f.weight));
+  if(!totalW) return 0;
+  const s=sum(CFG.scoringFactors.map(f=>(deal.factorScores&&deal.factorScores[f.id]||0)*f.weight));
+  return s/totalW;
+}
+function tierFor(score){
+  const sorted=[...CFG.tiers].sort((a,b)=>b.minScore-a.minScore);
+  return sorted.find(t=>score>=t.minScore) || sorted[sorted.length-1];
+}
+function dealMetrics(deal){
+  const score=weightedScore(deal);
+  const tier=tierFor(score);
+  const probability=tier?tier.probability:0;
+  const weightedValue=(deal.value||0)*probability;
+  return {score,tier,probability,weightedValue};
+}
+/* ---------- shared status (RAG) colour system ----------
+   Same semantic scale + class names as Cursus/Eventus/Ordo/Custodia/Prospectus
+   (2026-08-13). Tiers are user-configurable (CFG.tiers, edited on the Scoring model
+   page) so this deliberately reasons off tier.probability rather than a hardcoded
+   tier name. "Exceeding" here means a deal closed won despite sitting in a tier the
+   scoring model rated as low-probability -- it beat what the model expected of it. */
+const RAG_THRESHOLDS = {
+  atRiskProbability: 0.3 // tier probability below this => amber/At risk (or the exceed star on a win)
+};
+function ragForDeal(d, m){
+  if(d.stage==='Closed Lost') return {tone:'red',label:'Lost'};
+  if(d.stage==='Closed Won'){
+    const exceed = !!(m.tier && m.tier.probability < RAG_THRESHOLDS.atRiskProbability);
+    return {tone:'green',label:'Won',exceed};
+  }
+  if(monthBucket(d.closeDate)==='Overdue') return {tone:'red',label:'Overdue'};
+  if(m.tier && m.tier.probability < RAG_THRESHOLDS.atRiskProbability) return {tone:'amber',label:'At risk'};
+  if(d.stage==='Prospecting') return {tone:'grey',label:'New'};
+  return {tone:'blue',label:'On track'};
+}
+function ragPillHtml(rag){
+  return `<span class="rag rag-${rag.tone}">${esc(rag.label)}${rag.exceed?' <span class="rag-exceed">★</span>':''}</span>`;
+}
+
+function monthBucket(closeDateStr){
+  if(!closeDateStr) return 'No date';
+  const now=new Date(); const cd=new Date(closeDateStr+'T00:00:00');
+  if(isNaN(cd.getTime())) return 'No date';
+  const startOfThisMonth=new Date(now.getFullYear(),now.getMonth(),1);
+  const startOfNextMonth=new Date(now.getFullYear(),now.getMonth()+1,1);
+  const startOfMonthAfter=new Date(now.getFullYear(),now.getMonth()+2,1);
+  if(cd < startOfThisMonth) return 'Overdue';
+  if(cd < startOfNextMonth) return 'This month';
+  if(cd < startOfMonthAfter) return 'Next month';
+  return 'Later';
+}
+
+/* ---------- pages ---------- */
+function pageHome(){
+  const hr=new Date().getHours();
+  const greeting=hr<12?'Good morning':hr<18?'Good afternoon':'Good evening';
+  const name=(_myProfile&&_myProfile.name)?_myProfile.name.split(' ')[0]:'there';
+  const today=new Date().toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'long'});
+  const openDeals=CFG.deals.filter(d=>d.stage!=='Closed Won'&&d.stage!=='Closed Lost');
+
+  let h=`<div class="phead"><div><h1>${greeting}, ${esc(name)}</h1>
+    <p>${today} · ${openDeals.length?`<b>${openDeals.length}</b> open deal${openDeals.length===1?'':'s'} in the pipeline`:'No open deals right now'}</p></div>
+    <div class="sp"></div>
+    <button class="btn pri" onclick="go('deals');addDeal()">+ Quick add deal</button></div>`;
+
+  h+=`<div class="kpis">
+    <div class="kpi hl"><div class="k">Open deals</div><div class="kpi-v">${openDeals.length}</div></div>
+    <div class="kpi"><div class="k">Open pipeline value</div><div class="kpi-v">${F.mk(sum(openDeals.map(d=>d.value)))}</div></div>
+    <div class="kpi"><div class="k">Weighted pipeline</div><div class="kpi-v">${F.mk(sum(openDeals.map(d=>dealMetrics(d).weightedValue)))}</div>
+      <div class="sub">value × tier probability</div></div>
+    <div class="kpi"><div class="k">Contacts</div><div class="kpi-v">${CFG.contacts.length}</div></div>
+  </div>`;
+
+  h+=`<div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">`;
+  h+=`<div style="flex:2;min-width:320px">
+    <div class="card"><h3>Open deals <span class="sp"></span><button class="btn sm" onclick="go('deals')">Open Deals</button></h3><div class="bd flush"><table><thead><tr>
+      <th>Deal</th><th class="n">Value</th><th>Stage</th><th>Tier</th><th>Progress</th></tr></thead><tbody>
+      ${openDeals.slice(0,6).map(d=>{ const m=dealMetrics(d); return `<tr><td class="lb">${esc(d.name)}</td>
+        <td class="n calc">${F.mk(d.value)}</td><td>${esc(d.stage)}</td><td><span class="pill ${m.tier?m.tier.name.toLowerCase():'n'}">${m.tier?esc(m.tier.name):'—'}</span></td>
+        <td>${ragPillHtml(ragForDeal(d,m))}</td></tr>`; }).join('')
+        || '<tr><td colspan="5" class="empty">No open deals — Quick Add to create one.</td></tr>'}
+      </tbody></table></div></div>
+  </div>`;
+
+  h+=`<div style="flex:1;min-width:260px">
+    <div class="card"><h3>Recent activity</h3><div class="bd flush">
+      ${CFG.audit.slice(0,8).map(a=>`<div style="padding:7px 14px;border-bottom:1px solid var(--line);font-size:11.5px">
+        <div>${esc(a.what)}</div><div class="mini" style="color:var(--ink-2)">${esc(a.detail||'')} · ${F.dt(a.ts)}</div></div>`).join('')
+        || '<div class="empty">No activity yet.</div>'}
+    </div></div>
+  </div>`;
+  h+=`</div>`;
+  return h;
+}
+function pageDeals(){
+  const openDeals=CFG.deals.filter(d=>d.stage!=='Closed Won'&&d.stage!=='Closed Lost');
+  const totalW=sum(CFG.scoringFactors.map(f=>f.weight));
+  let h=`<div class="phead"><div><h1>Deals</h1>
+    <p>Score each open deal against the factors below. Weighted score drives the tier, and the tier's probability
+      drives the forecast.</p></div></div>`;
+  if(totalW!==100){
+    h+=`<div class="note" style="border-color:var(--warn);background:var(--warn-bg)">Scoring factor weights sum to ${totalW}%, not 100% —
+      scores are still computed correctly (normalised), but consider tidying the weights on the Scoring model page.</div>`;
+  }
+  h+=`<div class="kpis">
+    <div class="kpi hl"><div class="k">Open deals</div><div class="kpi-v">${openDeals.length}</div></div>
+    <div class="kpi"><div class="k">Open pipeline value</div><div class="kpi-v">${F.mk(sum(openDeals.map(d=>d.value)))}</div></div>
+    <div class="kpi"><div class="k">Weighted pipeline</div><div class="kpi-v">${F.mk(sum(openDeals.map(d=>dealMetrics(d).weightedValue)))}</div>
+      <div class="sub">value × tier probability</div></div>
+  </div>`;
+  h+=`<div class="card"><h3>Deals <span class="sp"></span><span class="pill n">${CFG.deals.length}</span>
+      <button class="btn sm" onclick="exportClosedWonForOrdo()">Export closed-won for Ordo</button>
+      <button class="btn sm pri" onclick="addDeal()">Add deal</button></h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>Deal</th><th>Progress</th><th class="n">Value</th><th>Stage</th><th>Close date</th><th>Campaign</th>
+      ${CFG.scoringFactors.map(f=>`<th class="n">${esc(f.name)}</th>`).join('')}
+      <th class="n">Score</th><th>Tier</th><th class="n">Weighted</th><th></th></tr></thead><tbody>
+    ${!CFG.deals.length?`<tr><td colspan="${10+CFG.scoringFactors.length}" class="empty">No deals yet.</td></tr>`:CFG.deals.map(d=>{
+      const m=dealMetrics(d);
+      return `<tr>
+        <td><input class="cel txt" style="width:190px" value="${esc(d.name)}" onchange="setIn('deals','${d.id}','name',this.value)">
+          <div class="mini">${esc(d.account)}${d.trackingRef?' · '+esc(d.trackingRef):''}</div></td>
+        <td>${ragPillHtml(ragForDeal(d,m))}</td>
+        <td class="n"><div class="row" style="justify-content:flex-end">
+          <select class="cel" style="width:60px" onchange="setIn('deals','${d.id}','currency',this.value)">
+            ${Object.keys(CCY_SYM).map(c=>`<option ${c===d.currency?'selected':''}>${c}</option>`).join('')}</select>
+          <input class="cel w" value="${d.value||0}" onchange="setIn('deals','${d.id}','value',this.value,'num')"></div></td>
+        <td><select class="cel txt" style="width:120px" onchange="setIn('deals','${d.id}','stage',this.value)">
+          ${STAGES.map(s=>`<option ${s===d.stage?'selected':''}>${s}</option>`).join('')}</select></td>
+        <td><input class="cel txt" type="date" value="${d.closeDate||''}" onchange="setIn('deals','${d.id}','closeDate',this.value)"></td>
+        <td><select class="cel txt" style="width:150px" onchange="setIn('deals','${d.id}','campaignId',this.value||null)">
+            <option value="">— not linked —</option>
+            ${CFG.referenceList.campaigns.map(c=>`<option value="${c.id}" ${c.id===d.campaignId?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
+          ${(!d.campaignId&&d.campaignRef)?`<div class="mini">legacy ref: ${esc(d.campaignRef)}</div>`:''}</td>
+        ${CFG.scoringFactors.map(f=>`<td class="n"><input class="cel w" value="${(d.factorScores&&d.factorScores[f.id])||0}" onchange="setFactorScore('${d.id}','${f.id}',this.value)"></td>`).join('')}
+        <td class="n">${F.n(m.score,0)}</td>
+        <td><span class="pill ${m.tier?m.tier.name.toLowerCase():'n'}">${m.tier?esc(m.tier.name):'—'}</span></td>
+        <td class="n">${F.mk(m.weightedValue,CCY_SYM[d.currency])}</td>
+        <td class="n"><button class="btn sm dgr" onclick="removeDeal('${d.id}')">Remove</button></td></tr>`;
+    }).join('')}
+    </tbody></table></div></div>
+    <div class="bd" style="border-top:1px solid var(--line-2)"><p class="mini" style="margin:0">Campaign ref is a free-text pointer to an Ordo/Cursus tracking ref (e.g. <code>ORD-CAM-0001</code>) for traceability.
+      Closed-won deals export as JSON above, but Ordo does not import it yet — deliberately left for later so its win/actuals
+      engine gets a proper look before anything writes into it.</p></div></div>`;
+  return h;
+}
+
+function pageScoring(){
+  const totalW=sum(CFG.scoringFactors.map(f=>f.weight));
+  let h=`<div class="phead"><div><h1>Scoring model</h1>
+    <p>Factors and weights used to compute each deal's score, and the tiers that turn a score into a win probability.</p></div></div>`;
+  h+=`<div class="card"><h3>Scoring factors <span class="sp"></span>
+      <span class="pill ${totalW===100?'ok':'n'}">${totalW}% total</span>
+      <button class="btn sm pri" onclick="addFactor()">Add factor</button></h3>
+    <div class="bd flush"><table><thead><tr><th>Factor</th><th class="n">Weight %</th><th></th></tr></thead><tbody>
+    ${CFG.scoringFactors.map(f=>`<tr>
+      <td><input class="cel txt" style="width:220px" value="${esc(f.name)}" onchange="setFactor('${f.id}','name',this.value)"></td>
+      <td class="n"><input class="cel w" value="${f.weight}" onchange="setFactor('${f.id}','weight',this.value)"></td>
+      <td class="n"><button class="btn sm dgr" onclick="removeFactor('${f.id}')">Remove</button></td></tr>`).join('')}
+    </tbody></table></div></div>`;
+  h+=`<div class="card"><h3>Tiers &amp; win probability</h3><div class="bd flush"><table><thead><tr>
+    <th>Tier</th><th class="n">Min score</th><th class="n">Win probability</th></tr></thead><tbody>
+    ${[...CFG.tiers].sort((a,b)=>b.minScore-a.minScore).map(t=>`<tr>
+      <td><span class="pill ${t.name.toLowerCase()}">${esc(t.name)}</span></td>
+      <td class="n"><input class="cel w" value="${t.minScore}" onchange="setTier('${t.id}','minScore',this.value)"></td>
+      <td class="n"><input class="cel w" value="${Math.round((t.probability||0)*100)}" onchange="setTier('${t.id}','probability',this.value)">%</td></tr>`).join('')}
+    </tbody></table></div></div>`;
+  return h;
+}
+
+function pageForecast(){
+  const openDeals=CFG.deals.filter(d=>d.stage!=='Closed Won'&&d.stage!=='Closed Lost');
+  const buckets=['Overdue','This month','Next month','Later','No date'];
+  const grouped={}; buckets.forEach(b=>grouped[b]=[]);
+  openDeals.forEach(d=>{ grouped[monthBucket(d.closeDate)].push(d); });
+  const maxWeighted=Math.max(1,...buckets.map(b=>sum(grouped[b].map(d=>dealMetrics(d).weightedValue))));
+
+  let h=`<div class="phead"><div><h1>Forecast</h1>
+    <p>Open deals grouped by close-date bucket, weighted by each deal's tier probability. This is a planning view, not a
+      prediction — every number traces back to a deal's score and an editable tier probability.</p></div></div>`;
+
+  h+=`<div class="card"><h3>By close date</h3><div class="bd">
+    ${buckets.filter(b=>grouped[b].length).map(b=>{
+      const rows=grouped[b]; const val=sum(rows.map(d=>d.value)); const wv=sum(rows.map(d=>dealMetrics(d).weightedValue));
+      const pct=Math.round((wv/maxWeighted)*100);
+      return `<div class="bucketrow"><div class="lbl">${esc(b)}</div>
+        <div class="bar"><i style="width:${pct}%"></i></div>
+        <div class="mini n">${rows.length} deal${rows.length===1?'':'s'}</div>
+        <div class="n" style="font-weight:700">${F.mk(wv)}<div class="mini" style="font-weight:400">of ${F.mk(val)}</div></div></div>`;
+    }).join('') || '<div class="empty">No open deals.</div>'}
+    </div></div>`;
+
+  h+=`<div class="card"><h3>By tier</h3><div class="bd flush"><table><thead><tr>
+    <th>Tier</th><th class="n">Deals</th><th class="n">Pipeline value</th><th class="n">Weighted value</th></tr></thead><tbody>
+    ${[...CFG.tiers].sort((a,b)=>b.minScore-a.minScore).map(t=>{
+      const rows=openDeals.filter(d=>tierFor(weightedScore(d)).id===t.id);
+      const val=sum(rows.map(d=>d.value)); const wv=sum(rows.map(d=>dealMetrics(d).weightedValue));
+      return `<tr><td><span class="pill ${t.name.toLowerCase()}">${esc(t.name)}</span></td>
+        <td class="n">${rows.length}</td><td class="n">${F.mk(val)}</td><td class="n">${F.mk(wv)}</td></tr>`;
+    }).join('')}
+    </tbody></table></div></div>`;
+
+  h+=`<div class="card hl"><h3>Total</h3><div class="bd">
+    <p style="margin:0">${openDeals.length} open deal${openDeals.length===1?'':'s'} worth ${F.mk(sum(openDeals.map(d=>d.value)))} at face value;
+    weighted by tier probability, that's ${F.mk(sum(openDeals.map(d=>dealMetrics(d).weightedValue)))} in the forecast.</p></div></div>`;
+  return h;
+}
+
+function pageSync(){
+  let h=`<div class="phead"><div><h1>Shared configuration &amp; imports</h1>
+    <p>Tracking IDs come from Norma. Target-list rows come from Prospectus (export "for Augur" on its Target list page).</p></div></div>`;
+  h+=`<div class="card"><h3>Import shared config from Norma <span class="sp"></span>
+      ${CFG.meta.normaSyncedAt?`<span class="pill ok">Last synced ${F.dt(CFG.meta.normaSyncedAt)} (v${CFG.meta.normaConfigVersion||'?'})</span>`:`<span class="pill warn">Never synced</span>`}
+      <a class="btn sm" href="Norma.html" target="tool_Norma">Open Norma</a></h3>
+    <div class="bd"><label class="btn pri">Choose Norma export file…<input type="file" accept="application/json" style="display:none" onchange="handleNormaImportFile(this.files[0])"></label></div></div>`;
+  h+=`<div class="card"><h3>Import target list from Prospectus <span class="sp"></span>
+      ${CFG.meta.prospectusSyncedAt?`<span class="pill ok">Last imported ${F.dt(CFG.meta.prospectusSyncedAt)}</span>`:`<span class="pill warn">Never imported</span>`}
+      <a class="btn sm" href="Prospectus.html" target="tool_Prospectus">Open Prospectus</a></h3>
+    <div class="bd"><label class="btn pri">Choose Prospectus export file…<input type="file" accept="application/json" style="display:none" onchange="handleProspectusImportFile(this.files[0])"></label>
+    <p class="mini" style="margin-top:8px">Each imported row becomes a new deal at $0 value and a stage mapped from its Prospectus status — score it and set a value and close date to bring it into the forecast.</p></div></div>`;
+  h+=`<div class="card"><h3>Import reference list from Cursus <span class="sp"></span>
+      ${CFG.meta.cursusRefSyncedAt?`<span class="pill ok">Last synced ${F.dt(CFG.meta.cursusRefSyncedAt)} (${CFG.referenceList.campaigns.length} campaigns)</span>`:`<span class="pill warn">Never synced</span>`}
+      <a class="btn sm" href="Cursus.html" target="tool_Cursus">Open Cursus</a></h3>
+    <div class="bd">
+      <p class="mini">In Cursus: Sync → "Export reference list". Importing it here replaces the old free-text campaign
+        reference with a real dropdown on the Deals page — that's what makes revenue-contribution reporting by
+        campaign possible, since a typed string can't be reliably rolled up.</p>
+      <label class="btn pri">Choose Cursus reference file…<input type="file" accept="application/json" style="display:none" onchange="handleCursusRefFile(this.files[0])"></label>
+    </div></div>`;
+  h+=`<div class="card"><h3>Local autosave</h3><div class="bd">
+    <p class="mini" style="margin:0 0 8px">Deals and scoring save to this browser automatically. Local only — export/import is still how
+      data reaches other tools.</p>
+    <button class="btn sm dgr" onclick="clearLocal()">Clear local autosave</button></div></div>`;
+  h+=`<div class="card"><h3>Activity log</h3><div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>When</th><th>What</th><th>Detail</th></tr></thead><tbody>
+      ${!CFG.audit.length?`<tr><td colspan="3" class="empty">Nothing yet.</td></tr>`:
+        CFG.audit.map(a=>`<tr><td class="mini">${esc(a.ts)}</td><td>${esc(a.what)}</td><td class="mini">${esc(a.detail)}</td></tr>`).join('')}
+      </tbody></table></div></div></div>`;
+  return h;
+}
+
+function pageContacts(){
+  let h=`<div class="phead"><div><h1>Contacts</h1>
+    <p>Who you actually talk to at each account, and a running log of touchpoints — the piece deals and
+      target-account filtering don't cover on their own.</p></div></div>`;
+  h+=`<div class="card"><h3>Contacts <span class="sp"></span><span class="pill n">${CFG.contacts.length}</span>
+      <button class="btn sm pri" onclick="addContact()">Add contact</button></h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>Name</th><th>Title</th><th>Account</th><th>Email</th><th>Phone</th><th></th></tr></thead><tbody>
+    ${!CFG.contacts.length?`<tr><td colspan="6" class="empty">No contacts yet.</td></tr>`:CFG.contacts.map(c=>`<tr>
+      <td><input class="cel txt" style="width:150px" value="${esc(c.name)}" onchange="setIn('contacts','${c.id}','name',this.value)"></td>
+      <td><input class="cel txt" style="width:150px" value="${esc(c.title)}" onchange="setIn('contacts','${c.id}','title',this.value)"></td>
+      <td><input class="cel txt" style="width:150px" value="${esc(c.account)}" onchange="setIn('contacts','${c.id}','account',this.value)"></td>
+      <td><input class="cel txt" style="width:170px" value="${esc(c.email)}" onchange="setIn('contacts','${c.id}','email',this.value)"></td>
+      <td><input class="cel txt" style="width:130px" value="${esc(c.phone)}" onchange="setIn('contacts','${c.id}','phone',this.value)"></td>
+      <td class="n"><button class="btn sm" onclick="addActivity('${c.id}')">Log touchpoint</button>
+        <button class="btn sm dgr" onclick="removeContact('${c.id}')">Remove</button></td></tr>`).join('')}
+    </tbody></table></div></div></div>`;
+
+  const sorted=CFG.activities.slice().sort((a,b)=>(b.occurredAt||'').localeCompare(a.occurredAt||''));
+  h+=`<div class="card"><h3>Touchpoints <span class="sp"></span><span class="pill n">${CFG.activities.length}</span></h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>Date</th><th>Contact</th><th>Type</th><th>Summary</th><th>Related deal</th><th>Logged by</th><th></th></tr></thead><tbody>
+    ${!sorted.length?`<tr><td colspan="7" class="empty">No touchpoints logged yet — add a contact, then log one.</td></tr>`:sorted.map(a=>{
+      const contact=byId(CFG.contacts,a.contactId);
+      return `<tr>
+        <td><input class="cel txt" type="date" value="${a.occurredAt||''}" onchange="setIn('activities','${a.id}','occurredAt',this.value)"></td>
+        <td>${esc(contact?contact.name:'—')}</td>
+        <td><select class="cel txt" style="width:100px" onchange="setIn('activities','${a.id}','type',this.value)">
+          ${['Call','Email','Meeting','Note'].map(t=>`<option ${t===a.type?'selected':''}>${t}</option>`).join('')}</select></td>
+        <td><input class="cel txt" style="width:260px" value="${esc(a.summary)}" onchange="setIn('activities','${a.id}','summary',this.value)"></td>
+        <td><select class="cel txt" style="width:160px" onchange="setIn('activities','${a.id}','dealId',this.value||null)">
+          <option value="">— none —</option>
+          ${CFG.deals.map(d=>`<option value="${d.id}" ${d.id===a.dealId?'selected':''}>${esc(d.name)}</option>`).join('')}</select></td>
+        <td class="mini">${esc(a.loggedBy)}</td>
+        <td class="n"><button class="btn sm dgr" onclick="removeActivity('${a.id}')">Remove</button></td></tr>`;}).join('')}
+    </tbody></table></div></div></div>`;
+  return h;
+}
+
+const PAGES=[
+  {id:'home',     ix:'0', label:'Home',           fn:pageHome},
+  {id:'deals',    ix:'1', label:'Deals',          fn:pageDeals},
+  {id:'scoring',  ix:'2', label:'Scoring model',  fn:pageScoring},
+  {id:'forecast', ix:'3', label:'Forecast',       fn:pageForecast},
+  {id:'contacts', ix:'4', label:'Contacts',       fn:pageContacts},
+  {id:'sync',     ix:'5', label:'Shared config',  fn:pageSync}
+];
+function renderSide(){
+  let h='<h4>Augur</h4>';
+  PAGES.forEach(p=>{ h+=`<a class="navi ${UI.page===p.id?'on':''}" href="#" onclick="go('${p.id}');return false">
+    <span class="ix">${p.ix}</span><span>${p.label}</span></a>`; });
+  return h;
+}
+function renderTnAcct(){
+  const nm=_myProfile?_myProfile.name:'';
+  const initials=nm?nm.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase():'?';
+  return `<span class="tn-avatar">${esc(initials)}</span>
+    <div class="tn-who"><b>${esc(nm||'—')}</b><span>Augur</span></div>
+    <a class="tn-signout" href="#" onclick="doSignOut();return false;">Sign out</a>`;
+}
+/* Consistent cross-module bar: search jumps between the 8 tools, same list
+   and behavior as every other file -- not this tool's own deals/contacts. */
+const MODULES=[
+  {id:'Ordo',label:'Ordo',desc:'Funnel planning & forecasting',color:'#1F3AC7'},
+  {id:'Cursus',label:'Cursus',desc:'Campaign & activity execution',color:'#0E7C6B'},
+  {id:'Eventus',label:'Eventus',desc:'Event planning & logistics',color:'#B5480E'},
+  {id:'Custodia',label:'Custodia',desc:'Asset register',color:'#3B6E1F'},
+  {id:'Prospectus',label:'Prospectus',desc:'ICP filters & opportunity reports',color:'#9C2B3C'},
+  {id:'Augur',label:'Augur',desc:'Lead & deal scoring',color:'#5A3E9C'},
+  {id:'Schema',label:'Schema',desc:'Process maps & workflows',color:'#3A5A8C'},
+  {id:'Norma',label:'Norma',desc:'Shared configuration',color:'#B5730E'}
+];
+const THIS_MODULE='Augur';
+function renderTnModuleLinks(){
+  return MODULES.map(m=>m.id===THIS_MODULE
+    ? `<span class="tn-link on"><span class="mk" style="background:${m.color}">${m.label[0]}</span>${m.label}</span>`
+    : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}"><span class="mk" style="background:${m.color}">${m.label[0]}</span>${m.label}</a>`
+  ).join('');
+}
+function tnSearchResults(q){
+  q=(q||'').trim().toLowerCase(); if(!q) return [];
+  return MODULES.filter(m=>m.label.toLowerCase().includes(q)||m.desc.toLowerCase().includes(q)).slice(0,8);
+}
+let _tnResultList=[];
+function tnSearch(q){
+  _tnResultList=tnSearchResults(q);
+  const box=document.getElementById('tnResults');
+  if(!q||!q.trim()){ box.innerHTML=''; return; }
+  box.innerHTML = `<div class="tn-results">${
+    _tnResultList.length ? _tnResultList.map((m,i)=>`<a href="#" onclick="tnPick(${i});return false"><span class="ty">Module</span><div>${esc(m.label)}</div></a>`).join('')
+    : '<div class="none">No matches.</div>'
+  }</div>`;
+}
+window.tnSearch=tnSearch;
+function tnPick(i){
+  const m=_tnResultList[i]; if(!m) return;
+  window.open(m.id+'.html','tool_'+m.id);
+  document.getElementById('tnResults').innerHTML='';
+  document.getElementById('tnSearchInput').value='';
+}
+window.tnPick=tnPick;
+function tnSearchKey(ev){
+  if(ev.key==='Enter' && _tnResultList.length){ tnPick(0); }
+  if(ev.key==='Escape'){ document.getElementById('tnResults').innerHTML=''; ev.target.blur(); }
+}
+window.tnSearchKey=tnSearchKey;
+function render(){
+  const p=PAGES.find(x=>x.id===UI.page)||PAGES[0];
+  document.getElementById('side').innerHTML=renderSide();
+  document.getElementById('tnLinks').innerHTML=renderTnModuleLinks();
+  document.getElementById('tnAcct').innerHTML=renderTnAcct();
+  document.getElementById('main').innerHTML=p.fn();
+  saveLocal();
+  scheduleSupabaseSave();
+}
+sb.auth.onAuthStateChange((event)=>{
+  if(event==='SIGNED_OUT'){
+    if(_skipNextSignOutReload){ _skipNextSignOutReload=false; return; }
+    location.reload();
+  }
+});
+bootApp();
+</script>
+</body>
+</html>

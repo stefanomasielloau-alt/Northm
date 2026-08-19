@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Custodia — Asset Register</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+  --nav:#3B6E1F; --nav-dk:#2C5217; --ink:#10182B; --ink-2:#45506B; --ink-3:#7C879E;
+  --surface:#FFFFFF; --canvas:#F2F4F8; --canvas-2:#E9EDF4; --line:#DFE3EB; --line-2:#EEF1F6;
+  --input:#7B3FE4; --input-bg:#F7F2FE; --calc:#45506B;
+  --ok:#0E8A5F; --ok-bg:#E7F5EF; --warn:#C8791A; --warn-bg:#FDF4E7; --bad:#D0342C; --bad-bg:#FCEDEC;
+  --r:8px; --r-sm:5px;
+  --sh:0 1px 2px rgba(16,24,43,.05), 0 1px 3px rgba(16,24,43,.04);
+  --sh-2:0 4px 16px rgba(16,24,43,.10);
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:var(--sans); background:var(--canvas); color:var(--ink); font-size:13.5px;}
+.sp{flex:1}
+.topnav{background:var(--surface); border-bottom:1px solid var(--line); min-height:56px; display:flex; align-items:center; padding:0 18px; gap:16px; position:sticky; top:0; z-index:50; box-shadow:var(--sh); flex-wrap:wrap;}
+.tn-brand{display:flex; align-items:center; gap:9px; flex-shrink:0; padding:8px 0;}
+.tn-mk{width:34px;height:34px;border-radius:8px;background:var(--nav);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px;flex-shrink:0;}
+.tn-brandtext{line-height:1.15}
+.tn-name{font-weight:800; font-size:14.5px; color:var(--ink);}
+.tn-sub{font-size:9px; letter-spacing:.08em; color:var(--ink-3); font-weight:700; text-transform:uppercase;}
+.tn-links{display:flex; align-items:center; gap:2px; flex:1; overflow-x:auto; min-width:0;}
+.tn-link{padding:7px 12px; border-radius:6px; font-size:12.5px; font-weight:600; color:var(--ink-2); text-decoration:none; white-space:nowrap; flex-shrink:0; display:inline-flex; align-items:center; gap:6px;}
+.tn-link:hover{background:var(--canvas-2)}
+.tn-link.on{background:var(--canvas-2); color:var(--ink); cursor:default;}
+.tn-link .mk{width:16px;height:16px;border-radius:4px;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:9px;flex-shrink:0;}
+.tn-search{position:relative; flex-shrink:0;}
+.tn-search .bx{display:flex; align-items:center; gap:6px; background:var(--canvas); border:1px solid var(--line); border-radius:7px; padding:6px 10px; width:190px;}
+.tn-search input{border:none;background:transparent;outline:none;font-size:12.5px;flex:1;color:var(--ink); min-width:0;}
+.tn-kbd{font-size:10px;color:var(--ink-3);background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:1px 5px;flex-shrink:0;}
+.tn-results{position:absolute; top:calc(100% + 4px); left:0; width:260px; background:var(--surface); border:1px solid var(--line); border-radius:8px; box-shadow:var(--sh-2); z-index:60; max-height:320px; overflow-y:auto;}
+.tn-results a{display:block; padding:8px 12px; text-decoration:none; color:var(--ink); font-size:12.5px; border-bottom:1px solid var(--line-2);}
+.tn-results a:last-child{border-bottom:none}
+.tn-results a:hover{background:var(--canvas-2)}
+.tn-results .ty{font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-3); font-weight:700;}
+.tn-results .none{padding:10px 12px; font-size:12px; color:var(--ink-3);}
+.tn-acct{display:flex; align-items:center; gap:8px; flex-shrink:0; padding:8px 0;}
+.tn-avatar{width:30px;height:30px;border-radius:50%;background:var(--nav);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex-shrink:0;}
+.tn-who{font-size:11.5px; line-height:1.3;}
+.tn-who b{display:block; color:var(--ink); font-weight:700;}
+.tn-who span{color:var(--ink-3);}
+.tn-signout{font-size:10.5px; color:var(--ink-3); text-decoration:none;}
+.tn-signout:hover{color:var(--ink)}
+/* ---------- restored left-hand page nav (this tool's own pages) ---------- */
+.wrap{display:flex; min-height:calc(100vh - 56px);}
+.side{width:210px; background:var(--surface); border-right:1px solid var(--line); padding:10px 0; flex-shrink:0;}
+.side h4{font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3); margin:14px 14px 6px;}
+.navi{display:flex; align-items:center; gap:8px; padding:7px 14px; text-decoration:none; color:var(--ink-2); font-size:13px; border-left:3px solid transparent;}
+.navi:hover{background:var(--canvas-2)}
+.navi.on{background:var(--canvas-2);border-left-color:var(--nav);color:var(--ink);font-weight:700}
+.navi .ix{width:16px; text-align:center; font-size:11px; color:var(--ink-3);}
+.navi.on .ix{color:var(--nav)}
+.main{flex:1; padding:18px 22px; max-width:none;}
+.phead{display:flex; align-items:flex-start; gap:14px; margin-bottom:14px;}
+.phead h1{font-size:19px; margin:0 0 3px;}
+.phead p{margin:0; color:var(--ink-2); font-size:12.5px; max-width:680px;}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); margin-bottom:14px; box-shadow:var(--sh);}
+.card h3{display:flex; align-items:center; gap:8px; margin:0; padding:11px 14px; border-bottom:1px solid var(--line-2); font-size:13.5px;}
+.card .bd{padding:14px;}
+.card .bd.flush{padding:0;}
+.scroll{overflow-x:auto;}
+.scroll.cap{max-height:560px; overflow-y:auto;}
+table{width:100%; border-collapse:collapse; font-size:12.5px;}
+th{text-align:left; padding:8px 10px; background:var(--canvas); color:var(--ink-2); font-weight:700; font-size:11.5px; text-transform:uppercase; letter-spacing:.02em; position:sticky; top:0;}
+td{padding:6px 10px; border-bottom:1px solid var(--line-2); vertical-align:middle;}
+td.n,th.n{text-align:right;}
+td.lb{font-weight:600;}
+.empty{padding:18px; text-align:center; color:var(--ink-3); font-size:12.5px;}
+.mini{font-size:11.5px; color:var(--ink-3);}
+.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px;}
+.kpi{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:11px 13px;}
+.kpi.hl{border-color:var(--nav); background:linear-gradient(180deg,#fff,rgba(59,110,31,.05));}
+.kpi .k{font-size:11px; color:var(--ink-3); margin-bottom:3px;}
+.kpi .kpi-v{font-size:19px; font-weight:800; font-variant-numeric:tabular-nums;}
+.kpi.hl .kpi-v{color:var(--nav)}
+.kpi .sub{font-size:11px; color:var(--ink-3); margin-top:2px;}
+.row{display:flex; align-items:center; gap:6px;}
+.btn{background:#fff; border:1px solid var(--line); border-radius:6px; padding:6px 11px; font-size:12.5px; cursor:pointer; color:var(--ink); text-decoration:none; display:inline-flex; align-items:center; gap:5px;}
+.btn:hover{background:var(--canvas-2)}
+.btn.sm{padding:4px 9px; font-size:11.5px;}
+.btn.pri{background:var(--nav);border-color:var(--nav);color:#fff}
+.btn.pri:hover{background:var(--nav-dk)}
+.btn.dgr{color:var(--bad); border-color:#F3C9C6;}
+.btn.dgr:hover{background:var(--bad-bg)}
+.pill{display:inline-block; padding:2px 8px; border-radius:20px; font-size:10.5px; font-weight:700; background:var(--canvas-2); color:var(--ink-2);}
+.pill.ok{background:var(--ok-bg); color:var(--ok);}
+.pill.warn{background:var(--warn-bg); color:var(--warn);}
+.pill.bad{background:var(--bad-bg); color:var(--bad);}
+.pill.n{background:var(--canvas-2); color:var(--ink-2);}
+/* Shared status (RAG) pill -- same semantic scale + class names as Cursus/Eventus/Ordo
+   (2026-08-13): grey not-started/not-tracked, blue on-track, amber at-risk, red behind/
+   critical, green good, plus a gold star for "exceeding" where that concept applies. */
+.rag{display:inline-flex; align-items:center; gap:3px; padding:2px 8px; border-radius:20px; font-size:10.5px; font-weight:700; white-space:nowrap;}
+.rag-grey{background:#E7EAF0; color:#5B6472;}
+.rag-blue{background:#E3E8FD; color:#1F3AC7;}
+.rag-amber{background:#FBEBD3; color:#B5730E;}
+.rag-red{background:#F8DEE0; color:#9C2B3C;}
+.rag-green{background:#DCF3E9; color:#0E8A5F;}
+.rag-exceed{color:#C9971A;}
+.note{background:#EEF6E9;border-left:3px solid var(--nav);border-radius:0 var(--r-sm) var(--r-sm) 0; padding:10px 14px; margin-bottom:14px; font-size:12px; color:var(--ink-2);}
+.in,input.in,select.in,.cel{border:1px solid #E1D3FA; border-radius:5px; padding:5px 7px; font-size:12.5px; background:var(--input-bg); color:var(--ink); font-family:inherit;}
+.in:focus,.cel:focus{outline:2px solid var(--input); outline-offset:0;}
+.cel.txt{width:100%;}
+.cel.w{width:70px;}
+.toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:9px 16px; border-radius:20px; font-size:12.5px; box-shadow:var(--sh-2); z-index:200; animation:fade .2s ease;}
+@keyframes fade{from{opacity:0; transform:translateX(-50%) translateY(6px)} to{opacity:1; transform:translateX(-50%) translateY(0)}}
+.lbl{font-size:11px; color:var(--ink-3); font-weight:700; text-transform:uppercase; letter-spacing:.02em;}
+.authwrap{max-width:360px;margin:14vh auto;padding:32px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-2);}
+.authwrap h2{margin:0 0 4px;font-size:18px;}
+.authwrap p.sub{margin:0 0 20px;color:var(--ink-2);font-size:12.5px;}
+.authwrap input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;margin-bottom:10px;box-sizing:border-box;}
+.authwrap button{width:100%;padding:10px;border:none;border-radius:6px;background:var(--ink);color:#fff;font-weight:700;font-size:13px;cursor:pointer;}
+.authwrap .err{color:#B3261E;font-size:12px;margin:-4px 0 10px;min-height:14px;}
+</style>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<div id="authGate" style="display:none"></div>
+<div class="topnav" id="topnav">
+  <div class="tn-brand"><span class="tn-mk">C</span><div class="tn-brandtext"><div class="tn-name">Custodia</div><div class="tn-sub">All modules</div></div></div>
+  <nav class="tn-links" id="tnLinks"></nav>
+  <div class="tn-search">
+    <div class="bx"><input id="tnSearchInput" placeholder="Search modules..." oninput="tnSearch(this.value)" onkeydown="tnSearchKey(event)"><span class="tn-kbd">/</span></div>
+    <div id="tnResults"></div>
+  </div>
+  <div class="tn-acct" id="tnAcct"></div>
+  <script>document.addEventListener('click',function(e){var r=document.getElementById('tnResults');if(r&&!e.target.closest('.tn-search'))r.innerHTML='';});</script>
+</div>
+<div class="wrap" id="wrap">
+  <nav class="side" id="side"></nav>
+  <main class="main" id="main"></main>
+</div>
+<div id="layer"></div>
+<script>
+/* ============================================================================
+   CUSTODIA — high-level asset register. Latin for "safekeeping, guardianship."
+   Built from a reference workbook that split assets across separate Phys/Digital/Swag
+   sheets plus a Reference-tracking sheet. Collapsed to v1's simplest workable shape: one
+   Assets table with a Category dropdown (Physical/Digital/Swag) instead of three parallel
+   sheets, plus a separate References list for customer references usable in sales -- a
+   different concept (people, not stock) that happened to share the same source workbook.
+   Standalone file, own CFG, no server -- same Norma bridge as every other module.
+
+   Supabase note: assets/asset_references/asset_transactions/cost_buckets/audit_log now
+   live in the shared database. CFG.referenceList.campaigns is populated directly from the
+   live shared campaigns table on load -- the JSON import-from-Cursus function below is kept
+   as a manual fallback but is no longer the primary path.
+   ============================================================================ */
+const SUPABASE_URL = 'https://rcmocuubeajnqjltuwdv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjbW9jdXViZWFqbnFqbHR1d2R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzMTgzNTQsImV4cCI6MjEwMTg5NDM1NH0.rZuoKPmmkpNe8Ug8Gu_KmpoKyibigJccdpoRGcLt3pY';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* real UUIDs now — every DB primary key is uuid type. Prefix arg kept for call-site
+   compatibility (uid('ast'), uid('ref') etc still work) but no longer affects the id itself. */
+const uid = _p => crypto.randomUUID();
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const sum = a => a.reduce((x,y)=>x+(y||0),0);
+const byId = (a,id) => a.find(x=>x.id===id);
+const F = {
+  n:(v,d=0)=>(v==null||isNaN(v))?'—':Number(v).toLocaleString('en-AU',{minimumFractionDigits:d,maximumFractionDigits:d}),
+  mk:v=>{ if(v==null||isNaN(v))return '—'; const a=Math.abs(v),s=v<0?'-':'';
+    if(a>=1e6) return s+'$'+(a/1e6).toFixed(a>=1e7?1:2)+'M';
+    if(a>=1e3) return s+'$'+Math.round(a/1e3)+'k'; return s+'$'+Math.round(a); },
+  d:iso=>{ if(!iso)return '—'; return new Date(iso+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'2-digit'}); },
+  dt:iso=>{ if(!iso)return '—'; return new Date(iso).toLocaleString('en-AU',{day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'}); }
+};
+
+const CATEGORIES=['Physical','Digital','Swag'];
+
+/* ---------- shared status (RAG) colour system ----------
+   Same semantic scale + class names as Cursus/Eventus/Ordo (2026-08-13). Custodia's
+   signal is stock health, using the fields already on the asset (stock/lowStockAt) --
+   no "exceeding" star here, since "well stocked" isn't really an outcome to celebrate
+   the way beating a budget or an attendance target is. */
+const RAG_THRESHOLDS = {
+  criticalStockRatio: 0.5 // stock <= (lowStockAt * this) => red/Critical, else amber/Low stock
+};
+function ragForAsset(a){
+  if(a.category==='Digital') return {tone:'blue',label:'Active'};
+  if(a.stock==null) return {tone:'grey',label:'Not tracked'};
+  if(a.stock<=0) return {tone:'red',label:'Out of stock'};
+  if(a.lowStockAt!=null){
+    if(a.stock<=a.lowStockAt*RAG_THRESHOLDS.criticalStockRatio) return {tone:'red',label:'Critical'};
+    if(a.stock<=a.lowStockAt) return {tone:'amber',label:'Low stock'};
+  }
+  return {tone:'green',label:'In stock'};
+}
+function ragPillHtml(rag){
+  return `<span class="rag rag-${rag.tone}">${esc(rag.label)}${rag.exceed?' <span class="rag-exceed">★</span>':''}</span>`;
+}
+
+const CFG = {
+  meta:{ normaSyncedAt:null, normaConfigVersion:null, cursusRefSyncedAt:null, augurSyncedAt:null },
+  /* populated directly from the live shared campaigns table on load now (see
+     loadFromSupabase) -- the manual JSON-import-from-Cursus path below still works as a
+     fallback but is no longer needed for this to be populated. */
+  referenceList:{ campaigns:[], activities:[] },
+  /* imported from Augur's closed-won export -- lets asset spend be compared against the revenue
+     a campaign that used the asset actually closed. Not wired to the database this pilot. */
+  wonDeals:[],
+  /* local/static for now, not persisted -- see Cursus/Norma for the same scope note. */
+  trackingConfig:null,
+  /* everything below is Supabase-backed now -- populated by loadFromSupabase(). */
+  costBuckets:[],
+  assets:[],
+  references:[],
+  transactions:[],
+  audit:[]
+};
+
+const UI = { page:'home' };
+
+function logAudit(what,detail){
+  CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
+  if(CFG.audit.length>150)CFG.audit.pop();
+}
+function toast(msg){
+  const l=document.getElementById('layer');
+  const d=document.createElement('div'); d.className='toast'; d.textContent=msg;
+  l.appendChild(d); setTimeout(()=>d.remove(),2200);
+}
+function go(page){ UI.page=page; render(); }
+window.go=go;
+function setIn(field,id,key,val,type){
+  const row=byId(CFG[field],id); if(!row)return;
+  let v=val;
+  if(type==='money'||type==='num'){ v=val===''?null:parseFloat(String(val).replace(/[$,\\s]/g,'')); if(v!=null&&isNaN(v))v=null; }
+  row[key]=v; logAudit('edit',field+'.'+key); render();
+}
+window.setIn=setIn;
+
+/* ---------- local autosave (survives a refresh/close; export/import is still the
+   portable, cross-tool bridge) ---------- */
+const LS_KEY='custodia_autosave_v1';
+function saveLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(CFG)); }catch(e){} }
+function loadLocal(){
+  try{
+    const raw=localStorage.getItem(LS_KEY); if(!raw) return false;
+    const parsed=JSON.parse(raw);
+    Object.keys(parsed).forEach(k=>{ CFG[k]=parsed[k]; });
+    return true;
+  }catch(e){ return false; }
+}
+function clearLocal(){
+  localStorage.removeItem(LS_KEY);
+  toast('Local autosave cleared — reload the page to reset to the built-in defaults.');
+}
+window.clearLocal=clearLocal;
+
+/* ============================================================================
+   Supabase data layer — whole-plan load/save, same pattern as Ordo/Cursus/Norma.
+   Custodia owns assets/asset_references/asset_transactions; cost_buckets and campaigns
+   are shared, read-only dimensions here (Norma and Cursus/Ordo own writing them).
+   ============================================================================ */
+let _orgId = null, _myProfile = null, _saveTimer = null, _realtimeChannel = null;
+/* Set right before an internal (non-user-initiated) signOut() -- e.g. bootApp()'s error path
+   below -- so the global onAuthStateChange listener knows to skip its reload-on-SIGNED_OUT and
+   let the error message stay on screen instead of wiping it out immediately. Without this, the
+   error flashes for a frame and then vanishes, which is exactly the "flash and it's gone" bug. */
+let _skipNextSignOutReload = false;
+
+async function upsertRows(table, rows, mapFn){
+  if(!rows || !rows.length) return;
+  try{
+    const payload = rows.map(r=>Object.assign(mapFn(r), {org_id:_orgId}));
+    const { error } = await sb.from(table).upsert(payload);
+    if(error) throw error;
+  }catch(e){ console.error('Save failed for '+table, e); toast('Could not save '+table+' to the database — see console.'); }
+}
+
+/* Fire-and-forget real delete, paired with upsertRows above. Called immediately after the
+   local CFG array filter in every remove*() function so the UI stays instant while the row
+   actually leaves the database (previously these were UPSERT-only, so removed rows silently
+   reappeared on next load). */
+async function deleteRow(table, id){
+  if(!_orgId || !id) return;
+  try{
+    const { error } = await sb.from(table).delete().eq('id', id).eq('org_id', _orgId);
+    if(error) throw error;
+  }catch(e){ console.error('Delete failed for '+table, e); toast('Removed here, but could not delete from the database — see console.'); }
+}
+
+async function saveToSupabase(){
+  if(!_orgId) return;
+  await Promise.all([
+    upsertRows('assets', CFG.assets, a=>({
+      id:a.id,name:a.name,category:a.category,tags:a.tags||'',stock:a.stock,low_stock_at:a.lowStockAt,
+      cost_per:a.costPer||0,purchase_date:a.purchaseDate||null,location:a.location||'',
+      campaigns_used:a.campaignsUsed||'',campaign_id:a.campaignId||null,source_task_id:a.sourceTaskId||null
+    })),
+    upsertRows('asset_references', CFG.references, r=>({id:r.id,client_name:r.clientName,contact_name:r.contactName||'',notes:r.notes||''})),
+    upsertRows('asset_transactions', CFG.transactions, t=>({
+      id:t.id,asset_id:t.assetId,date:t.date||null,type:t.type,qty:t.qty||0,before:t.before,after:t.after,
+      campaign_id:t.campaignId||null,campaign_ref:t.campaignRef||'',notes:t.notes||''
+    })),
+    upsertRows('audit_log', CFG.audit, a=>({ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null}))
+  ]);
+}
+
+function scheduleSupabaseSave(){
+  if(!_orgId) return;
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(()=>{ saveToSupabase(); }, 900);
+}
+
+async function loadFromSupabase(){
+  const { data:{ user: authUser } } = await sb.auth.getUser();
+  if(!authUser) throw new Error('Not signed in.');
+  const { data: prof, error: profErr } = await sb.from('profiles')
+    .select('id,name,org_id,role_id,region_ids,cross_region').eq('id', authUser.id).single();
+  if(profErr || !prof){ const e = new Error('No profile linked yet.'); e.noProfile = true; throw e; }
+  _myProfile = prof; _orgId = prof.org_id;
+
+  const results = await Promise.all([
+    sb.from('assets').select('id,name,category,tags,stock,low_stock_at,cost_per,purchase_date,location,campaigns_used,campaign_id,source_task_id'),
+    sb.from('asset_references').select('id,client_name,contact_name,notes'),
+    sb.from('asset_transactions').select('id,asset_id,date,type,qty,before,after,campaign_id,campaign_ref,notes').order('date',{ascending:false}),
+    sb.from('cost_buckets').select('id,code,label'),
+    sb.from('campaigns').select('id,name,programme_id'),
+    sb.from('audit_log').select('ts,what,detail').order('ts',{ascending:false}).limit(200)
+  ]);
+  const [assetsR,referencesR,transactionsR,costBucketsR,campaignsR,auditR] = results;
+  for(const r of results){ if(r.error) throw r.error; }
+
+  CFG.assets = (assetsR.data||[]).map(a=>({
+    id:a.id,name:a.name,category:a.category,tags:a.tags||'',stock:a.stock,lowStockAt:a.low_stock_at,
+    costPer:a.cost_per,purchaseDate:a.purchase_date||'',location:a.location||'',
+    campaignsUsed:a.campaigns_used||'',campaignId:a.campaign_id||null,sourceTaskId:a.source_task_id||null
+  }));
+  CFG.references = (referencesR.data||[]).map(r=>({id:r.id,clientName:r.client_name,contactName:r.contact_name||'',notes:r.notes||''}));
+  CFG.transactions = (transactionsR.data||[]).map(t=>({
+    id:t.id,assetId:t.asset_id,date:t.date||'',type:t.type,qty:t.qty,before:t.before,after:t.after,
+    campaignId:t.campaign_id||null,campaignRef:t.campaign_ref||'',notes:t.notes||''
+  }));
+  CFG.costBuckets = (costBucketsR.data||[]).map(c=>({id:c.id,code:c.code,label:c.label}));
+  /* live campaigns, replacing the old stale JSON-import bridge -- same field shape
+     (id,name,programmeName) the existing pages already read from CFG.referenceList.campaigns. */
+  CFG.referenceList.campaigns = (campaignsR.data||[]).map(c=>({id:c.id,name:c.name,programmeName:null}));
+  CFG.audit = (auditR.data||[]).map(a=>({ts:a.ts,what:a.what,detail:a.detail}));
+}
+
+/* Live notifications: subscribe to audit_log INSERTs for this org so an action
+   taken in another tab/tool shows up here as a toast without a reload. Own
+   actions are skipped (via user_id) since they're already toasted locally.
+   This is notification-only -- it does NOT live-sync the underlying record
+   (a campaign, a deal, etc); reload or navigate to see that reflected in place. */
+function subscribeRealtime(){
+  if(_realtimeChannel || !_orgId) return;
+  _realtimeChannel = sb.channel('audit_log_org_'+_orgId)
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'audit_log', filter:'org_id=eq.'+_orgId }, payload=>{
+      const row = payload.new || {};
+      if(_myProfile && row.user_id && row.user_id===_myProfile.id) return;
+      /* phase18: a targeted alert_people row carries a resolved target_user_ids list --
+         only toast a viewer whose own id is in it. Absent/empty (almost every row, and
+         any 'org'-targeted alert) keeps the original broadcast-to-everyone behaviour. The
+         row still joins the shared audit trail either way -- only the live toast is gated. */
+      const targeted = Array.isArray(row.target_user_ids) && row.target_user_ids.length>0;
+      const forMe = !targeted || (_myProfile && row.target_user_ids.includes(_myProfile.id));
+      if(forMe) toast((row.what||'Update')+(row.detail?' — '+row.detail:''));
+      if(CFG.audit){ CFG.audit.unshift({ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
+      render();
+    })
+    .subscribe();
+}
+function loginScreenHtml(err){
+  return '<div class="authwrap"><h2>Custodia</h2><p class="sub">Sign in to continue.</p>'+
+    '<div class="err">'+(err?esc(err):'')+'</div>'+
+    '<input id="authEmail" type="email" placeholder="Email" autocomplete="username">'+
+    '<input id="authPass" type="password" placeholder="Password" autocomplete="current-password">'+
+    '<button onclick="doSignIn()">Sign in</button>'+
+    '<p class="sub" style="margin-top:10px">New here? <a href="#" onclick="showSignUpGate();return false;">Create an account</a></p>'+
+    '</div>';
+}
+function signUpScreenHtml(err, notice){
+  return '<div class="authwrap"><h2>Custodia</h2><p class="sub">Create an account.</p>'+
+    '<div class="err">'+(err?esc(err):'')+'</div>'+
+    (notice ? '<div class="sub" style="margin-bottom:8px">'+esc(notice)+'</div>' : '')+
+    '<input id="suEmail" type="email" placeholder="Email" autocomplete="username">'+
+    '<input id="suPass" type="password" placeholder="Password (min 6 characters)" autocomplete="new-password">'+
+    '<input id="suPass2" type="password" placeholder="Confirm password" autocomplete="new-password">'+
+    '<button onclick="doSignUp()">Create account</button>'+
+    '<p class="sub" style="margin-top:10px">Already have an account? <a href="#" onclick="showAuthGate();return false;">Sign in</a></p>'+
+    '</div>';
+}
+function onboardingScreenHtml(err){
+  return '<div class="authwrap"><h2>Custodia</h2><p class="sub">You\'re signed in, but this login isn\'t linked to an organization yet.</p>'+
+    '<div class="err">'+(err?esc(err):'')+'</div>'+
+    '<div style="border:1px solid #ddd;border-radius:8px;padding:12px;margin-bottom:12px">'+
+      '<b>Create a new organization</b>'+
+      '<input id="orgName" type="text" placeholder="Organization name">'+
+      '<input id="orgYourName" type="text" placeholder="Your name">'+
+      '<button onclick="doCreateOrg()">Create organization</button>'+
+    '</div>'+
+    '<div style="border:1px solid #ddd;border-radius:8px;padding:12px">'+
+      '<b>I have an invite code</b>'+
+      '<input id="inviteCode" type="text" placeholder="Invite code" style="text-transform:uppercase">'+
+      '<input id="inviteYourName" type="text" placeholder="Your name">'+
+      '<button onclick="doRedeemInvite()">Join organization</button>'+
+    '</div>'+
+    '<p class="sub" style="margin-top:10px"><a href="#" onclick="doSignOut();return false;">Sign out</a></p>'+
+    '</div>';
+}
+async function doSignIn(){
+  const email = document.getElementById('authEmail').value.trim();
+  const pass = document.getElementById('authPass').value;
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if(error){ document.getElementById('authGate').innerHTML = loginScreenHtml(error.message); return; }
+  await bootApp();
+}
+window.doSignIn = doSignIn;
+async function doSignUp(){
+  const email = document.getElementById('suEmail').value.trim();
+  const pass = document.getElementById('suPass').value;
+  const pass2 = document.getElementById('suPass2').value;
+  if(pass.length < 6){ document.getElementById('authGate').innerHTML = signUpScreenHtml('Password must be at least 6 characters.'); return; }
+  if(pass !== pass2){ document.getElementById('authGate').innerHTML = signUpScreenHtml('Passwords do not match.'); return; }
+  const { data, error } = await sb.auth.signUp({ email, password: pass });
+  if(error){ document.getElementById('authGate').innerHTML = signUpScreenHtml(error.message); return; }
+  if(data.session){ await bootApp(); return; }
+  document.getElementById('authGate').innerHTML = signUpScreenHtml(null, 'Account created — check your email to confirm, then sign in.');
+}
+window.doSignUp = doSignUp;
+async function doSignOut(){ await sb.auth.signOut(); location.reload(); }
+window.doSignOut = doSignOut;
+async function doCreateOrg(){
+  const p_org_name = document.getElementById('orgName').value.trim();
+  const p_your_name = document.getElementById('orgYourName').value.trim();
+  const { error } = await sb.rpc('create_organization', { p_org_name, p_your_name });
+  if(error){ document.getElementById('authGate').innerHTML = onboardingScreenHtml(error.message); return; }
+  await bootApp();
+}
+window.doCreateOrg = doCreateOrg;
+async function doRedeemInvite(){
+  const p_code = document.getElementById('inviteCode').value.trim();
+  const p_your_name = document.getElementById('inviteYourName').value.trim();
+  const { error } = await sb.rpc('redeem_invite', { p_code, p_your_name });
+  if(error){ document.getElementById('authGate').innerHTML = onboardingScreenHtml(error.message); return; }
+  await bootApp();
+}
+window.doRedeemInvite = doRedeemInvite;
+
+function showAuthGate(err){
+  const gate = document.getElementById('authGate');
+  gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
+  gate.innerHTML = loginScreenHtml(err);
+  document.getElementById('topnav').style.display = 'none';
+  document.getElementById('wrap').style.display = 'none';
+}
+window.showAuthGate = showAuthGate;
+function showSignUpGate(err){
+  const gate = document.getElementById('authGate');
+  gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
+  gate.innerHTML = signUpScreenHtml(err);
+  document.getElementById('topnav').style.display = 'none';
+  document.getElementById('wrap').style.display = 'none';
+}
+window.showSignUpGate = showSignUpGate;
+function showOnboardingGate(err){
+  const gate = document.getElementById('authGate');
+  gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
+  gate.innerHTML = onboardingScreenHtml(err);
+  document.getElementById('topnav').style.display = 'none';
+  document.getElementById('wrap').style.display = 'none';
+}
+function hideAuthGate(){
+  const gate = document.getElementById('authGate');
+  gate.style.display = 'none'; gate.innerHTML = '';
+  document.getElementById('topnav').style.display = '';
+  document.getElementById('wrap').style.display = '';
+}
+async function bootApp(){
+  const { data:{ session } } = await sb.auth.getSession();
+  if(!session){ showAuthGate(); return; }
+  try{ await loadFromSupabase(); }
+  catch(e){
+    console.error(e);
+    if(e.noProfile){ showOnboardingGate(); return; }
+    _skipNextSignOutReload = true;
+    await sb.auth.signOut();
+    showAuthGate(e.message || 'Could not load your data. Contact an admin.');
+    return;
+  }
+  hideAuthGate();
+  render();
+  subscribeRealtime();
+}
+
+/* ---------- Norma bridge ---------- */
+function handleNormaImportFile(file){
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>importSharedConfigFromNorma(e.target.result);
+  reader.onerror=()=>toast('Could not read that file.');
+  reader.readAsText(file);
+}
+window.handleNormaImportFile=handleNormaImportFile;
+function importSharedConfigFromNorma(jsonText){
+  let data;
+  try{ data=JSON.parse(jsonText); }
+  catch(e){ toast('That is not valid JSON — is it a Norma shared-config export?'); return; }
+  if(data.costBuckets && data.costBuckets.length){
+    data.costBuckets.forEach(b=>{ const ex=byId(CFG.costBuckets,b.id); if(ex) Object.assign(ex,b); else CFG.costBuckets.push(b); });
+  }
+  if(data.trackingConfig){ CFG.trackingConfig=data.trackingConfig; CFG.trackingConfig.mySeq=CFG.trackingConfig.mySeq||{}; }
+  if(data.configVersion!=null){ CFG.meta.normaConfigVersion=data.configVersion; }
+  CFG.meta.normaSyncedAt=new Date().toISOString();
+  logAudit('import shared config from Norma','cost buckets'+(data.trackingConfig?' + tracking convention':''));
+  render();
+  toast('Shared config imported from Norma.');
+}
+window.importSharedConfigFromNorma=importSharedConfigFromNorma;
+function nextTrackingRef(type){
+  const tc=CFG.trackingConfig; if(!tc) return null;
+  const modCode=(tc.modCodes&&tc.modCodes.custodia)||'AST';
+  const typeCode=(tc.typeCodes&&tc.typeCodes[type])||type.toUpperCase().slice(0,3);
+  tc.mySeq=tc.mySeq||{};
+  tc.mySeq[typeCode]=(tc.mySeq[typeCode]||0)+1;
+  const seq=String(tc.mySeq[typeCode]).padStart(tc.seqPadding||4,'0');
+  return tc.pattern.replace('{mod}',modCode).replace('{type}',typeCode).replace('{seq}',seq);
+}
+
+/* ---------- CRUD ---------- */
+function addAsset(){
+  CFG.assets.push({id:uid('ast'),name:'New asset',category:'Physical',tags:'',stock:0,lowStockAt:null,
+    costPer:0,purchaseDate:'',location:'',campaignsUsed:'',trackingRef:nextTrackingRef('asset')});
+  logAudit('add asset','New asset'); render(); toast('Asset added.');
+}
+window.addAsset=addAsset;
+function removeAsset(id){
+  if(!confirm('Remove this asset?'))return;
+  CFG.assets=CFG.assets.filter(a=>a.id!==id); logAudit('remove asset',id); render();
+  deleteRow('assets',id);
+}
+window.removeAsset=removeAsset;
+function addReference(){
+  CFG.references.push({id:uid('ref'),clientName:'New client',contactName:'',notes:''});
+  logAudit('add reference','New client'); render(); toast('Reference added.');
+}
+window.addReference=addReference;
+function removeReference(id){
+  CFG.references=CFG.references.filter(r=>r.id!==id); logAudit('remove reference',id); render();
+  deleteRow('asset_references',id);
+}
+window.removeReference=removeReference;
+
+/* ---------- transactions ledger ---------- */
+function recordTransaction(assetId,type,qtyStr,campaignId,campaignRef,notes){
+  const a=byId(CFG.assets,assetId); if(!a){ toast('No asset selected.'); return; }
+  if(a.category==='Digital'){ toast('Digital assets do not track stock.'); return; }
+  let qty=parseFloat(qtyStr); if(isNaN(qty)) qty=0;
+  let delta;
+  if(type==='Check-out') delta=-Math.abs(qty);
+  else if(type==='Check-in') delta=Math.abs(qty);
+  else delta=qty;
+  const before=a.stock||0;
+  let after=before+delta;
+  let clamped=false;
+  if(after<0){ after=0; clamped=true; }
+  a.stock=after;
+  const tx={id:uid('tx'),assetId:assetId,date:new Date().toISOString().slice(0,10),type:type,
+    qty:clamped?(after-before):delta,before:before,after:after,campaignId:campaignId||null,campaignRef:campaignRef||'',notes:notes||''};
+  CFG.transactions.push(tx);
+  logAudit('stock transaction',a.name+' '+type+' '+tx.qty+(clamped?' (clamped at 0)':''));
+  render();
+  toast(clamped?'Recorded, but stock was clamped at 0 rather than go negative.':'Transaction recorded.');
+}
+window.recordTransaction=recordTransaction;
+function submitTransaction(){
+  const sel=document.getElementById('txAssetSel');
+  if(!sel||!sel.value){ toast('No stockable asset to select.'); return; }
+  const type=document.getElementById('txTypeSel').value;
+  const qty=document.getElementById('txQtyInput').value;
+  const campaignId=document.getElementById('txCampaignSel').value;
+  const campaignRef=document.getElementById('txCampaignInput').value;
+  const notes=document.getElementById('txNotesInput').value;
+  recordTransaction(sel.value,type,qty,campaignId,campaignRef,notes);
+}
+window.submitTransaction=submitTransaction;
+/* ---------- reference list import from Cursus (real campaign/activity ids -- see Section 5.4-style
+   bridge in the requirements doc; this is the Custodia-side equivalent) ---------- */
+function importReferenceListFromCursus(jsonText){
+  let data;
+  try{ data=JSON.parse(jsonText); }
+  catch(e){ toast('That is not valid JSON — is it a Cursus reference-list export?'); return; }
+  CFG.referenceList={ campaigns:data.campaigns||[], activities:data.activities||[] };
+  CFG.meta.cursusRefSyncedAt=new Date().toISOString();
+  logAudit('import reference list from Cursus', CFG.referenceList.campaigns.length+' campaigns, '+CFG.referenceList.activities.length+' activities');
+  render();
+  toast('Reference list imported — campaigns are now selectable on the Transactions page.');
+}
+window.importReferenceListFromCursus=importReferenceListFromCursus;
+function handleCursusRefFile(file){
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>importReferenceListFromCursus(e.target.result);
+  reader.onerror=()=>toast('Could not read that file.');
+  reader.readAsText(file);
+}
+window.handleCursusRefFile=handleCursusRefFile;
+function importClosedWonFromAugur(jsonText){
+  let data;
+  try{ data=JSON.parse(jsonText); }
+  catch(e){ toast('That is not valid JSON — is it an Augur closed-won export?'); return; }
+  CFG.wonDeals=data.deals||[];
+  CFG.meta.augurSyncedAt=new Date().toISOString();
+  logAudit('import closed-won from Augur', CFG.wonDeals.length+' deal(s)');
+  render();
+  toast(CFG.wonDeals.length+' closed-won deal(s) imported — see Effectiveness.');
+}
+window.importClosedWonFromAugur=importClosedWonFromAugur;
+function handleAugurImportFile(file){
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>importClosedWonFromAugur(e.target.result);
+  reader.onerror=()=>toast('Could not read that file.');
+  reader.readAsText(file);
+}
+window.handleAugurImportFile=handleAugurImportFile;
+
+/* ---------- pages ---------- */
+function pageHome(){
+  const hr=new Date().getHours();
+  const greeting=hr<12?'Good morning':hr<18?'Good afternoon':'Good evening';
+  const name=(_myProfile&&_myProfile.name)?_myProfile.name.split(' ')[0]:'there';
+  const today=new Date().toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'long'});
+  const stockable=CFG.assets.filter(a=>a.category!=='Digital');
+  const lowStock=stockable.filter(a=>a.lowStockAt!=null && a.stock!=null && a.stock<=a.lowStockAt);
+  const totalValue=sum(CFG.assets.map(a=>(a.stock||1)*(a.costPer||0)));
+
+  let h=`<div class="phead"><div><h1>${greeting}, ${esc(name)}</h1>
+    <p>${today} · ${lowStock.length?`<b>${lowStock.length}</b> asset${lowStock.length===1?'':'s'} at or below low-stock threshold`:'Nothing urgent right now'}</p></div>
+    <div class="sp"></div>
+    <button class="btn pri" onclick="go('assets');addAsset()">+ Quick add asset</button></div>`;
+
+  h+=`<div class="kpis">
+    <div class="kpi hl"><div class="k">Assets tracked</div><div class="kpi-v">${CFG.assets.length}</div></div>
+    <div class="kpi"><div class="k">Estimated value</div><div class="kpi-v">${F.mk(totalValue)}</div><div class="sub">stock × cost per unit</div></div>
+    <div class="kpi ${lowStock.length?'hl':''}"><div class="k">Low stock</div><div class="kpi-v" style="color:${lowStock.length?'var(--bad)':'inherit'}">${lowStock.length}</div><div class="sub">at or below threshold</div></div>
+    <div class="kpi"><div class="k">Transactions logged</div><div class="kpi-v">${CFG.transactions.length}</div></div>
+  </div>`;
+
+  h+=`<div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">`;
+  h+=`<div style="flex:2;min-width:320px">
+    <div class="card"><h3>Assets <span class="sp"></span><button class="btn sm" onclick="go('assets')">Open Assets</button></h3><div class="bd flush"><table><thead><tr>
+      <th>Asset</th><th>Category</th><th class="n">Stock</th><th class="n">Cost per</th></tr></thead><tbody>
+      ${CFG.assets.slice(0,6).map(a=>`<tr><td class="lb">${esc(a.name)}</td><td>${esc(a.category)}</td>
+        <td class="n">${a.stock==null?'—':a.stock}</td><td class="n calc">${F.mk(a.costPer||0)}</td></tr>`).join('')
+        || '<tr><td colspan="4" class="empty">No assets yet — Quick Add to create the first one.</td></tr>'}
+      </tbody></table></div></div>
+  </div>`;
+
+  h+=`<div style="flex:1;min-width:260px">
+    ${lowStock.length?`<div class="card"><h3>Low stock</h3><div class="bd">
+      ${lowStock.map(a=>`<div class="mini" style="margin-bottom:5px">${esc(a.name)} — <b style="color:var(--bad)">${a.stock} left</b></div>`).join('')}
+    </div></div>`:''}
+    <div class="card"><h3>Recent activity</h3><div class="bd flush">
+      ${CFG.audit.slice(0,8).map(a=>`<div style="padding:7px 14px;border-bottom:1px solid var(--line);font-size:11.5px">
+        <div>${esc(a.what)}</div><div class="mini" style="color:var(--ink-2)">${esc(a.detail||'')} · ${F.dt(a.ts)}</div></div>`).join('')
+        || '<div class="empty">No activity yet.</div>'}
+    </div></div>
+  </div>`;
+  h+=`</div>`;
+  return h;
+}
+function pageAssets(){
+  const stockable=CFG.assets.filter(a=>a.category!=='Digital');
+  const lowStock=stockable.filter(a=>a.lowStockAt!=null && a.stock!=null && a.stock<=a.lowStockAt);
+  const totalValue=sum(CFG.assets.map(a=>(a.stock||1)*(a.costPer||0)));
+  let h=`<div class="phead"><div><h1>Assets</h1>
+    <p>One list across Physical, Digital and Swag — filter by category as needed rather than juggling separate sheets.</p></div></div>`;
+  h+=`<div class="kpis">
+    <div class="kpi hl"><div class="k">Assets tracked</div><div class="kpi-v">${CFG.assets.length}</div></div>
+    <div class="kpi"><div class="k">Estimated value</div><div class="kpi-v">${F.mk(totalValue)}</div><div class="sub">stock × cost per unit</div></div>
+    <div class="kpi ${lowStock.length?'':''}"><div class="k">Low stock</div><div class="kpi-v" style="color:${lowStock.length?'var(--bad)':'inherit'}">${lowStock.length}</div><div class="sub">at or below threshold</div></div>
+  </div>`;
+  if(lowStock.length){
+    h+=`<div class="note" style="border-color:var(--bad);background:var(--bad-bg)"><strong>Low stock:</strong> ${lowStock.map(a=>esc(a.name)+' ('+a.stock+' left)').join(', ')}.</div>`;
+  }
+  h+=`<div class="card"><h3>Assets <span class="sp"></span><span class="pill n">${CFG.assets.length}</span>
+      <button class="btn sm pri" onclick="addAsset()">Add asset</button></h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>Asset</th><th>Status</th><th>Category</th><th>Tags</th><th class="n">Stock</th><th class="n">Low-stock at</th>
+      <th class="n">Cost per</th><th>Purchased</th><th>Location</th><th>Campaigns used within</th><th></th></tr></thead><tbody>
+    ${!CFG.assets.length?`<tr><td colspan="11" class="empty">No assets yet.</td></tr>`:CFG.assets.map(a=>{
+      const low=a.lowStockAt!=null && a.stock!=null && a.stock<=a.lowStockAt;
+      return `<tr${low?' style="background:var(--bad-bg)"':''}>
+        <td><input class="cel txt" style="width:180px" value="${esc(a.name)}" onchange="setIn('assets','${a.id}','name',this.value)">${a.trackingRef?`<div class="mini">${esc(a.trackingRef)}</div>`:''}</td>
+        <td>${ragPillHtml(ragForAsset(a))}</td>
+        <td><select class="cel txt" style="width:100px" onchange="setIn('assets','${a.id}','category',this.value)">
+          ${CATEGORIES.map(c=>`<option ${c===a.category?'selected':''}>${c}</option>`).join('')}</select></td>
+        <td><input class="cel txt" style="width:120px" value="${esc(a.tags)}" onchange="setIn('assets','${a.id}','tags',this.value)"></td>
+        <td class="n">${a.category==='Digital'?'<span class="mini">n/a</span>':`<input class="cel w" value="${a.stock==null?'':a.stock}" onchange="setIn('assets','${a.id}','stock',this.value,'num')">`}</td>
+        <td class="n">${a.category==='Digital'?'<span class="mini">n/a</span>':`<input class="cel w" value="${a.lowStockAt==null?'':a.lowStockAt}" onchange="setIn('assets','${a.id}','lowStockAt',this.value,'num')">`}</td>
+        <td class="n"><input class="cel w" value="${a.costPer||0}" onchange="setIn('assets','${a.id}','costPer',this.value,'money')"></td>
+        <td><input class="cel txt" type="date" value="${a.purchaseDate||''}" onchange="setIn('assets','${a.id}','purchaseDate',this.value)"></td>
+        <td>${a.category==='Digital'?'<span class="mini">n/a</span>':`<input class="cel txt" style="width:150px" value="${esc(a.location)}" onchange="setIn('assets','${a.id}','location',this.value)">`}</td>
+        <td><input class="cel txt" style="width:180px" placeholder="campaign name(s)" value="${esc(a.campaignsUsed)}" onchange="setIn('assets','${a.id}','campaignsUsed',this.value)"></td>
+        <td class="n"><button class="btn sm dgr" onclick="removeAsset('${a.id}')">Remove</button></td></tr>`;
+    }).join('')}
+    </tbody></table></div></div></div>`;
+  return h;
+}
+
+function pageEffectiveness(){
+  const hasWon=CFG.wonDeals.length>0;
+  let h=`<div class="phead"><div><h1>Effectiveness</h1>
+    <p>Asset spend attributed to the campaigns it was actually checked out against, alongside what those campaigns
+      went on to close. Needs a reference list import from Cursus (so transactions can link to a real campaign) and
+      a closed-won import from Augur.</p></div></div>`;
+  if(!hasWon){
+    h+=`<div class="note"><strong>No closed-won data imported yet.</strong> In Augur: Deals page → "Export closed-won for Ordo"
+      (the same export works here). Then Sync → "Import closed-won from Augur" below.</div>`;
+  }
+  const checkouts=CFG.transactions.filter(t=>t.type==='Check-out'&&t.campaignId);
+  const byCampaign={};
+  checkouts.forEach(t=>{
+    const a=byId(CFG.assets,t.assetId); if(!a) return;
+    const cost=Math.abs(t.qty)*(a.costPer||0);
+    byCampaign[t.campaignId]=byCampaign[t.campaignId]||{cost:0,assetIds:new Set()};
+    byCampaign[t.campaignId].cost+=cost;
+    byCampaign[t.campaignId].assetIds.add(a.id);
+  });
+  const campRows=Object.keys(byCampaign).map(cid=>{
+    const camp=byId(CFG.referenceList.campaigns,cid);
+    const won=CFG.wonDeals.filter(d=>d.campaignId===cid);
+    const wonValue=sum(won.map(d=>d.value||0));
+    const b=byCampaign[cid];
+    return { name:camp?camp.name:cid, assetCost:b.cost, assetCount:b.assetIds.size, wonCount:won.length, wonValue,
+      ratio: b.cost?wonValue/b.cost:null };
+  });
+  h+=`<div class="card"><h3>Asset spend by campaign <span class="sp"></span><span class="pill n">${campRows.length}</span></h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>Campaign</th><th class="n">Assets used</th><th class="n">Asset cost</th><th class="n">Won deals</th>
+      <th class="n">Won value</th><th class="n">Value : cost</th></tr></thead><tbody>
+    ${!campRows.length?`<tr><td colspan="6" class="empty">No check-outs linked to a real campaign yet — set a campaign on the
+      Transactions page (needs a reference list imported from Cursus first).</td></tr>`:
+      campRows.map(r=>`<tr><td>${esc(r.name)}</td><td class="n calc">${r.assetCount}</td>
+        <td class="n calc">${F.mk(r.assetCost)}</td><td class="n calc">${r.wonCount}</td>
+        <td class="n calc">${F.mk(r.wonValue)}</td><td class="n calc">${r.ratio!=null?r.ratio.toFixed(2)+'×':'—'}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="mini" style="padding:8px 14px 0">Asset cost here is check-outs only (quantity × cost per unit) — check-ins and
+      adjustments aren't counted as spend against a campaign. "Won deals" only counts deals Augur linked to this exact
+      campaign, so this is a floor on revenue contribution, not a complete picture.</p></div>`;
+  return h;
+}
+
+function pageReferences(){
+  let h=`<div class="phead"><div><h1>Reference tracking</h1>
+    <p>Customers willing to act as a sales reference — a different concept from the assets above (people, not stock)
+      that lived in the same source workbook.</p></div></div>`;
+  h+=`<div class="card"><h3>References <span class="sp"></span><span class="pill n">${CFG.references.length}</span>
+      <button class="btn sm pri" onclick="addReference()">Add reference</button></h3>
+    <div class="bd flush"><table><thead><tr><th>Client name</th><th>Contact name</th><th>Notes / guidance</th><th></th></tr></thead><tbody>
+    ${!CFG.references.length?`<tr><td colspan="4" class="empty">No references logged yet.</td></tr>`:CFG.references.map(r=>`<tr>
+      <td><input class="cel txt" style="width:180px" value="${esc(r.clientName)}" onchange="setIn('references','${r.id}','clientName',this.value)"></td>
+      <td><input class="cel txt" style="width:160px" value="${esc(r.contactName)}" onchange="setIn('references','${r.id}','contactName',this.value)"></td>
+      <td><input class="cel txt" style="width:320px" value="${esc(r.notes)}" onchange="setIn('references','${r.id}','notes',this.value)"></td>
+      <td class="n"><button class="btn sm dgr" onclick="removeReference('${r.id}')">Remove</button></td></tr>`).join('')}
+    </tbody></table></div></div>`;
+  return h;
+}
+
+function pageTransactions(){
+  const stockable=CFG.assets.filter(a=>a.category!=='Digital');
+  let h=`<div class="phead"><div><h1>Transactions</h1>
+    <p>A running ledger of stock movements — check-outs, check-ins, and manual adjustments — so stock changes are traceable
+      instead of just edited in place.</p></div></div>`;
+  h+=`<div class="card"><h3>Record a transaction</h3><div class="bd">
+    <div class="row" style="gap:8px;flex-wrap:wrap">
+      <select class="cel" id="txAssetSel" style="width:230px">
+        ${!stockable.length?'<option value="">No stockable assets</option>':stockable.map(a=>`<option value="${a.id}">${esc(a.name)} (current: ${a.stock==null?0:a.stock})</option>`).join('')}
+      </select>
+      <select class="cel" id="txTypeSel" style="width:120px">
+        <option>Check-out</option><option>Check-in</option><option>Adjustment</option>
+      </select>
+      <input class="cel w" id="txQtyInput" placeholder="qty" value="1">
+      <select class="cel" id="txCampaignSel" style="width:200px">
+        <option value="">— not linked —</option>
+        ${CFG.referenceList.campaigns.map(c=>`<option value="${c.id}">${esc(c.name)}${c.programmeName?' ('+esc(c.programmeName)+')':''}</option>`).join('')}
+      </select>
+      <input class="cel txt" id="txCampaignInput" style="width:160px" placeholder="note / legacy ref (optional)">
+      <input class="cel txt" id="txNotesInput" style="width:200px" placeholder="notes (optional)">
+      <button class="btn sm pri" onclick="submitTransaction()" ${!stockable.length?'disabled':''}>Record</button>
+    </div>
+    <p class="mini" style="margin-top:8px">Check-out subtracts, check-in adds, adjustment applies the number as-entered (e.g. -2 to correct
+      an overcount). Stock is clamped at 0 — it won't go negative.
+      ${!CFG.referenceList.campaigns.length?' The campaign dropdown is empty until you import a reference list from Cursus (Sync page) — until then, use the note field.':' Picking a real campaign here is what makes cost-per-outcome and revenue-contribution reporting possible later; the note field is free text and can\'t be rolled up.'}</p></div></div>`;
+  h+=`<div class="card"><h3>History <span class="sp"></span><span class="pill n">${CFG.transactions.length}</span></h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>Date</th><th>Asset</th><th>Type</th><th class="n">Qty</th><th class="n">Before → After</th><th>Campaign</th><th>Notes</th></tr></thead><tbody>
+      ${!CFG.transactions.length?`<tr><td colspan="7" class="empty">No transactions recorded yet.</td></tr>`:
+        [...CFG.transactions].reverse().map(t=>{
+          const a=byId(CFG.assets,t.assetId);
+          const linked=t.campaignId?byId(CFG.referenceList.campaigns,t.campaignId):null;
+          const campaignDisplay=linked?esc(linked.name):(t.campaignRef?esc(t.campaignRef)+' <span class="mini">(unlinked)</span>':'—');
+          return `<tr><td class="mini">${F.d(t.date)}</td><td>${a?esc(a.name):'<span class="mini">(deleted asset)</span>'}</td>
+          <td><span class="pill n">${esc(t.type)}</span></td><td class="n">${t.qty>0?'+':''}${t.qty}</td>
+          <td class="n mini">${t.before} → ${t.after}</td><td class="mini">${campaignDisplay}</td><td class="mini">${esc(t.notes||'—')}</td></tr>`;
+        }).join('')}
+      </tbody></table></div></div></div>`;
+  return h;
+}
+
+function pageSync(){
+  let h=`<div class="phead"><div><h1>Shared configuration</h1>
+    <p>Cost buckets and the tracking ID convention come from Norma, not owned here.</p></div></div>`;
+  h+=`<div class="card"><h3>Import shared config from Norma <span class="sp"></span>
+      ${CFG.meta.normaSyncedAt?`<span class="pill ok">Last synced ${F.dt(CFG.meta.normaSyncedAt)} (v${CFG.meta.normaConfigVersion||'?'})</span>`:`<span class="pill warn">Never synced</span>`}
+      <a class="btn sm" href="Norma.html" target="tool_Norma">Open Norma</a></h3>
+    <div class="bd">
+      <label class="btn pri">Choose Norma export file…<input type="file" accept="application/json" style="display:none" onchange="handleNormaImportFile(this.files[0])"></label>
+    </div></div>`;
+  h+=`<div class="card"><h3>Import reference list from Cursus <span class="sp"></span>
+      ${CFG.meta.cursusRefSyncedAt?`<span class="pill ok">Last synced ${F.dt(CFG.meta.cursusRefSyncedAt)} (${CFG.referenceList.campaigns.length} campaigns)</span>`:`<span class="pill warn">Never synced</span>`}
+      <a class="btn sm" href="Cursus.html" target="tool_Cursus">Open Cursus</a></h3>
+    <div class="bd">
+      <p class="mini">In Cursus: Sync → "Export reference list". Importing it here lets Transactions link an asset's
+        use to a real campaign instead of only a free-text note — that's what makes cost/effectiveness reporting
+        possible against actual campaigns rather than a label that can't be rolled up.</p>
+      <label class="btn pri">Choose Cursus reference file…<input type="file" accept="application/json" style="display:none" onchange="handleCursusRefFile(this.files[0])"></label>
+    </div></div>`;
+  h+=`<div class="card"><h3>Import closed-won from Augur <span class="sp"></span>
+      ${CFG.meta.augurSyncedAt?`<span class="pill ok">Last synced ${F.dt(CFG.meta.augurSyncedAt)} (${CFG.wonDeals.length} deals)</span>`:`<span class="pill warn">Never synced</span>`}
+      <a class="btn sm" href="Augur.html" target="tool_Augur">Open Augur</a></h3>
+    <div class="bd">
+      <p class="mini">In Augur: Deals page → "Export closed-won for Ordo" (the same file works here). Powers the
+        Effectiveness page — asset spend against what the campaigns it was used in actually closed.</p>
+      <label class="btn pri">Choose Augur export file…<input type="file" accept="application/json" style="display:none" onchange="handleAugurImportFile(this.files[0])"></label>
+    </div></div>`;
+  h+=`<div class="card"><h3>Local autosave</h3><div class="bd">
+    <p class="mini" style="margin:0 0 8px">Assets, references and transactions save to this browser automatically. Local only —
+      export/import is still how data reaches other tools.</p>
+    <button class="btn sm dgr" onclick="clearLocal()">Clear local autosave</button></div></div>`;
+  h+=`<div class="card"><h3>Activity log</h3><div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>When</th><th>What</th><th>Detail</th></tr></thead><tbody>
+      ${!CFG.audit.length?`<tr><td colspan="3" class="empty">Nothing yet.</td></tr>`:
+        CFG.audit.map(a=>`<tr><td class="mini">${esc(a.ts)}</td><td>${esc(a.what)}</td><td class="mini">${esc(a.detail)}</td></tr>`).join('')}
+      </tbody></table></div></div></div>`;
+  return h;
+}
+
+const PAGES=[
+  {id:'home',         ix:'0', label:'Home',             fn:pageHome},
+  {id:'assets',       ix:'1', label:'Assets',            fn:pageAssets},
+  {id:'transactions', ix:'2', label:'Transactions',      fn:pageTransactions},
+  {id:'effectiveness',ix:'3', label:'Effectiveness',     fn:pageEffectiveness},
+  {id:'references',   ix:'4', label:'Reference tracking', fn:pageReferences},
+  {id:'sync',         ix:'5', label:'Shared config',      fn:pageSync}
+];
+function renderSide(){
+  let h='<h4>Custodia</h4>';
+  PAGES.forEach(p=>{ h+=`<a class="navi ${UI.page===p.id?'on':''}" href="#" onclick="go('${p.id}');return false">
+    <span class="ix">${p.ix}</span><span>${p.label}</span></a>`; });
+  return h;
+}
+function renderTnAcct(){
+  const nm=_myProfile?_myProfile.name:'';
+  const initials=nm?nm.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase():'?';
+  return `<span class="tn-avatar">${esc(initials)}</span>
+    <div class="tn-who"><b>${esc(nm||'—')}</b><span>Custodia</span></div>
+    <a class="tn-signout" href="#" onclick="doSignOut();return false;">Sign out</a>`;
+}
+/* Consistent cross-module bar: search jumps between the 8 tools, same list
+   and behavior as every other file -- not this tool's own assets. */
+const MODULES=[
+  {id:'Ordo',label:'Ordo',desc:'Funnel planning & forecasting',color:'#1F3AC7'},
+  {id:'Cursus',label:'Cursus',desc:'Campaign & activity execution',color:'#0E7C6B'},
+  {id:'Eventus',label:'Eventus',desc:'Event planning & logistics',color:'#B5480E'},
+  {id:'Custodia',label:'Custodia',desc:'Asset register',color:'#3B6E1F'},
+  {id:'Prospectus',label:'Prospectus',desc:'ICP filters & opportunity reports',color:'#9C2B3C'},
+  {id:'Augur',label:'Augur',desc:'Lead & deal scoring',color:'#5A3E9C'},
+  {id:'Schema',label:'Schema',desc:'Process maps & workflows',color:'#3A5A8C'},
+  {id:'Norma',label:'Norma',desc:'Shared configuration',color:'#B5730E'}
+];
+const THIS_MODULE='Custodia';
+function renderTnModuleLinks(){
+  return MODULES.map(m=>m.id===THIS_MODULE
+    ? `<span class="tn-link on"><span class="mk" style="background:${m.color}">${m.label[0]}</span>${m.label}</span>`
+    : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}"><span class="mk" style="background:${m.color}">${m.label[0]}</span>${m.label}</a>`
+  ).join('');
+}
+function tnSearchResults(q){
+  q=(q||'').trim().toLowerCase(); if(!q) return [];
+  return MODULES.filter(m=>m.label.toLowerCase().includes(q)||m.desc.toLowerCase().includes(q)).slice(0,8);
+}
+let _tnResultList=[];
+function tnSearch(q){
+  _tnResultList=tnSearchResults(q);
+  const box=document.getElementById('tnResults');
+  if(!q||!q.trim()){ box.innerHTML=''; return; }
+  box.innerHTML = `<div class="tn-results">${
+    _tnResultList.length ? _tnResultList.map((m,i)=>`<a href="#" onclick="tnPick(${i});return false"><span class="ty">Module</span><div>${esc(m.label)}</div></a>`).join('')
+    : '<div class="none">No matches.</div>'
+  }</div>`;
+}
+window.tnSearch=tnSearch;
+function tnPick(i){
+  const m=_tnResultList[i]; if(!m) return;
+  window.open(m.id+'.html','tool_'+m.id);
+  document.getElementById('tnResults').innerHTML='';
+  document.getElementById('tnSearchInput').value='';
+}
+window.tnPick=tnPick;
+function tnSearchKey(ev){
+  if(ev.key==='Enter' && _tnResultList.length){ tnPick(0); }
+  if(ev.key==='Escape'){ document.getElementById('tnResults').innerHTML=''; ev.target.blur(); }
+}
+window.tnSearchKey=tnSearchKey;
+function render(){
+  const p=PAGES.find(x=>x.id===UI.page)||PAGES[0];
+  document.getElementById('side').innerHTML=renderSide();
+  document.getElementById('tnLinks').innerHTML=renderTnModuleLinks();
+  document.getElementById('tnAcct').innerHTML=renderTnAcct();
+  document.getElementById('main').innerHTML=p.fn();
+  saveLocal();
+  scheduleSupabaseSave();
+}
+sb.auth.onAuthStateChange((event)=>{
+  if(event==='SIGNED_OUT'){
+    if(_skipNextSignOutReload){ _skipNextSignOutReload=false; return; }
+    location.reload();
+  }
+});
+bootApp();
+</script>
+</body>
+</html>

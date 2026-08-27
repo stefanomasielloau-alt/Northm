@@ -1,4 +1,4 @@
-[Resource from github at repo://stefanomasielloau-alt/Northm/sha/71d6d56e3c423f06fc4cc8e7c3a0ca09b1bd1bb3/contents/index.html] <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -421,7 +421,7 @@ function render(){
     <div class="kpi"><div class="k">Touchpoints (7d)</div><div class="v">${r.touchpointsThisWeek.length}</div><div class="sub">logged in Scoring</div></div>
   </div>`;
 
-  h += `<div class="section-lbl">Plan &amp; execute</div>
+  h += `<div class="section-lbl">Plan</div>
   <div class="grid">
     <div class="card">
       <div class="bar" style="background:#1F3AC7"></div>
@@ -444,6 +444,10 @@ function render(){
         <div class="row"><span class="pill ok">Live</span><a class="btn" href="Cursus.html" target="tool_Cursus">Open →</a></div>
       </div>
     </div>
+  </div>
+
+  <div class="section-lbl">Execute</div>
+  <div class="grid">
     <div class="card">
       <div class="bar" style="background:#B5480E"></div>
       <div class="bd">
@@ -490,6 +494,18 @@ function render(){
       </div>
     </div>
     <div class="card">
+      <div class="bar" style="background:#1F1F1F"></div>
+      <div class="bd">
+        <h3><span class="mk" style="background:#1F1F1F">Ct</span>Contact</h3>
+        <p>LinkedIn outreach, contact pipeline and campaign tracking. Separate tool — opens signed in automatically.</p>
+        <div class="row"><span class="pill ok">Live</span><a class="btn" href="#" onclick="openContact();return false;">Open →</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-lbl">Configuration</div>
+  <div class="grid">
+    <div class="card">
       <div class="bar" style="background:#3A5A8C"></div>
       <div class="bd">
         <h3><span class="mk" style="background:#3A5A8C">Pr</span>Process Maps</h3>
@@ -498,28 +514,12 @@ function render(){
         <div class="row"><span class="pill ok">Live</span><a class="btn" href="Schema.html" target="tool_Schema">Open →</a></div>
       </div>
     </div>
-  </div>
-
-  <div class="section-lbl">Configuration</div>
-  <div class="grid">
     <div class="card">
       <div class="bar" style="background:#B5730E"></div>
       <div class="bd">
         <h3><span class="mk" style="background:#B5730E">Co</span>Configuration</h3>
         <p>The shared configuration hub — cost buckets, tracking ID convention, roles &amp; users, and org hierarchy.</p>
         <div class="row"><span class="pill ok">Live</span><a class="btn" href="Norma.html" target="tool_Norma">Open →</a></div>
-      </div>
-    </div>
-  </div>
-
-  <div class="section-lbl">Contact</div>
-  <div class="grid">
-    <div class="card">
-      <div class="bar" style="background:#1F1F1F"></div>
-      <div class="bd">
-        <h3><span class="mk" style="background:#1F1F1F">Ct</span>Contact</h3>
-        <p>LinkedIn outreach, contact pipeline and campaign tracking. Separate tool — opens signed in automatically.</p>
-        <div class="row"><span class="pill ok">Live</span><a class="btn" href="#" onclick="openContact();return false;">Open →</a></div>
       </div>
     </div>
   </div>

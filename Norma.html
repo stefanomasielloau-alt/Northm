@@ -420,8 +420,8 @@ async function loadFromSupabase(){
   CFG.orgInvites = invitesR.data || [];
   CFG.regions = (regionsR.data||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name}));
   if(CFG.isSuperAdmin){
-    const { data: orgs } = await sb.from('organizations').select('id,name,created_at,parent_org_id').order('created_at');
-    CFG.allOrganizations = (orgs||[]).map(o=>({id:o.id,name:o.name,createdAt:o.created_at,parentOrgId:o.parent_org_id||null}));
+    const { data: orgs } = await sb.from('organizations').select('id,name,created_at,parent_org_id,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma').order('created_at');
+    CFG.allOrganizations = (orgs||[]).map(o=>({id:o.id,name:o.name,createdAt:o.created_at,parentOrgId:o.parent_org_id||null,moduleAccess:moduleAccessFromRow(o)}));
     const { data: rels } = await sb.from('org_relations').select('id,org_a_id,org_b_id');
     CFG.orgRelations = rels || [];
   }
@@ -642,6 +642,18 @@ async function toggleRoleModuleAccess(roleId, moduleKey){
   render();
 }
 window.toggleRoleModuleAccess = toggleRoleModuleAccess;
+async function toggleOrgModuleAccess(orgId, moduleKey){
+  if(!CFG.isSuperAdmin){ toast('Only Super Admin can change an organization\'s module access.'); return; }
+  const o = byId(CFG.allOrganizations, orgId); if(!o) return;
+  const old = !!o.moduleAccess[moduleKey];
+  o.moduleAccess[moduleKey] = !old; render();
+  const col = MODULE_DB_COL[moduleKey];
+  const { error } = await sb.from('organizations').update({ [col]: !old }).eq('id', orgId);
+  if(error){ o.moduleAccess[moduleKey] = old; render(); toast('Could not update organization: '+error.message); return; }
+  logAudit('organization module access', o.name+': '+moduleKey+' → '+(!old?'available':'off'));
+  render();
+}
+window.toggleOrgModuleAccess = toggleOrgModuleAccess;
 async function renameRole(roleId, name){
   if(!canConfig()){ toast('Your role cannot rename roles.'); return; }
   const r = byId(CFG.roles, roleId); if(!r || !name.trim() || name===r.name) return;
@@ -668,8 +680,8 @@ async function createOrgAsSuperAdmin(){
   const name = prompt('New organization name:'); if(!name) return;
   const { data, error } = await sb.rpc('platform_create_organization', { p_org_name: name });
   if(error){ toast('Could not create organization: '+error.message); return; }
-  const { data: orgs } = await sb.from('organizations').select('id,name,created_at,parent_org_id').order('created_at');
-  CFG.allOrganizations = (orgs||[]).map(o=>({id:o.id,name:o.name,createdAt:o.created_at,parentOrgId:o.parent_org_id||null}));
+  const { data: orgs } = await sb.from('organizations').select('id,name,created_at,parent_org_id,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma').order('created_at');
+  CFG.allOrganizations = (orgs||[]).map(o=>({id:o.id,name:o.name,createdAt:o.created_at,parentOrgId:o.parent_org_id||null,moduleAccess:moduleAccessFromRow(o)}));
   UI.inviteOrgId = data;
   logAudit('create organization', name);
   render();
@@ -748,6 +760,14 @@ function orgEditModalHtml(){
       <div class="row" style="gap:8px;margin:4px 0 16px">
         <input class="cel txt" id="orgEditName" style="flex:1" value="${esc(o.name)}">
         <button class="btn sm pri" onclick="saveOrgName('${o.id}', document.getElementById('orgEditName').value)">Save</button>
+      </div>
+
+      <label class="lbl" title="The ceiling -- a role or user in this org can never get a module that's off here, no matter what their role allows">Modules available to this org</label>
+      <div class="mini" style="margin:4px 0 16px">${MODULES.map(m=>`<button class="btn sm" title="${esc(m.label)}"
+          style="padding:3px 6px;margin:1px;opacity:${o.moduleAccess[m.id]?'1':'.35'}" onclick="toggleOrgModuleAccess('${o.id}','${m.id}')">
+          <span class="mk" style="background:${m.color};width:14px;height:14px;font-size:8px">${m.icon}</span></button>`).join('')}
+        <p class="mini" style="margin-top:6px">This is the ceiling, not the default -- a role still needs its own Modules toggle
+          on (Roles &amp; users above) for anyone to actually get in.</p>
       </div>
 
       <label class="lbl">Parent organization</label>

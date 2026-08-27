@@ -446,30 +446,6 @@ function render(){
     </div>
   </div>
 
-  <div class="section-lbl">Execute</div>
-  <div class="grid">
-    <div class="card">
-      <div class="bar" style="background:#B5480E"></div>
-      <div class="bd">
-        <h3><span class="mk" style="background:#B5480E">Ev</span>Events</h3>
-        <p>Event planning, logistics and cost tracking — multi-venue events, speakers, checklists, attendance.</p>
-        <div class="stats"><div class="stat"><b>${CFG.events.length}</b>events</div>
-          <div class="stat"><b>${r.upcomingEvents.length}</b>upcoming</div></div>
-        <div class="row"><span class="pill ok">Live</span><a class="btn" href="Eventus.html" target="tool_Eventus">Open →</a></div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="bar" style="background:#3B6E1F"></div>
-      <div class="bd">
-        <h3><span class="mk" style="background:#3B6E1F">As</span>Assets</h3>
-        <p>Physical, digital and swag asset register with a stock transactions ledger.</p>
-        <div class="stats"><div class="stat"><b>${CFG.assets.length}</b>assets</div>
-          <div class="stat" style="${r.lowStockAssets.length?'color:#C8791A':''}"><b>${r.lowStockAssets.length}</b>low stock</div></div>
-        <div class="row"><span class="pill ${r.lowStockAssets.length?'warn':'ok'}">Live</span><a class="btn" href="Custodia.html" target="tool_Custodia">Open →</a></div>
-      </div>
-    </div>
-  </div>
-
   <div class="section-lbl">Find &amp; win</div>
   <div class="grid">
     <div class="card">
@@ -499,6 +475,30 @@ function render(){
         <h3><span class="mk" style="background:#1F1F1F">Ct</span>Contact</h3>
         <p>LinkedIn outreach, contact pipeline and campaign tracking. Separate tool — opens signed in automatically.</p>
         <div class="row"><span class="pill ok">Live</span><a class="btn" href="#" onclick="openContact();return false;">Open →</a></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-lbl">Execute</div>
+  <div class="grid">
+    <div class="card">
+      <div class="bar" style="background:#B5480E"></div>
+      <div class="bd">
+        <h3><span class="mk" style="background:#B5480E">Ev</span>Events</h3>
+        <p>Event planning, logistics and cost tracking — multi-venue events, speakers, checklists, attendance.</p>
+        <div class="stats"><div class="stat"><b>${CFG.events.length}</b>events</div>
+          <div class="stat"><b>${r.upcomingEvents.length}</b>upcoming</div></div>
+        <div class="row"><span class="pill ok">Live</span><a class="btn" href="Eventus.html" target="tool_Eventus">Open →</a></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="bar" style="background:#3B6E1F"></div>
+      <div class="bd">
+        <h3><span class="mk" style="background:#3B6E1F">As</span>Assets</h3>
+        <p>Physical, digital and swag asset register with a stock transactions ledger.</p>
+        <div class="stats"><div class="stat"><b>${CFG.assets.length}</b>assets</div>
+          <div class="stat" style="${r.lowStockAssets.length?'color:#C8791A':''}"><b>${r.lowStockAssets.length}</b>low stock</div></div>
+        <div class="row"><span class="pill ${r.lowStockAssets.length?'warn':'ok'}">Live</span><a class="btn" href="Custodia.html" target="tool_Custodia">Open →</a></div>
       </div>
     </div>
   </div>

@@ -42,6 +42,10 @@ body{font-family:var(--sans); background:var(--canvas); color:var(--ink); font-s
 .tn-results .ty{font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-3); font-weight:700;}
 .tn-results .none{padding:10px 12px; font-size:12px; color:var(--ink-3);}
 .tn-acct{display:flex; align-items:center; gap:8px; flex-shrink:0; padding:8px 0;}
+.mask{position:fixed;inset:0;background:rgba(16,24,43,.42);z-index:80;display:grid;place-items:center;padding:18px}
+.modal{background:#fff;border-radius:10px;box-shadow:var(--sh-2);width:min(640px,100%);max-height:88vh;overflow:auto}
+.modal>h3{margin:0;padding:13px 16px;border-bottom:1px solid var(--line);font-size:14px;font-weight:700}
+.modal .bd{padding:16px}
 .tn-avatar{width:30px;height:30px;border-radius:50%;background:var(--nav);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex-shrink:0;}
 .tn-who{font-size:11.5px; line-height:1.3;}
 .tn-who b{display:block; color:var(--ink); font-weight:700;}
@@ -138,6 +142,7 @@ td.lb{font-weight:600;}
     <div class="bx"><input id="tnSearchInput" placeholder="Search modules..." oninput="tnSearch(this.value)" onkeydown="tnSearchKey(event)"><span class="tn-kbd">/</span></div>
     <div id="tnResults"></div>
   </div>
+  <button class="btn sm" id="tnHelpBtn" onclick="openHelpPanel()" title="Help &amp; FAQ" style="margin-right:8px">?</button>
   <div class="tn-acct" id="tnAcct"></div>
   <script>document.addEventListener('click',function(e){var r=document.getElementById('tnResults');if(r&&!e.target.closest('.tn-search'))r.innerHTML='';});</script>
 </div>
@@ -198,7 +203,7 @@ const STAGES=['Prospecting','Qualifying','Proposal','Negotiation','Closed Won','
    nothing downstream needs to change; only the population source moved. */
 const CFG = {};
 
-const UI = { page:'home', dealsFilter:'', dealsSortBy:null, dealsSortDir:'asc', contactsFilter:'', contactsSortBy:null, contactsSortDir:'asc' };
+const UI = { page:'home', helpOpen:false, dealsFilter:'', dealsSortBy:null, dealsSortDir:'asc', contactsFilter:'', contactsSortBy:null, contactsSortDir:'asc' };
 
 function logAudit(what,detail){
   CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
@@ -1066,6 +1071,32 @@ const MODULES=[
   {id:'Norma',label:'Configuration',desc:'Shared configuration',color:'#B5730E',icon:'Co'}
 ];
 const THIS_MODULE='Augur';
+const HELP_FAQ=[
+  {q:'How do I reset my password?', a:'An admin can trigger a reset from Configuration \u2192 Roles & users \u2192 Reset password, or use "Forgot password" at login. The email comes from Supabase directly, not from North.'},
+  {q:'How do I set up a passkey?', a:'From your account menu, choose to set up a passkey \u2014 your browser or device (Windows Hello, Touch ID, a security key, etc.) will walk you through it.'},
+  {q:'How do I invite a new teammate?', a:'Configuration \u2192 Invite a new teammate \u2192 choose their role \u2192 Generate invite code, then send them the code. They redeem it at signup by choosing "I have an invite code."'},
+  {q:"Why can't I see a module, or can't edit something?", a:'Access is layered: your organization sets the ceiling (which modules exist for anyone there), your role sets Configure/Publish/Can edit, and you personally have a Modules toggle in the Users table. Ask an admin to check all three.'},
+  {q:"What's the difference between Simple and Expert mode?", a:'In Campaign Planning, Simple mode shows the core fields; Expert mode adds business case, sign-off, partner allocation and more \u2014 toggle it from Campaign Planning if your role allows it.'},
+  {q:'What does Cross-region visibility mean?', a:'"Transparent" means you see every region in your organization. "Isolated" means you only see the regions specifically checked for you.'},
+  {q:'What is Super Admin?', a:"Super Admin isn't a role in the Roles table \u2014 it's a separate flag on a login that gives full cross-organization visibility in Configuration, independent of any one organization's roles."}
+];
+function helpPanelHtml(){
+  const mod = MODULES.find(m=>m.id===THIS_MODULE) || {label:THIS_MODULE, desc:''};
+  const pageLabel = ((PAGES.find(p=>p.id===UI.page))||{}).label || '';
+  return `<div class="mask" onclick="if(event.target===this)closeHelpPanel()"><div class="modal" style="width:min(520px,100%)">
+    <h3>Help &amp; FAQ <span class="sp"></span><button class="btn sm" onclick="closeHelpPanel()">Close</button></h3>
+    <div class="bd" style="max-height:70vh;overflow:auto">
+      <div class="note" style="margin-bottom:16px"><strong>${esc(mod.label)}</strong>${pageLabel?' \u2014 '+esc(pageLabel):''}<br>${esc(mod.desc)}</div>
+      <div class="lbl" style="margin-bottom:8px">Frequently asked</div>
+      ${HELP_FAQ.map(f=>`<details style="margin-bottom:8px"><summary style="cursor:pointer;font-weight:600;font-size:12.5px">${esc(f.q)}</summary>
+        <div class="mini" style="margin-top:4px;padding-left:2px">${esc(f.a)}</div></details>`).join('')}
+    </div>
+  </div></div>`;
+}
+function openHelpPanel(){ UI.helpOpen=true; render(); }
+function closeHelpPanel(){ UI.helpOpen=false; render(); }
+window.openHelpPanel=openHelpPanel; window.closeHelpPanel=closeHelpPanel;
+
 function renderTnModuleLinks(){
   return MODULES.map(m=>{
     const t = (m.desc||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
@@ -1128,7 +1159,7 @@ function render(){
   document.getElementById('side').innerHTML=renderSide();
   document.getElementById('tnLinks').innerHTML=renderTnModuleLinks();
   document.getElementById('tnAcct').innerHTML=renderTnAcct();
-  document.getElementById('main').innerHTML=p.fn();
+  document.getElementById('main').innerHTML=p.fn() + (UI.helpOpen?helpPanelHtml():'');
 
   if(activeId){
     const el=document.getElementById(activeId);

@@ -252,6 +252,15 @@ function signUpScreenHtml(err, notice){
     '<p class="sub" style="margin-top:10px">Already have an account? <a href="#" onclick="showAuthGate();return false;">Sign in</a></p>'+
     '</div>';
 }
+function resetPasswordScreenHtml(err, notice){
+  return '<div class="authwrap"><div class="authbrand"><img class="authlogo-full" src="'+AUTH_LOGO+'" alt="North"><div class="ab-ver">v0.24</div></div><p class="sub">Set a new password.</p>'+
+    '<div class="err">'+(err?esc(err):'')+'</div>'+
+    (notice ? '<div class="sub" style="margin-bottom:8px">'+esc(notice)+'</div>' : '')+
+    '<input id="rpPass" type="password" placeholder="New password (min 6 characters)" autocomplete="new-password">'+
+    '<input id="rpPass2" type="password" placeholder="Confirm new password" autocomplete="new-password">'+
+    '<button onclick="doSetNewPassword()">Set password</button>'+
+    '</div>';
+}
 function onboardingScreenHtml(err){
   return '<div class="authwrap"><div class="authbrand"><img class="authlogo-full" src="'+AUTH_LOGO+'" alt="North"><div class="ab-ver">v0.24</div></div><p class="sub">You\'re signed in, but this login isn\'t linked to an organization yet.</p>'+
     '<div class="err">'+(err?esc(err):'')+'</div>'+
@@ -290,6 +299,16 @@ async function doSignUp(){
   document.getElementById('authGate').innerHTML = signUpScreenHtml(null, 'Account created — check your email to confirm, then sign in.');
 }
 window.doSignUp = doSignUp;
+async function doSetNewPassword(){
+  const pass = document.getElementById('rpPass').value;
+  const pass2 = document.getElementById('rpPass2').value;
+  if(pass.length < 6){ document.getElementById('authGate').innerHTML = resetPasswordScreenHtml('Password must be at least 6 characters.'); return; }
+  if(pass !== pass2){ document.getElementById('authGate').innerHTML = resetPasswordScreenHtml('Passwords do not match.'); return; }
+  const { error } = await sb.auth.updateUser({ password: pass });
+  if(error){ document.getElementById('authGate').innerHTML = resetPasswordScreenHtml(error.message); return; }
+  await bootApp();
+}
+window.doSetNewPassword = doSetNewPassword;
 async function doSignOut(){ await sb.auth.signOut(); location.reload(); }
 window.doSignOut = doSignOut;
 async function doCreateOrg(){
@@ -329,6 +348,16 @@ function showSignUpGate(err){
   document.getElementById('foot').style.display = 'none';
 }
 window.showSignUpGate = showSignUpGate;
+function showResetPasswordGate(err){
+  const gate = document.getElementById('authGate');
+  gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
+  gate.innerHTML = resetPasswordScreenHtml(err);
+  document.getElementById('topnav').style.display = 'none';
+  document.querySelector('.top').style.display = 'none';
+  document.getElementById('wrap').style.display = 'none';
+  document.getElementById('foot').style.display = 'none';
+}
+window.showResetPasswordGate = showResetPasswordGate;
 function showOnboardingGate(err){
   const gate = document.getElementById('authGate');
   gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
@@ -597,6 +626,12 @@ sb.auth.onAuthStateChange((event)=>{
   if(event==='SIGNED_OUT'){
     if(_skipNextSignOutReload){ _skipNextSignOutReload=false; return; }
     location.reload();
+  }
+  if(event==='PASSWORD_RECOVERY'){
+    // Landed here via a Supabase password-reset email link (admin-triggered
+    // from Configuration -> Users, or self-service later). Supabase already
+    // created a temporary session for this -- just collect the new password.
+    showResetPasswordGate();
   }
 });
 bootApp();

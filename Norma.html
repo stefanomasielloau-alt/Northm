@@ -448,6 +448,29 @@ async function setUserRole(userId, roleId){
   render();
 }
 window.setUserRole = setUserRole;
+async function setUserName(userId, name){
+  if(!canConfig()){ toast('Your role cannot edit users.'); return; }
+  const u = byId(CFG.users, userId); if(!u) return;
+  const trimmed = name.trim();
+  if(trimmed === u.name) return;
+  const old = u.name; u.name = trimmed; render();
+  const { error } = await sb.from('profiles').update({ name: trimmed }).eq('id', userId);
+  if(error){ u.name = old; render(); toast('Could not update name: '+error.message); return; }
+  logAudit('rename user', (old||'(blank)')+' → '+(trimmed||'(blank)'));
+  render();
+}
+window.setUserName = setUserName;
+async function resetUserPassword(userId){
+  if(!canConfig()){ toast('Your role cannot reset passwords.'); return; }
+  const u = byId(CFG.users, userId); if(!u) return;
+  if(!u.email){ toast('This user has no email on file.'); return; }
+  if(!confirm('Send a password-reset email to '+(u.name||u.email)+' ('+u.email+')? They\'ll get a link from Supabase to set a new password themselves — nobody, including you, sees or sets it directly.')) return;
+  const { error } = await sb.auth.resetPasswordForEmail(u.email, { redirectTo: location.origin + '/index.html' });
+  if(error){ toast('Could not send reset email: '+error.message); return; }
+  logAudit('reset password requested', u.name+' ('+u.email+')');
+  toast('Reset email sent to '+u.email+'.');
+}
+window.resetUserPassword = resetUserPassword;
 async function setUserCrossRegion(userId){
   if(!canConfig()){ toast('Your role cannot change access.'); return; }
   const u = byId(CFG.users, userId); if(!u) return;
@@ -1135,7 +1158,7 @@ function pageUsers(){
       <th>Cross-region visibility</th><th>Regions when isolated</th><th></th></tr></thead><tbody>
     ${CFG.users.slice().sort((a,b)=>(orgName(a.orgId)).localeCompare(orgName(b.orgId))).map(u=>{
       const orgRegions = CFG.regions.filter(r=>r.orgId===u.orgId);
-      return `<tr><td class="lb">${esc(u.name)}</td><td class="mini">${esc(u.email||'—')}</td>
+      return `<tr><td class="lb"><input class="cel txt" style="width:150px" value="${esc(u.name)}" placeholder="add a name" ${dis} onchange="setUserName('${u.id}',this.value)"></td><td class="mini">${esc(u.email||'—')}</td>
       ${sa?`<td class="mini"><select class="cel txt" style="width:150px" onchange="setUserOrg('${u.id}',this.value)">
         ${(CFG.allOrganizations||[]).map(o=>`<option value="${o.id}" ${o.id===u.orgId?'selected':''}>${esc(o.name)}</option>`).join('')}
         </select>${u.orgId===_orgId?' <span class="tag">yours</span>':''}</td>`:''}
@@ -1147,7 +1170,7 @@ function pageUsers(){
       <td class="mini">${u.crossRegion?'<span class="pill n">sees all — n/a</span>':(orgRegions.length?orgRegions.map(r=>
         `<label style="margin-right:8px"><input type="checkbox" class="regbox-${u.id}" value="${r.id}" ${u.regionIds.includes(r.id)?'checked':''} ${dis} onchange="setUserRegions('${u.id}')"> ${esc(r.name)}</label>`
       ).join(''):'<span class="pill n">no regions in this org</span>')}</td>
-      <td class="n">${u.id===(_myProfile||{}).id?'<span class="mini">you</span>':`<button class="btn sm dgr" ${dis} onclick="removeUserFromOrg('${u.id}')">Remove</button>`}</td>
+      <td class="n"><button class="btn sm" ${dis} onclick="resetUserPassword('${u.id}')">Reset password</button> ${u.id===(_myProfile||{}).id?'':`<button class="btn sm dgr" ${dis} onclick="removeUserFromOrg('${u.id}')">Remove</button>`}</td>
       </tr>`;
     }).join('')}
     </tbody></table></div>

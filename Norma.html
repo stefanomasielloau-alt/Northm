@@ -254,7 +254,7 @@ const CFG = {
   audit:[]
 };
 
-const UI = { page:'home', helpOpen:false, orgEdit:null, showArchivedInvites:false };
+const UI = { page:'home', helpOpen:false, orgEdit:null, showArchivedInvites:false, usersOrgFilter:'', rolesSortKey:'org', rolesSortDir:'asc', usersSortKey:'org', usersSortDir:'asc' };
 
 function logAudit(what,detail){
   CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
@@ -445,6 +445,32 @@ async function loadFromSupabase(){
   }));
   CFG.teams = (teamsR.data||[]).map(t=>({id:t.id,name:t.name||'',memberIds:t.member_ids||[]}));
 }
+/* Roles & users page (2026-08-27): org filter (Super Admin only -- everyone else already
+   only sees their own org) + click-header-to-sort, so "look at all of one company's Roles,
+   users, etc" is a filter, and long cross-org lists can be sorted alphabetically instead of
+   only by organization. */
+function setUsersOrgFilter(orgId){ UI.usersOrgFilter = orgId; render(); }
+window.setUsersOrgFilter = setUsersOrgFilter;
+function setSort(table, key){
+  const keyField = table+'SortKey', dirField = table+'SortDir';
+  if(UI[keyField] === key){ UI[dirField] = UI[dirField]==='asc' ? 'desc' : 'asc'; }
+  else { UI[keyField] = key; UI[dirField] = 'asc'; }
+  render();
+}
+window.setSort = setSort;
+function sortArrow(table, key){
+  if(UI[table+'SortKey'] !== key) return '';
+  return UI[table+'SortDir']==='asc' ? ' \u25B2' : ' \u25BC';
+}
+function sortByKey(list, table, keyFns){
+  const key = UI[table+'SortKey'] || 'org', dir = UI[table+'SortDir'] || 'asc';
+  const fn = keyFns[key] || keyFns.org;
+  return list.slice().sort((a,b)=>{
+    const cmp = String(fn(a)||'').localeCompare(String(fn(b)||''));
+    return dir==='asc' ? cmp : -cmp;
+  });
+}
+
 const canConfig=()=>{
   const r=(CFG.roles||[]).find(x=>x.id===(_myProfile||{}).role_id);
   return !!(r&&r.config) || !!CFG.isSuperAdmin;
@@ -1475,15 +1501,23 @@ function pageUsers(){
   if(sa) h+=`<div class="note"><strong>You're seeing every organization's roles and users on this page</strong> —
     that's what Super Admin means. Everyone else only ever sees their own organization's rows. Super Admin itself
     isn't a role in the table below; it's a separate flag on your login, independent of any one organization's roles.</div>`;
+  if(sa) h+=`<div class="row" style="gap:8px;align-items:center;margin:0 0 14px">
+    <label class="mini">Filter by organization:</label>
+    <select class="cel txt" style="width:220px" onchange="setUsersOrgFilter(this.value)">
+      <option value="">All organizations</option>
+      ${(CFG.allOrganizations||[]).map(o=>`<option value="${o.id}" ${o.id===UI.usersOrgFilter?'selected':''}>${esc(o.name)}</option>`).join('')}
+    </select>
+    ${UI.usersOrgFilter?`<span class="pill v">Showing: ${esc(orgName(UI.usersOrgFilter))} <a href="#" onclick="setUsersOrgFilter('');return false" style="margin-left:6px">clear</a></span>`:''}
+    </div>`;
 
   h+=`<div class="card"><h3>Roles <span class="sp"></span>
     <button class="btn sm pri" ${dis} onclick="addRole()">Add role</button></h3>
     <div class="bd flush"><table><thead><tr>
-    <th>Role</th>${sa?'<th>Organization</th>':''}
+    <th class="sortable" style="cursor:pointer" onclick="setSort('roles','name')">Role${sortArrow('roles','name')}</th>${sa?`<th class="sortable" style="cursor:pointer" onclick="setSort('roles','org')">Organization${sortArrow('roles','org')}</th>`:''}
     <th title="Off = view-only wherever this role has module access (which modules is now set per organization and per person, not here). On = can edit.">Can edit</th>
     <th>Configure</th><th>Publish</th><th>Write everywhere</th><th>Scope</th>
     <th>Requires commit on plan edits</th><th>Expert mode allowed</th><th></th></tr></thead><tbody>
-    ${CFG.roles.slice().sort((a,b)=>(orgName(a.orgId)).localeCompare(orgName(b.orgId))).map(r=>`<tr>
+    ${sortByKey((sa&&UI.usersOrgFilter)?CFG.roles.filter(r=>r.orgId===UI.usersOrgFilter):CFG.roles,'roles',{org:r=>orgName(r.orgId),name:r=>r.name}).map(r=>`<tr>
       <td class="lb"><input class="cel txt" style="width:120px" value="${esc(r.name)}" ${dis} onchange="renameRole('${r.id}',this.value)">
         ${r.isSystem?'<span class="pill n" style="margin-left:6px">Standard</span>':''}</td>
       ${sa?`<td class="mini">${esc(orgName(r.orgId))}${r.orgId===_orgId?' <span class="tag">yours</span>':''}</td>`:''}
@@ -1532,9 +1566,9 @@ function pageUsers(){
         the same way Beta Testing did.</p></div></div>`;
   }
   h+=`<div class="card"><h3>Users</h3>
-    <div class="bd flush"><table><thead><tr><th>Name</th><th>Email</th>${sa?'<th>Organization</th>':''}<th>Role</th>
+    <div class="bd flush"><table><thead><tr><th class="sortable" style="cursor:pointer" onclick="setSort('users','name')">Name${sortArrow('users','name')}</th><th>Email</th>${sa?`<th class="sortable" style="cursor:pointer" onclick="setSort('users','org')">Organization${sortArrow('users','org')}</th>`:''}<th>Role</th>
       <th>Cross-region visibility</th><th>Regions when isolated</th><th title="Which modules this person can open -- capped by what their organization allows">Modules</th><th></th></tr></thead><tbody>
-    ${CFG.users.slice().sort((a,b)=>(orgName(a.orgId)).localeCompare(orgName(b.orgId))).map(u=>{
+    ${sortByKey((sa&&UI.usersOrgFilter)?CFG.users.filter(u=>u.orgId===UI.usersOrgFilter):CFG.users,'users',{org:u=>orgName(u.orgId),name:u=>u.name}).map(u=>{
       const orgRegions = CFG.regions.filter(r=>r.orgId===u.orgId);
       return `<tr id="userRow-${u.id}"><td class="lb"><input class="cel txt" style="width:150px" value="${esc(u.name)}" placeholder="add a name" ${dis} onchange="setUserName('${u.id}',this.value)"></td><td class="mini">${esc(u.email||'—')}</td>
       ${sa?`<td class="mini"><select class="cel txt" style="width:150px" onchange="setUserOrg('${u.id}',this.value)">
@@ -1610,7 +1644,7 @@ function pageUsers(){
       <input type="checkbox" ${UI.showArchivedInvites?'checked':''} onchange="UI.showArchivedInvites=this.checked;render()"> Show archived (${archivedCount})</label></div>`:''; })()}
     <div class="bd flush" style="padding-top:0"><table><thead><tr><th>Code</th><th>Role</th>
       ${sa?'<th>Organization</th>':''}<th>Invited by</th><th>Created</th><th>Expires</th><th>Status</th><th>Redeemed by</th><th></th></tr></thead><tbody>
-    ${(()=>{ const visible=CFG.orgInvites.filter(i=>UI.showArchivedInvites||!i.archived); return visible.length?visible.map(i=>{
+    ${(()=>{ const visible=CFG.orgInvites.filter(i=>(UI.showArchivedInvites||!i.archived)&&(!(sa&&UI.usersOrgFilter)||i.org_id===UI.usersOrgFilter)); return visible.length?visible.map(i=>{
       const r=byId(CFG.roles,i.role_id);
       const status=i.used_at?'<span class="pill ok">Used</span>':(new Date(i.expires_at)<new Date()?'<span class="pill bad">Expired</span>':'<span class="pill n">Open</span>');
       const redeemedBy=i.used_by?(byId(CFG.users,i.used_by)||{}).name||'—':'—';

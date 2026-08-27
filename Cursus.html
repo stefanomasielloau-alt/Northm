@@ -256,7 +256,8 @@ const byId = (a,id) => a.find(x=>x.id===id);
 const CFG = {};
 
 const UI = { page:'home', helpOpen:false, campaignId:null, wizard:null, moveDialog:null,
-  planScope:'campaign', planView:'table', planProgrammeId:null, planCampaignId:null, detail:null };
+  planScope:'campaign', planView:'table', planProgrammeId:null, planCampaignId:null, detail:null,
+  contactPicker:null };
 
 const bucket = id => byId(CFG.costBuckets,id);
 const programme = id => byId(CFG.programmes,id);
@@ -358,7 +359,8 @@ async function saveToSupabase(){
       start_date:t.startDate||null,due_date:t.dueDate||null,status:t.status,notes:t.notes||'',
       supplier:t.supplier||'',po:t.po||'',template_id:t.templateId,cost_bucket_id:t.costBucketId,
       planned_cost:t.plannedCost||0,committed_cost:t.committedCost||0,actual_cost:t.actualCost||0,
-      tracking_ref:t.trackingRef||null,sort_order:t.sortOrder||0,event_id:t.eventId||null
+      tracking_ref:t.trackingRef||null,sort_order:t.sortOrder||0,event_id:t.eventId||null,
+      contact_refs:t.contactRefs||[]
     })),
     upsertRows('templates', CFG.templates, t=>({
       id:t.id,name:t.name,type:t.type,default_cost_bucket_id:t.defaultCostBucketId,notes:t.notes||''
@@ -398,7 +400,7 @@ async function loadFromSupabase(){
     sb.from('programmes').select('id,name'),
     sb.from('cost_buckets').select('id,code,label'),
     sb.from('campaigns').select('id,name,programme_id,region_id,cost_bucket_id,start_date,end_date,budget,crm_ref,period_type,period_label,tracking_ref,business_case,signoff_status,po_number,registration_url,project_folder_url,external_links,applicable_splits,partner_motion_tags,cloned_from_id,contact_list_ref,icp_ref,sort_order'),
-    sb.from('tasks').select('id,campaign_id,name,type,owner,start_date,due_date,status,notes,supplier,po,template_id,cost_bucket_id,planned_cost,committed_cost,actual_cost,tracking_ref,sort_order,event_id'),
+    sb.from('tasks').select('id,campaign_id,name,type,owner,start_date,due_date,status,notes,supplier,po,template_id,cost_bucket_id,planned_cost,committed_cost,actual_cost,tracking_ref,sort_order,event_id,contact_refs'),
     sb.from('templates').select('id,name,type,default_cost_bucket_id,notes'),
     /* Read-only reference into the Events module's eventus_events table -- Campaign Planning never writes here, just
        links an activity to an event and rolls up budget/pax/registered/attended for
@@ -439,7 +441,8 @@ async function loadFromSupabase(){
     startDate:t.start_date||'',dueDate:t.due_date||'',status:t.status,notes:t.notes||'',
     supplier:t.supplier||'',po:t.po||'',templateId:t.template_id,costBucketId:t.cost_bucket_id,
     plannedCost:t.planned_cost,committedCost:t.committed_cost,actualCost:t.actual_cost,
-    trackingRef:t.tracking_ref||null,sortOrder:t.sort_order||0,eventId:t.event_id||null
+    trackingRef:t.tracking_ref||null,sortOrder:t.sort_order||0,eventId:t.event_id||null,
+    contactRefs:t.contact_refs||[]
   }));
   CFG.templates = (templatesR.data||[]).map(t=>({
     id:t.id,name:t.name,type:t.type,defaultCostBucketId:t.default_cost_bucket_id,notes:t.notes||''
@@ -1950,8 +1953,157 @@ function detailActivityHtml(id){
         <span class="mini">${linkedEvent.registered||0} registered · ${linkedEvent.attended||0} attended · ${F.mk(linkedEvent.budget||0)} budget</span>
         <a class="btn sm pri" href="Eventus.html#event=${linkedEvent.id}" target="tool_Eventus">Open in Events →</a>
       </div>`:`<div class="mini" style="margin-top:4px;color:var(--ink-3)">Pick an event to deep-link this activity to its record in Events.</div>`}
+      ${(t.type==='Contact Outreach'||t.type==='Contact Sourcing')?activityContactsSectionHtml(t):''}
     </div>
     <div class="ft"><button class="btn" onclick="closeDetail()">Close</button></div>
+  </div></div>`;
+}
+
+/* ---------- Push to Contacts (2026-08-27) ----------
+   'Contact Outreach' and 'Contact Sourcing' activities get a small Hub Contacts section:
+   - Select from Contacts: pulls existing Hub contacts in as this activity's audience (a
+     picker, GET /admin/list-contacts).
+   - Push to Contacts: sends contacts entered here (the inline add-row form) to Hub as new
+     records (POST /admin/push-contacts), deduped server-side by name/LinkedIn URL.
+   Both actions are offered on either activity type rather than guessing which of "outreach"
+   vs "sourcing" means push vs pull -- Stef can tell us to split them once this has been used
+   a little. Needs the contact_refs column on tasks (see backlog doc / morning SQL) --
+   without it these entries won't survive a reload, though nothing else on this page breaks. */
+function activityContactsSectionHtml(t){
+  const refs = t.contactRefs||[];
+  const unpushed = refs.filter(c=>!c.pushed);
+  return `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <label class="lbl" style="margin:0">Hub Contacts <span class="mini">(${refs.length})</span></label>
+      <button class="btn sm" onclick="openContactPicker('${t.id}')">Select from Contacts</button>
+    </div>
+    ${!refs.length?'<div class="mini" style="margin:4px 0;color:var(--ink-3)">No contacts attached yet.</div>':
+      `<div style="margin:6px 0">${refs.map((c,i)=>`<div class="row" style="justify-content:space-between;align-items:center;padding:3px 0">
+        <span class="mini">${esc(c.name)}${c.company?' — '+esc(c.company):''} ${c.pushed?'<span class="pill ok">In Hub</span>':'<span class="pill n">Not pushed</span>'}</span>
+        <button class="btn sm dgr" onclick="removeActivityContact('${t.id}',${i})">Remove</button>
+      </div>`).join('')}</div>`}
+    <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">
+      <input class="in" id="draftContactName-${t.id}" placeholder="Name" style="flex:1;min-width:110px">
+      <input class="in" id="draftContactCompany-${t.id}" placeholder="Company" style="flex:1;min-width:110px">
+      <input class="in" id="draftContactEmail-${t.id}" placeholder="Email" style="flex:1;min-width:130px">
+      <input class="in" id="draftContactLi-${t.id}" placeholder="LinkedIn URL" style="flex:1;min-width:130px">
+      <button class="btn sm" onclick="addDraftContact('${t.id}')">Add</button>
+    </div>
+    <div class="row" style="justify-content:flex-end;margin-top:8px">
+      <button class="btn sm pri" ${unpushed.length?'':'disabled'} onclick="pushActivityContactsToHub('${t.id}')">Push to Contacts${unpushed.length?' ('+unpushed.length+')':''}</button>
+    </div>
+  </div>`;
+}
+function addDraftContact(taskId){
+  const t=byId(CFG.tasks,taskId); if(!t) return;
+  const name=(document.getElementById('draftContactName-'+taskId)||{}).value||'';
+  if(!name.trim()){ toast('Name is required.'); return; }
+  const company=(document.getElementById('draftContactCompany-'+taskId)||{}).value||'';
+  const email=(document.getElementById('draftContactEmail-'+taskId)||{}).value||'';
+  const li=(document.getElementById('draftContactLi-'+taskId)||{}).value||'';
+  t.contactRefs = (t.contactRefs||[]).concat([{name:name.trim(),company:company.trim(),email:email.trim(),li:li.trim(),pushed:false}]);
+  logAudit('add contact draft', t.name+' → '+name.trim());
+  render();
+}
+window.addDraftContact=addDraftContact;
+function removeActivityContact(taskId, idx){
+  const t=byId(CFG.tasks,taskId); if(!t) return;
+  const refs=(t.contactRefs||[]).slice(); const removed=refs.splice(idx,1)[0];
+  t.contactRefs=refs;
+  logAudit('remove contact', t.name+' → '+(removed?removed.name:''));
+  render();
+}
+window.removeActivityContact=removeActivityContact;
+async function pushActivityContactsToHub(taskId){
+  const t=byId(CFG.tasks,taskId); if(!t) return;
+  const unpushed=(t.contactRefs||[]).filter(c=>!c.pushed);
+  if(!unpushed.length) return;
+  const { data } = await sb.auth.getSession();
+  const token = data && data.session && data.session.access_token;
+  if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
+  try{
+    const r = await fetch(CONTACT_URL+'/admin/push-contacts', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token: token, contacts: unpushed.map(c=>({name:c.name,company:c.company,email:c.email,li:c.li})) })
+    });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok){ toast(j.error||'Could not push to Hub Contacts.'); return; }
+    (t.contactRefs||[]).forEach(c=>{ if(!c.pushed) c.pushed=true; });
+    logAudit('pushed to Hub Contacts', t.name+' → '+(j.inserted_count||0)+' new, '+(j.skipped_count||0)+' already existed');
+    toast((j.inserted_count||0)+' pushed to Hub'+((j.skipped_count)?', '+j.skipped_count+' already there':'')+'.');
+    render();
+  }catch(e){ toast('Could not reach Hub.'); }
+}
+window.pushActivityContactsToHub=pushActivityContactsToHub;
+
+/* ---------- Select from Contacts picker ---------- */
+function openContactPicker(taskId){
+  UI.contactPicker = { taskId, query:'', loading:true, results:[], error:null };
+  render();
+  loadContactPickerResults('');
+}
+window.openContactPicker=openContactPicker;
+function closeContactPicker(){ UI.contactPicker=null; render(); }
+window.closeContactPicker=closeContactPicker;
+async function loadContactPickerResults(q){
+  if(!UI.contactPicker) return;
+  UI.contactPicker.loading=true; UI.contactPicker.query=q; render();
+  const { data } = await sb.auth.getSession();
+  const token = data && data.session && data.session.access_token;
+  if(!token){ UI.contactPicker.loading=false; UI.contactPicker.error='Your own North session has expired -- sign in again.'; render(); return; }
+  try{
+    const url = CONTACT_URL+'/admin/list-contacts?token='+encodeURIComponent(token)+'&q='+encodeURIComponent(q||'');
+    const r = await fetch(url);
+    const j = await r.json().catch(()=>({}));
+    if(!UI.contactPicker) return; // closed while the request was in flight
+    if(!r.ok){ UI.contactPicker.loading=false; UI.contactPicker.error=j.error||'Could not load Hub contacts.'; render(); return; }
+    UI.contactPicker.loading=false; UI.contactPicker.results=j.contacts||[]; UI.contactPicker.error=null; render();
+  }catch(e){
+    if(!UI.contactPicker) return;
+    UI.contactPicker.loading=false; UI.contactPicker.error='Could not reach Hub.'; render();
+  }
+}
+window.loadContactPickerResults=loadContactPickerResults;
+let _contactPickerSearchTimer=null;
+function searchContactPicker(q){
+  UI.contactPicker.query=q; // keep the input's value in sync immediately; the fetch itself is debounced
+  clearTimeout(_contactPickerSearchTimer);
+  _contactPickerSearchTimer=setTimeout(()=>loadContactPickerResults(q), 300);
+}
+window.searchContactPicker=searchContactPicker;
+/* Takes an INDEX into UI.contactPicker.results, not the contact's fields directly -- those
+   are free text from Hub (names like "O'Brien" are entirely plausible) and embedding them
+   straight into an onclick="...('...')" attribute string breaks on any apostrophe, or worse,
+   is a self-XSS injection point. Looking the row up by index sidesteps that completely. */
+function addContactPickerResult(idx){
+  const cp=UI.contactPicker; if(!cp) return;
+  const c=(cp.results||[])[idx]; if(!c) return;
+  const t=byId(CFG.tasks,cp.taskId); if(!t) return;
+  const refs=t.contactRefs||[];
+  if(refs.some(x=>x.hubId===c.id)){ toast(c.name+' is already attached.'); return; }
+  t.contactRefs = refs.concat([{ hubId:c.id, name:c.name, company:c.company, email:c.email, li:c.li, pushed:true }]);
+  logAudit('selected from Hub Contacts', t.name+' → '+c.name);
+  toast(c.name+' added.');
+  render();
+}
+window.addContactPickerResult=addContactPickerResult;
+function contactPickerHtml(){
+  const cp=UI.contactPicker; if(!cp) return '';
+  const t=byId(CFG.tasks,cp.taskId);
+  return `<div class="mask"><div class="modal" style="width:min(520px,100%)">
+    <h3>Select from Contacts ${t?`<span class="mini">for ${esc(t.name)}</span>`:''}</h3>
+    <div class="bd" style="max-height:60vh;overflow:auto">
+      <input class="in" placeholder="Search name or company…" value="${esc(cp.query)}"
+        oninput="searchContactPicker(this.value)" style="margin-bottom:8px">
+      ${cp.loading?'<div class="mini">Loading…</div>':''}
+      ${cp.error?`<div class="mini" style="color:var(--bad)">${esc(cp.error)}</div>`:''}
+      ${(!cp.loading&&!cp.error&&!cp.results.length)?'<div class="empty">No Hub contacts found.</div>':''}
+      ${cp.results.map((c,i)=>`<div class="row" style="justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--line)">
+        <span class="mini">${esc(c.name)}${c.company?' — '+esc(c.company):''}</span>
+        <button class="btn sm" onclick="addContactPickerResult(${i})">Add</button>
+      </div>`).join('')}
+    </div>
+    <div class="ft"><button class="btn" onclick="closeContactPicker()">Close</button></div>
   </div></div>`;
 }
 
@@ -2608,7 +2760,7 @@ function render(){
   document.getElementById('tnLinks').innerHTML=renderTnModuleLinks();
   document.getElementById('tnAcct').innerHTML=renderTnAcct();
   document.getElementById('main').innerHTML=p.fn() + (UI.helpOpen?helpPanelHtml():'');
-  document.getElementById('wizardLayer').innerHTML=campaignWizardPanel()+moveDialogPanel()+detailPanelHtml();
+  document.getElementById('wizardLayer').innerHTML=campaignWizardPanel()+moveDialogPanel()+detailPanelHtml()+contactPickerHtml();
   saveLocal();
   scheduleSupabaseSave();
 }

@@ -1382,15 +1382,18 @@ function pageCampaignNaming(){
 
 function pageLLM(){
   let h=`<div class="phead"><div><h1>LLM providers</h1>
-    <p>Placeholder configuration only — no module makes a live call to any of these yet, and no real API key is ever
-      stored here. This just gives every module a consistent place to point at once that feature exists.</p></div></div>`;
+    <p>This registry is still just a label/endpoint list — no real API key is ever stored here, North itself makes
+      no live LLM calls. Hub-Backend now has one real endpoint (<code>/admin/ai-extract</code>, 2026-08-27) for the
+      planned "ingest a brief with AI" feature, configured via server-side environment variables (LLM_PROVIDER /
+      LLM_API_KEY / LLM_MODEL on Hub-Backend), not from anything set here — this page is a heads-up, not the
+      control for it yet.</p></div></div>`;
   h+=`<div class="card"><h3>Providers <span class="sp"></span><span class="pill n">${CFG.llmProviders.length}</span>
       <button class="btn sm pri" onclick="addLlmProvider()">Add provider</button></h3>
     <div class="bd flush"><table><thead><tr><th>Name</th><th>Kind</th><th>Endpoint</th><th>Key</th><th>Enabled</th><th></th></tr></thead><tbody>
     ${CFG.llmProviders.map(p=>`<tr>
       <td><input class="cel txt" style="width:160px" value="${esc(p.name)}" onchange="setIn('llmProviders','${p.id}','name',this.value)"></td>
       <td><select class="cel txt" style="width:120px" onchange="setIn('llmProviders','${p.id}','kind',this.value)">
-        ${['Anthropic','OpenAI','Azure OpenAI','Other'].map(k=>`<option ${k===p.kind?'selected':''}>${k}</option>`).join('')}</select></td>
+        ${['Anthropic','OpenAI','Azure OpenAI','Google Gemini','Other'].map(k=>`<option ${k===p.kind?'selected':''}>${k}</option>`).join('')}</select></td>
       <td><input class="cel txt" style="width:220px" placeholder="https://…" value="${esc(p.endpoint)}" onchange="setIn('llmProviders','${p.id}','endpoint',this.value)"></td>
       <td class="mini">${esc(p.keyLabel)}</td>
       <td><input type="checkbox" ${p.enabled?'checked':''} onchange="setIn('llmProviders','${p.id}','enabled',this.checked)"></td>

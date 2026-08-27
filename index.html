@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+[Resource from github at repo://stefanomasielloau-alt/Northm/sha/71d6d56e3c423f06fc4cc8e7c3a0ca09b1bd1bb3/contents/index.html] <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -120,6 +120,7 @@ body{font-family:var(--sans); background:var(--canvas); color:var(--ink); font-s
     <a class="tn-link" href="Augur.html" target="tool_Augur"><span class="mk" style="background:#5A3E9C">Sc</span>Scoring</a>
     <a class="tn-link" href="Schema.html" target="tool_Schema"><span class="mk" style="background:#3A5A8C">Pr</span>Process Maps</a>
     <a class="tn-link" href="Norma.html" target="tool_Norma"><span class="mk" style="background:#B5730E">Co</span>Configuration</a>
+    <a class="tn-link" href="#" onclick="openContact();return false;"><span class="mk" style="background:#1F1F1F">Ct</span>Contact</a>
   </nav>
   <div class="tn-search">
     <div class="bx"><input id="tnSearchInput" placeholder="Search modules..." oninput="tnSearch(this.value)" onkeydown="tnSearchKey(event)"><span class="tn-kbd">/</span></div>
@@ -511,6 +512,18 @@ function render(){
     </div>
   </div>
 
+  <div class="section-lbl">Contact</div>
+  <div class="grid">
+    <div class="card">
+      <div class="bar" style="background:#1F1F1F"></div>
+      <div class="bd">
+        <h3><span class="mk" style="background:#1F1F1F">Ct</span>Contact</h3>
+        <p>LinkedIn outreach, contact pipeline and campaign tracking. Separate tool — opens signed in automatically.</p>
+        <div class="row"><span class="pill ok">Live</span><a class="btn" href="#" onclick="openContact();return false;">Open →</a></div>
+      </div>
+    </div>
+  </div>
+
   <div class="section-lbl">Recent activity</div>
   <div class="feed"><h3>Across every tool in your organization</h3>${renderFeed()}</div>
 
@@ -555,6 +568,24 @@ function tnPick(i){
   document.getElementById('tnSearchInput').value='';
 }
 window.tnPick=tnPick;
+
+// Contact button — hands the visitor's live Supabase session token to
+// Hub's /auth/sso endpoint so they land there already signed in, instead
+// of a second username/password. Hub verifies the token itself (see
+// hub_local_api.py); North never talks to Hub's database directly.
+// Falls back to a bare (logged-out) open if getSession() fails for any
+// reason, rather than blocking the click.
+const CONTACT_URL = 'https://hub-backend-psi.vercel.app';
+async function openContact(){
+  let url = CONTACT_URL;
+  try{
+    const { data } = await sb.auth.getSession();
+    const t = data && data.session && data.session.access_token;
+    if(t) url = CONTACT_URL + '/auth/sso?token=' + encodeURIComponent(t);
+  }catch(e){ /* fall through to plain (logged-out) open */ }
+  window.open(url, 'tool_Contact');
+}
+window.openContact=openContact;
 function tnSearchKey(ev){
   if(ev.key==='Enter' && _tnResultList.length){ tnPick(0); }
   if(ev.key==='Escape'){ document.getElementById('tnResults').innerHTML=''; ev.target.blur(); }

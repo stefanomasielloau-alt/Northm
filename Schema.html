@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+[Resource from github at repo://stefanomasielloau-alt/Northm/sha/71d6d56e3c423f06fc4cc8e7c3a0ca09b1bd1bb3/contents/Schema.html] <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1541,7 +1541,7 @@ function renderTnModuleLinks(){
   return MODULES.map(m=>m.id===THIS_MODULE
     ? `<span class="tn-link on"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</span>`
     : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`
-  ).join('');
+  ).join('') + '<a class="tn-link" href="#" onclick="openContact();return false;"><span class="mk" style="background:#1F1F1F">Ct</span>Contact</a>';
 }
 function tnSearchResults(q){
   q=(q||'').trim().toLowerCase(); if(!q) return [];
@@ -1565,6 +1565,21 @@ function tnPick(i){
   document.getElementById('tnSearchInput').value='';
 }
 window.tnPick=tnPick;
+
+// Contact button -- hands the visitor's live Supabase session token to
+// Hub's /auth/sso endpoint so they land there already signed in. Falls
+// back to a bare (logged-out) open if getSession() fails for any reason.
+const CONTACT_URL = 'https://hub-backend-psi.vercel.app';
+async function openContact(){
+  let url = CONTACT_URL;
+  try{
+    const { data } = await sb.auth.getSession();
+    const t = data && data.session && data.session.access_token;
+    if(t) url = CONTACT_URL + '/auth/sso?token=' + encodeURIComponent(t);
+  }catch(e){ /* fall through to plain (logged-out) open */ }
+  window.open(url, 'tool_Contact');
+}
+window.openContact=openContact;
 function tnSearchKey(ev){
   if(ev.key==='Enter' && _tnResultList.length){ tnPick(0); }
   if(ev.key==='Escape'){ document.getElementById('tnResults').innerHTML=''; ev.target.blur(); }

@@ -1920,8 +1920,7 @@ function detailActivityHtml(id){
         <div style="flex:1;min-width:180px"><label class="lbl">Name</label>
           <input class="in" value="${esc(t.name)}" onchange="setIn('tasks','${t.id}','name',this.value)"></div>
         <div style="flex:1;min-width:130px"><label class="lbl">Type</label>
-          <input class="in" list="activityTypeList" value="${esc(t.type)}" onchange="setIn('tasks','${t.id}','type',this.value)">
-          <datalist id="activityTypeList">${ACTIVITY_TYPE_SUGGESTIONS.map(s=>`<option value="${s}">`).join('')}</datalist></div>
+          <select class="in" onchange="setIn('tasks','${t.id}','type',this.value)">${activityTypeOptionsHtml(t)}</select></div>
         <div style="flex:1;min-width:110px"><label class="lbl">Owner</label>
           <input class="in" value="${esc(t.owner)}" onchange="setIn('tasks','${t.id}','owner',this.value)"></div>
       </div>
@@ -1956,6 +1955,12 @@ function detailActivityHtml(id){
 }
 
 const ACTIVITY_TYPE_SUGGESTIONS=['General','Event','Content','Paid Media','Email','Webinar','Other'];
+function activityTypeOptionsHtml(t){
+  const cur = t.type || '';
+  const list = ACTIVITY_TYPE_SUGGESTIONS.includes(cur) || !cur ? ACTIVITY_TYPE_SUGGESTIONS : [cur].concat(ACTIVITY_TYPE_SUGGESTIONS);
+  const placeholder = !cur ? '<option value="" selected disabled>— choose —</option>' : '';
+  return placeholder + list.map(s=>`<option ${s===cur?'selected':''}>${esc(s)}</option>`).join('');
+}
 
 /* ---------- Table view ---------- */
 function planSingleLevelTableHtml(level, items){
@@ -2027,7 +2032,7 @@ function planSingleLevelTableHtml(level, items){
       return `<tr draggable="true" ondragstart="dragPlanRow(event,'${t.id}')" ondragover="allowDrop(event)" ondrop="dropPlanRow(event,'${t.id}','activity')">
         <td class="mini" style="cursor:grab" title="Drag to reorder">⠿</td>
         <td><input class="cel txt" style="width:160px" value="${esc(t.name)}" onchange="setIn('tasks','${t.id}','name',this.value)"></td>
-        <td><input class="cel txt" style="width:100px" list="activityTypeList" value="${esc(t.type)}" onchange="setIn('tasks','${t.id}','type',this.value)"></td>
+        <td><select class="cel txt" style="width:100px" onchange="setIn('tasks','${t.id}','type',this.value)">${activityTypeOptionsHtml(t)}</select></td>
         <td><input class="cel txt" style="width:100px" value="${esc(t.owner)}" onchange="setIn('tasks','${t.id}','owner',this.value)"></td>
         <td><input class="cel txt" style="width:104px" type="date" value="${t.startDate||''}" onchange="setIn('tasks','${t.id}','startDate',this.value)"></td>
         <td><input class="cel txt" style="width:104px" type="date" value="${t.dueDate||''}" onchange="setIn('tasks','${t.id}','dueDate',this.value)"></td>
@@ -2042,7 +2047,6 @@ function planSingleLevelTableHtml(level, items){
           <button class="btn sm dgr" onclick="removeTask('${t.id}')">Remove</button></td></tr>`;
     }).join('')}
     </tbody></table></div></div>
-    <datalist id="activityTypeList">${ACTIVITY_TYPE_SUGGESTIONS.map(s=>`<option value="${s}">`).join('')}</datalist>
     </div>`;
   return h;
 }

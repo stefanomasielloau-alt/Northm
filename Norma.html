@@ -390,7 +390,7 @@ async function loadFromSupabase(){
     sb.from('org_settings').select('webhook_url,webhook_enabled,fy_start_month,campaign_naming_pattern,campaign_naming_seq_scope,campaign_naming_seq_counters').eq('org_id',_orgId).maybeSingle(),
     sb.from('audit_log').select('ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200),
     sb.from('roles').select('id,org_id,name,config,publish,write_all,scope,description,require_commit_on_edit,allow_expert_mode,is_system,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,can_edit'),
-    sb.from('profiles').select('id,org_id,name,email,role_id,region_ids,cross_region,contact_access'),
+    sb.from('profiles').select('id,org_id,name,email,role_id,region_ids,cross_region,contact_access,module_overrides'),
     sb.from('org_invites').select('id,code,role_id,region_ids,cross_region,created_by,created_at,expires_at,used_by,used_at,org_id').order('created_at',{ascending:false}),
     sb.from('regions').select('id,org_id,name'),
     /* Read-only, for the Agent Activity dashboard -- Norma doesn't own this table and never
@@ -416,12 +416,12 @@ async function loadFromSupabase(){
   CFG.costBuckets = (costBucketsR.data||[]).map(c=>({id:c.id,code:c.code,label:c.label,dept:c.dept,extCode:c.ext_code||''}));
   CFG.llmProviders = (llmR.data||[]).map(p=>({id:p.id,name:p.name,kind:p.kind,endpoint:p.endpoint||'',keyLabel:p.key_label||'',enabled:p.enabled}));
   CFG.roles = (rolesR.data||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name,config:r.config,publish:r.publish,writeAll:r.write_all,scope:r.scope,desc:r.description||'',requireCommitOnEdit:r.require_commit_on_edit,allowExpertMode:r.allow_expert_mode,isSystem:!!r.is_system,moduleAccess:moduleAccessFromRow(r),canEdit:!!r.can_edit}));
-  CFG.users = (profilesR.data||[]).map(p=>({id:p.id,orgId:p.org_id,name:p.name,email:p.email||'',roleId:p.role_id,regionIds:p.region_ids||[],crossRegion:p.cross_region,contactAccess:!!p.contact_access}));
+  CFG.users = (profilesR.data||[]).map(p=>({id:p.id,orgId:p.org_id,name:p.name,email:p.email||'',roleId:p.role_id,regionIds:p.region_ids||[],crossRegion:p.cross_region,contactAccess:!!p.contact_access,moduleOverrides:p.module_overrides||{}}));
   CFG.orgInvites = invitesR.data || [];
   CFG.regions = (regionsR.data||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name}));
   if(CFG.isSuperAdmin){
-    const { data: orgs } = await sb.from('organizations').select('id,name,created_at,parent_org_id,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma').order('created_at');
-    CFG.allOrganizations = (orgs||[]).map(o=>({id:o.id,name:o.name,createdAt:o.created_at,parentOrgId:o.parent_org_id||null,moduleAccess:moduleAccessFromRow(o)}));
+    const { data: orgs } = await sb.from('organizations').select('id,name,created_at,parent_org_id,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,access_contact').order('created_at');
+    CFG.allOrganizations = (orgs||[]).map(o=>({id:o.id,name:o.name,createdAt:o.created_at,parentOrgId:o.parent_org_id||null,moduleAccess:orgModuleAccessFromRow(o)}));
     const { data: rels } = await sb.from('org_relations').select('id,org_a_id,org_b_id');
     CFG.orgRelations = rels || [];
   }
@@ -647,13 +647,33 @@ async function toggleOrgModuleAccess(orgId, moduleKey){
   const o = byId(CFG.allOrganizations, orgId); if(!o) return;
   const old = !!o.moduleAccess[moduleKey];
   o.moduleAccess[moduleKey] = !old; render();
-  const col = MODULE_DB_COL[moduleKey];
+  const col = MODULE_DB_COL_ORG[moduleKey];
   const { error } = await sb.from('organizations').update({ [col]: !old }).eq('id', orgId);
   if(error){ o.moduleAccess[moduleKey] = old; render(); toast('Could not update organization: '+error.message); return; }
   logAudit('organization module access', o.name+': '+moduleKey+' → '+(!old?'available':'off'));
   render();
 }
 window.toggleOrgModuleAccess = toggleOrgModuleAccess;
+/* Per-user module access (2026-08-27): Contact keeps using the existing
+   contact_access column and setContactAccess() -- no need to migrate that, it
+   already works and pushUserToHub() already reads it. The other 8 modules are
+   new: a sparse profiles.module_overrides jsonb, backfilled to "everything on"
+   for every existing user by the SQL migration so nobody lost access when this
+   shipped; a brand new user starts with none, same locked-down-by-default
+   pattern as new roles and new organizations. */
+async function toggleUserModuleAccess(userId, moduleKey){
+  if(!canConfig()){ toast('Your role cannot change module access.'); return; }
+  if(moduleKey==='Contact'){ setContactAccess(userId); return; }
+  const u = byId(CFG.users, userId); if(!u) return;
+  const old = !!u.moduleOverrides[moduleKey];
+  const next = Object.assign({}, u.moduleOverrides, { [moduleKey]: !old });
+  u.moduleOverrides = next; render();
+  const { error } = await sb.from('profiles').update({ module_overrides: next }).eq('id', userId);
+  if(error){ u.moduleOverrides[moduleKey] = old; render(); toast('Could not update module access: '+error.message); return; }
+  logAudit('user module access', (u.name||u.email)+': '+moduleKey+' → '+(!old?'on':'off'));
+  render();
+}
+window.toggleUserModuleAccess = toggleUserModuleAccess;
 async function renameRole(roleId, name){
   if(!canConfig()){ toast('Your role cannot rename roles.'); return; }
   const r = byId(CFG.roles, roleId); if(!r || !name.trim() || name===r.name) return;
@@ -680,8 +700,8 @@ async function createOrgAsSuperAdmin(){
   const name = prompt('New organization name:'); if(!name) return;
   const { data, error } = await sb.rpc('platform_create_organization', { p_org_name: name });
   if(error){ toast('Could not create organization: '+error.message); return; }
-  const { data: orgs } = await sb.from('organizations').select('id,name,created_at,parent_org_id,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma').order('created_at');
-  CFG.allOrganizations = (orgs||[]).map(o=>({id:o.id,name:o.name,createdAt:o.created_at,parentOrgId:o.parent_org_id||null,moduleAccess:moduleAccessFromRow(o)}));
+  const { data: orgs } = await sb.from('organizations').select('id,name,created_at,parent_org_id,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,access_contact').order('created_at');
+  CFG.allOrganizations = (orgs||[]).map(o=>({id:o.id,name:o.name,createdAt:o.created_at,parentOrgId:o.parent_org_id||null,moduleAccess:orgModuleAccessFromRow(o)}));
   UI.inviteOrgId = data;
   logAudit('create organization', name);
   render();
@@ -762,12 +782,12 @@ function orgEditModalHtml(){
         <button class="btn sm pri" onclick="saveOrgName('${o.id}', document.getElementById('orgEditName').value)">Save</button>
       </div>
 
-      <label class="lbl" title="The ceiling -- a role or user in this org can never get a module that's off here, no matter what their role allows">Modules available to this org</label>
-      <div class="mini" style="margin:4px 0 16px">${MODULES.map(m=>`<button class="btn sm" title="${esc(m.label)}"
+      <label class="lbl" title="The ceiling -- nobody in this org can get a module that's off here, no matter what they're set to at the user level">Modules available to this org</label>
+      <div class="mini" style="margin:4px 0 16px">${ACCESS_MODULES_ALL.map(m=>`<button class="btn sm" title="${esc(m.label)}"
           style="padding:3px 6px;margin:1px;opacity:${o.moduleAccess[m.id]?'1':'.35'}" onclick="toggleOrgModuleAccess('${o.id}','${m.id}')">
           <span class="mk" style="background:${m.color};width:14px;height:14px;font-size:8px">${m.icon}</span></button>`).join('')}
-        <p class="mini" style="margin-top:6px">This is the ceiling, not the default -- a role still needs its own Modules toggle
-          on (Roles &amp; users above) for anyone to actually get in.</p>
+        <p class="mini" style="margin-top:6px">This is the ceiling, not the default -- each person still needs their own
+          access turned on in the Users table below for anyone to actually get in.</p>
       </div>
 
       <label class="lbl">Parent organization</label>
@@ -1386,17 +1406,14 @@ function pageUsers(){
   h+=`<div class="card"><h3>Roles <span class="sp"></span>
     <button class="btn sm pri" ${dis} onclick="addRole()">Add role</button></h3>
     <div class="bd flush"><table><thead><tr>
-    <th>Role</th>${sa?'<th>Organization</th>':''}<th title="Which modules this role can even see">Modules</th>
-    <th title="Off = view-only wherever this role has module access. On = can edit.">Can edit</th>
+    <th>Role</th>${sa?'<th>Organization</th>':''}
+    <th title="Off = view-only wherever this role has module access (which modules is now set per organization and per person, not here). On = can edit.">Can edit</th>
     <th>Configure</th><th>Publish</th><th>Write everywhere</th><th>Scope</th>
     <th>Requires commit on plan edits</th><th>Expert mode allowed</th><th></th></tr></thead><tbody>
     ${CFG.roles.slice().sort((a,b)=>(orgName(a.orgId)).localeCompare(orgName(b.orgId))).map(r=>`<tr>
       <td class="lb"><input class="cel txt" style="width:120px" value="${esc(r.name)}" ${dis} onchange="renameRole('${r.id}',this.value)">
         ${r.isSystem?'<span class="pill n" style="margin-left:6px">Standard</span>':''}</td>
       ${sa?`<td class="mini">${esc(orgName(r.orgId))}${r.orgId===_orgId?' <span class="tag">yours</span>':''}</td>`:''}
-      <td style="white-space:nowrap">${MODULES.map(m=>`<button class="btn sm" ${dis} title="${esc(m.label)}"
-          style="padding:3px 6px;margin:1px;opacity:${r.moduleAccess[m.id]?'1':'.35'}" onclick="toggleRoleModuleAccess('${r.id}','${m.id}')">
-          <span class="mk" style="background:${m.color};width:14px;height:14px;font-size:8px">${m.icon}</span></button>`).join('')}</td>
       <td><button class="btn sm" ${dis} onclick="toggleRoleFlag('${r.id}','canEdit','can_edit')">
         <span class="pill ${r.canEdit?'ok':'n'}">${r.canEdit?'Yes':'View only'}</span></button></td>
       <td><button class="btn sm" ${dis} onclick="toggleRoleFlag('${r.id}','config','config')">
@@ -1416,17 +1433,17 @@ function pageUsers(){
       </td>
       </tr>`).join('')}
     </tbody></table></div>
-    <div class="bd" style="padding-top:0"><p class="mini"><b>Modules</b> controls which of the 8 tools this role can even
-      open — a module it's not lit up for won't show in that role's top nav or side menu. <b>Can edit</b> applies across
-      every module the role does have access to: off means view-only everywhere, on means normal editing. A brand new
-      role starts with no modules and view-only until you turn things on for it. <b>Configure</b> lets someone edit these shared settings and
+    <div class="bd" style="padding-top:0"><p class="mini">Which modules someone can even open is set per organization
+      (the ceiling, in that org's Edit screen) and per person (in the Users table below) — not here. <b>Can edit</b> still
+      applies at the role level: off means view-only in whatever modules the person has access to, on means normal editing.
+      A brand new role starts view-only until you turn editing on for it. <b>Configure</b> lets someone edit these shared settings and
       manage users. <b>Requires commit on plan edits</b> is specific to Strategy/Campaign Planning — queues that role's budget/date/actuals
       edits for confirmation instead of applying immediately. <b>Expert mode allowed</b> controls whether this role can
       switch Campaign Planning out of Simple mode — off by default only if you turn it off; everyone can use Expert mode until you do.</p></div></div>`;
 
   h+=`<div class="card"><h3>Users</h3>
     <div class="bd flush"><table><thead><tr><th>Name</th><th>Email</th>${sa?'<th>Organization</th>':''}<th>Role</th>
-      <th>Cross-region visibility</th><th>Regions when isolated</th><th title="Whether they can be pushed to Hub/Contact">Contact access</th><th></th></tr></thead><tbody>
+      <th>Cross-region visibility</th><th>Regions when isolated</th><th title="Which modules this person can open -- capped by what their organization allows">Modules</th><th></th></tr></thead><tbody>
     ${CFG.users.slice().sort((a,b)=>(orgName(a.orgId)).localeCompare(orgName(b.orgId))).map(u=>{
       const orgRegions = CFG.regions.filter(r=>r.orgId===u.orgId);
       return `<tr><td class="lb"><input class="cel txt" style="width:150px" value="${esc(u.name)}" placeholder="add a name" ${dis} onchange="setUserName('${u.id}',this.value)"></td><td class="mini">${esc(u.email||'—')}</td>
@@ -1441,7 +1458,12 @@ function pageUsers(){
       <td class="mini">${u.crossRegion?'<span class="pill n">sees all — n/a</span>':(orgRegions.length?orgRegions.map(r=>
         `<label style="margin-right:8px"><input type="checkbox" class="regbox-${u.id}" value="${r.id}" ${u.regionIds.includes(r.id)?'checked':''} ${dis} onchange="setUserRegions('${u.id}')"> ${esc(r.name)}</label>`
       ).join(''):'<span class="pill n">no regions in this org</span>')}</td>
-      <td class="n"><input type="checkbox" ${u.contactAccess?'checked':''} ${dis} onchange="setContactAccess('${u.id}')" title="Allow pushing this person to Hub/Contact"></td>
+      <td style="white-space:nowrap">${ACCESS_MODULES_ALL.map(m=>{
+        const on = m.id==='Contact' ? !!u.contactAccess : !!u.moduleOverrides[m.id];
+        return `<button class="btn sm" ${dis} title="${esc(m.label)}"
+          style="padding:3px 6px;margin:1px;opacity:${on?'1':'.35'}" onclick="toggleUserModuleAccess('${u.id}','${m.id}')">
+          <span class="mk" style="background:${m.color};width:14px;height:14px;font-size:8px">${m.icon}</span></button>`;
+      }).join('')}</td>
       <td class="n" style="white-space:nowrap">
         <button class="btn sm" ${dis} onclick="resetUserPassword('${u.id}')">Reset password</button>
         <button class="btn sm" ${dis} onclick="pushPasswordDirect('${u.id}')">Set password</button>
@@ -1454,7 +1476,9 @@ function pageUsers(){
     </tbody></table></div>
     <div class="bd" style="padding-top:0"><p class="mini">"Transparent" sees every region in the organization.
       "Isolated" sees only the regions checked here — check none and they'll see nothing region-scoped until you assign some.
-      "Contact access" controls whether they can be pushed to Hub — once pushed, assign their Hub/Queue permissions in Hub's own Settings.</p></div></div>`;
+      <b>Modules</b> is per-person access to each of the 8 tools plus Contact — capped by what the organization allows (set
+      in that org's Edit screen). Turning on Contact here is what lets you push them to Hub below; once pushed, assign their
+      Hub/Queue permissions in Hub's own Settings.</p></div></div>`;
 
   h+=`<div class="card"><h3>Teams <span class="sp"></span>
     <button class="btn sm pri" ${dis} onclick="addTeam()">Add team</button></h3>
@@ -1579,6 +1603,16 @@ function moduleAccessToRow(moduleAccess){
 }
 function lockedDownModuleAccess(){
   const out={}; MODULE_ACCESS_KEYS.forEach(k=>{ out[k]=false; }); return out;
+}
+/* Organizations (the ceiling) and Users (the actual assignment) both need Contact
+   in the picture too, since Contact/Hub is a 9th module in every practical sense --
+   MODULES itself stays the 8 North modules only, since that array also drives the
+   top-nav rendering shared across all 9 files and Contact isn't a North page
+   (2026-08-27, moving module access off Roles and onto Organization + User). */
+const ACCESS_MODULES_ALL = MODULES.concat([{id:'Contact',label:'Contact',desc:'Search contacts, notes and outreach',color:'#1F1F1F',icon:'Ct'}]);
+const MODULE_DB_COL_ORG = Object.assign({}, MODULE_DB_COL, {Contact:'access_contact'});
+function orgModuleAccessFromRow(r){
+  const out={}; ACCESS_MODULES_ALL.forEach(m=>{ out[m.id]=!!r[MODULE_DB_COL_ORG[m.id]]; }); return out;
 }
 function renderTnModuleLinks(){
   return MODULES.map(m=>{

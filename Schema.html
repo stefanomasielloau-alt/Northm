@@ -340,7 +340,7 @@ async function loadFromSupabase(){
     sb.from('schema_automations').select('id,name,trigger_type,trigger_value,action_type,action_message,action_target_agent,enabled,fired_ids,last_run_at'),
     sb.from('campaigns').select('id,name,signoff_status'),
     sb.from('tasks').select('id,name,campaign_id,due_date,status'),
-    sb.from('audit_log').select('ts,what,detail').order('ts',{ascending:false}).limit(200),
+    sb.from('audit_log').select('ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200),
     sb.from('agent_destinations').select('id,name,type,target,is_org_default'),
     sb.from('agent_dispatches').select('id,automation_id,brief,destination_id,destination_name,status,result_detail,pushed_by,pushed_at,created_at').order('created_at',{ascending:false}).limit(200),
     /* Read-only, for the "Alert people" target picker (phase18) -- Schema doesn't own any

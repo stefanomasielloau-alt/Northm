@@ -351,7 +351,7 @@ async function loadFromSupabase(){
     sb.from('campaigns').select('id,name'),
     sb.from('crm_contacts').select('id,name,title,account,email,phone,notes'),
     sb.from('crm_activities').select('id,contact_id,deal_id,type,summary,occurred_at,logged_by'),
-    sb.from('audit_log').select('ts,what,detail').order('ts',{ascending:false}).limit(200)
+    sb.from('audit_log').select('ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200)
   ]);
   const [factorsR,tiersR,dealsR,campaignsR,contactsR,activitiesR,auditR] = results;
   for(const r of results){ if(r.error) throw r.error; }

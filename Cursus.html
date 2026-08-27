@@ -404,7 +404,7 @@ async function loadFromSupabase(){
        reporting (phase16, Planning drill-down + Events cross-link). */
     sb.from('eventus_events').select('id,name,type,status,campaign_id,budget,pax,registered,attended'),
     sb.from('org_settings').select('webhook_url,webhook_enabled,fy_start_month,campaign_naming_pattern,campaign_naming_seq_scope,campaign_naming_seq_counters').eq('org_id',_orgId).maybeSingle(),
-    sb.from('audit_log').select('ts,what,detail').order('ts',{ascending:false}).limit(200),
+    sb.from('audit_log').select('ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200),
     sb.from('partners').select('id,name,type,contact_name,contact_email,contact_phone,notes'),
     sb.from('campaign_partner_allocations').select('id,campaign_id,partner_id,role,budget_share_pct,lead_share_pct'),
     sb.from('assets').select('id,name,category'),

@@ -403,7 +403,7 @@ async function loadFromSupabase(){
     sb.from('prospectus_leads').select('id,filter_id,company,domain,contact_name,status,notes'),
     sb.from('cost_buckets').select('id,code,label'),
     sb.from('llm_providers').select('id,name,kind,endpoint,key_label,enabled,priority,notes'),
-    sb.from('audit_log').select('ts,what,detail').order('ts',{ascending:false}).limit(200),
+    sb.from('audit_log').select('ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200),
     sb.from('roles').select('id,org_id,name,config,publish,write_all,scope,description')
   ]);
   const [filtersR,reportsR,leadsR,costBucketsR,llmR,auditR,rolesR] = results;

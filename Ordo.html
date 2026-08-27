@@ -462,15 +462,28 @@ function visibleRegions(){
 }
 function canWriteRegion(rid){
   const u=user(),r=role();
+  if(CFG.isPlatformAdmin)return true;
+  if(!r)return false;
   if(r.name==='Viewer')return false;
   if(r.writeAll)return true;
   if(r.scope==='all')return true;
   return u.regionIds.includes(rid);
 }
-const canConfig=()=>role().config;
-const canPublish=()=>role().publish;
-const verLocked=()=>version().locked&&!role().writeAll;
-const readOnly=()=>role().name==='Viewer'||verLocked();
+/* Super Admin (2026-08-27): a Super Admin's profile has no org-scoped role_id at
+   all -- role() legitimately returns undefined for them, same as for a user who
+   hasn't been assigned a role yet. Every one of these now checks isPlatformAdmin
+   first and null-guards role() otherwise, instead of assuming it's always an
+   object (that assumption is what was crashing this page to blank for Stef). */
+const canConfig=()=>CFG.isPlatformAdmin || !!(role()&&role().config);
+const canPublish=()=>CFG.isPlatformAdmin || !!(role()&&role().publish);
+const verLocked=()=>version().locked && !(CFG.isPlatformAdmin || (role()&&role().writeAll));
+const readOnly=()=>{
+  if(CFG.isPlatformAdmin) return false;
+  const r=role();
+  if(!r) return true;
+  return r.name==='Viewer'||verLocked();
+};
+const roleName=()=>{ const r=role(); return r ? r.name : (CFG.isPlatformAdmin?'Super Admin':'No role assigned'); };
 
 /* ============================================================================
    CALCULATION ENGINE — resolves the chain from CFG.gates at runtime.
@@ -1204,7 +1217,7 @@ function impactOf(dim,action,memberName){
    MUTATION + AUDIT + PENDING-CHANGE FLOW
    ============================================================================ */
 function logAudit(what,detail){
-  CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),who:user().name,role:role().name,what:what,detail:detail});
+  CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),who:user().name,role:roleName(),what:what,detail:detail});
   if(CFG.audit.length>200)CFG.audit.pop();
 }
 function toast(msg){
@@ -1636,7 +1649,7 @@ function SET(path,val,opts){
 const PLAN_EDIT_FIELDS={ campaigns:['budget','start','end','committed','actual','convOverride'] };
 function setIn(arr,id,field,val,type){
   const it=byId(CFG[arr],id); if(!it)return;
-  if(PLAN_EDIT_FIELDS[arr]&&PLAN_EDIT_FIELDS[arr].includes(field)&&role().requireCommitOnEdit){
+  if(PLAN_EDIT_FIELDS[arr]&&PLAN_EDIT_FIELDS[arr].includes(field)&&!CFG.isPlatformAdmin&&role()&&role().requireCommitOnEdit){
     queuePlanEdit(arr,id,field,val,type); return;
   }
   let v=val;
@@ -1718,7 +1731,7 @@ function impactPanel(){
         </span></li>`).join('')}</ul>
       </div>
       <div class="ftr">
-        <span class="mini">Logged against <b>${esc(user().name)}</b> · ${esc(role().name)}</span>
+        <span class="mini">Logged against <b>${esc(user().name)}</b> · ${esc(roleName())}</span>
         <span class="sp"></span>
         <button class="btn" onclick="cancelPending()">Cancel</button>
         <button class="btn ${i.destructive?'dgr':'pri'}" onclick="commitPending()">
@@ -1774,7 +1787,7 @@ function pageAdmin(){
   let h=`<div class="phead"><div><h1>Admin &amp; configuration</h1>
     <p>Dimensions are data, not structure. Add a gate here and every module below follows it — no rebuild.</p></div>
     <div class="sp"></div>
-    ${canConfig()?'<span class="pill ok">Configuration unlocked</span>':'<span class="pill bad">Read only for '+esc(role().name)+'</span>'}
+    ${canConfig()?'<span class="pill ok">Configuration unlocked</span>':'<span class="pill bad">Read only for '+esc(roleName())+'</span>'}
     </div>`;
   h+=`<div class="tabs">${ADMIN_TABS.map(t=>`<button class="tab ${UI.adminTab===t[0]?'on':''}" onclick="go('admin','${t[0]}')">${t[1]}</button>`).join('')}</div>`;
   const dis=canConfig()?'':'disabled';
@@ -2708,7 +2721,7 @@ function pageGeo(){
     <p>Region and pod funnels, plus the gap between ACV target and the demand the funnel can actually produce.</p></div>
     <div class="sp"></div><span class="pill ${vis.length<R().length?'warn':'n'}">${vis.length} of ${R().length} regions visible to ${esc(user().name)}</span></div>`;
   if(vis.length<R().length) h+=`<div class="note w"><strong>Scope isolation active.</strong>
-    ${esc(user().name)} is a ${esc(role().name)} with cross-region visibility off, so only
+    ${esc(user().name)} is a ${esc(roleName())} with cross-region visibility off, so only
     ${vis.map(r=>esc(r.name)).join(', ')} resolves. Switch the Role selector to compare.</div>`;
   const totAe=sum(vis.map(r=>r.aeHeads)),totAcv=sum(vis.map(r=>r.acvTarget));
   h+=`<div class="kpis">
@@ -3772,7 +3785,7 @@ function exportCfg(){
   toast('Configuration exported.');
 }
 window.exportCfg=exportCfg;
-document.getElementById('cRole').onchange=e=>{UI.userId=e.target.value;render();toast('Now acting as '+user().name+' — '+role().name);};
+document.getElementById('cRole').onchange=e=>{UI.userId=e.target.value;render();toast('Now acting as '+user().name+' — '+roleName());};
 document.getElementById('cVer').onchange=e=>{UI.versionId=e.target.value;render();};
 document.getElementById('cFy').onchange=e=>{UI.fy=e.target.value;render();};
 document.getElementById('cGrain').onchange=e=>{UI.grain=e.target.value;CFG.time.grain=e.target.value;render();};

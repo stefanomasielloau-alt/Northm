@@ -254,7 +254,7 @@ const CFG = {
   audit:[]
 };
 
-const UI = { page:'home', helpOpen:false, orgEdit:null };
+const UI = { page:'home', helpOpen:false, orgEdit:null, showArchivedInvites:false };
 
 function logAudit(what,detail){
   CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
@@ -394,7 +394,7 @@ async function loadFromSupabase(){
     sb.from('audit_log').select('ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200),
     sb.from('roles').select('id,org_id,name,config,publish,write_all,scope,description,require_commit_on_edit,allow_expert_mode,is_system,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,can_edit'),
     sb.from('profiles').select('id,org_id,name,email,role_id,region_ids,cross_region,contact_access,module_overrides'),
-    sb.from('org_invites').select('id,code,role_id,region_ids,cross_region,created_by,created_at,expires_at,used_by,used_at,org_id').order('created_at',{ascending:false}),
+    sb.from('org_invites').select('id,code,role_id,region_ids,cross_region,created_by,created_at,expires_at,used_by,used_at,org_id,archived').order('created_at',{ascending:false}),
     sb.from('regions').select('id,org_id,name'),
     /* Read-only, for the Agent Activity dashboard -- Norma doesn't own this table and never
        writes back to it; Schema is the only tool that creates/updates dispatches. Same
@@ -954,13 +954,25 @@ async function generateInvite(){
   UI.lastInviteCode = data;
   logAudit('create invite','Role: '+((byId(CFG.roles,roleId)||{}).name||'—'));
   const { data: invites } = await sb.from('org_invites')
-    .select('id,code,role_id,region_ids,cross_region,created_by,created_at,expires_at,used_by,used_at,org_id')
+    .select('id,code,role_id,region_ids,cross_region,created_by,created_at,expires_at,used_by,used_at,org_id,archived')
     .order('created_at',{ascending:false});
   CFG.orgInvites = invites || [];
   render();
   toast('Invite code generated — share it with your new teammate.');
 }
 window.generateInvite = generateInvite;
+/* Archive an invite (2026-08-27) -- doesn't delete it (nothing here ever deletes),
+   just hides it from the default view so the list doesn't grow unbounded. Toggled
+   back into view with the "Show archived" checkbox above the table. */
+async function archiveInvite(inviteId){
+  if(!CFG.isSuperAdmin && !canConfig()){ toast('Your role cannot archive invites.'); return; }
+  const inv = CFG.orgInvites.find(i=>i.id===inviteId); if(!inv) return;
+  inv.archived = true; render();
+  const { error } = await sb.from('org_invites').update({ archived: true }).eq('id', inviteId);
+  if(error){ inv.archived = false; render(); toast('Could not archive invite: '+error.message); return; }
+  logAudit('archive invite', inv.code);
+}
+window.archiveInvite = archiveInvite;
 function copyInviteCode(code){
   if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(code); toast('Code copied.'); }
   else toast('Code: '+code);
@@ -1594,17 +1606,22 @@ function pageUsers(){
     ${UI.lastInviteCode?`<div class="note" style="margin-top:10px"><strong>Code: <span style="font-size:15px;letter-spacing:1px">${esc(UI.lastInviteCode)}</span></strong>
       <button class="btn sm" onclick="copyInviteCode('${esc(UI.lastInviteCode)}')">Copy</button></div>`:''}
     </div>
+    ${(()=>{ const archivedCount=CFG.orgInvites.filter(i=>i.archived).length; return archivedCount?`<div class="bd" style="padding-top:0"><label class="mini">
+      <input type="checkbox" ${UI.showArchivedInvites?'checked':''} onchange="UI.showArchivedInvites=this.checked;render()"> Show archived (${archivedCount})</label></div>`:''; })()}
     <div class="bd flush" style="padding-top:0"><table><thead><tr><th>Code</th><th>Role</th>
-      ${sa?'<th>Organization</th>':''}<th>Created</th><th>Expires</th><th>Status</th><th>Redeemed by</th></tr></thead><tbody>
-    ${CFG.orgInvites.length?CFG.orgInvites.map(i=>{
+      ${sa?'<th>Organization</th>':''}<th>Invited by</th><th>Created</th><th>Expires</th><th>Status</th><th>Redeemed by</th><th></th></tr></thead><tbody>
+    ${(()=>{ const visible=CFG.orgInvites.filter(i=>UI.showArchivedInvites||!i.archived); return visible.length?visible.map(i=>{
       const r=byId(CFG.roles,i.role_id);
       const status=i.used_at?'<span class="pill ok">Used</span>':(new Date(i.expires_at)<new Date()?'<span class="pill bad">Expired</span>':'<span class="pill n">Open</span>');
       const redeemedBy=i.used_by?(byId(CFG.users,i.used_by)||{}).name||'—':'—';
-      return `<tr><td class="lb">${esc(i.code)}</td><td>${esc(r?r.name:'—')}</td>
+      const invitedBy=i.created_by?(byId(CFG.users,i.created_by)||{}).name||'—':'—';
+      return `<tr style="${i.archived?'opacity:.55':''}"><td class="lb">${esc(i.code)}</td><td>${esc(r?r.name:'—')}</td>
         ${sa?`<td class="mini">${esc(orgName(i.org_id))}</td>`:''}
+        <td class="mini">${esc(invitedBy)}</td>
         <td class="mini">${esc((i.created_at||'').slice(0,10))}</td><td class="mini">${esc((i.expires_at||'').slice(0,10))}</td>
-        <td>${status}</td><td class="mini">${esc(redeemedBy)}</td></tr>`;
-    }).join(''):`<tr><td colspan="${sa?7:6}" class="empty">No invites generated yet.</td></tr>`}
+        <td>${status}</td><td class="mini">${esc(redeemedBy)}</td>
+        <td class="n">${i.archived?'<span class="pill n">Archived</span>':`<button class="btn sm" ${dis} onclick="archiveInvite('${i.id}')">Archive</button>`}</td></tr>`;
+    }).join(''):`<tr><td colspan="${sa?8:7}" class="empty">No invites generated yet.</td></tr>`; })()}
     </tbody></table></div></div>`;
 
   return h;

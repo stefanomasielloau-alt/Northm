@@ -837,9 +837,7 @@ function orgEditModalHtml(){
       </div>
 
       <label class="lbl" title="The ceiling -- nobody in this org can get a module that's off here, no matter what they're set to at the user level">Modules available to this org</label>
-      <div class="mini" style="margin:4px 0 16px">${ACCESS_MODULES_ALL.map(m=>`<button class="btn sm" title="${esc(m.label)}"
-          style="padding:3px 6px;margin:1px;opacity:${o.moduleAccess[m.id]?'1':'.35'}" onclick="toggleOrgModuleAccess('${o.id}','${m.id}')">
-          <span class="mk" style="background:${m.color};width:14px;height:14px;font-size:8px">${m.icon}</span></button>`).join('')}
+      <div class="mini" style="margin:4px 0 16px">${ACCESS_MODULES_ALL.map(m=>moduleAccessBtnHtml(m, !!o.moduleAccess[m.id], `toggleOrgModuleAccess('${o.id}','${m.id}')`)).join('')}
         <p class="mini" style="margin-top:6px">This is the ceiling, not the default -- each person still needs their own
           access turned on in the Users table below for anyone to actually get in.</p>
       </div>
@@ -1565,9 +1563,7 @@ function pageUsers(){
       <div class="bd flush"><table><thead><tr><th>Organization</th><th class="n">Users</th><th>Modules</th><th class="n">Created</th><th></th></tr></thead><tbody>
       ${(CFG.allOrganizations||[]).map(o=>`<tr><td class="lb">${esc(o.name)}${o.id===_orgId?' <span class="tag">yours</span>':''}${o.parentOrgId?' <span class="mini">(sub-org of '+esc(orgName(o.parentOrgId))+')</span>':''}</td>
         <td class="n calc">${CFG.users.filter(u=>u.orgId===o.id).length}</td>
-        <td style="white-space:nowrap">${ACCESS_MODULES_ALL.map(m=>`<button class="btn sm" title="${esc(m.label)}"
-          style="padding:3px 6px;margin:1px;opacity:${o.moduleAccess[m.id]?'1':'.35'}" onclick="toggleOrgModuleAccess('${o.id}','${m.id}')">
-          <span class="mk" style="background:${m.color};width:14px;height:14px;font-size:8px">${m.icon}</span></button>`).join('')}</td>
+        <td style="white-space:nowrap">${ACCESS_MODULES_ALL.map(m=>moduleAccessBtnHtml(m, !!o.moduleAccess[m.id], `toggleOrgModuleAccess('${o.id}','${m.id}')`)).join('')}</td>
         <td class="n mini">${esc((o.createdAt||'').slice(0,10))}</td>
         <td class="n"><button class="btn sm" onclick="openOrgEdit('${o.id}')">Edit</button></td></tr>`).join('')}
       </tbody></table></div>
@@ -1595,9 +1591,7 @@ function pageUsers(){
       ).join(''):'<span class="pill n">no regions in this org</span>')}</td>
       <td style="white-space:nowrap">${ACCESS_MODULES_ALL.map(m=>{
         const on = m.id==='Contact' ? !!u.contactAccess : !!u.moduleOverrides[m.id];
-        return `<button class="btn sm" ${dis} title="${esc(m.label)}"
-          style="padding:3px 6px;margin:1px;opacity:${on?'1':'.35'}" onclick="toggleUserModuleAccess('${u.id}','${m.id}')">
-          <span class="mk" style="background:${m.color};width:14px;height:14px;font-size:8px">${m.icon}</span></button>`;
+        return moduleAccessBtnHtml(m, on, `toggleUserModuleAccess('${u.id}','${m.id}')`, dis);
       }).join('')}</td>
       <td class="n" style="white-space:nowrap">
         <button class="btn sm" ${dis} onclick="resetUserPassword('${u.id}')">Reset password</button>
@@ -1762,6 +1756,16 @@ function lockedDownModuleAccess(){
    top-nav rendering shared across all 9 files and Contact isn't a North page
    (2026-08-27, moving module access off Roles and onto Organization + User). */
 const ACCESS_MODULES_ALL = MODULES.concat([{id:'Contact',label:'Contact',desc:'Search contacts, notes and outreach',color:'#1F1F1F',icon:'Ct'}]);
+/* 2026-08-27: shared markup for the module-access toggle buttons -- previously opacity was the
+   ONLY signal for on/off, hard to read at a glance per Stef. Enabled now also gets a solid ring
+   in the module's own color; disabled stays dim with no ring. Tooltip states the mode in words
+   too, not just the module name. */
+function moduleAccessBtnHtml(m, on, onclickJs, disabledAttr){
+  return `<button class="btn sm" ${disabledAttr||''} title="${esc(m.label)} — ${on?'Enabled':'Disabled'} (click to toggle)"
+    style="padding:3px 6px;margin:1px;opacity:${on?'1':'.4'};border:2px solid ${on?m.color:'transparent'};border-radius:6px"
+    onclick="${onclickJs}">
+    <span class="mk" style="background:${m.color};width:14px;height:14px;font-size:8px">${m.icon}</span></button>`;
+}
 const MODULE_DB_COL_ORG = Object.assign({}, MODULE_DB_COL, {Contact:'access_contact'});
 function orgModuleAccessFromRow(r){
   const out={}; ACCESS_MODULES_ALL.forEach(m=>{ out[m.id]=!!r[MODULE_DB_COL_ORG[m.id]]; }); return out;

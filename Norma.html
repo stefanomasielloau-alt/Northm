@@ -114,6 +114,8 @@ td.lb{font-weight:600;}
 .modal{background:#fff;border-radius:10px;box-shadow:var(--sh-2);width:min(640px,100%);max-height:88vh;overflow:auto}
 .modal>h3{margin:0;padding:13px 16px;border-bottom:1px solid var(--line);font-size:14px;font-weight:700}
 .modal .bd{padding:16px}
+@keyframes rowFlash{0%{background:#FFF3CD}100%{background:transparent}}
+.row-flash{animation:rowFlash 2.2s ease-out}
 .modal .ft{padding:11px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;background:#FAFBFE}
 .mcard{border:1px solid var(--line); border-radius:var(--r); padding:14px; background:var(--surface);}
 .mgrid{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px;}
@@ -714,6 +716,22 @@ window.createOrgAsSuperAdmin = createOrgAsSuperAdmin;
    read-only summary of who's in it. Super Admin only -- gated the same
    way the "All organizations" card already is. ---------- */
 function openOrgEdit(orgId){ UI.orgEdit = orgId; render(); }
+/* Org Edit -> Users & rights: click a name to land on that person's row in the main
+   Users table below (closes the popup, switches to the Roles & users page if needed,
+   scrolls to the row, and gives it a brief highlight so it's easy to spot). */
+function jumpToUserFromOrgEdit(userId){
+  UI.orgEdit = null;
+  UI.page = 'users';
+  render();
+  setTimeout(()=>{
+    const el = document.getElementById('userRow-'+userId);
+    if(!el) return;
+    el.scrollIntoView({behavior:'smooth', block:'center'});
+    el.classList.add('row-flash');
+    setTimeout(()=>el.classList.remove('row-flash'), 2200);
+  }, 30);
+}
+window.jumpToUserFromOrgEdit = jumpToUserFromOrgEdit;
 window.openOrgEdit = openOrgEdit;
 function closeOrgEdit(){ UI.orgEdit = null; render(); }
 window.closeOrgEdit = closeOrgEdit;
@@ -820,7 +838,7 @@ function orgEditModalHtml(){
       <div class="bd flush" style="margin-top:4px"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead><tbody>
         ${orgUsers.length ? orgUsers.map(u=>{
           const r = byId(CFG.roles, u.roleId);
-          return `<tr><td class="lb">${esc(u.name||'—')}</td><td class="mini">${esc(u.email||'—')}</td><td class="mini">${esc(r?r.name:'— no role —')}</td></tr>`;
+          return `<tr><td class="lb"><a href="#" onclick="jumpToUserFromOrgEdit('${u.id}');return false;" title="Jump to this person in the Users table">${esc(u.name||'—')}</a></td><td class="mini">${esc(u.email||'—')}</td><td class="mini">${esc(r?r.name:'— no role —')}</td></tr>`;
         }).join('') : '<tr><td colspan="3" class="empty">No users yet.</td></tr>'}
       </tbody></table></div>
       <p class="mini" style="margin-top:8px">To change a role or remove a user, use the Users table above (switch into this org first if it isn't yours).</p>
@@ -1446,7 +1464,7 @@ function pageUsers(){
       <th>Cross-region visibility</th><th>Regions when isolated</th><th title="Which modules this person can open -- capped by what their organization allows">Modules</th><th></th></tr></thead><tbody>
     ${CFG.users.slice().sort((a,b)=>(orgName(a.orgId)).localeCompare(orgName(b.orgId))).map(u=>{
       const orgRegions = CFG.regions.filter(r=>r.orgId===u.orgId);
-      return `<tr><td class="lb"><input class="cel txt" style="width:150px" value="${esc(u.name)}" placeholder="add a name" ${dis} onchange="setUserName('${u.id}',this.value)"></td><td class="mini">${esc(u.email||'—')}</td>
+      return `<tr id="userRow-${u.id}"><td class="lb"><input class="cel txt" style="width:150px" value="${esc(u.name)}" placeholder="add a name" ${dis} onchange="setUserName('${u.id}',this.value)"></td><td class="mini">${esc(u.email||'—')}</td>
       ${sa?`<td class="mini"><select class="cel txt" style="width:150px" onchange="setUserOrg('${u.id}',this.value)">
         ${(CFG.allOrganizations||[]).map(o=>`<option value="${o.id}" ${o.id===u.orgId?'selected':''}>${esc(o.name)}</option>`).join('')}
         </select>${u.orgId===_orgId?' <span class="tag">yours</span>':''}</td>`:''}

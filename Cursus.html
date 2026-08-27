@@ -1955,7 +1955,8 @@ function detailActivityHtml(id){
   </div></div>`;
 }
 
-const ACTIVITY_TYPE_SUGGESTIONS=['General','Event','Content','Paid Media','Email','Webinar','Other'];
+const ACTIVITY_TYPE_SUGGESTIONS=['General','Event','Content','Paid Media','Email','Webinar','Contact Outreach','Contact Sourcing','Other'];
+/* 'Contact Outreach' and 'Contact Sourcing' (2026-08-27, per Stef) are the two types meant to connect an Activity to Hub's Contact database -- push a target list to Hub, or pull an existing Hub list in as the activity's audience. Not wired up yet: waiting on Push to Hub (Norma.html) being confirmed working first, plus what exactly 'push' should create in Hub. See the backlog doc. */
 function activityTypeOptionsHtml(t){
   const cur = t.type || '';
   const list = ACTIVITY_TYPE_SUGGESTIONS.includes(cur) || !cur ? ACTIVITY_TYPE_SUGGESTIONS : [cur].concat(ACTIVITY_TYPE_SUGGESTIONS);

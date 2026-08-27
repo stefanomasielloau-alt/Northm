@@ -1460,6 +1460,23 @@ function pageUsers(){
       edits for confirmation instead of applying immediately. <b>Expert mode allowed</b> controls whether this role can
       switch Campaign Planning out of Simple mode — off by default only if you turn it off; everyone can use Expert mode until you do.</p></div></div>`;
 
+  if(sa){
+    h+=`<div class="card"><h3>All organizations <span class="sp"></span><span class="pill v">Super Admin view</span>
+      <button class="btn sm pri" style="margin-left:8px" onclick="createOrgAsSuperAdmin()">Add organization</button></h3>
+      <div class="bd flush"><table><thead><tr><th>Organization</th><th class="n">Users</th><th>Modules</th><th class="n">Created</th><th></th></tr></thead><tbody>
+      ${(CFG.allOrganizations||[]).map(o=>`<tr><td class="lb">${esc(o.name)}${o.id===_orgId?' <span class="tag">yours</span>':''}${o.parentOrgId?' <span class="mini">(sub-org of '+esc(orgName(o.parentOrgId))+')</span>':''}</td>
+        <td class="n calc">${CFG.users.filter(u=>u.orgId===o.id).length}</td>
+        <td style="white-space:nowrap">${ACCESS_MODULES_ALL.map(m=>`<button class="btn sm" title="${esc(m.label)}"
+          style="padding:3px 6px;margin:1px;opacity:${o.moduleAccess[m.id]?'1':'.35'}" onclick="toggleOrgModuleAccess('${o.id}','${m.id}')">
+          <span class="mk" style="background:${m.color};width:14px;height:14px;font-size:8px">${m.icon}</span></button>`).join('')}</td>
+        <td class="n mini">${esc((o.createdAt||'').slice(0,10))}</td>
+        <td class="n"><button class="btn sm" onclick="openOrgEdit('${o.id}')">Edit</button></td></tr>`).join('')}
+      </tbody></table></div>
+      <div class="bd" style="padding-top:0"><p class="mini">Full cross-org data management (working inside another
+        organization's plan from here) isn't built yet — this covers visibility, roles, users and invites only.
+        New organizations start with no regions, pods, or campaigns — their own Org Admin sets those up in Strategy,
+        the same way Beta Testing did.</p></div></div>`;
+  }
   h+=`<div class="card"><h3>Users</h3>
     <div class="bd flush"><table><thead><tr><th>Name</th><th>Email</th>${sa?'<th>Organization</th>':''}<th>Role</th>
       <th>Cross-region visibility</th><th>Regions when isolated</th><th title="Which modules this person can open -- capped by what their organization allows">Modules</th><th></th></tr></thead><tbody>
@@ -1548,23 +1565,6 @@ function pageUsers(){
     }).join(''):`<tr><td colspan="${sa?7:6}" class="empty">No invites generated yet.</td></tr>`}
     </tbody></table></div></div>`;
 
-  if(sa){
-    h+=`<div class="card"><h3>All organizations <span class="sp"></span><span class="pill v">Super Admin view</span>
-      <button class="btn sm pri" style="margin-left:8px" onclick="createOrgAsSuperAdmin()">Add organization</button></h3>
-      <div class="bd flush"><table><thead><tr><th>Organization</th><th class="n">Users</th><th>Modules</th><th class="n">Created</th><th></th></tr></thead><tbody>
-      ${(CFG.allOrganizations||[]).map(o=>`<tr><td class="lb">${esc(o.name)}${o.id===_orgId?' <span class="tag">yours</span>':''}${o.parentOrgId?' <span class="mini">(sub-org of '+esc(orgName(o.parentOrgId))+')</span>':''}</td>
-        <td class="n calc">${CFG.users.filter(u=>u.orgId===o.id).length}</td>
-        <td style="white-space:nowrap">${ACCESS_MODULES_ALL.map(m=>`<button class="btn sm" title="${esc(m.label)}"
-          style="padding:3px 6px;margin:1px;opacity:${o.moduleAccess[m.id]?'1':'.35'}" onclick="toggleOrgModuleAccess('${o.id}','${m.id}')">
-          <span class="mk" style="background:${m.color};width:14px;height:14px;font-size:8px">${m.icon}</span></button>`).join('')}</td>
-        <td class="n mini">${esc((o.createdAt||'').slice(0,10))}</td>
-        <td class="n"><button class="btn sm" onclick="openOrgEdit('${o.id}')">Edit</button></td></tr>`).join('')}
-      </tbody></table></div>
-      <div class="bd" style="padding-top:0"><p class="mini">Full cross-org data management (working inside another
-        organization's plan from here) isn't built yet — this covers visibility, roles, users and invites only.
-        New organizations start with no regions, pods, or campaigns — their own Org Admin sets those up in Strategy,
-        the same way Beta Testing did.</p></div></div>`;
-  }
   return h;
 }
 

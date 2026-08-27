@@ -2190,6 +2190,51 @@ function planBoardHtml(level, items){
 }
 
 /* ---------- Gantt view (always the deepest level of the current scope) ---------- */
+/* 2026-08-27: time-scale header + gridlines -- previously the Gantt showed only a
+   "start -> end" text line above plain bars, so unless you read the tooltip there was no
+   way to tell what month/week you were looking at. Weekly ticks (Monday-aligned) under
+   ~10 weeks of range, monthly ticks otherwise -- a range that size is unreadable with the
+   other granularity (too many weekly labels, or too few monthly ones). */
+function ganttTicks(rs, re, span, rangeDays){
+  const ticks=[];
+  if(rangeDays<=70){
+    let d=new Date(rs);
+    d.setDate(d.getDate()-((d.getDay()+6)%7)); // back up to the Monday on/before rs
+    let guard=0;
+    while(d.getTime()<=re && guard<60){
+      guard++;
+      if(d.getTime()>=rs){
+        const iso=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+        ticks.push({ left: ganttClamp((d.getTime()-rs)/span,0,1)*100, label: F.d(iso), major:false });
+      }
+      d.setDate(d.getDate()+7);
+    }
+  } else {
+    let d=new Date(rs); d.setDate(1);
+    if(d.getTime()<rs) d.setMonth(d.getMonth()+1);
+    let guard=0;
+    while(d.getTime()<=re && guard<48){
+      guard++;
+      const label=d.toLocaleDateString('en-AU',{month:'short'})+(d.getMonth()===0?" '"+String(d.getFullYear()).slice(2):'');
+      ticks.push({ left: ganttClamp((d.getTime()-rs)/span,0,1)*100, label, major:true });
+      d.setMonth(d.getMonth()+1);
+    }
+  }
+  return ticks;
+}
+function ganttScaleHeaderHtml(ticks, draggable){
+  return `<div class="row" style="gap:8px;margin-bottom:6px">
+    <span style="width:14px;flex-shrink:0"></span>
+    <div style="width:150px;flex-shrink:0"></div>
+    <div style="flex:1;position:relative;height:16px">
+      ${ticks.map(t=>`<div class="mini" style="position:absolute;left:${t.left}%;top:0;transform:translateX(-1px);border-left:1px solid var(--line);padding-left:4px;white-space:nowrap;color:var(--ink-3)">${esc(t.label)}</div>`).join('')}
+    </div>
+    <span style="width:64px;flex-shrink:0"></span>
+  </div>`;
+}
+function ganttGridlinesHtml(ticks){
+  return ticks.map(t=>`<div style="position:absolute;left:${t.left}%;top:0;bottom:0;width:1px;background:var(--line)"></div>`).join('');
+}
 function planGanttRange(items, level){
   let starts=[], ends=[];
   if(level==='activity'){ starts=items.map(t=>t.startDate).filter(Boolean); ends=items.map(t=>t.dueDate).filter(Boolean); }
@@ -2209,7 +2254,9 @@ function planGanttHtml(level, items){
   const rs=new Date(range.start+'T00:00:00').getTime(), re=new Date(range.end+'T00:00:00').getTime();
   const span=Math.max(1,re-rs), rangeDays=Math.max(1,Math.round(span/86400000));
   const draggable = level==='campaign' || level==='activity';
+  const ticks = ganttTicks(rs, re, span, rangeDays);
   h+=`<div class="mini" style="margin-bottom:8px">${F.d(range.start)} → ${F.d(range.end)}${draggable?' · drag a bar to reschedule, drag the ⠿ handle to reorder':' · read-only (Programmes are synced from Strategy)'}</div>`;
+  h+=ganttScaleHeaderHtml(ticks, draggable);
   h+=`<div style="display:flex;flex-direction:column;gap:6px">`;
   items.forEach(it=>{
     const isTask = level==='activity';
@@ -2223,6 +2270,7 @@ function planGanttHtml(level, items){
       ${draggable?`<span class="mini" draggable="true" ondragstart="dragPlanRow(event,'${it.id}')" ondragover="allowDrop(event)" ondrop="dropPlanRow(event,'${it.id}','${level}')" style="width:14px;flex-shrink:0;cursor:grab" title="Drag to reorder">⠿</span>`:'<span style="width:14px;flex-shrink:0"></span>'}
       <div class="mini" style="width:150px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" onclick="openDetail('${level}','${it.id}')">${esc(it.name)}</div>
       <div class="gtrack" data-range-days="${rangeDays}" style="flex:1;position:relative;height:20px;background:var(--canvas);border-radius:4px">
+        ${ganttGridlinesHtml(ticks)}
         <div ${draggable?`onmousedown="ganttBarMouseDown(event,'${level}','${it.id}')"`:`onclick="openDetail('${level}','${it.id}')"`}
           style="position:absolute;top:2px;height:16px;left:${left}%;width:${width}%;background:${color};border-radius:3px;${draggable?'cursor:grab':'cursor:pointer'}"
           title="${esc(it.name)} — ${esc(rag.label)}"></div>

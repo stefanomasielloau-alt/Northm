@@ -548,10 +548,15 @@ async function pushUserToHub(userId){
   const u = byId(CFG.users, userId); if(!u) return;
   if(!u.email){ toast('This user has no email on file.'); return; }
   if(!u.contactAccess){ toast('Check "Contact access" for '+(u.name||u.email)+' before pushing them to Hub.'); return; }
-  const { data } = await sb.auth.getSession();
-  const token = data && data.session && data.session.access_token;
-  if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
+  /* 2026-08-27: sb.auth.getSession() used to sit OUTSIDE this try/catch -- if it ever threw
+     (session storage read failure, extension interference, anything) the function would just
+     stop with zero feedback: no toast, nothing. Reported as "tried it, nothing happens" with
+     no error text, which is exactly what that looks like. Moved inside so every failure path
+     now shows something, and if it still fails silently after this, that itself is a clue. */
   try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
     const r = await fetch(CONTACT_URL+'/admin/push-user', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ token: token, target_email: u.email })
@@ -560,7 +565,7 @@ async function pushUserToHub(userId){
     if(!r.ok){ toast(j.error||'Could not push to Hub.'); return; }
     logAudit('pushed to Hub', u.name||u.email);
     toast(j.already_existed ? (u.name||u.email)+' already has a Hub account.' : (u.name||u.email)+' pushed to Hub — set their Hub/Queue access there.');
-  }catch(e){ toast('Could not reach Hub.'); }
+  }catch(e){ toast('Could not reach Hub: '+(e&&e.message?e.message:'unknown error')); }
 }
 window.pushUserToHub = pushUserToHub;
 async function pushPasswordDirect(userId){
@@ -570,10 +575,10 @@ async function pushPasswordDirect(userId){
   const newPassword = prompt('New password for '+(u.name||u.email)+' (min 8 characters). This gets set on their North account immediately and emailed to them.');
   if(newPassword===null) return;
   if(newPassword.length<8){ toast('Password must be at least 8 characters.'); return; }
-  const { data } = await sb.auth.getSession();
-  const token = data && data.session && data.session.access_token;
-  if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
   try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
     const r = await fetch(CONTACT_URL+'/admin/push-password', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ token: token, target_email: u.email, new_password: newPassword })
@@ -582,7 +587,7 @@ async function pushPasswordDirect(userId){
     if(!r.ok){ toast(j.error||'Could not set password.'); return; }
     logAudit('password pushed', u.name||u.email);
     toast(j.emailed ? 'Password set and emailed to '+u.email+'.' : 'Password set, but the email could not be sent -- tell them directly.');
-  }catch(e){ toast('Could not reach Hub.'); }
+  }catch(e){ toast('Could not reach Hub: '+(e&&e.message?e.message:'unknown error')); }
 }
 window.pushPasswordDirect = pushPasswordDirect;
 async function pushEmailDirect(userId){
@@ -594,10 +599,10 @@ async function pushEmailDirect(userId){
   const trimmed = newEmail.trim().toLowerCase();
   if(!trimmed || trimmed.indexOf('@')<0){ toast('Enter a valid email address.'); return; }
   if(trimmed===u.email.toLowerCase()){ toast('That\'s already their email.'); return; }
-  const { data } = await sb.auth.getSession();
-  const token = data && data.session && data.session.access_token;
-  if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
   try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
     const r = await fetch(CONTACT_URL+'/admin/push-email', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ token: token, target_email: u.email, new_email: trimmed })
@@ -609,7 +614,7 @@ async function pushEmailDirect(userId){
     logAudit('email changed', (u.name||u.email)+' -> '+trimmed);
     toast('Email changed to '+trimmed+(j.hub_username_renamed?' (their Hub username was updated to match).':'.'));
     await loadFromSupabase(); render();
-  }catch(e){ toast('Could not reach Hub.'); }
+  }catch(e){ toast('Could not reach Hub: '+(e&&e.message?e.message:'unknown error')); }
 }
 window.pushEmailDirect = pushEmailDirect;
 async function setUserCrossRegion(userId){

@@ -2018,10 +2018,12 @@ async function pushActivityContactsToHub(taskId){
   const t=byId(CFG.tasks,taskId); if(!t) return;
   const unpushed=(t.contactRefs||[]).filter(c=>!c.pushed);
   if(!unpushed.length) return;
-  const { data } = await sb.auth.getSession();
-  const token = data && data.session && data.session.access_token;
-  if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
+  /* getSession() lives inside the try (2026-08-27) -- see the matching note on
+     pushUserToHub in Norma.html: outside the try, any throw there means zero feedback. */
   try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
     const r = await fetch(CONTACT_URL+'/admin/push-contacts', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ token: token, contacts: unpushed.map(c=>({name:c.name,company:c.company,email:c.email,li:c.li})) })
@@ -2032,7 +2034,7 @@ async function pushActivityContactsToHub(taskId){
     logAudit('pushed to Hub Contacts', t.name+' → '+(j.inserted_count||0)+' new, '+(j.skipped_count||0)+' already existed');
     toast((j.inserted_count||0)+' pushed to Hub'+((j.skipped_count)?', '+j.skipped_count+' already there':'')+'.');
     render();
-  }catch(e){ toast('Could not reach Hub.'); }
+  }catch(e){ toast('Could not reach Hub: '+(e&&e.message?e.message:'unknown error')); }
 }
 window.pushActivityContactsToHub=pushActivityContactsToHub;
 

@@ -2240,7 +2240,19 @@ function pagePlanning(){
 
   h+=planBreadcrumb();
 
-  h+=`<div class="row" style="gap:6px;margin-bottom:6px;flex-wrap:wrap;align-items:center">
+  h+=`<div class="kpis" style="margin-bottom:12px">
+    <div class="kpi"><div class="k">Campaigns in scope</div><div class="kpi-v">${r.campCount}</div></div>
+    <div class="kpi"><div class="k">Activities in scope</div><div class="kpi-v">${r.taskCount}</div></div>
+    <div class="kpi"><div class="k">Budget</div><div class="kpi-v">${F.mk(r.budget)}</div></div>
+    <div class="kpi hl"><div class="k">Committed</div><div class="kpi-v">${F.mk(r.committed)}</div></div>
+    <div class="kpi hl"><div class="k">Actual</div><div class="kpi-v">${F.mk(r.actual)}</div></div>
+    ${(r.events.registered||r.events.attended||r.events.budget)?`<div class="kpi"><div class="k">Linked events</div><div class="kpi-v">${r.events.attended}/${r.events.registered}</div><div class="sub">attended/registered · ${F.mk(r.events.budget)} budget</div></div>`:''}
+  </div>`;
+
+  /* View switcher + scope filters: given a coloured backing (was plain white-on-white,
+     easy to miss -- e.g. the Gantt button) and moved below the KPI tiles so the headline
+     numbers lead, per Stef 2026-08-27. */
+  h+=`<div class="row" style="gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center;background:#EAF6F3;border:1px solid #CFEAE3;border-radius:var(--r);padding:10px 12px">
     <button class="btn sm ${UI.planView==='table'?'pri':''}" onclick="setPlanView('table')">Table</button>
     <button class="btn sm ${UI.planView==='board'?'pri':''}" onclick="setPlanView('board')">Board</button>
     <button class="btn sm ${UI.planView==='gantt'?'pri':''}" onclick="setPlanView('gantt')">Gantt</button>
@@ -2256,15 +2268,6 @@ function pagePlanning(){
       <option value="">All campaigns</option>
       ${(UI.planProgrammeId?CFG.campaigns.filter(c=>c.programmeId===UI.planProgrammeId):CFG.campaigns).map(c=>`<option value="${c.id}" ${c.id===UI.planCampaignId?'selected':''}>${esc(c.name)}</option>`).join('')}
     </select>
-  </div>`;
-
-  h+=`<div class="kpis" style="margin-bottom:12px">
-    <div class="kpi"><div class="k">Campaigns in scope</div><div class="kpi-v">${r.campCount}</div></div>
-    <div class="kpi"><div class="k">Activities in scope</div><div class="kpi-v">${r.taskCount}</div></div>
-    <div class="kpi"><div class="k">Budget</div><div class="kpi-v">${F.mk(r.budget)}</div></div>
-    <div class="kpi hl"><div class="k">Committed</div><div class="kpi-v">${F.mk(r.committed)}</div></div>
-    <div class="kpi hl"><div class="k">Actual</div><div class="kpi-v">${F.mk(r.actual)}</div></div>
-    ${(r.events.registered||r.events.attended||r.events.budget)?`<div class="kpi"><div class="k">Linked events</div><div class="kpi-v">${r.events.attended}/${r.events.registered}</div><div class="sub">attended/registered · ${F.mk(r.events.budget)} budget</div></div>`:''}
   </div>`;
 
   if(UI.planView==='table'){ h+=planTableHtml(); return h; }

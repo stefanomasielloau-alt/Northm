@@ -260,10 +260,13 @@ function logAudit(what,detail){
   CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
   if(CFG.audit.length>100)CFG.audit.pop();
 }
+/* 2026-08-27: bumped from 2200ms -- several toasts here are the ONLY feedback for an
+   action that otherwise looks like nothing happened (e.g. Push to Hub's "Check Contact
+   access first" gate), so a message that vanishes in ~2s is easy to miss entirely. */
 function toast(msg){
   const l=document.getElementById('layer');
   const d=document.createElement('div'); d.className='toast'; d.textContent=msg;
-  l.appendChild(d); setTimeout(()=>d.remove(),2200);
+  l.appendChild(d); setTimeout(()=>d.remove(),4200);
 }
 function go(page){ UI.page=page; render(); }
 window.go=go;

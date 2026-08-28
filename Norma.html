@@ -557,14 +557,20 @@ async function pushUserToHub(userId){
     const { data } = await sb.auth.getSession();
     const token = data && data.session && data.session.access_token;
     if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
+    // 2026-08-28: role name now goes along with the push, so Hub can sync
+    // this person's role there instead of always defaulting to Viewer --
+    // see hub_local_api.py's _map_north_role_name() for how a name that
+    // doesn't match one of the 5 standard ones (a custom role) is handled.
+    const pushedRole = byId(CFG.roles, u.roleId);
     const r = await fetch(CONTACT_URL+'/admin/push-user', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ token: token, target_email: u.email })
+      body: JSON.stringify({ token: token, target_email: u.email, role_name: (pushedRole && pushedRole.name) || '' })
     });
     const j = await r.json().catch(()=>({}));
     if(!r.ok){ toast(j.error||'Could not push to Hub.'); return; }
     logAudit('pushed to Hub', u.name||u.email);
-    toast(j.already_existed ? (u.name||u.email)+' already has a Hub account.' : (u.name||u.email)+' pushed to Hub — set their Hub/Queue access there.');
+    const hubRoleLabel = {user:'Viewer',planner:'Planner',manager:'Manager',admin:'Admin',super_user:'Super User'}[j.role] || 'Viewer';
+    toast(j.already_existed ? (u.name||u.email)+' already has a Hub account — role synced to '+hubRoleLabel+'.' : (u.name||u.email)+' pushed to Hub as '+hubRoleLabel+' — set their Hub/Queue access there.');
   }catch(e){ toast('Could not reach Hub: '+(e&&e.message?e.message:'unknown error')); }
 }
 window.pushUserToHub = pushUserToHub;

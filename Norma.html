@@ -419,6 +419,17 @@ async function loadFromSupabase(){
   }catch(e){ console.warn('tracking_config column not available yet (migration pending?) -- falling back to local default.', e); }
   if(_trackingConfigFromDb) CFG.trackingConfig = _trackingConfigFromDb;
 
+  /* feedback_items backs the Feedback tab + the floating feedback widget on every North
+     page (2026-08-28). Fail-soft, same reasoning as tracking_config above: the table only
+     exists once its migration has been run, and a missing-table error here must never
+     break the rest of Configuration loading. */
+  CFG.feedbackItems = [];
+  try{
+    const fbR = await sb.from('feedback_items').select('id,reporter_id,reporter_name,page,url,comment,status,created_at').eq('org_id',_orgId).order('created_at',{ascending:false}).limit(200);
+    if(fbR.error) throw fbR.error;
+    CFG.feedbackItems = fbR.data || [];
+  }catch(e){ console.warn('feedback_items table not available yet (migration pending?) -- Feedback tab will show empty.', e); }
+
   CFG.costBuckets = (costBucketsR.data||[]).map(c=>({id:c.id,code:c.code,label:c.label,dept:c.dept,extCode:c.ext_code||''}));
   CFG.llmProviders = (llmR.data||[]).map(p=>({id:p.id,name:p.name,kind:p.kind,endpoint:p.endpoint||'',keyLabel:p.key_label||'',enabled:p.enabled}));
   CFG.roles = (rolesR.data||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name,config:r.config,publish:r.publish,writeAll:r.write_all,scope:r.scope,desc:r.description||'',requireCommitOnEdit:r.require_commit_on_edit,allowExpertMode:r.allow_expert_mode,isSystem:!!r.is_system,moduleAccess:moduleAccessFromRow(r),canEdit:!!r.can_edit}));
@@ -1672,6 +1683,55 @@ function pageUsers(){
   return h;
 }
 
+function pageFeedback(){
+  const rows=CFG.feedbackItems||[];
+  const userName=id=>{ const u=(CFG.users||[]).find(x=>x.id===id); return u?u.name:'—'; };
+  const openCount=rows.filter(r=>r.status==='open'||!r.status).length;
+  const resolvedCount=rows.filter(r=>r.status==='resolved').length;
+  let h=`<div class="phead"><div><h1>Feedback</h1>
+    <p>Issues reported from the floating feedback button on every North page. Name, page, and timestamp
+      are captured automatically -- only the description is typed by the reporter.</p></div></div>`;
+  h+=`<div class="card"><h3>Summary</h3><div class="bd" style="display:flex;gap:24px;flex-wrap:wrap">
+      <div><div class="mini">Total</div><div style="font-size:22px;font-weight:600">${rows.length}</div></div>
+      <div><div class="mini">Open</div><div style="font-size:22px;font-weight:600">${openCount}</div></div>
+      <div><div class="mini">Resolved</div><div style="font-size:22px;font-weight:600">${resolvedCount}</div></div>
+    </div></div>`;
+  h+=`<div class="card"><h3>Reported issues</h3><div class="bd flush"><div class="scroll cap">
+    <table><thead><tr><th>Status</th><th>Reported</th><th>By</th><th>Page</th><th>Description</th><th></th></tr></thead><tbody>
+    ${!rows.length?`<tr><td colspan="6" class="empty">No issues reported yet.</td></tr>`:rows.map(r=>{
+      const status=r.status||'open';
+      const pillClass = status==='resolved'?'ok':(status==='in_progress'?'n':'bad');
+      return `<tr>
+        <td><span class="pill ${pillClass}">${esc(status)}</span></td>
+        <td class="mini">${r.created_at?F.dt(r.created_at):'—'}</td>
+        <td class="mini">${esc(r.reporter_name||(r.reporter_id?userName(r.reporter_id):'—'))}</td>
+        <td class="mini">${esc(r.page||'—')}</td>
+        <td title="${esc(r.url||'')}">${esc(r.comment||'')}</td>
+        <td class="n"><select onchange="updateFeedbackStatus('${r.id}',this.value)" ${canConfig()?'':'disabled'}>
+          <option value="open" ${status==='open'?'selected':''}>Open</option>
+          <option value="in_progress" ${status==='in_progress'?'selected':''}>In progress</option>
+          <option value="resolved" ${status==='resolved'?'selected':''}>Resolved</option>
+        </select></td>
+      </tr>`;
+    }).join('')}
+    </tbody></table>
+  </div></div></div>`;
+  return h;
+}
+async function updateFeedbackStatus(id, status){
+  if(!canConfig()){ toast('Your role cannot update feedback status.'); return; }
+  const item=(CFG.feedbackItems||[]).find(x=>x.id===id);
+  const prevStatus=item?item.status:null;
+  if(item) item.status=status;
+  render();
+  const { error } = await sb.from('feedback_items').update({status}).eq('id',id);
+  if(error){
+    if(item) item.status=prevStatus;
+    render();
+    toast('Could not update status: '+error.message);
+  }
+}
+
 const PAGES=[
   {id:'home',       ix:'0', label:'Home',            fn:pageHome},
   {id:'users',      ix:'1', label:'Roles & users',   fn:pageUsers},
@@ -1681,13 +1741,14 @@ const PAGES=[
   {id:'llm',        ix:'5', label:'LLM providers',   fn:pageLLM},
   {id:'integrations',ix:'6',label:'Integrations',    fn:pageIntegrations},
   {id:'agentactivity',ix:'7',label:'Agent activity',  fn:pageAgentActivity},
-  {id:'sync',       ix:'8', label:'Export',          fn:pageSync}
+  {id:'sync',       ix:'8', label:'Export',          fn:pageSync},
+  {id:'feedback',   ix:'9', label:'Feedback',        fn:pageFeedback}
 ];
 
 function renderSide(){
   let h='<h4>Shared configuration</h4>';
   PAGES.forEach(p=>{
-    const locked = p.id==='users'&&!canConfig();
+    const locked = (p.id==='users'||p.id==='feedback')&&!canConfig();
     h+=`<a class="navi ${UI.page===p.id?'on':''}" href="#" onclick="go('${p.id}');return false">
       <span class="ix">${p.ix}</span><span>${p.label}</span>${locked?'<span class="lk">read only</span>':''}</a>`;
   });
@@ -1843,5 +1904,54 @@ sb.auth.onAuthStateChange((event)=>{
 });
 bootApp();
 </script>
+<!-- Feedback widget (2026-08-28) -->
+<button id="fbTrigger" onclick="openFeedbackModal()" title="Report an issue" style="position:fixed;right:20px;bottom:20px;z-index:9999;width:48px;height:48px;border-radius:50%;background:#111;color:#fff;border:none;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center">💬</button>
+<div id="fbModal" onclick="if(event.target===this)closeFeedbackModal()" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.4);align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:10px;padding:20px;width:380px;max-width:92vw;box-shadow:0 12px 40px rgba(0,0,0,.25)">
+    <h3 style="margin:0 0 10px;font-size:16px">Report an issue</h3>
+    <p style="margin:0 0 12px;font-size:12px;color:#888">Page: <strong id="fbPageLabel"></strong></p>
+    <div style="margin-bottom:10px"><label style="font-size:11px;font-weight:600;color:#666;display:block;margin-bottom:3px">Your name</label><input id="fbName" style="width:100%;font-size:13px;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;box-sizing:border-box"></div>
+    <div style="margin-bottom:14px"><label style="font-size:11px;font-weight:600;color:#666;display:block;margin-bottom:3px">What went wrong?</label><textarea id="fbComment" rows="4" placeholder="Describe the issue..." style="width:100%;font-size:13px;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;box-sizing:border-box;resize:vertical"></textarea></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px">
+      <button onclick="closeFeedbackModal()" style="padding:8px 14px;border:1px solid #d1d5db;background:#fff;border-radius:6px;cursor:pointer;font-size:13px">Cancel</button>
+      <button id="fbSubmitBtn" onclick="submitFeedback()" style="padding:8px 14px;border:none;background:#111;color:#fff;border-radius:6px;cursor:pointer;font-size:13px">Submit</button>
+    </div>
+  </div>
+</div>
+<script>
+const FEEDBACK_MODULE = 'Configuration';
+function openFeedbackModal(){
+  const nameEl=document.getElementById('fbName');
+  if(nameEl) nameEl.value=(_myProfile&&_myProfile.name)?_myProfile.name:'';
+  const pl=document.getElementById('fbPageLabel'); if(pl) pl.textContent=FEEDBACK_MODULE;
+  const c=document.getElementById('fbComment'); if(c) c.value='';
+  const m=document.getElementById('fbModal'); if(m) m.style.display='flex';
+}
+function closeFeedbackModal(){
+  const m=document.getElementById('fbModal'); if(m) m.style.display='none';
+}
+async function submitFeedback(){
+  const comment=(document.getElementById('fbComment').value||'').trim();
+  if(!comment){ toast('Please describe the issue first.'); return; }
+  if(!_orgId||!_myProfile){ toast('Not signed in yet -- try again in a moment.'); return; }
+  const name=(document.getElementById('fbName').value||'').trim()||_myProfile.name||'';
+  const btn=document.getElementById('fbSubmitBtn');
+  if(btn) btn.disabled=true;
+  try{
+    const { error } = await sb.from('feedback_items').insert({
+      org_id:_orgId, reporter_id:_myProfile.id, reporter_name:name,
+      page:FEEDBACK_MODULE, url:location.href, comment:comment
+    });
+    if(error){ toast('Could not submit: '+error.message); return; }
+    closeFeedbackModal();
+    toast('Thanks -- issue reported.');
+  }catch(e){
+    toast('Could not reach the server.');
+  }finally{
+    if(btn) btn.disabled=false;
+  }
+}
+</script>
+<!-- /Feedback widget -->
 </body>
 </html>

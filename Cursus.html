@@ -2784,5 +2784,54 @@ sb.auth.onAuthStateChange((event)=>{
 });
 bootApp();
 </script>
+<!-- Feedback widget (2026-08-28) -->
+<button id="fbTrigger" onclick="openFeedbackModal()" title="Report an issue" style="position:fixed;right:20px;bottom:20px;z-index:9999;width:48px;height:48px;border-radius:50%;background:#111;color:#fff;border:none;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center">💬</button>
+<div id="fbModal" onclick="if(event.target===this)closeFeedbackModal()" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.4);align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:10px;padding:20px;width:380px;max-width:92vw;box-shadow:0 12px 40px rgba(0,0,0,.25)">
+    <h3 style="margin:0 0 10px;font-size:16px">Report an issue</h3>
+    <p style="margin:0 0 12px;font-size:12px;color:#888">Page: <strong id="fbPageLabel"></strong></p>
+    <div style="margin-bottom:10px"><label style="font-size:11px;font-weight:600;color:#666;display:block;margin-bottom:3px">Your name</label><input id="fbName" style="width:100%;font-size:13px;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;box-sizing:border-box"></div>
+    <div style="margin-bottom:14px"><label style="font-size:11px;font-weight:600;color:#666;display:block;margin-bottom:3px">What went wrong?</label><textarea id="fbComment" rows="4" placeholder="Describe the issue..." style="width:100%;font-size:13px;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;box-sizing:border-box;resize:vertical"></textarea></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px">
+      <button onclick="closeFeedbackModal()" style="padding:8px 14px;border:1px solid #d1d5db;background:#fff;border-radius:6px;cursor:pointer;font-size:13px">Cancel</button>
+      <button id="fbSubmitBtn" onclick="submitFeedback()" style="padding:8px 14px;border:none;background:#111;color:#fff;border-radius:6px;cursor:pointer;font-size:13px">Submit</button>
+    </div>
+  </div>
+</div>
+<script>
+const FEEDBACK_MODULE = 'Campaign Planning';
+function openFeedbackModal(){
+  const nameEl=document.getElementById('fbName');
+  if(nameEl) nameEl.value=(_myProfile&&_myProfile.name)?_myProfile.name:'';
+  const pl=document.getElementById('fbPageLabel'); if(pl) pl.textContent=FEEDBACK_MODULE;
+  const c=document.getElementById('fbComment'); if(c) c.value='';
+  const m=document.getElementById('fbModal'); if(m) m.style.display='flex';
+}
+function closeFeedbackModal(){
+  const m=document.getElementById('fbModal'); if(m) m.style.display='none';
+}
+async function submitFeedback(){
+  const comment=(document.getElementById('fbComment').value||'').trim();
+  if(!comment){ toast('Please describe the issue first.'); return; }
+  if(!_orgId||!_myProfile){ toast('Not signed in yet -- try again in a moment.'); return; }
+  const name=(document.getElementById('fbName').value||'').trim()||_myProfile.name||'';
+  const btn=document.getElementById('fbSubmitBtn');
+  if(btn) btn.disabled=true;
+  try{
+    const { error } = await sb.from('feedback_items').insert({
+      org_id:_orgId, reporter_id:_myProfile.id, reporter_name:name,
+      page:FEEDBACK_MODULE, url:location.href, comment:comment
+    });
+    if(error){ toast('Could not submit: '+error.message); return; }
+    closeFeedbackModal();
+    toast('Thanks -- issue reported.');
+  }catch(e){
+    toast('Could not reach the server.');
+  }finally{
+    if(btn) btn.disabled=false;
+  }
+}
+</script>
+<!-- /Feedback widget -->
 </body>
 </html>

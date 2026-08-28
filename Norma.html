@@ -564,7 +564,7 @@ async function pushUserToHub(userId){
     const pushedRole = byId(CFG.roles, u.roleId);
     const r = await fetch(CONTACT_URL+'/admin/push-user', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ token: token, target_email: u.email, role_name: (pushedRole && pushedRole.name) || '' })
+      body: JSON.stringify({ token: token, target_email: u.email, target_name: u.name || '', role_name: (pushedRole && pushedRole.name) || '' })
     });
     const j = await r.json().catch(()=>({}));
     if(!r.ok){ toast(j.error||'Could not push to Hub.'); return; }

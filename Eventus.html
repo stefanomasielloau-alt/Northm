@@ -799,7 +799,17 @@ function pageHome(){
       </tbody></table></div></div>
   </div>`;
 
+  const pipeStages=['Planned','Approved','Confirmed','Completed','Cancelled'];
+  const pipeCounts=pipeStages.map(s=>CFG.events.filter(e=>e.status===s).length);
+  const pipeMax=Math.max(1,...pipeCounts);
+  const pipeColor={Planned:'var(--ink-2)',Approved:'var(--warn,#b8860b)',Confirmed:'var(--warn,#b8860b)',Completed:'var(--ok,#1a7f4e)',Cancelled:'var(--bad,#b23)'};
   h+=`<div style="flex:1;min-width:260px">
+    <div class="card"><h3>Pipeline snapshot</h3><div class="bd">
+      ${pipeStages.map((s,i)=>`<div style="margin-bottom:8px">
+        <div class="row" style="justify-content:space-between;font-size:11.5px"><span>${s}</span><b>${pipeCounts[i]}</b></div>
+        <div class="bar" style="width:100%;height:6px;margin-top:2px"><i style="width:${(pipeCounts[i]/pipeMax*100)||0}%;background:${pipeColor[s]}"></i></div>
+      </div>`).join('')}
+    </div></div>
     <div class="card"><h3>Recent activity</h3><div class="bd flush">
       ${CFG.audit.slice(0,8).map(a=>`<div style="padding:7px 14px;border-bottom:1px solid var(--line);font-size:11.5px">
         <div>${esc(a.what)}</div><div class="mini" style="color:var(--ink-2)">${esc(a.detail||'')} · ${F.dt(a.ts)}</div></div>`).join('')

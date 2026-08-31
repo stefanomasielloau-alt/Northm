@@ -71,7 +71,7 @@ body{font-family:var(--sans); background:var(--canvas); color:var(--ink); font-s
 .card .bd{padding:14px;}
 .card .bd.flush{padding:0;}
 .scroll{overflow-x:auto;}
-.scroll.cap{max-height:520px; overflow-y:auto;}
+.scroll.cap{max-height:520px; overflow-y:auto;resize:vertical;min-height:160px;overflow-y:auto;}
 table{width:100%; border-collapse:collapse; font-size:12.5px;}
 th{text-align:left; padding:8px 10px; background:var(--canvas); color:var(--ink-2); font-weight:700; font-size:11.5px; text-transform:uppercase; letter-spacing:.02em; position:sticky; top:0;}
 td{padding:6px 10px; border-bottom:1px solid var(--line-2); vertical-align:middle;}
@@ -500,6 +500,24 @@ async function loadFromSupabase(){
   }catch(e){
     console.warn('Could not load org_settings.tracking_config (migration may not be run yet) -- falling back to manual Configuration import if any.', e);
   }
+
+  /* Active AI provider for the 'Upload a document' campaign-wizard path (2026-08-31) --
+     Norma's LLM providers page marks at most one row Active; this maps its Kind to the
+     provider id Hub-Backend's /admin/ai-extract expects. Fail-soft, same reasoning as
+     tracking_config above: the model column may not exist yet if the migration hasn't
+     run, and having no active row at all is a normal, supported state -- Hub-Backend
+     just falls back to its own env-var default in that case. */
+  CFG.aiProvider = null; CFG.aiModel = null;
+  try{
+    const { data: activeLlm, error: llmErr } = await sb.from('llm_providers')
+      .select('kind,model').eq('org_id',_orgId).eq('enabled',true).limit(1).maybeSingle();
+    if(llmErr) throw llmErr;
+    if(activeLlm){
+      const kindMap = {'Google Gemini':'gemini','Anthropic':'anthropic','OpenAI':'openai'};
+      CFG.aiProvider = kindMap[activeLlm.kind] || null;
+      CFG.aiModel = activeLlm.model || null;
+    }
+  }catch(e){ console.warn('Could not load active LLM provider (migration may not be run yet)', e); }
 }
 
 /* Live notifications: subscribe to audit_log INSERTs for this org so an action
@@ -820,7 +838,7 @@ async function wizHandleFileInput(input){
     return;
   }
   const text=await file.text();
-  wizParseDocumentText(text);
+  await wizIngestDocumentText(text);
 }
 window.wizHandleFileInput=wizHandleFileInput;
 function wizHandleDrop(ev){
@@ -830,9 +848,53 @@ function wizHandleDrop(ev){
     toast('For now, document prefill reads .txt or .csv files only — PDF/Word support is planned.');
     return;
   }
-  file.text().then(wizParseDocumentText);
+  file.text().then(wizIngestDocumentText);
 }
 window.wizHandleDrop=wizHandleDrop;
+
+/* AI-assisted document ingest (2026-08-31) -- tries Hub-Backend's /admin/ai-extract first
+   for a richer field set (objective/audience/keyMessages/channels, in addition to
+   name/dates/budget) than the regex-only wizParseDocumentText below can manage. Falls
+   back to that regex parser -- unchanged, still the safety net -- whenever AI extraction
+   isn't configured yet (Hub-Backend returns 501), the call fails for any reason, or the
+   model returns nothing usable, so document prefill keeps working exactly as it did
+   before even with zero AI setup. Nothing is ever created without the human reviewing
+   the prefilled form first, same as the regex path. */
+async function wizIngestDocumentText(text){
+  const w=UI.wizard; if(!w)return;
+  w.docNote='Reading with AI…'; w.entryPath='form'; render();
+  try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token) throw new Error('Your own North session has expired -- sign in again.');
+    const resp = await fetch(CONTACT_URL+'/admin/ai-extract', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token, input_text:text, provider:CFG.aiProvider||undefined, model:CFG.aiModel||undefined })
+    });
+    const j = await resp.json().catch(()=>({}));
+    if(resp.status===501){ wizParseDocumentText(text); return; } // not configured yet -- quiet fallback
+    if(!resp.ok || !j.ok) throw new Error(j.error||('AI request failed ('+resp.status+')'));
+    const f=j.fields||{};
+    let filled=false;
+    if(f.name){ w.name=String(f.name).slice(0,120); filled=true; }
+    if(f.startDate){ w.start=f.startDate; filled=true; }
+    if(f.endDate){ w.end=f.endDate; filled=true; }
+    if(typeof f.budget==='number'){ w.budget=f.budget; filled=true; }
+    const extras=[];
+    if(f.objective) extras.push('Objective: '+f.objective);
+    if(f.audience) extras.push('Audience: '+f.audience);
+    if(Array.isArray(f.keyMessages)&&f.keyMessages.length) extras.push('Key messages: '+f.keyMessages.join('; '));
+    if(Array.isArray(f.channels)&&f.channels.length) extras.push('Channels: '+f.channels.join(', '));
+    if(extras.length){ w.businessCase=(w.businessCase?w.businessCase+'\n\n':'')+extras.join('\n'); filled=true; }
+    if(!filled){ wizParseDocumentText(text); return; } // AI returned nothing usable -- fall back
+    w.docNote='Prefilled with AI from your document — double-check every field before creating. Objective / audience / key messages / channels (if found) were added to Business case for review.';
+    render();
+  }catch(e){
+    console.warn('AI document ingest failed, falling back to basic prefill', e);
+    wizParseDocumentText(text);
+  }
+}
+window.wizIngestDocumentText=wizIngestDocumentText;
 function wizSet(key,val,type){
   if(!UI.wizard)return; let v=val;
   if(type==='num'||type==='money'){ v=parseFloat(String(val).replace(/[$,\s]/g,'')); if(isNaN(v))v=0; }
@@ -926,7 +988,7 @@ function campaignWizardPanel(){
           <button class="btn" style="text-align:left;padding:12px" onclick="wizChoosePath('guided')">
             <b>Answer a few questions</b><div class="mini">One question at a time — good if you're not sure what's needed.</div></button>
           <button class="btn" style="text-align:left;padding:12px" onclick="wizChoosePath('document')">
-            <b>Upload a document</b><div class="mini">Drop a brief or plan and we'll prefill what we can find (name, dates, budget).</div></button>
+            <b>Upload a document</b><div class="mini">Drop a brief or plan — we'll use AI to pull as much as we can (name, objective, audience, dates, budget, channels), or fall back to basic prefill if AI isn't set up yet.</div></button>
         </div>
       </div>
       <div class="ft"><button class="btn" onclick="closeCampaignWizard()">Cancel</button></div>
@@ -1945,7 +2007,7 @@ function detailActivityHtml(id){
         <div style="flex:1;min-width:100px"><label class="lbl">Actual</label>
           <input class="in" value="${t.actualCost||0}" onchange="setIn('tasks','${t.id}','actualCost',this.value,'money')"></div>
       </div>
-      <label class="lbl" style="margin-top:8px">Linked Events event</label>
+      <label class="lbl" style="margin-top:8px">Linked event</label>
       <select class="in" onchange="setIn('tasks','${t.id}','eventId',this.value||null)">
         <option value="">— none —</option>
         ${candidateEvents.map(e=>`<option value="${e.id}" ${e.id===t.eventId?'selected':''}>${esc(e.name)}</option>`).join('')}</select>
@@ -1953,6 +2015,8 @@ function detailActivityHtml(id){
         <span class="mini">${linkedEvent.registered||0} registered · ${linkedEvent.attended||0} attended · ${F.mk(linkedEvent.budget||0)} budget</span>
         <a class="btn sm pri" href="Eventus.html#event=${linkedEvent.id}" target="tool_Eventus">Open in Events →</a>
       </div>`:`<div class="mini" style="margin-top:4px;color:var(--ink-3)">Pick an event to deep-link this activity to its record in Events.</div>`}
+      <label class="lbl" style="margin-top:8px">Notes</label>
+      <textarea class="in" rows="3" onchange="setIn('tasks','${t.id}','notes',this.value)">${esc(t.notes||'')}</textarea>
       ${(t.type==='Contact Outreach'||t.type==='Contact Sourcing')?activityContactsSectionHtml(t):''}
     </div>
     <div class="ft"><button class="btn" onclick="closeDetail()">Close</button></div>

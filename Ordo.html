@@ -143,7 +143,7 @@ tr.tot td{border-top:1.5px solid var(--line);border-bottom:none}
 tr.sub td{background:#FCFDFE;font-size:11.5px;color:var(--ink-2)}
 tr.gp td{background:var(--canvas-2);font-size:10px;text-transform:uppercase;letter-spacing:.08em;font-weight:800;color:var(--ink-2)}
 .scroll{overflow:auto;max-height:none}
-.scroll.cap{max-height:420px}
+.scroll.cap{max-height:420px;resize:vertical;min-height:160px;overflow-y:auto;}
 
 /* ---------- inputs ---------- */
 .f{display:flex;flex-direction:column;gap:3px;margin-bottom:9px}
@@ -815,7 +815,7 @@ function calcDefaults(){
   const rate=cumRate(exitGate().id,verMult()*segBlend());
   const costs=A().map(a=>a.costPer).filter(x=>x>0);
   const avgCost=costs.length?sum(costs)/costs.length:0;
-  return { targetWins:CFG.drivers.winTarget, avgDeal:CFG.drivers.avgDealSize, rate:rate, costPerLead:Math.round(avgCost) };
+  return { targetWins:CFG.drivers.winTarget, avgDeal:CFG.drivers.avgDealSize, rate:rate, costPerLead:Math.round(avgCost), entryVolume: rate>0?Math.round(CFG.drivers.winTarget/rate):0 };
 }
 function calcSet(field,val){
   if(!UI.calc) UI.calc=calcDefaults();
@@ -2040,7 +2040,7 @@ function pageAdmin(){
     {
       const progRows=CFG.programmes.map(p=>{
         const camps=CFG.campaigns.filter(c=>c.programmeId===p.id);
-        return { p, count:camps.length, budget:sum(camps.map(c=>c.budget||0)),
+        return { p, camps, count:camps.length, budget:sum(camps.map(c=>c.budget||0)),
           committed:sum(camps.map(c=>c.committed||0)), actual:sum(camps.map(c=>c.actual||0)) };
       });
       const noProg=CFG.campaigns.filter(c=>!c.programmeId).length;
@@ -2049,7 +2049,8 @@ function pageAdmin(){
         <div class="bd flush"><div class="scroll cap"><table><thead><tr><th>Programme</th><th class="n">Campaigns</th>
           <th class="n">Budget</th><th class="n">Committed</th><th class="n">Actual</th><th></th></tr></thead><tbody>
           ${!progRows.length?`<tr><td colspan="6" class="empty">No programmes yet.</td></tr>`:
-            progRows.map(r=>`<tr><td>${esc(r.p.name)}${r.p.clonedFromId?' <span class="pill n" title="cloned">clone</span>':''}</td><td class="n calc">${r.count}</td>
+            progRows.map(r=>`<tr><td><input class="cel txt" style="width:170px" value="${esc(r.p.name)}" onchange="setIn('programmes','${r.p.id}','name',this.value)">${r.p.clonedFromId?' <span class="pill n" title="cloned">clone</span>':''}
+                ${r.count?`<div class="mini" title="Campaigns in this programme">${r.camps.map(c=>esc(c.name)).join(', ')}</div>`:''}</td><td class="n calc">${r.count}</td>
               <td class="n calc">${F.mk(r.budget)}</td><td class="n calc">${F.mk(r.committed)}</td>
               <td class="n calc">${F.mk(r.actual)}</td>
               <td class="n"><button class="btn sm" ${dis} onclick="cloneProgramme('${r.p.id}')">Clone</button>
@@ -3589,6 +3590,13 @@ function pageCalculator(){
   const roi = totalCost ? revenue/totalCost : null;
   const detailed = backward(k.targetWins||0, m);
 
+  const entryVolume = k.entryVolume||0;
+  const winsExpected = entryVolume*k.rate;
+  const buCost = entryVolume*k.costPerLead;
+  const buRevenue = winsExpected*k.avgDeal;
+  const buCostPerWin = winsExpected ? buCost/winsExpected : null;
+  const buRoi = buCost ? buRevenue/buCost : null;
+
   let h=`<div class="phead"><div><h1>Quick calculator</h1>
     <p>A handful of numbers for fast what-if thinking, kept separate from the live plan until you push it across.</p></div>
     <div class="sp"></div><button class="btn sm" onclick="calcReset()">Reset to current plan</button></div>`;
@@ -3619,6 +3627,25 @@ function pageCalculator(){
       </div>
       <div class="mini" style="margin-top:8px">Push to planner sets the live win target and deal size. The second option
         also drops a draft campaign into Campaign &amp; cost with this budget and conversion assumption, ready to refine.</div>
+    </div></div>
+  </div>`;
+
+  h+=`<div class="grid g2">
+    <div class="card"><h3>Bottom-up: from volume</h3><div class="bd">
+      <div class="f"><label>${esc(entryGate().name)} you expect</label>
+        <input class="in v" value="${entryVolume}" onchange="calcSet('entryVolume',this.value)"></div>
+      <div class="mini">Uses the same conversion rate, average deal size and cost-per-lead entered in the top-down
+        assumptions above — change those there, this side just runs the same numbers forward instead of backward.</div>
+    </div></div>
+    <div class="card"><h3>Result</h3><div class="bd">
+      <div class="kpis">
+        <div class="kpi hl"><div class="k">${esc(exitGate().name)} expected</div><div class="kpi-v">${F.n(winsExpected)}</div><div class="sub">at ${F.p(k.rate,1)} blended</div></div>
+        <div class="kpi"><div class="k">Total cost</div><div class="kpi-v">${F.mk(buCost)}</div><div class="sub">${F.mk(k.costPerLead)}/lead</div></div>
+        <div class="kpi"><div class="k">Cost per win</div><div class="kpi-v">${buCostPerWin!=null?F.mk(buCostPerWin):'—'}</div><div class="sub">blended</div></div>
+        <div class="kpi"><div class="k">Projected revenue</div><div class="kpi-v">${F.mk(buRevenue)}</div><div class="sub">${buRoi!=null?F.n(buRoi,1)+'x cost':'—'}</div></div>
+      </div>
+      <div class="dv"></div>
+      <button class="btn" onclick="calcSet('targetWins',${Math.round(winsExpected)||0})">Use ${F.n(winsExpected)} as my top-down target &uarr;</button>
     </div></div>
   </div>`;
 
@@ -3679,7 +3706,7 @@ function renderSide(){
   });
   const v=validations(),bad=v.filter(x=>x.s==='bad').length;
   h+=`<h4>Status</h4><div style="padding:2px 14px">
-    <div class="row" style="margin-bottom:5px"><span class="pill ${bad?'bad':'ok'}">${bad?bad+' blocking':'Validations pass'}</span></div>
+    <div class="row" style="margin-bottom:5px"><a href="#" onclick="go('home');return false" title="Go to Home to see the validations list" class="pill ${bad?'bad':'ok'}" style="cursor:pointer;text-decoration:none">${bad?bad+' blocking':'Validations pass'}</a></div>
     <div class="mini" style="line-height:1.6">
       ${chain().length} gates · ${R().length} regions · ${P().length} pods<br>
       ${A().length} activities · ${S().length} streams · ${G().length} segments<br>

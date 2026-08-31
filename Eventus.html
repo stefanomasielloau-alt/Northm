@@ -70,7 +70,7 @@ body{font-family:var(--sans); background:var(--canvas); color:var(--ink); font-s
 .card .bd{padding:14px;}
 .card .bd.flush{padding:0;}
 .scroll{overflow-x:auto;}
-.scroll.cap{max-height:520px; overflow-y:auto;}
+.scroll.cap{max-height:520px; overflow-y:auto;resize:vertical;min-height:160px;overflow-y:auto;}
 table{width:100%; border-collapse:collapse; font-size:12.5px;}
 th{text-align:left; padding:8px 10px; background:var(--canvas); color:var(--ink-2); font-weight:700; font-size:11.5px; text-transform:uppercase; letter-spacing:.02em; position:sticky; top:0;}
 td{padding:6px 10px; border-bottom:1px solid var(--line-2); vertical-align:middle;}
@@ -677,7 +677,8 @@ function addEvent(){
   const e={id:uid('evt'),name:'New event',type:EVENT_TYPES[0],status:'Planned',start:'',end:'',country:'',venue:'',
     location:'',pax:0,requester:'',campaignRef:'',budget:0,registered:0,attended:0,trackingRef:nextTrackingRef('event')};
   CFG.events.push(e);
-  logAudit('add event','New event'); render(); toast('Event created.');
+  logAudit('add event','New event'); toast('Event created.');
+  go('event', e.id);
 }
 window.addEvent=addEvent;
 function removeEvent(id){
@@ -778,7 +779,7 @@ function pageHome(){
   let h=`<div class="phead"><div><h1>${greeting}, ${esc(name)}</h1>
     <p>${today} · ${upcoming.length?`<b>${upcoming.length}</b> upcoming event${upcoming.length===1?'':'s'}`:'No upcoming events'}</p></div>
     <div class="sp"></div>
-    <button class="btn pri" onclick="go('events');addEvent()">+ Quick add event</button></div>`;
+    <button class="btn pri" onclick="addEvent()">+ Quick add event</button></div>`;
 
   h+=`<div class="kpis">
     <div class="kpi hl"><div class="k">Events</div><div class="kpi-v">${CFG.events.length}</div><div class="sub">${upcoming.length} upcoming</div></div>

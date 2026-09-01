@@ -938,18 +938,24 @@ function orgEditModalHtml(){
 async function addRole(){
   if(!canConfig()){ toast('Your role cannot add roles.'); return; }
   const name = prompt('New role name:'); if(!name) return;
+  /* 2026-09-01: Super Admin previously had no way to target a role at any org
+     but their own -- addRole() always wrote org_id:_orgId. Now, for Super Admin,
+     it targets whichever org the "Filter by organization" dropdown above is set
+     to (the org they're already looking at on this page); everyone else keeps
+     the old behavior of always creating in their own org. */
+  const targetRoleOrgId = (CFG.isSuperAdmin && UI.usersOrgFilter) ? UI.usersOrgFilter : _orgId;
   /* New roles start with no module access and no edit rights -- unconfigured
      means nothing, not everything (2026-08-27). Turn on what this role needs
      from the Modules column below. */
   const { data, error } = await sb.from('roles').insert({
-    org_id:_orgId, name, config:false, publish:false, write_all:false, scope:'own', description:'', is_system:false,
+    org_id:targetRoleOrgId, name, config:false, publish:false, write_all:false, scope:'own', description:'', is_system:false,
     can_edit:false, ...moduleAccessToRow(lockedDownModuleAccess())
   }).select().single();
   if(error){ toast('Could not create role: '+error.message); return; }
   CFG.roles.push({id:data.id,orgId:data.org_id,name:data.name,config:data.config,publish:data.publish,writeAll:data.write_all,scope:data.scope,desc:data.description||'',requireCommitOnEdit:data.require_commit_on_edit,allowExpertMode:data.allow_expert_mode,isSystem:false,moduleAccess:moduleAccessFromRow(data),canEdit:!!data.can_edit});
-  logAudit('add role', name);
+  logAudit('add role', name+(targetRoleOrgId!==_orgId?' in '+orgName(targetRoleOrgId):''));
   render();
-  toast(name+' created with no module access yet -- turn on what it needs in the Modules column.');
+  toast(name+' created'+(targetRoleOrgId!==_orgId?' in '+orgName(targetRoleOrgId):'')+' with no module access yet -- turn on what it needs in the Modules column.');
 }
 window.addRole = addRole;
 /* Clone always produces a new, non-system role -- even cloning one of the 5 standard
@@ -997,6 +1003,28 @@ async function cloneRolesIntoOrg(targetOrgId, sourceOrgId){
   toast(rows.length+' role(s) cloned into '+orgName(targetOrgId)+'.');
 }
 window.cloneRolesIntoOrg = cloneRolesIntoOrg;
+/* 2026-09-01: Super Admin previously had no way to move an EXISTING role to a
+   different org -- only whole-org role cloning existed. Mirrors setUserOrg()'s
+   pattern: confirm, warn if anyone's currently assigned this role (their access
+   may now resolve against a different org than they're in), write org_id, roll
+   back locally on error. */
+async function setRoleOrg(roleId, newOrgId){
+  if(!CFG.isSuperAdmin){ toast('Only Super Admin can move a role to a different organization.'); return; }
+  const r = byId(CFG.roles, roleId); if(!r || newOrgId===r.orgId) return;
+  const destName = orgName(newOrgId);
+  const inUse = CFG.users.some(u=>u.roleId===roleId);
+  const msg = inUse
+    ? 'This role is currently assigned to at least one user. Moving it to "'+destName+'" means their role will belong to a different organization than they do, which can break their access until you reassign them. Move it anyway?'
+    : 'Move role "'+r.name+'" to "'+destName+'"?';
+  if(!confirm(msg)) return;
+  const old = r.orgId; r.orgId = newOrgId; render();
+  const { error } = await sb.from('roles').update({ org_id: newOrgId }).eq('id', roleId);
+  if(error){ r.orgId = old; render(); toast('Could not move role: '+error.message); return; }
+  logAudit('move role to organization', r.name+' \u2192 '+destName);
+  render();
+  toast(r.name+' moved to '+destName+'.');
+}
+window.setRoleOrg = setRoleOrg;
 /* Standard roles (Admin, Super User, Manager, Planner, Viewer) are marked is_system and
    can only be renamed or cloned, never deleted -- protects every org from losing a role
    its users still depend on. Any role created via Add role or Clone role is deletable. */
@@ -1661,7 +1689,7 @@ function pageUsers(){
     ${sortByKey((sa&&UI.usersOrgFilter)?CFG.roles.filter(r=>r.orgId===UI.usersOrgFilter):CFG.roles,'roles',{org:r=>orgName(r.orgId),name:r=>r.name}).map(r=>`<tr>
       <td class="lb"><input class="cel txt" style="width:120px" value="${esc(r.name)}" ${dis} onchange="renameRole('${r.id}',this.value)">
         ${r.isSystem?'<span class="pill n" style="margin-left:6px">Standard</span>':''}</td>
-      ${sa?`<td class="mini">${esc(orgName(r.orgId))}${r.orgId===_orgId?' <span class="tag">yours</span>':''}</td>`:''}
+      ${sa?`<td class="mini"><select class="cel txt" style="width:170px" ${dis} onchange="setRoleOrg('${r.id}', this.value)">${(CFG.allOrganizations||[]).map(o=>`<option value="${o.id}" ${o.id===r.orgId?'selected':''}>${esc(o.name)}</option>`).join('')}</select>${r.orgId===_orgId?' <span class="tag">yours</span>':''}</td>`:''}
       <td><button class="btn sm" ${dis} onclick="toggleRoleFlag('${r.id}','canEdit','can_edit')">
         <span class="pill ${r.canEdit?'ok':'n'}">${r.canEdit?'Yes':'View only'}</span></button></td>
       <td><button class="btn sm" ${dis} onclick="toggleRoleFlag('${r.id}','config','config')">

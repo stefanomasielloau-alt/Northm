@@ -186,7 +186,7 @@ async function loadFromSupabase(){
   CFG.isSuperAdmin = !!isPA;
 
   const results = await Promise.all([
-    sb.from('organizations').select('id,name,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,access_contact').eq('id', prof.org_id).maybeSingle(),
+    sb.from('organizations').select('id,name,hub_org_slug,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,access_contact').eq('id', prof.org_id).maybeSingle(),
     sb.from('programmes').select('id,name'),
     sb.from('campaigns').select('id,name,budget,signoff_status,programme_id'),
     sb.from('tasks').select('id,campaign_id,status'),
@@ -695,7 +695,7 @@ async function openContact(){
   try{
     const { data } = await sb.auth.getSession();
     const t = data && data.session && data.session.access_token;
-    if(t) url = CONTACT_URL + '/auth/sso?token=' + encodeURIComponent(t);
+    if(t){ url = CONTACT_URL + '/auth/sso?token=' + encodeURIComponent(t); if(CFG.org && CFG.org.hub_org_slug) url += '&org=' + encodeURIComponent(CFG.org.hub_org_slug); }
   }catch(e){ /* fall through to plain (logged-out) open */ }
   window.open(url, 'tool_Contact');
 }

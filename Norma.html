@@ -313,7 +313,7 @@ window.clearLocal=clearLocal;
    Norma owns cost_buckets (shared/read-write by every module), llm_providers (config
    only, no live calls), and the campaign-naming fields on org_settings.
    ============================================================================ */
-let _orgId = null, _myProfile = null, _saveTimer = null, _realtimeChannel = null;
+let _hubOrgSlug = '', _orgId = null, _myProfile = null, _saveTimer = null, _realtimeChannel = null;
 /* Set right before an internal (non-user-initiated) signOut() -- e.g. bootApp()'s error path
    below -- so the global onAuthStateChange listener knows to skip its reload-on-SIGNED_OUT and
    let the error message stay on screen instead of wiping it out immediately. Without this, the
@@ -398,6 +398,9 @@ async function loadFromSupabase(){
   if(profErr || !prof){ const e = new Error('No profile linked yet.'); e.noProfile = true; throw e; }
   _myProfile = prof; _orgId = prof.org_id;
 
+  const { data: hubOrgRow } = await sb.from('organizations').select('hub_org_slug').eq('id', _orgId).maybeSingle();
+  _hubOrgSlug = (hubOrgRow && hubOrgRow.hub_org_slug) || '';
+
   const { data: isPA } = await sb.rpc('is_platform_admin');
   CFG.isSuperAdmin = !!isPA;
 
@@ -457,8 +460,8 @@ async function loadFromSupabase(){
   CFG.orgInvites = invitesR.data || [];
   CFG.regions = (regionsR.data||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name}));
   if(CFG.isSuperAdmin){
-    const { data: orgs } = await sb.from('organizations').select('id,name,created_at,parent_org_id,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,access_contact').order('created_at');
-    CFG.allOrganizations = (orgs||[]).map(o=>({id:o.id,name:o.name,createdAt:o.created_at,parentOrgId:o.parent_org_id||null,moduleAccess:orgModuleAccessFromRow(o)}));
+    const { data: orgs } = await sb.from('organizations').select('id,name,created_at,parent_org_id,hub_org_slug,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,access_contact').order('created_at');
+    CFG.allOrganizations = (orgs||[]).map(o=>({id:o.id,name:o.name,createdAt:o.created_at,parentOrgId:o.parent_org_id||null,hubOrgSlug:o.hub_org_slug||'',moduleAccess:orgModuleAccessFromRow(o)}));
     const { data: rels } = await sb.from('org_relations').select('id,org_a_id,org_b_id');
     CFG.orgRelations = rels || [];
   }
@@ -779,8 +782,8 @@ async function createOrgAsSuperAdmin(){
   const { data, error } = await sb.rpc('platform_create_organization', { p_org_name: name });
   if(error){ toast('Could not create organization: '+error.message); return; }
   const newOrgId = data;
-  const { data: orgs } = await sb.from('organizations').select('id,name,created_at,parent_org_id,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,access_contact').order('created_at');
-  CFG.allOrganizations = (orgs||[]).map(o=>({id:o.id,name:o.name,createdAt:o.created_at,parentOrgId:o.parent_org_id||null,moduleAccess:orgModuleAccessFromRow(o)}));
+  const { data: orgs } = await sb.from('organizations').select('id,name,created_at,parent_org_id,hub_org_slug,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,access_contact').order('created_at');
+  CFG.allOrganizations = (orgs||[]).map(o=>({id:o.id,name:o.name,createdAt:o.created_at,parentOrgId:o.parent_org_id||null,hubOrgSlug:o.hub_org_slug||'',moduleAccess:orgModuleAccessFromRow(o)}));
   UI.inviteOrgId = newOrgId;
   logAudit('create organization', name);
   /* 2026-09-01: new orgs used to start with ZERO roles, silently breaking
@@ -856,6 +859,16 @@ async function saveOrgName(orgId, newName){
   toast('Renamed to '+trimmed+'.');
 }
 window.saveOrgName = saveOrgName;
+async function saveOrgHubSlug(orgId, newSlug){
+  const trimmed = (newSlug||'').trim();
+  const o = byId(CFG.allOrganizations, orgId); if(!o) return;
+  const old = o.hubOrgSlug; o.hubOrgSlug = trimmed; render();
+  const { error } = await sb.from('organizations').update({ hub_org_slug: trimmed || null }).eq('id', orgId);
+  if(error){ o.hubOrgSlug = old; render(); toast('Could not update Hub org slug: '+error.message); return; }
+  logAudit('set Hub org slug', o.name+' -> '+(trimmed||'(cleared)'));
+  toast(trimmed ? 'Hub org slug set to '+trimmed+'.' : 'Hub org slug cleared -- Contact will fall back to the default Hub org.');
+}
+window.saveOrgHubSlug = saveOrgHubSlug;
 async function setOrgParent(orgId, parentId){
   const o = byId(CFG.allOrganizations, orgId); if(!o) return;
   if(parentId===orgId){ toast('An organization cannot be its own parent.'); render(); return; }
@@ -903,6 +916,13 @@ function orgEditModalHtml(){
         <input class="cel txt" id="orgEditName" style="flex:1" value="${esc(o.name)}">
         <button class="btn sm pri" onclick="saveOrgName('${o.id}', document.getElementById('orgEditName').value)">Save</button>
       </div>
+
+      <label class="lbl" title="Must exactly match the slug this org was registered with in Hub's control database -- used to route the Contact button to the right org instead of Hub's single default org">Hub org slug (Contact routing)</label>
+      <div class="row" style="gap:8px;margin:4px 0 16px">
+        <input class="cel txt" id="orgEditHubSlug" style="flex:1" placeholder="e.g. bodgit-scarpa" value="${esc(o.hubOrgSlug||'')}">
+        <button class="btn sm pri" onclick="saveOrgHubSlug('${o.id}', document.getElementById('orgEditHubSlug').value)">Save</button>
+      </div>
+      <p class="mini" style="margin:-10px 0 16px">Blank means Contact falls back to Hub's single default org -- set this for every org that has its own Hub data.</p>
 
       <label class="lbl" title="The ceiling -- nobody in this org can get a module that's off here, no matter what they're set to at the user level">Modules available to this org</label>
       <div class="mini" style="margin:4px 0 16px">${ACCESS_MODULES_ALL.map(m=>moduleAccessBtnHtml(m, !!o.moduleAccess[m.id], `toggleOrgModuleAccess('${o.id}','${m.id}')`)).join('')}
@@ -2128,7 +2148,7 @@ async function openContact(){
   try{
     const { data } = await sb.auth.getSession();
     const t = data && data.session && data.session.access_token;
-    if(t) url = CONTACT_URL + '/auth/sso?token=' + encodeURIComponent(t);
+    if(t){ url = CONTACT_URL + '/auth/sso?token=' + encodeURIComponent(t); if(_hubOrgSlug) url += '&org=' + encodeURIComponent(_hubOrgSlug); }
   }catch(e){ /* fall through to plain (logged-out) open */ }
   window.open(url, 'tool_Contact');
 }

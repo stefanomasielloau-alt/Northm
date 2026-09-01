@@ -1257,7 +1257,7 @@ window.clearLocal=clearLocal;
    closes that gap with a real DELETE, fired from each remove*() function alongside
    the local CFG filter, so the UI still updates instantly but the row is actually gone.
    ============================================================================ */
-let _orgId = null, _myProfile = null, _saveTimer = null, _realtimeChannel = null;
+let _hubOrgSlug = '', _orgId = null, _myProfile = null, _saveTimer = null, _realtimeChannel = null;
 /* Set right before an internal (non-user-initiated) signOut() -- e.g. bootApp()'s error path
    below -- so the global onAuthStateChange listener knows to skip its reload-on-SIGNED_OUT and
    let the error message stay on screen instead of wiping it out immediately. Without this, the
@@ -1339,8 +1339,12 @@ async function loadFromSupabase(){
   if(profErr || !prof){ const e = new Error('No profile linked yet.'); e.noProfile = true; throw e; }
   _myProfile = prof; _orgId = prof.org_id;
 
+  const { data: hubOrgRow } = await sb.from('organizations').select('hub_org_slug').eq('id', _orgId).maybeSingle();
+  _hubOrgSlug = (hubOrgRow && hubOrgRow.hub_org_slug) || '';
+
   const { data: isPA } = await sb.rpc('is_platform_admin');
   CFG.isPlatformAdmin = !!isPA;
+  CFG.isSuperAdmin = CFG.isPlatformAdmin;
   const { data: invites } = await sb.from('org_invites')
     .select('id,code,role_id,region_ids,cross_region,created_by,created_at,expires_at,used_by,used_at,org_id')
     .order('created_at',{ascending:false});
@@ -3876,7 +3880,7 @@ async function openContact(){
   try{
     const { data } = await sb.auth.getSession();
     const t = data && data.session && data.session.access_token;
-    if(t) url = CONTACT_URL + '/auth/sso?token=' + encodeURIComponent(t);
+    if(t){ url = CONTACT_URL + '/auth/sso?token=' + encodeURIComponent(t); if(_hubOrgSlug) url += '&org=' + encodeURIComponent(_hubOrgSlug); }
   }catch(e){ /* fall through to plain (logged-out) open */ }
   window.open(url, 'tool_Contact');
 }

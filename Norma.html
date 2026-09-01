@@ -409,7 +409,7 @@ async function loadFromSupabase(){
     sb.from('llm_providers').select('id,name,kind,endpoint,key_label,model,enabled'),
     sb.from('org_settings').select('webhook_url,webhook_enabled,fy_start_month,campaign_naming_pattern,campaign_naming_seq_scope,campaign_naming_seq_counters').eq('org_id',_orgId).maybeSingle(),
     sb.from('audit_log').select('ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200),
-    sb.from('roles').select('id,org_id,name,config,publish,write_all,scope,description,require_commit_on_edit,allow_expert_mode,is_system,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,can_edit'),
+    sb.from('roles').select('id,org_id,name,config,publish,write_all,scope,description,require_commit_on_edit,allow_expert_mode,is_system,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,can_edit,manage_own_team'),
     sb.from('profiles').select('id,org_id,name,email,role_id,region_ids,cross_region,contact_access,module_overrides'),
     sb.from('org_invites').select('id,code,role_id,region_ids,cross_region,created_by,created_at,expires_at,used_by,used_at,org_id,archived').order('created_at',{ascending:false}),
     sb.from('regions').select('id,org_id,name'),
@@ -417,9 +417,10 @@ async function loadFromSupabase(){
        writes back to it; Schema is the only tool that creates/updates dispatches. Same
        read-only-mirror pattern as Cursus reading Eventus's events. */
     sb.from('agent_dispatches').select('id,automation_id,brief,destination_id,destination_name,status,result_detail,pushed_by,pushed_at,created_at').order('created_at',{ascending:false}).limit(200),
-    sb.from('teams').select('id,name,member_ids')
+    sb.from('teams').select('id,name,member_ids'),
+    sb.from('business_units').select('id,org_id,name,manager_id,parent_id,member_ids')
   ]);
-  const [costBucketsR,llmR,orgSettingsR,auditR,rolesR,profilesR,invitesR,regionsR,agentDispR,teamsR] = results;
+  const [costBucketsR,llmR,orgSettingsR,auditR,rolesR,profilesR,invitesR,regionsR,agentDispR,teamsR,buR] = results;
   for(const r of results){ if(r.error) throw r.error; }
 
   /* tracking_config is queried separately, fail-soft: the column may not exist yet if the
@@ -455,7 +456,7 @@ async function loadFromSupabase(){
 
   CFG.costBuckets = (costBucketsR.data||[]).map(c=>({id:c.id,code:c.code,label:c.label,dept:c.dept,extCode:c.ext_code||''}));
   CFG.llmProviders = (llmR.data||[]).map(p=>({id:p.id,name:p.name,kind:p.kind,endpoint:p.endpoint||'',keyLabel:p.key_label||'',model:p.model||'',enabled:p.enabled}));
-  CFG.roles = (rolesR.data||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name,config:r.config,publish:r.publish,writeAll:r.write_all,scope:r.scope,desc:r.description||'',requireCommitOnEdit:r.require_commit_on_edit,allowExpertMode:r.allow_expert_mode,isSystem:!!r.is_system,moduleAccess:moduleAccessFromRow(r),canEdit:!!r.can_edit}));
+  CFG.roles = (rolesR.data||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name,config:r.config,publish:r.publish,writeAll:r.write_all,scope:r.scope,desc:r.description||'',requireCommitOnEdit:r.require_commit_on_edit,allowExpertMode:r.allow_expert_mode,isSystem:!!r.is_system,moduleAccess:moduleAccessFromRow(r),canEdit:!!r.can_edit,manageOwnTeam:!!r.manage_own_team}));
   CFG.users = (profilesR.data||[]).map(p=>({id:p.id,orgId:p.org_id,name:p.name,email:p.email||'',roleId:p.role_id,regionIds:p.region_ids||[],crossRegion:p.cross_region,contactAccess:!!p.contact_access,moduleOverrides:p.module_overrides||{}}));
   CFG.orgInvites = invitesR.data || [];
   CFG.regions = (regionsR.data||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name}));
@@ -481,6 +482,7 @@ async function loadFromSupabase(){
     pushedBy:d.pushed_by,pushedAt:d.pushed_at,createdAt:d.created_at
   }));
   CFG.teams = (teamsR.data||[]).map(t=>({id:t.id,name:t.name||'',memberIds:t.member_ids||[]}));
+  CFG.businessUnits = (buR.data||[]).map(u=>({id:u.id,orgId:u.org_id,name:u.name||'',managerId:u.manager_id||null,parentId:u.parent_id||null,memberIds:u.member_ids||[]}));
 }
 /* Roles & users page (2026-08-27): org filter (Super Admin only -- everyone else already
    only sees their own org) + click-header-to-sort, so "look at all of one company's Roles,
@@ -516,8 +518,37 @@ const canConfig=()=>{
   const r=(CFG.roles||[]).find(x=>x.id===(_myProfile||{}).role_id);
   return !!(r&&r.config) || !!CFG.isSuperAdmin;
 };
+/* 2026-09-01: a Manager whose role has manage_own_team can reassign a
+   teammate's role and toggle their module-access overrides -- nothing
+   else (no role/unit creation or deletion, no org settings, no one
+   outside their own business unit(s)). This is deliberately separate
+   from canConfig() (full org-wide roles/users control), which stays
+   all-or-nothing for Admin/Super Admin. Business units can nest under a
+   parent unit -- a manager's scope includes every unit nested under one
+   they manage, recursively. */
+const canManageOwnTeam=()=>{
+  const r=(CFG.roles||[]).find(x=>x.id===(_myProfile||{}).role_id);
+  return !!(r&&r.manageOwnTeam) || canConfig();
+};
+function myManagedUnitIds(){
+  const myId=(_myProfile||{}).id; if(!myId) return [];
+  const units=CFG.businessUnits||[];
+  const rootIds=units.filter(u=>u.managerId===myId).map(u=>u.id);
+  const out=new Set(rootIds);
+  let grew=true;
+  while(grew){
+    grew=false;
+    units.forEach(u=>{ if(u.parentId && out.has(u.parentId) && !out.has(u.id)){ out.add(u.id); grew=true; } });
+  }
+  return [...out];
+}
+function isInMyManagedScope(userId){
+  if(canConfig()) return true;
+  const unitIds=myManagedUnitIds(); if(!unitIds.length) return false;
+  return (CFG.businessUnits||[]).some(u=>unitIds.includes(u.id) && (u.memberIds||[]).includes(userId));
+}
 async function setUserRole(userId, roleId){
-  if(!canConfig()){ toast('Your role cannot change access.'); return; }
+  if(!(canConfig() || (canManageOwnTeam() && isInMyManagedScope(userId)))){ toast('Your role cannot change access.'); return; }
   const u = byId(CFG.users, userId); if(!u) return;
   const old = u.roleId; u.roleId = roleId; render();
   const { error } = await sb.from('profiles').update({ role_id: roleId }).eq('id', userId);
@@ -743,7 +774,7 @@ window.toggleOrgModuleAccess = toggleOrgModuleAccess;
    shipped; a brand new user starts with none, same locked-down-by-default
    pattern as new roles and new organizations. */
 async function toggleUserModuleAccess(userId, moduleKey){
-  if(!canConfig()){ toast('Your role cannot change module access.'); return; }
+  if(!(canConfig() || (canManageOwnTeam() && isInMyManagedScope(userId)))){ toast('Your role cannot change module access.'); return; }
   if(moduleKey==='Contact'){ setContactAccess(userId); return; }
   const u = byId(CFG.users, userId); if(!u) return;
   const old = !!u.moduleOverrides[moduleKey];
@@ -1378,6 +1409,103 @@ function toggleTeamMember(teamId,userId){
   else t.memberIds.push(userId);
   logAudit('edit team membership',t.name); render();
 }
+/* Business units (2026-09-01): org-chart-shaped, distinct from Alerts (a flat
+   notification-recipient list). Structure edits (create/delete/assign manager/
+   nest under a parent) stay canConfig()-only -- a scoped manager can act on
+   people already in their unit(s) (see setUserRole/toggleUserModuleAccess
+   above) but never restructure the org chart itself. */
+async function addBusinessUnit(){
+  if(!canConfig()){ toast('Your role cannot manage business units.'); return; }
+  const { data, error } = await sb.from('business_units').insert({ org_id:_orgId, name:'New unit', member_ids:[] }).select().single();
+  if(error){ toast('Could not create business unit: '+error.message); return; }
+  CFG.businessUnits.push({id:data.id,orgId:data.org_id,name:data.name,managerId:null,parentId:null,memberIds:[]});
+  logAudit('add business unit','New unit'); render(); toast('Business unit added.');
+}
+window.addBusinessUnit=addBusinessUnit;
+async function renameBusinessUnit(id,name){
+  if(!canConfig()){ toast('Your role cannot manage business units.'); return; }
+  const u=byId(CFG.businessUnits,id); if(!u||!name.trim())return;
+  u.name=name.trim();
+  const { error } = await sb.from('business_units').update({name:u.name}).eq('id',id);
+  if(error){ toast('Could not rename: '+error.message); return; }
+  logAudit('rename business unit',u.name); render();
+}
+window.renameBusinessUnit=renameBusinessUnit;
+async function setBusinessUnitManager(id,managerId){
+  if(!canConfig()){ toast('Your role cannot manage business units.'); return; }
+  const u=byId(CFG.businessUnits,id); if(!u)return;
+  const old=u.managerId; u.managerId=managerId||null; render();
+  const { error } = await sb.from('business_units').update({manager_id:u.managerId}).eq('id',id);
+  if(error){ u.managerId=old; render(); toast('Could not set manager: '+error.message); return; }
+  logAudit('business unit manager',u.name+': '+(managerId?(byId(CFG.users,managerId)||{}).name:'none')); render();
+}
+window.setBusinessUnitManager=setBusinessUnitManager;
+async function setBusinessUnitParent(id,parentId){
+  if(!canConfig()){ toast('Your role cannot manage business units.'); return; }
+  if(parentId===id){ toast('A business unit cannot be its own parent.'); render(); return; }
+  const u=byId(CFG.businessUnits,id); if(!u)return;
+  const old=u.parentId; u.parentId=parentId||null; render();
+  const { error } = await sb.from('business_units').update({parent_id:u.parentId}).eq('id',id);
+  if(error){ u.parentId=old; render(); toast('Could not nest unit: '+error.message); return; }
+  logAudit('business unit parent',u.name+' -> '+(parentId?(byId(CFG.businessUnits,parentId)||{}).name:'top level')); render();
+}
+window.setBusinessUnitParent=setBusinessUnitParent;
+async function toggleBusinessUnitMember(unitId,userId){
+  if(!canConfig()){ toast('Your role cannot manage business units.'); return; }
+  const u=byId(CFG.businessUnits,unitId); if(!u)return;
+  u.memberIds=u.memberIds||[];
+  const has=u.memberIds.includes(userId);
+  u.memberIds = has ? u.memberIds.filter(x=>x!==userId) : [...u.memberIds, userId];
+  render();
+  const { error } = await sb.from('business_units').update({member_ids:u.memberIds}).eq('id',unitId);
+  if(error){ toast('Could not update membership: '+error.message); render(); return; }
+  logAudit('business unit membership',u.name); render();
+}
+window.toggleBusinessUnitMember=toggleBusinessUnitMember;
+async function removeBusinessUnit(id){
+  if(!canConfig()){ toast('Your role cannot manage business units.'); return; }
+  const u=byId(CFG.businessUnits,id); if(!u)return;
+  const hasChildren=(CFG.businessUnits||[]).some(x=>x.parentId===id);
+  if(hasChildren){ toast('Un-nest its sub-units first.'); return; }
+  if(!confirm('Remove business unit "'+u.name+'"? Its manager loses scoped access to these people immediately.'))return;
+  const { error } = await sb.from('business_units').delete().eq('id',id);
+  if(error){ toast('Could not remove: '+error.message); return; }
+  CFG.businessUnits=CFG.businessUnits.filter(x=>x.id!==id);
+  logAudit('remove business unit',u.name); render(); toast('Business unit removed.');
+}
+window.removeBusinessUnit=removeBusinessUnit;
+function renderBusinessUnitsCard(){
+  const dis = canConfig()?'':'disabled';
+  const orgUsers = CFG.users.filter(u=>u.orgId===_orgId);
+  const orgUnits = CFG.businessUnits.filter(u=>u.orgId===_orgId);
+  return `<div class="card"><h3>Business units <span class="sp"></span>
+    <button class="btn sm pri" ${dis} onclick="addBusinessUnit()">Add business unit</button></h3>
+    <div class="bd"><p class="mini" style="margin:0 0 9px">Who reports to whom. A unit's manager can reassign the role
+      and toggle module access for people in it (and in any unit nested under it) from the Users table above --
+      nothing else. Give a role "Manage own team" (in the Roles table above) to let its holders use this.</p>
+    ${!orgUnits.length?`<p class="empty">No business units yet.</p>`:orgUnits.map(u=>{
+      const parentOptions = orgUnits.filter(x=>x.id!==u.id && x.parentId!==u.id);
+      return `<div class="note" style="margin-bottom:10px">
+        <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <input class="cel txt" style="width:180px;font-weight:600" value="${esc(u.name)}" ${dis} onchange="renameBusinessUnit('${u.id}',this.value)">
+          <select class="cel txt" style="width:170px" ${dis} onchange="setBusinessUnitManager('${u.id}',this.value)" title="Manager">
+            <option value="">— no manager —</option>
+            ${orgUsers.map(p=>`<option value="${p.id}" ${p.id===u.managerId?'selected':''}>${esc(p.name||p.email||'—')}</option>`).join('')}
+          </select>
+          <select class="cel txt" style="width:170px" ${dis} onchange="setBusinessUnitParent('${u.id}',this.value)" title="Nested under">
+            <option value="">— top level —</option>
+            ${parentOptions.map(p=>`<option value="${p.id}" ${p.id===u.parentId?'selected':''}>Under: ${esc(p.name)}</option>`).join('')}
+          </select>
+          <span class="pill n">${(u.memberIds||[]).length} member${(u.memberIds||[]).length===1?'':'s'}</span>
+          <button class="btn sm dgr" ${dis} onclick="removeBusinessUnit('${u.id}')">Remove</button>
+        </div>
+        <div style="margin-top:8px">${orgUsers.map(p=>
+          `<label style="margin-right:12px;display:inline-block;margin-bottom:4px"><input type="checkbox" ${(u.memberIds||[]).includes(p.id)?'checked':''} ${dis} onchange="toggleBusinessUnitMember('${u.id}','${p.id}')"> ${esc(p.name||p.email||'—')}</label>`
+        ).join('')}</div>
+      </div>`;
+    }).join('')}
+    </div></div>`;
+}
 window.toggleTeamMember=toggleTeamMember;
 
 /* ---------- cost buckets ---------- */
@@ -1797,7 +1925,7 @@ function pageUsers(){
     <div class="bd flush"><table><thead><tr>
     <th class="sortable" style="cursor:pointer" onclick="setSort('roles','name')">Role${sortArrow('roles','name')}</th>${sa?`<th class="sortable" style="cursor:pointer" onclick="setSort('roles','org')">Organization${sortArrow('roles','org')}</th>`:''}
     <th title="Off = view-only wherever this role has module access (which modules is now set per organization and per person, not here). On = can edit.">Can edit</th>
-    <th>Configure</th><th>Publish</th><th>Write everywhere</th><th>Scope</th>
+    <th>Configure</th><th title="Can reassign the role and toggle module access for people in the business unit(s) they manage -- nothing else. Off has no effect if Configure is already on.">Manage own team</th><th>Publish</th><th>Write everywhere</th><th>Scope</th>
     <th>Requires commit on plan edits</th><th>Expert mode allowed</th><th></th></tr></thead><tbody>
     ${sortByKey((sa&&UI.usersOrgFilter)?CFG.roles.filter(r=>r.orgId===UI.usersOrgFilter):CFG.roles,'roles',{org:r=>orgName(r.orgId),name:r=>r.name}).map(r=>`<tr>
       <td class="lb"><input class="cel txt" style="width:120px" value="${esc(r.name)}" ${dis} onchange="renameRole('${r.id}',this.value)">
@@ -1807,6 +1935,8 @@ function pageUsers(){
         <span class="pill ${r.canEdit?'ok':'n'}">${r.canEdit?'Yes':'View only'}</span></button></td>
       <td><button class="btn sm" ${dis} onclick="toggleRoleFlag('${r.id}','config','config')">
         <span class="pill ${r.config?'ok':'n'}">${r.config?'Yes':'No'}</span></button></td>
+      <td><button class="btn sm" ${dis} onclick="toggleRoleFlag('${r.id}','manageOwnTeam','manage_own_team')">
+        <span class="pill ${r.manageOwnTeam?'ok':'n'}">${r.manageOwnTeam?'Yes':'No'}</span></button></td>
       <td><button class="btn sm" ${dis} onclick="toggleRoleFlag('${r.id}','publish','publish')">
         <span class="pill ${r.publish?'ok':'n'}">${r.publish?'Yes':'No'}</span></button></td>
       <td><button class="btn sm" ${dis} onclick="toggleRoleFlag('${r.id}','writeAll','write_all')">
@@ -1864,11 +1994,12 @@ function pageUsers(){
       <th>Cross-region visibility</th><th>Regions when isolated</th><th title="Which modules this person can open -- capped by what their organization allows">Modules</th><th></th></tr></thead><tbody>
     ${sortByKey(CFG.users.filter(u=>(!(sa&&UI.usersOrgFilter)||u.orgId===UI.usersOrgFilter)&&(!UI.usersRegionFilter||(u.regionIds||[]).includes(UI.usersRegionFilter))&&(!UI.usersTeamFilter||(CFG.teams.find(t=>t.id===UI.usersTeamFilter)||{memberIds:[]}).memberIds.includes(u.id))),'users',{org:u=>orgName(u.orgId),name:u=>u.name}).map(u=>{
       const orgRegions = CFG.regions.filter(r=>r.orgId===u.orgId);
+      const rowDis = (canConfig()||(canManageOwnTeam()&&isInMyManagedScope(u.id)))?'':'disabled';
       return `<tr id="userRow-${u.id}"><td class="lb"><input class="cel txt" style="width:150px" value="${esc(u.name)}" placeholder="add a name" ${dis} onchange="setUserName('${u.id}',this.value)"></td><td class="mini">${esc(u.email||'—')}</td>
       ${sa?`<td class="mini"><select class="cel txt" style="width:150px" onchange="setUserOrg('${u.id}',this.value)">
         ${(CFG.allOrganizations||[]).map(o=>`<option value="${o.id}" ${o.id===u.orgId?'selected':''}>${esc(o.name)}</option>`).join('')}
         </select>${u.orgId===_orgId?' <span class="tag">yours</span>':''}</td>`:''}
-      <td><select class="cel txt" style="width:130px" ${dis} onchange="setUserRole('${u.id}',this.value)">
+      <td><select class="cel txt" style="width:130px" ${rowDis} onchange="setUserRole('${u.id}',this.value)">
         ${!u.roleId?'<option value="" selected disabled>— choose a role —</option>':''}
         ${CFG.roles.filter(x=>x.orgId===u.orgId).map(x=>`<option value="${x.id}" ${x.id===u.roleId?'selected':''}>${esc(x.name)}</option>`).join('')}</select></td>
       <td><button class="btn sm" ${dis} onclick="setUserCrossRegion('${u.id}')">
@@ -1878,7 +2009,7 @@ function pageUsers(){
       ).join(''):'<span class="pill n">no regions in this org</span>')}</td>
       <td style="white-space:nowrap">${ACCESS_MODULES_ALL.map(m=>{
         const on = m.id==='Contact' ? !!u.contactAccess : !!u.moduleOverrides[m.id];
-        return moduleAccessBtnHtml(m, on, `toggleUserModuleAccess('${u.id}','${m.id}')`, dis);
+        return moduleAccessBtnHtml(m, on, `toggleUserModuleAccess('${u.id}','${m.id}')`, rowDis);
       }).join('')}</td>
       <td class="n" style="white-space:nowrap">
         <button class="btn sm" ${dis} onclick="resetUserPassword('${u.id}')">Reset password</button>
@@ -1915,6 +2046,8 @@ function pageUsers(){
       </div>`;
     }).join('')}
     </div></div>`;
+
+  h+=renderBusinessUnitsCard();
 
   h+=`<div class="card"><h3>Invite a new teammate</h3>
     <div class="bd"><p class="mini" style="margin:0 0 9px">Generates a one-time code, valid 14 days. Send it to them —

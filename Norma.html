@@ -314,6 +314,13 @@ window.clearLocal=clearLocal;
    only, no live calls), and the campaign-naming fields on org_settings.
    ============================================================================ */
 let _hubOrgSlug = '', _orgId = null, _myProfile = null, _saveTimer = null, _realtimeChannel = null;
+/* 2026-09-01: Hub Super Admin session for the "Hub connections" panel below.
+   Deliberately kept OUT of CFG -- CFG gets JSON.stringify'd into
+   localStorage by saveLocal() for offline caching, and this holds a live
+   Hub auth token plus (briefly, mid-form) a DB connection string. This
+   object is never written to localStorage/sessionStorage and evaporates
+   on refresh/navigation, by design -- see hubSuperLogin()/hubSuperLogout(). */
+let _hubSuper = { token: '', username: '', orgs: [] };
 /* Set right before an internal (non-user-initiated) signOut() -- e.g. bootApp()'s error path
    below -- so the global onAuthStateChange listener knows to skip its reload-on-SIGNED_OUT and
    let the error message stay on screen instead of wiping it out immediately. Without this, the
@@ -1474,6 +1481,108 @@ async function removeBusinessUnit(id){
   logAudit('remove business unit',u.name); render(); toast('Business unit removed.');
 }
 window.removeBusinessUnit=removeBusinessUnit;
+
+/* Hub database connections (2026-09-01), Super Admin only. Trigger-only by
+   design: North never stores a Hub connection string or a standing Hub
+   session. hubSuperLogin() exchanges Hub's OWN super-admin username/password
+   (a separate credential from North's Supabase auth -- see Hub-Backend's
+   super_users table) for a short-lived bearer token, held ONLY in the
+   _hubSuper module variable above (never CFG, never localStorage) and gone
+   on refresh. Every call below re-sends that token; nothing is cached
+   beyond the safe org metadata (id/slug/name/status) that GET /api/orgs
+   itself returns -- the connection string (dsn) is accepted once by
+   /api/orgs/register, stored encrypted server-side in Hub's control DB, and
+   never read back by any endpoint, so there is nothing for North to leak
+   even if it wanted to keep a copy. */
+async function hubSuperLogin(){
+  const userEl=document.getElementById('hubSuperUser'), passEl=document.getElementById('hubSuperPass');
+  const username=(userEl&&userEl.value||'').trim(), password=(passEl&&passEl.value||'');
+  if(!username||!password){ toast('Enter the Hub super-admin username and password.'); return; }
+  try{
+    const res=await fetch(CONTACT_URL+'/api/super/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+    if(!res.ok){ toast(res.status===401?'Invalid Hub super-admin credentials.':'Could not sign in to Hub ('+res.status+').'); return; }
+    const data=await res.json();
+    _hubSuper.token=data.token; _hubSuper.username=username;
+    if(passEl) passEl.value='';
+    await loadHubOrgs();
+    toast('Connected to Hub as '+username+'.');
+  }catch(e){ toast('Could not reach Hub: '+e.message); }
+}
+window.hubSuperLogin=hubSuperLogin;
+function hubSuperLogout(){
+  _hubSuper={token:'',username:'',orgs:[]};
+  render();
+}
+window.hubSuperLogout=hubSuperLogout;
+async function loadHubOrgs(){
+  if(!_hubSuper.token) return;
+  try{
+    const res=await fetch(CONTACT_URL+'/api/orgs',{headers:{'Authorization':'Bearer '+_hubSuper.token}});
+    if(res.status===401){ _hubSuper={token:'',username:'',orgs:[]}; toast('Hub session expired -- sign in again.'); render(); return; }
+    if(!res.ok){ toast('Could not load Hub organizations ('+res.status+').'); return; }
+    const data=await res.json();
+    _hubSuper.orgs=data.orgs||[];
+    render();
+  }catch(e){ toast('Could not reach Hub: '+e.message); }
+}
+window.loadHubOrgs=loadHubOrgs;
+async function registerHubOrgConnection(){
+  if(!_hubSuper.token){ toast('Sign in to Hub first.'); return; }
+  const val=id=>{ const el=document.getElementById(id); return el?el.value.trim():''; };
+  const name=val('hubRegName'), slug=val('hubRegSlug'), adminUsername=val('hubRegAdminUser'),
+        adminPassword=val('hubRegAdminPass'), dsn=val('hubRegDsn'),
+        projectUrl=val('hubRegProjectUrl'), anonKey=val('hubRegAnonKey');
+  if(!name||!slug||!adminUsername||!adminPassword||!dsn){ toast('Name, slug, admin username/password and the DSN are all required.'); return; }
+  if(!confirm('Register "'+name+'" (slug: '+slug+') against this database connection? Re-registering an existing slug updates its stored connection in place.')) return;
+  try{
+    const res=await fetch(CONTACT_URL+'/api/orgs/register',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+_hubSuper.token},
+      body:JSON.stringify({name,slug,admin_username:adminUsername,admin_password:adminPassword,dsn,project_url:projectUrl||null,anon_key:anonKey||null})});
+    if(res.status===401){ _hubSuper={token:'',username:'',orgs:[]}; toast('Hub session expired -- sign in again.'); render(); return; }
+    if(!res.ok){ const t=await res.text().catch(()=>''); toast('Could not register: '+res.status+(t?' -- '+t.slice(0,200):'')); return; }
+    ['hubRegName','hubRegSlug','hubRegAdminUser','hubRegAdminPass','hubRegDsn','hubRegProjectUrl','hubRegAnonKey'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    await loadHubOrgs();
+    toast('Hub connection registered for "'+name+'".');
+  }catch(e){ toast('Could not reach Hub: '+e.message); }
+}
+window.registerHubOrgConnection=registerHubOrgConnection;
+function renderHubConnectionsCard(){
+  if(!CFG.isSuperAdmin) return '';
+  if(!_hubSuper.token){
+    return `<div class="card"><h3>Hub database connections <span class="sp"></span><span class="pill v">Super Admin view</span></h3>
+      <div class="bd"><p class="mini" style="margin:0 0 9px">Register or review which database backs each organization's
+        Contact/Hub data (e.g. Bodgit&amp;Scarpa's separate Neon database) -- without North ever storing the connection
+        string. Sign in with your <b>Hub</b> super-admin account (separate from your North login) to continue; the
+        session lives only in this tab and is gone on refresh.</p>
+      <div class="row" style="gap:8px;flex-wrap:wrap">
+        <input class="cel txt" id="hubSuperUser" style="width:180px" placeholder="Hub super-admin username" autocomplete="off">
+        <input class="cel txt" id="hubSuperPass" type="password" style="width:180px" placeholder="Password" autocomplete="off" onkeydown="if(event.key==='Enter')hubSuperLogin()">
+        <button class="btn sm pri" onclick="hubSuperLogin()">Connect to Hub</button>
+      </div></div></div>`;
+  }
+  return `<div class="card"><h3>Hub database connections <span class="sp"></span><span class="pill v">Super Admin view</span>
+    <span class="pill ok" style="margin-left:8px">Connected as ${esc(_hubSuper.username)}</span>
+    <button class="btn sm" style="margin-left:8px" onclick="hubSuperLogout()">Disconnect</button></h3>
+    <div class="bd flush"><table><thead><tr><th>Organization</th><th>Slug</th><th>Status</th><th class="n">Registered</th></tr></thead><tbody>
+    ${!_hubSuper.orgs.length?`<tr><td colspan="4" class="empty">No organizations registered in Hub yet.</td></tr>`:_hubSuper.orgs.map(o=>
+      `<tr><td class="lb">${esc(o.name)}</td><td class="mini">${esc(o.slug)}</td><td><span class="pill ${o.status==='active'?'ok':'n'}">${esc(o.status)}</span></td><td class="n mini">${esc((o.created_at||'').slice(0,10))}</td></tr>`
+    ).join('')}
+    </tbody></table></div>
+    <div class="bd"><p class="mini" style="margin:0 0 9px">Register a database connection for an organization -- new, or to
+      re-point an existing slug at a different database. The connection string (DSN) is sent once, applied, then kept
+      only in Hub's own encrypted storage; it is never displayed or stored here.</p>
+    <div class="row" style="gap:8px;flex-wrap:wrap">
+      <input class="cel txt" id="hubRegName" style="width:160px" placeholder="Organization name">
+      <input class="cel txt" id="hubRegSlug" style="width:120px" placeholder="Slug (e.g. bodgit-scarpa)">
+      <input class="cel txt" id="hubRegAdminUser" style="width:150px" placeholder="Hub admin username (for this org)">
+      <input class="cel txt" id="hubRegAdminPass" type="password" style="width:150px" placeholder="Hub admin password" autocomplete="off">
+    </div>
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px">
+      <input class="cel txt" id="hubRegDsn" style="width:340px" placeholder="Postgres connection string (DSN) -- Supabase/Neon" autocomplete="off">
+      <input class="cel txt" id="hubRegProjectUrl" style="width:220px" placeholder="Project URL (optional)">
+      <input class="cel txt" id="hubRegAnonKey" style="width:220px" placeholder="Anon key (optional)" autocomplete="off">
+      <button class="btn sm pri" onclick="registerHubOrgConnection()">Register connection</button>
+    </div></div></div>`;
+}
 function renderBusinessUnitsCard(){
   const dis = canConfig()?'':'disabled';
   const orgUsers = CFG.users.filter(u=>u.orgId===_orgId);
@@ -1974,6 +2083,7 @@ function pageUsers(){
         organization's plan from here) isn't built yet — this covers visibility, roles, users and invites only.
         New organizations start with no regions, pods, or campaigns — their own Org Admin sets those up in Strategy,
         the same way Beta Testing did.</p></div></div>`;
+    h+=renderHubConnectionsCard();
   }
   h+=`<div class="row" style="gap:8px;align-items:center;margin:0 0 14px;flex-wrap:wrap">
     <label class="mini">Filter by region:</label>

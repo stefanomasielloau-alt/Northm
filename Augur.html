@@ -403,12 +403,14 @@ function subscribeRealtime(){
     })
     .subscribe();
 }
-function loginScreenHtml(err){
+function loginScreenHtml(err, notice){
   return '<div class="authwrap"><div class="authbrand"><img class="authlogo-full" src="'+AUTH_LOGO+'" alt="North"><div class="ab-ver">v0.2708.3</div></div><h2>Scoring</h2><p class="sub">Sign in to continue.</p>'+
     '<div class="err">'+(err?esc(err):'')+'</div>'+
+    (notice ? '<div class="sub" style="margin-bottom:8px">'+esc(notice)+'</div>' : '')+
     '<input id="authEmail" type="email" placeholder="Email" autocomplete="username">'+
     '<input id="authPass" type="password" placeholder="Password" autocomplete="current-password">'+
     '<button onclick="doSignIn()">Sign in</button>'+
+    '<p class="sub" style="margin-top:6px"><a href="#" onclick="doForgotPassword();return false;">Forgot password?</a></p>'+
     '<p class="sub" style="margin-top:10px">New here? <a href="#" onclick="showSignUpGate();return false;">Create an account</a></p>'+
     '</div>';
 }
@@ -449,6 +451,14 @@ async function doSignIn(){
   await bootApp();
 }
 window.doSignIn = doSignIn;
+async function doForgotPassword(){
+  const email = document.getElementById('authEmail').value.trim();
+  if(!email){ document.getElementById('authGate').innerHTML = loginScreenHtml('Enter your email above, then click "Forgot password?" again.'); return; }
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + '/index.html' });
+  if(error){ document.getElementById('authGate').innerHTML = loginScreenHtml(error.message); return; }
+  document.getElementById('authGate').innerHTML = loginScreenHtml(null, 'Check '+email+' for a link to set a new password.');
+}
+window.doForgotPassword = doForgotPassword;
 async function doSignUp(){
   const email = document.getElementById('suEmail').value.trim();
   const pass = document.getElementById('suPass').value;

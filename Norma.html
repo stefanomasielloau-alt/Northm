@@ -778,12 +778,39 @@ async function createOrgAsSuperAdmin(){
   const name = prompt('New organization name:'); if(!name) return;
   const { data, error } = await sb.rpc('platform_create_organization', { p_org_name: name });
   if(error){ toast('Could not create organization: '+error.message); return; }
+  const newOrgId = data;
   const { data: orgs } = await sb.from('organizations').select('id,name,created_at,parent_org_id,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,access_contact').order('created_at');
   CFG.allOrganizations = (orgs||[]).map(o=>({id:o.id,name:o.name,createdAt:o.created_at,parentOrgId:o.parent_org_id||null,moduleAccess:orgModuleAccessFromRow(o)}));
-  UI.inviteOrgId = data;
+  UI.inviteOrgId = newOrgId;
   logAudit('create organization', name);
+  /* 2026-09-01: new orgs used to start with ZERO roles, silently breaking
+     "assign a role" and "invite a teammate" until someone noticed and
+     manually ran Clone roles -- exactly the gap that left Bodgit&Scarpa
+     unusable. Auto-seed the 5 standard roles now, sourced from the
+     creating Super Admin's own org (by exact name, so any extra/renamed
+     roles there like "Admin (RLS test org)" are deliberately NOT carried
+     over -- a new org should start clean). */
+  const standardNames = ['Admin','Manager','Viewer','Planner','Super User'];
+  const templateRoles = CFG.roles.filter(r=>r.orgId===_orgId && r.isSystem && standardNames.includes(r.name));
+  if(templateRoles.length){
+    const rows = templateRoles.map(r=>({
+      org_id: newOrgId, name: r.name, config: r.config, publish: r.publish, write_all: r.writeAll,
+      scope: r.scope, description: r.desc, require_commit_on_edit: r.requireCommitOnEdit,
+      allow_expert_mode: r.allowExpertMode, is_system: true, can_edit: r.canEdit,
+      ...moduleAccessToRow(r.moduleAccess)
+    }));
+    const { data: newRoles, error: roleErr } = await sb.from('roles').insert(rows).select();
+    if(roleErr){
+      toast(name+' created, but standard roles could not be seeded automatically: '+roleErr.message+' -- use Clone roles to fix.');
+    } else {
+      (newRoles||[]).forEach(d=>{
+        CFG.roles.push({id:d.id,orgId:d.org_id,name:d.name,config:d.config,publish:d.publish,writeAll:d.write_all,scope:d.scope,desc:d.description||'',requireCommitOnEdit:d.require_commit_on_edit,allowExpertMode:d.allow_expert_mode,isSystem:!!d.is_system,moduleAccess:moduleAccessFromRow(d),canEdit:!!d.can_edit});
+      });
+      logAudit('seed standard roles', name+' \u2192 '+newRoles.length+' role(s)');
+    }
+  }
   render();
-  toast(name+' created. Pick it under "Invite a new teammate" to generate its first invite code.');
+  toast(name+' created'+(templateRoles.length?' with '+templateRoles.length+' standard role(s) ready to assign.':'. Pick it under "Invite a new teammate" to generate its first invite code.'));
 }
 window.createOrgAsSuperAdmin = createOrgAsSuperAdmin;
 
@@ -1031,14 +1058,20 @@ window.setRoleOrg = setRoleOrg;
 async function deleteRoleRow(roleId){
   if(!canConfig()){ toast('Your role cannot delete roles.'); return; }
   const r = byId(CFG.roles, roleId); if(!r) return;
-  if(r.isSystem){ toast('Standard roles can\'t be deleted — clone it instead if you need a variant.'); return; }
+  /* 2026-09-01: standard roles are still protected from everyone EXCEPT
+     Super Admin -- who can now override, since only Super Admin sees this
+     button for a system role at all (see the roles-table render below). */
+  if(r.isSystem && !CFG.isSuperAdmin){ toast('Standard roles can\'t be deleted — clone it instead if you need a variant.'); return; }
   const inUse = CFG.users.some(u=>u.roleId===roleId);
   if(inUse){ toast('This role is still assigned to at least one user — reassign them first.'); return; }
-  if(!confirm('Delete role "'+r.name+'"? This cannot be undone.')) return;
+  const warn = r.isSystem
+    ? 'This is a STANDARD role ("'+r.name+'") in '+orgName(r.orgId)+' -- deleting it can break access for anyone assigned it later, and there is no undo. Only Super Admin can do this. Really delete it?'
+    : 'Delete role "'+r.name+'"? This cannot be undone.';
+  if(!confirm(warn)) return;
   const { error } = await sb.from('roles').delete().eq('id', roleId);
   if(error){ toast('Could not delete role: '+error.message); return; }
   CFG.roles = CFG.roles.filter(x=>x.id!==roleId);
-  logAudit('delete role', r.name);
+  logAudit('delete role', r.name+(r.isSystem?' (standard role, Super Admin override)':''));
   render();
 }
 window.deleteRoleRow = deleteRoleRow;
@@ -1705,7 +1738,7 @@ function pageUsers(){
         <span class="pill ${r.allowExpertMode?'ok':'n'}">${r.allowExpertMode?'Yes':'No'}</span></button></td>
       <td class="n" style="white-space:nowrap">
         <button class="btn sm" ${dis} onclick="cloneRole('${r.id}')">Clone</button>
-        ${r.isSystem?'':`<button class="btn sm dgr" ${dis} onclick="deleteRoleRow('${r.id}')">Delete</button>`}
+        ${(!r.isSystem||CFG.isSuperAdmin)?`<button class="btn sm dgr" ${dis} onclick="deleteRoleRow('${r.id}')">Delete</button>`:''}
       </td>
       </tr>`).join('')}
     </tbody></table></div>

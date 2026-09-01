@@ -1012,7 +1012,7 @@ function pageAutomations(){
     <p>Simple rules: when a campaign reaches a sign-off status, or a task goes overdue, either log a quiet note or
       raise an alert — both write to the shared audit log, which (as of phase12) also toasts live to anyone with
       this org open right now. As of phase18, an "Alert people" action can be targeted at everyone (the original
-      behaviour), specific people, a region, or a dedicated team (managed in Configuration → Roles &amp; users) — only
+      behaviour), specific people, a region, or a dedicated alert group (managed in Configuration → Roles &amp; users) — only
       people who match get the live toast. You can additionally flag an alert for AI-agent attention — that drafts
       an Agent Brief below, which a person can review and push to whichever agent/app destination is configured
       (defaulting to the org default, if one's set). Click "Run checks" to evaluate now, or leave this page open —
@@ -1041,7 +1041,7 @@ function pageAutomations(){
             <option value="org" ${targetType==='org'?'selected':''}>Everyone</option>
             <option value="users" ${targetType==='users'?'selected':''}>Specific people</option>
             <option value="regions" ${targetType==='regions'?'selected':''}>Region</option>
-            <option value="teams" ${targetType==='teams'?'selected':''}>Team</option>
+            <option value="teams" ${targetType==='teams'?'selected':''}>Alert group</option>
           </select>
           ${targetType==='org'?'':`<div class="mini" style="max-height:90px;overflow:auto;margin-top:4px;border:1px solid var(--line-2);padding:4px;border-radius:4px;min-width:130px">
             ${optionsHtml||'<span class="mini">none configured</span>'}</div>`}
@@ -1496,7 +1496,7 @@ function pageEditor(){
           <option value="org" ${nTargetType==='org'?'selected':''}>Everyone</option>
           <option value="users" ${nTargetType==='users'?'selected':''}>Specific people</option>
           <option value="regions" ${nTargetType==='regions'?'selected':''}>Region</option>
-          <option value="teams" ${nTargetType==='teams'?'selected':''}>Team</option>
+          <option value="teams" ${nTargetType==='teams'?'selected':''}>Alert group</option>
         </select>
         ${nTargetType==='org'?'':`<div class="mini" style="max-height:90px;overflow:auto;margin-top:4px;border:1px solid var(--line-2);padding:4px;border-radius:4px">
           ${nOptionsHtml||'<span class="mini">none configured</span>'}</div>`}

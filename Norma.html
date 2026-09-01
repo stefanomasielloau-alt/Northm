@@ -1353,7 +1353,7 @@ async function bootApp(){
 function addTeam(){
   if(!canConfig()){ toast('Your role cannot manage teams.'); return; }
   CFG.teams.push({id:uid('team'),name:'New team',memberIds:[]});
-  logAudit('add team','New team'); render(); toast('Team added.');
+  logAudit('add team','New team'); render(); toast('Alert group added.');
 }
 window.addTeam=addTeam;
 function renameTeam(id,name){
@@ -1365,7 +1365,7 @@ window.renameTeam=renameTeam;
 function removeTeam(id){
   if(!canConfig()){ toast('Your role cannot manage teams.'); return; }
   const t=byId(CFG.teams,id); if(!t)return;
-  if(!confirm('Remove team "'+t.name+'"? Any automations targeting it will stop notifying anyone until re-targeted.'))return;
+  if(!confirm('Remove alert group "'+t.name+'"? Any automations targeting it will stop notifying anyone until re-targeted.'))return;
   CFG.teams=CFG.teams.filter(x=>x.id!==id); logAudit('remove team',t.name); render();
   deleteRow('teams',id);
 }
@@ -1851,7 +1851,7 @@ function pageUsers(){
       <option value="">All regions</option>
       ${CFG.regions.filter(r=>r.orgId===((sa&&UI.usersOrgFilter)?UI.usersOrgFilter:_orgId)).map(r=>`<option value="${r.id}" ${r.id===UI.usersRegionFilter?'selected':''}>${esc(r.name)}</option>`).join('')}
     </select>
-    <label class="mini">Filter by team:</label>
+    <label class="mini">Filter by alert group:</label>
     <select class="cel txt" style="width:180px" onchange="setUsersTeamFilter(this.value)">
       <option value="">All teams</option>
       ${CFG.teams.map(t=>`<option value="${t.id}" ${t.id===UI.usersTeamFilter?'selected':''}>${esc(t.name)}</option>`).join('')}
@@ -1896,11 +1896,12 @@ function pageUsers(){
       in that org's Edit screen). Turning on Contact here is what lets you push them to Hub below; once pushed, assign their
       Hub/Queue permissions in Hub's own Settings.</p></div></div>`;
 
-  h+=`<div class="card"><h3>Teams <span class="sp"></span>
-    <button class="btn sm pri" ${dis} onclick="addTeam()">Add team</button></h3>
+  h+=`<div class="card"><h3>Alerts <span class="sp"></span>
+    <button class="btn sm pri" ${dis} onclick="addTeam()">Add alert group</button></h3>
     <div class="bd"><p class="mini" style="margin:0 0 9px">Named groups of people, for targeting an "Alert people" automation
-      in Process Maps at exactly who needs it instead of a whole region or the whole org. Editable here; used there.</p>
-    ${!CFG.teams.length?`<p class="empty">No teams yet.</p>`:CFG.teams.map(t=>{
+      in Process Maps at exactly who needs it -- a team and/or specific individuals (including Admins) -- instead of a whole
+      region or the whole org. Editable here; used there.</p>
+    ${!CFG.teams.length?`<p class="empty">No alert groups yet.</p>`:CFG.teams.map(t=>{
       const orgUsers=CFG.users.filter(u=>u.orgId===_orgId);
       return `<div class="note" style="margin-bottom:10px">
         <div class="row" style="justify-content:space-between;align-items:center">

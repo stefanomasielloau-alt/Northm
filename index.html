@@ -178,12 +178,15 @@ async function loadFromSupabase(){
   const { data:{ user: authUser } } = await sb.auth.getUser();
   if(!authUser) throw new Error('Not signed in.');
   const { data: prof, error: profErr } = await sb.from('profiles')
-    .select('id,name,org_id,role_id').eq('id', authUser.id).single();
+    .select('id,name,org_id,role_id,module_overrides,contact_access').eq('id', authUser.id).single();
   if(profErr || !prof){ const e = new Error('No profile linked yet.'); e.noProfile = true; throw e; }
   _myProfile = prof; _orgId = prof.org_id;
 
+  const { data: isPA } = await sb.rpc('is_platform_admin');
+  CFG.isSuperAdmin = !!isPA;
+
   const results = await Promise.all([
-    sb.from('organizations').select('id,name').eq('id', prof.org_id).maybeSingle(),
+    sb.from('organizations').select('id,name,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,access_contact').eq('id', prof.org_id).maybeSingle(),
     sb.from('programmes').select('id,name'),
     sb.from('campaigns').select('id,name,budget,signoff_status,programme_id'),
     sb.from('tasks').select('id,campaign_id,status'),
@@ -200,6 +203,8 @@ async function loadFromSupabase(){
   for(const r of results){ if(r.error) throw r.error; }
 
   CFG.org = orgR.data || { name: '—' };
+  CFG.myModuleOverrides = prof.module_overrides || {};
+  CFG.myContactAccess = !!prof.contact_access;
   CFG.programmes = progR.data || [];
   CFG.campaigns = campR.data || [];
   CFG.tasks = taskR.data || [];
@@ -457,6 +462,27 @@ function rollup(){
   return { totalBudget, awaitingSignoff, openDeals, pipelineValue, upcomingEvents, lowStockAssets, touchpointsThisWeek, openLeads };
 }
 
+/* 2026-09-01: module access (organization ceiling AND per-person override, set on
+   Configuration's Roles & users page) was configurable but never actually checked
+   anywhere outside Norma.html -- every module was reachable by nav or dashboard
+   card regardless of what was toggled off. index.html is the front door, so both
+   the top-nav links and the dashboard's "Open ->" cards are filtered through this
+   same check. The module pages themselves independently enforce this too (see
+   checkModuleAccess() in each), so this is belt-and-braces: hide what you can't
+   reach, and refuse it server-side even if someone reaches it anyway. */
+const MODULE_DB_COL = {Ordo:'access_ordo',Cursus:'access_cursus',Eventus:'access_eventus',Custodia:'access_custodia',Prospectus:'access_prospectus',Augur:'access_augur',Schema:'access_schema',Norma:'access_norma',Contact:'access_contact'};
+function navVisible(moduleId){
+  if(CFG.isSuperAdmin) return true;
+  const orgAllows = !!(CFG.org && CFG.org[MODULE_DB_COL[moduleId]]);
+  const mine = moduleId==='Contact' ? !!CFG.myContactAccess : !!(CFG.myModuleOverrides||{})[moduleId];
+  return orgAllows && mine;
+}
+function renderFilteredTnLinks(){
+  return MODULES.filter(m=>navVisible(m.id)).map(m=>{
+    const t = (m.desc||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+    return `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
+  }).join('') + (navVisible('Contact') ? '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">Ct</span>Contact</a>' : '');
+}
 function renderFeed(){
   if(!CFG.audit.length) return '<div class="empty">No activity yet.</div>';
   return '<ul>'+CFG.audit.map(a=>`<li><span class="ts">${esc(F.dt(a.ts))}</span><span>${esc(a.what)}${a.detail?' — '+esc(a.detail):''}</span></li>`).join('')+'</ul>';
@@ -464,6 +490,7 @@ function renderFeed(){
 
 function render(){
   const r = rollup();
+  const tnLinksEl = document.getElementById('tnLinks'); if(tnLinksEl) tnLinksEl.innerHTML = renderFilteredTnLinks();
   const nm=_myProfile?_myProfile.name:'';
   const initials=nm?nm.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase():'?';
   document.getElementById('tnAcct').innerHTML = `<span class="tn-avatar">${esc(initials)}</span>
@@ -492,7 +519,8 @@ function render(){
 
   h += `<div class="section-lbl">Plan</div>
   <div class="grid">
-    <div class="card">
+    ${navVisible('Ordo') ? `
+<div class="card">
       <div class="bar" style="background:#1F3AC7"></div>
       <div class="bd">
         <h3><span class="mk" style="background:#1F3AC7">St</span>Strategy</h3>
@@ -502,7 +530,9 @@ function render(){
         <div class="row"><span class="pill ok">Live</span><a class="btn" href="Ordo.html" target="tool_Ordo">Open →</a></div>
       </div>
     </div>
-    <div class="card">
+    ` : ''}
+    ${navVisible('Cursus') ? `
+<div class="card">
       <div class="bar" style="background:#0E7C6B"></div>
       <div class="bd">
         <h3><span class="mk" style="background:#0E7C6B">Ca</span>Campaign Planning</h3>
@@ -513,11 +543,13 @@ function render(){
         <div class="row"><span class="pill ok">Live</span><a class="btn" href="Cursus.html" target="tool_Cursus">Open →</a></div>
       </div>
     </div>
+    ` : ''}
   </div>
 
   <div class="section-lbl">Find &amp; win</div>
   <div class="grid">
-    <div class="card">
+    ${navVisible('Prospectus') ? `
+<div class="card">
       <div class="bar" style="background:#9C2B3C"></div>
       <div class="bd">
         <h3><span class="mk" style="background:#9C2B3C">Ta</span>Targets</h3>
@@ -527,7 +559,9 @@ function render(){
         <div class="row"><span class="pill ok">Live</span><a class="btn" href="Prospectus.html" target="tool_Prospectus">Open →</a></div>
       </div>
     </div>
-    <div class="card">
+    ` : ''}
+    ${navVisible('Augur') ? `
+<div class="card">
       <div class="bar" style="background:#5A3E9C"></div>
       <div class="bd">
         <h3><span class="mk" style="background:#5A3E9C">Sc</span>Scoring</h3>
@@ -538,7 +572,9 @@ function render(){
         <div class="row"><span class="pill ok">Live</span><a class="btn" href="Augur.html" target="tool_Augur">Open →</a></div>
       </div>
     </div>
-    <div class="card">
+    ` : ''}
+    ${navVisible('Contact') ? `
+<div class="card">
       <div class="bar" style="background:#1F1F1F"></div>
       <div class="bd">
         <h3><span class="mk" style="background:#1F1F1F">Ct</span>Contact</h3>
@@ -546,11 +582,13 @@ function render(){
         <div class="row"><span class="pill ok">Live</span><a class="btn" href="#" onclick="openContact();return false;">Open →</a></div>
       </div>
     </div>
+    ` : ''}
   </div>
 
   <div class="section-lbl">Execute</div>
   <div class="grid">
-    <div class="card">
+    ${navVisible('Eventus') ? `
+<div class="card">
       <div class="bar" style="background:#B5480E"></div>
       <div class="bd">
         <h3><span class="mk" style="background:#B5480E">Ev</span>Events</h3>
@@ -560,7 +598,9 @@ function render(){
         <div class="row"><span class="pill ok">Live</span><a class="btn" href="Eventus.html" target="tool_Eventus">Open →</a></div>
       </div>
     </div>
-    <div class="card">
+    ` : ''}
+    ${navVisible('Custodia') ? `
+<div class="card">
       <div class="bar" style="background:#3B6E1F"></div>
       <div class="bd">
         <h3><span class="mk" style="background:#3B6E1F">As</span>Assets</h3>
@@ -570,11 +610,13 @@ function render(){
         <div class="row"><span class="pill ${r.lowStockAssets.length?'warn':'ok'}">Live</span><a class="btn" href="Custodia.html" target="tool_Custodia">Open →</a></div>
       </div>
     </div>
+    ` : ''}
   </div>
 
   <div class="section-lbl">Configuration</div>
   <div class="grid">
-    <div class="card">
+    ${navVisible('Schema') ? `
+<div class="card">
       <div class="bar" style="background:#3A5A8C"></div>
       <div class="bd">
         <h3><span class="mk" style="background:#3A5A8C">Pr</span>Process Maps</h3>
@@ -583,7 +625,9 @@ function render(){
         <div class="row"><span class="pill ok">Live</span><a class="btn" href="Schema.html" target="tool_Schema">Open →</a></div>
       </div>
     </div>
-    <div class="card">
+    ` : ''}
+    ${navVisible('Norma') ? `
+<div class="card">
       <div class="bar" style="background:#B5730E"></div>
       <div class="bd">
         <h3><span class="mk" style="background:#B5730E">Co</span>Configuration</h3>
@@ -591,6 +635,7 @@ function render(){
         <div class="row"><span class="pill ok">Live</span><a class="btn" href="Norma.html" target="tool_Norma">Open →</a></div>
       </div>
     </div>
+    ` : ''}
   </div>
 
   <div class="section-lbl">Recent activity</div>

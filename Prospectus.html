@@ -571,6 +571,63 @@ function showAuthGate(err){
   document.getElementById('wrap').style.display = 'none';
 }
 window.showAuthGate = showAuthGate;
+/* 2026-09-01: module access (organization ceiling AND per-person override, set on
+   Configuration's Roles & users page) was configurable but never actually checked
+   anywhere outside Norma.html -- every module was reachable by nav or direct URL
+   regardless of what was toggled off. This is the enforcement side for Prospectus:
+   runs once per boot, right after the user's own profile/org load, before this
+   module's own content ever renders. Fails closed (denies) if the check itself
+   can't be completed, e.g. a network error -- a broken check should never fall
+   back to showing the module. */
+function accessRestrictedScreenHtml(){
+  return '<div class="card" style="max-width:420px;margin-top:80px;padding:28px;text-align:center">'
+    +'<h2 style="margin:0 0 10px">Access restricted</h2>'
+    +'<p class="sub" style="margin:0 0 16px">Your account doesn\'t have access to this module. Contact your Super Admin if you think this is wrong.</p>'
+    +'<button class="btn" onclick="sb.auth.signOut()">Sign out</button>'
+    +'</div>';
+}
+function showAccessRestrictedGate(){
+  const gate = document.getElementById('authGate');
+  gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
+  gate.innerHTML = accessRestrictedScreenHtml();
+  document.getElementById('topnav').style.display = 'none';
+  document.getElementById('wrap').style.display = 'none';
+}
+const MODULE_DB_COL = {Ordo:'access_ordo',Cursus:'access_cursus',Eventus:'access_eventus',Custodia:'access_custodia',Prospectus:'access_prospectus',Augur:'access_augur',Schema:'access_schema',Norma:'access_norma',Contact:'access_contact'};
+function navVisible(moduleId){
+  if(CFG.isSuperAdmin) return true;
+  const orgAllows = !!(CFG.orgModuleAccess && CFG.orgModuleAccess[MODULE_DB_COL[moduleId]]);
+  const mine = moduleId==='Contact' ? !!CFG.myContactAccess : !!((CFG.myModuleOverrides)||{})[moduleId];
+  return orgAllows && mine;
+}
+function renderFilteredTnLinks(){
+  return MODULES.map(m=>{
+    if(!navVisible(m.id)) return '';
+    const t = (m.desc||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+    return m.id===THIS_MODULE
+      ? `<span class="tn-link on" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</span>`
+      : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
+  }).join('') + (navVisible('Contact') ? '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">Ct</span>Contact</a>' : '');
+}
+async function checkModuleAccess(){
+  if(CFG.isSuperAdmin) return true;
+  try{
+    const [orgR, profR] = await Promise.all([
+      sb.from('organizations').select('access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,access_contact').eq('id', _orgId).single(),
+      sb.from('profiles').select('module_overrides,contact_access').eq('id', _myProfile.id).single()
+    ]);
+    if(orgR.error || profR.error) throw (orgR.error || profR.error);
+    CFG.orgModuleAccess = orgR.data;
+    CFG.myModuleOverrides = profR.data.module_overrides || {};
+    CFG.myContactAccess = !!profR.data.contact_access;
+    if(navVisible(THIS_MODULE)) return true;
+  }catch(e){
+    console.error('Could not verify module access -- denying by default.', e);
+  }
+  showAccessRestrictedGate();
+  return false;
+}
+
 function showSignUpGate(err){
   const gate = document.getElementById('authGate');
   gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
@@ -603,6 +660,10 @@ async function bootApp(){
     await sb.auth.signOut();
     showAuthGate(e.message || 'Could not load your data. Contact an admin.');
     return;
+  }
+  if(!(await checkModuleAccess())) return;
+  {
+    const tnLinksEl = document.getElementById('tnLinks'); if(tnLinksEl) tnLinksEl.innerHTML = renderFilteredTnLinks();
   }
   hideAuthGate();
   render();
@@ -1098,7 +1159,7 @@ window.tnSearchKey=tnSearchKey;
 function render(){
   const p=PAGES.find(x=>x.id===UI.page)||PAGES[0];
   document.getElementById('side').innerHTML=renderSide();
-  document.getElementById('tnLinks').innerHTML=renderTnModuleLinks();
+  document.getElementById('tnLinks').innerHTML=renderFilteredTnLinks();
   document.getElementById('tnAcct').innerHTML=renderTnAcct();
   document.getElementById('main').innerHTML=p.fn() + (UI.helpOpen?helpPanelHtml():'');
   saveLocal();

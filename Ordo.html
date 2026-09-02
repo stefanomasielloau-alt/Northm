@@ -3919,9 +3919,21 @@ function renderCtx(){
   // single-option selector showing just themselves -- same context bar,
   // no way to change UI.userId away from their own real profile id.
   const roleLocked = !canConfig();
+  // 2026-09-02 follow-up (Stef): an Admin could still switch to any OTHER
+  // Admin/config-tier peer in the org, unrestricted -- "he should only see
+  // who is below him in his organisation." Scoped the candidate list to
+  // exclude anyone else whose role also has canConfig()/config===true
+  // (same-or-higher privilege), so the switcher only offers lower-privilege
+  // roles to compare against -- unless the viewer is a genuine platform-wide
+  // Super Admin (CFG.isPlatformAdmin), who legitimately sits above every
+  // org role and keeps the full list. The viewer's own entry always stays
+  // in the list so their current selection still renders correctly.
+  const viewAsCandidates = CFG.isPlatformAdmin
+    ? CFG.users
+    : CFG.users.filter(u=>u.id===UI.userId || !((byId(CFG.roles,u.roleId)||{}).config));
   rs.innerHTML = roleLocked
     ? `<option value="${UI.userId}" selected>${esc(user().label||user().name)}</option>`
-    : CFG.users.map(u=>`<option value="${u.id}" ${u.id===UI.userId?'selected':''}>${esc(u.label)}</option>`).join('');
+    : viewAsCandidates.map(u=>`<option value="${u.id}" ${u.id===UI.userId?'selected':''}>${esc(u.label)}</option>`).join('');
   rs.disabled = roleLocked;
   document.getElementById('cVer').innerHTML=CFG.versions.map(v=>`<option value="${v.id}" ${v.id===UI.versionId?'selected':''}>${esc(v.name)}${v.locked?' 🔒':''}</option>`).join('');
   document.getElementById('cFy').innerHTML=CFG.time.years.map(y=>`<option ${y===UI.fy?'selected':''}>${y}</option>`).join('');

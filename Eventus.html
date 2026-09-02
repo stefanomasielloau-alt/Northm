@@ -136,6 +136,51 @@ tr.tot td{font-weight:800; border-top:2px solid var(--line);}
 </style>
 </head>
 <body>
+<!-- 2026-09-02: rotating loading-message overlay, per Stef's request to apply
+     the same treatment already shipped for Seek/Contact (Hub-Backend commit
+     6141a9e, contact-seeker-hub.html commit 4b3e499) to North's own modules.
+     bootApp() does a real network round trip (session check, then
+     loadFromSupabase()) before anything meaningful is on screen -- this
+     masks that wait with a spinner + rotating message instead of a blank
+     shell. Hidden by hideNorthLoadingOverlay(), called from the three points
+     bootApp() actually resolves to: showAuthGate() (not logged in / error),
+     showOnboardingGate() (no profile yet), and hideAuthGate() (success --
+     see each function below). Same shared message list/mechanism copied
+     into all 9 North HTML files -- this codebase has no shared JS module to
+     put it in once (see running-log architecture notes), so each file
+     carries its own identical copy; keep them in sync if the list changes. -->
+<div id="northLoadingOverlay" style="position:fixed;inset:0;background:#fff;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px">
+  <div style="width:36px;height:36px;border:3px solid #e5e5e5;border-top-color:#1d4ed8;border-radius:50%;animation:northLoadSpin 0.8s linear infinite"></div>
+  <div id="northLoadingMsg" style="font-size:13px;color:#666;font-weight:500;font-family:inherit"></div>
+</div>
+<style>@keyframes northLoadSpin{to{transform:rotate(360deg)}}</style>
+<script>
+(function(){
+  var NORTH_LOADING_MESSAGES=[
+    'Loading\u2026',
+    'Loading\u2026 great things take a moment.',
+    'Loading\u2026 pulling in your latest data.',
+    'Loading\u2026 almost there.',
+    'Loading\u2026 syncing everything up.',
+    'Loading\u2026 good things ahead.',
+    'Loading\u2026 hang tight.',
+    'Loading\u2026 making sure everything lines up.'
+  ];
+  var idx=Math.floor(Math.random()*NORTH_LOADING_MESSAGES.length);
+  var msgEl=document.getElementById('northLoadingMsg');
+  if(msgEl)msgEl.textContent=NORTH_LOADING_MESSAGES[idx];
+  window._northLoadingTimer=setInterval(function(){
+    idx=(idx+1)%NORTH_LOADING_MESSAGES.length;
+    if(msgEl)msgEl.textContent=NORTH_LOADING_MESSAGES[idx];
+  },1800);
+  window.hideNorthLoadingOverlay=function(){
+    clearInterval(window._northLoadingTimer);
+    var overlay=document.getElementById('northLoadingOverlay');
+    if(overlay)overlay.style.display='none';
+  };
+})();
+</script>
+<!-- ── End loading overlay ─────────────────────────────────────────────── -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <div id="authGate" style="display:none"></div>
 <div class="topnav" id="topnav">
@@ -532,6 +577,7 @@ async function doRedeemInvite(){
 window.doRedeemInvite = doRedeemInvite;
 
 function showAuthGate(err){
+  if(typeof hideNorthLoadingOverlay==='function')hideNorthLoadingOverlay();
   const gate = document.getElementById('authGate');
   gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
   gate.innerHTML = loginScreenHtml(err);
@@ -605,6 +651,7 @@ function showSignUpGate(err){
 }
 window.showSignUpGate = showSignUpGate;
 function showOnboardingGate(err){
+  if(typeof hideNorthLoadingOverlay==='function')hideNorthLoadingOverlay();
   const gate = document.getElementById('authGate');
   gate.style.cssText = 'display:flex;align-items:flex-start;justify-content:center;min-height:100vh;';
   gate.innerHTML = onboardingScreenHtml(err);
@@ -612,6 +659,7 @@ function showOnboardingGate(err){
   document.getElementById('wrap').style.display = 'none';
 }
 function hideAuthGate(){
+  if(typeof hideNorthLoadingOverlay==='function')hideNorthLoadingOverlay();
   const gate = document.getElementById('authGate');
   gate.style.display = 'none'; gate.innerHTML = '';
   document.getElementById('topnav').style.display = '';

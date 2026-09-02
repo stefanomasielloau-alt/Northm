@@ -1190,12 +1190,23 @@ window.tnPick=tnPick;
 // back to a bare (logged-out) open if getSession() fails for any reason.
 const CONTACT_URL = 'https://hub-backend-psi.vercel.app';
 async function openContact(){
+  // 2026-09-02: was a SILENT fall-through to a bare (logged-out) Contact
+  // open whenever getSession() failed or returned no token -- looked
+  // exactly like a normal login screen, no error, which is what made
+  // Bruce's "reverts to Contact Seeker Hub login" report so hard to
+  // place. Now it says why, so the next time this happens the toast
+  // itself is the diagnostic.
   let url = CONTACT_URL;
   try{
     const { data } = await sb.auth.getSession();
     const t = data && data.session && data.session.access_token;
-    if(t){ url = CONTACT_URL + '/auth/sso?token=' + encodeURIComponent(t); if(_hubOrgSlug) url += '&org=' + encodeURIComponent(_hubOrgSlug); }
-  }catch(e){ /* fall through to plain (logged-out) open */ }
+    if(t){
+      url = CONTACT_URL + '/auth/sso?token=' + encodeURIComponent(t);
+      if(_hubOrgSlug) url += '&org=' + encodeURIComponent(_hubOrgSlug);
+    } else {
+      toast('No live North session found -- sign in again, then try Contact.');
+    }
+  }catch(e){ toast('Could not start Contact sign-in: '+(e&&e.message?e.message:'unknown error')); }
   window.open(url, 'tool_Contact');
 }
 window.openContact=openContact;

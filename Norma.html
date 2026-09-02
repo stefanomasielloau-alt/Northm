@@ -1562,9 +1562,9 @@ function renderHubConnectionsCard(){
   return `<div class="card"><h3>Hub database connections <span class="sp"></span><span class="pill v">Super Admin view</span>
     <span class="pill ok" style="margin-left:8px">Connected as ${esc(_hubSuper.username)}</span>
     <button class="btn sm" style="margin-left:8px" onclick="hubSuperLogout()">Disconnect</button></h3>
-    <div class="bd flush"><table><thead><tr><th>Organization</th><th>Slug</th><th>Status</th><th class="n">Registered</th></tr></thead><tbody>
-    ${!_hubSuper.orgs.length?`<tr><td colspan="4" class="empty">No organizations registered in Hub yet.</td></tr>`:_hubSuper.orgs.map(o=>
-      `<tr><td class="lb">${esc(o.name)}</td><td class="mini">${esc(o.slug)}</td><td><span class="pill ${o.status==='active'?'ok':'n'}">${esc(o.status)}</span></td><td class="n mini">${esc((o.created_at||'').slice(0,10))}</td></tr>`
+    <div class="bd flush"><table><thead><tr><th>Organization</th><th>Slug</th><th>Status</th><th>Hub org ID (for scripts)</th><th class="n">Registered</th></tr></thead><tbody>
+    ${!_hubSuper.orgs.length?`<tr><td colspan="5" class="empty">No organizations registered in Hub yet.</td></tr>`:_hubSuper.orgs.map(o=>
+      `<tr><td class="lb">${esc(o.name)}</td><td class="mini">${esc(o.slug)}</td><td><span class="pill ${o.status==='active'?'ok':'n'}">${esc(o.status)}</span></td><td class="mini" style="font-family:monospace;user-select:all;cursor:text" title="Click to select, then copy">${esc(o.id)}</td><td class="n mini">${esc((o.created_at||'').slice(0,10))}</td></tr>`
     ).join('')}
     </tbody></table></div>
     <div class="bd"><p class="mini" style="margin:0 0 9px">Register a database connection for an organization -- new, or to

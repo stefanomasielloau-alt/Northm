@@ -3903,7 +3903,26 @@ function tnSearchKey(ev){
 window.tnSearchKey=tnSearchKey;
 function renderCtx(){
   const rs=document.getElementById('cRole');
-  rs.innerHTML=CFG.users.map(u=>`<option value="${u.id}" ${u.id===UI.userId?'selected':''}>${esc(u.label)}</option>`).join('');
+  // 2026-09-02 SECURITY FIX (Stef): this selector used to list every user
+  // in the org and let picking one flip UI.userId -- and role()/canConfig()
+  // both resolve straight off UI.userId (see byId(CFG.roles,user().roleId)
+  // above), so ANY signed-in user, any role, could pick an Admin from this
+  // list and have canConfig() start returning true for them: "Configuration
+  // unlocked" would light up and config-only fields would un-disable, all
+  // client-side. Whether server-side RLS would still block an actual write
+  // in that state hasn't been separately audited -- don't assume it does.
+  // The "view as another role to see how the funnel resolves" comparison
+  // this was built for (see the .ctx comment above and the "Switch the
+  // Role selector to compare" copy elsewhere on this page) is a legitimate
+  // config-time tool -- so it stays, but only for someone who already has
+  // canConfig() from their OWN real role. Everyone else gets a locked,
+  // single-option selector showing just themselves -- same context bar,
+  // no way to change UI.userId away from their own real profile id.
+  const roleLocked = !canConfig();
+  rs.innerHTML = roleLocked
+    ? `<option value="${UI.userId}" selected>${esc(user().label||user().name)}</option>`
+    : CFG.users.map(u=>`<option value="${u.id}" ${u.id===UI.userId?'selected':''}>${esc(u.label)}</option>`).join('');
+  rs.disabled = roleLocked;
   document.getElementById('cVer').innerHTML=CFG.versions.map(v=>`<option value="${v.id}" ${v.id===UI.versionId?'selected':''}>${esc(v.name)}${v.locked?' 🔒':''}</option>`).join('');
   document.getElementById('cFy').innerHTML=CFG.time.years.map(y=>`<option ${y===UI.fy?'selected':''}>${y}</option>`).join('');
   document.getElementById('cGrain').innerHTML=CFG.time.grains.map(g=>`<option ${g===UI.grain?'selected':''}>${g}</option>`).join('');

@@ -187,7 +187,7 @@ const F = {
     if(a>=1e3) return s+'$'+Math.round(a/1e3)+'k'; return s+'$'+Math.round(a); },
   p:(v,d=0)=>(v==null||isNaN(v))?'—':(v*100).toFixed(d)+'%',
   d:iso=>{ if(!iso)return '—'; return new Date(iso+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'2-digit'}); },
-  dt:iso=>{ if(!iso)return '—'; return new Date(iso).toLocaleString('en-AU',{day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'}); }
+  dt:iso=>{ if(!iso)return '—'; return new Date(iso).toLocaleString('en-AU',{day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
 };
 
 const EVENT_TYPES=['Trade Show / Seminar','Webinar','3rd Party','NGA Event','Client Day','Prospect Session'];

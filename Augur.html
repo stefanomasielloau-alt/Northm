@@ -192,7 +192,7 @@ const F = {
     if(a>=1e6) return s+c+(a/1e6).toFixed(a>=1e7?1:2)+'M';
     if(a>=1e3) return s+c+Math.round(a/1e3)+'k'; return s+c+Math.round(a); },
   pct:v=>(v==null||isNaN(v))?'—':Math.round(v*100)+'%',
-  dt:iso=>{ if(!iso)return '—'; return new Date(iso).toLocaleString('en-AU',{day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'}); },
+  dt:iso=>{ if(!iso)return '—'; return new Date(iso).toLocaleString('en-AU',{day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}); },
   d:iso=>{ if(!iso)return '—'; return new Date(iso+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'2-digit'}); }
 };
 const CCY_SYM={AUD:'A$',USD:'US$',GBP:'£',EUR:'€',SGD:'S$',NZD:'NZ$'};

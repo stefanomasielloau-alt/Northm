@@ -502,7 +502,7 @@ async function loadFromSupabase(){
      break the rest of Configuration loading. */
   CFG.feedbackItems = [];
   try{
-    const fbR = await sb.from('feedback_items').select('id,reporter_id,reporter_name,page,url,comment,status,created_at').eq('org_id',_orgId).order('created_at',{ascending:false}).limit(200);
+    const fbR = await sb.from('feedback_items').select('id,seq,reporter_id,reporter_name,page,url,comment,status,priority,notes,created_at').eq('org_id',_orgId).order('created_at',{ascending:false}).limit(200);
     if(fbR.error) throw fbR.error;
     CFG.feedbackItems = fbR.data || [];
   }catch(e){ console.warn('feedback_items table not available yet (migration pending?) -- Feedback tab will show empty.', e); }
@@ -1464,6 +1464,7 @@ async function bootApp(){
   hideAuthGate();
   render();
   subscribeRealtime();
+  if(new URLSearchParams(location.search).get('help')==='1'){ openHelpPanel(); }
 }
 
 /* ---------- teams (dedicated groups for targeted alerts, phase18) ---------- */
@@ -2284,41 +2285,113 @@ function pageUsers(){
   return h;
 }
 
+const FEEDBACK_STAGES=[
+  {id:'new',label:'New'},
+  {id:'in_progress',label:'In progress'},
+  {id:'on_hold',label:'On hold'},
+  {id:'feature_gap',label:'Feature gap'},
+  {id:'completed',label:'Completed'}
+];
+const FEEDBACK_PRIORITIES=['P1','P2','P3','P4'];
+function feedbackCode(r){ return 'FB-'+String(r.seq||0).padStart(4,'0'); }
+function feedbackStageLabel(id){ const s=FEEDBACK_STAGES.find(x=>x.id===(id||'new')); return s?s.label:'New'; }
+function feedbackStagePillClass(id){
+  if(id==='completed') return 'ok';
+  if(id==='in_progress'||id==='on_hold'||id==='feature_gap') return 'n';
+  return 'bad';
+}
 function pageFeedback(){
   const rows=CFG.feedbackItems||[];
   const userName=id=>{ const u=(CFG.users||[]).find(x=>x.id===id); return u?u.name:'—'; };
-  const openCount=rows.filter(r=>r.status==='open'||!r.status).length;
-  const resolvedCount=rows.filter(r=>r.status==='resolved').length;
+  const openCount=rows.filter(r=>!['completed'].includes(r.status||'new')).length;
+  const completedCount=rows.filter(r=>r.status==='completed').length;
+  const p1Count=rows.filter(r=>r.priority==='P1'&&r.status!=='completed').length;
   let h=`<div class="phead"><div><h1>Feedback</h1>
-    <p>Issues reported from the floating feedback button on every North page. Name, page, and timestamp
-      are captured automatically -- only the description is typed by the reporter.</p></div></div>`;
+    <p>Issues reported from the floating feedback button on every North page, plus Hub and Seek. Name, page, and timestamp
+      are captured automatically -- only the description is typed by the reporter.</p></div>
+      <div><button class="btn sm" onclick="exportFeedbackCsv()">Export CSV</button></div></div>`;
   h+=`<div class="card"><h3>Summary</h3><div class="bd" style="display:flex;gap:24px;flex-wrap:wrap">
       <div><div class="mini">Total</div><div style="font-size:22px;font-weight:600">${rows.length}</div></div>
       <div><div class="mini">Open</div><div style="font-size:22px;font-weight:600">${openCount}</div></div>
-      <div><div class="mini">Resolved</div><div style="font-size:22px;font-weight:600">${resolvedCount}</div></div>
+      <div><div class="mini">Completed</div><div style="font-size:22px;font-weight:600">${completedCount}</div></div>
+      <div><div class="mini">Open &amp; P1</div><div style="font-size:22px;font-weight:600;color:${p1Count?'#D0342C':'inherit'}">${p1Count}</div></div>
     </div></div>`;
   h+=`<div class="card"><h3>Reported issues</h3><div class="bd flush"><div class="scroll cap">
-    <table><thead><tr><th>Status</th><th>Reported</th><th>By</th><th>Page</th><th>Description</th><th></th></tr></thead><tbody>
-    ${!rows.length?`<tr><td colspan="6" class="empty">No issues reported yet.</td></tr>`:rows.map(r=>{
-      const status=r.status||'open';
-      const pillClass = status==='resolved'?'ok':(status==='in_progress'?'n':'bad');
+    <table><thead><tr><th>Code</th><th>Priority</th><th>Stage</th><th>Reported</th><th>By</th><th>Page</th><th>Description</th><th></th></tr></thead><tbody>
+    ${!rows.length?`<tr><td colspan="8" class="empty">No issues reported yet.</td></tr>`:rows.map(r=>{
+      const status=r.status||'new';
+      const pillClass = feedbackStagePillClass(status);
+      const priority=r.priority||'P3';
       return `<tr>
-        <td><span class="pill ${pillClass}">${esc(status)}</span></td>
+        <td class="mini">${esc(feedbackCode(r))}</td>
+        <td><select onchange="updateFeedbackPriority('${r.id}',this.value)" ${canConfig()?'':'disabled'}>
+          ${FEEDBACK_PRIORITIES.map(p=>`<option value="${p}" ${priority===p?'selected':''}>${p}</option>`).join('')}
+        </select></td>
+        <td><select onchange="updateFeedbackStatus('${r.id}',this.value)" ${canConfig()?'':'disabled'}>
+          ${FEEDBACK_STAGES.map(s=>`<option value="${s.id}" ${status===s.id?'selected':''}>${esc(s.label)}</option>`).join('')}
+        </select></td>
         <td class="mini">${r.created_at?F.dt(r.created_at):'—'}</td>
         <td class="mini">${esc(r.reporter_name||(r.reporter_id?userName(r.reporter_id):'—'))}</td>
         <td class="mini">${esc(r.page||'—')}</td>
-        <td title="${esc(r.url||'')}">${esc(r.comment||'')}</td>
-        <td class="n"><select onchange="updateFeedbackStatus('${r.id}',this.value)" ${canConfig()?'':'disabled'}>
-          <option value="open" ${status==='open'?'selected':''}>Open</option>
-          <option value="in_progress" ${status==='in_progress'?'selected':''}>In progress</option>
-          <option value="resolved" ${status==='resolved'?'selected':''}>Resolved</option>
-        </select></td>
+        <td title="${esc(r.url||'')}">${esc((r.comment||'').slice(0,80))}${(r.comment||'').length>80?'…':''}</td>
+        <td class="n"><button class="btn sm" onclick="openFeedbackDetail('${r.id}')">View</button></td>
       </tr>`;
     }).join('')}
     </tbody></table>
   </div></div></div>`;
   return h;
 }
+function feedbackDetailModalHtml(){
+  const r=(CFG.feedbackItems||[]).find(x=>x.id===UI.feedbackDetailId);
+  if(!r) return '';
+  const userName=id=>{ const u=(CFG.users||[]).find(x=>x.id===id); return u?u.name:'—'; };
+  const status=r.status||'new', priority=r.priority||'P3';
+  return `<div class="mask" onclick="if(event.target===this)closeFeedbackDetail()"><div class="modal" style="width:min(560px,100%)">
+    <h3>${esc(feedbackCode(r))} <span class="sp"></span><button class="btn sm" onclick="closeFeedbackDetail()">Close</button></h3>
+    <div class="bd" style="max-height:75vh;overflow:auto">
+      <div class="mini" style="margin-bottom:10px">
+        Reported ${r.created_at?F.dt(r.created_at):'—'} by ${esc(r.reporter_name||(r.reporter_id?userName(r.reporter_id):'—'))}
+        on <strong>${esc(r.page||'—')}</strong>${r.url?` — <a href="${esc(r.url)}" target="_blank" rel="noopener">source page</a>`:''}
+      </div>
+      <div class="lbl" style="margin-bottom:4px">Description</div>
+      <div class="note" style="margin-bottom:14px;white-space:pre-wrap">${esc(r.comment||'')}</div>
+      <div class="row" style="gap:16px;margin-bottom:14px">
+        <div style="flex:1">
+          <div class="lbl" style="margin-bottom:4px">Priority</div>
+          <select style="width:100%" onchange="updateFeedbackPriority('${r.id}',this.value)" ${canConfig()?'':'disabled'}>
+            ${FEEDBACK_PRIORITIES.map(p=>`<option value="${p}" ${priority===p?'selected':''}>${p}</option>`).join('')}
+          </select>
+        </div>
+        <div style="flex:1">
+          <div class="lbl" style="margin-bottom:4px">Stage</div>
+          <select style="width:100%" onchange="updateFeedbackStatus('${r.id}',this.value)" ${canConfig()?'':'disabled'}>
+            ${FEEDBACK_STAGES.map(s=>`<option value="${s.id}" ${status===s.id?'selected':''}>${esc(s.label)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="lbl" style="margin-bottom:4px">Private notes ${canConfig()?'':'<span class=\'mini\'>(admins only)</span>'}</div>
+      <textarea id="fbNotesEdit" rows="4" style="width:100%;box-sizing:border-box" ${canConfig()?'':'disabled'} placeholder="Only visible to admins -- not shown to the reporter.">${esc(r.notes||'')}</textarea>
+      ${canConfig()?`<div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn sm" onclick="saveFeedbackNotes('${r.id}')">Save notes</button></div>`:''}
+    </div>
+  </div></div>`;
+}
+function openFeedbackDetail(id){ UI.feedbackDetailId=id; render(); }
+function closeFeedbackDetail(){ UI.feedbackDetailId=null; render(); }
+window.openFeedbackDetail=openFeedbackDetail; window.closeFeedbackDetail=closeFeedbackDetail;
+function exportFeedbackCsv(){
+  const rows=CFG.feedbackItems||[];
+  const esc2=v=>{ v=(v==null?'':String(v)); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; };
+  const head=['Code','Priority','Stage','Reported','Reporter','Page','Description','Notes'];
+  const lines=[head.join(',')];
+  rows.forEach(r=>{
+    lines.push([feedbackCode(r), r.priority||'P3', feedbackStageLabel(r.status), r.created_at?F.dt(r.created_at):'', r.reporter_name||'', r.page||'', r.comment||'', r.notes||''].map(esc2).join(','));
+  });
+  const blob=new Blob([lines.join('\n')],{type:'text/csv'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='north-feedback-export.csv'; a.click();
+  toast('Feedback exported.');
+}
+window.exportFeedbackCsv=exportFeedbackCsv;
 async function updateFeedbackStatus(id, status){
   if(!canConfig()){ toast('Your role cannot update feedback status.'); return; }
   const item=(CFG.feedbackItems||[]).find(x=>x.id===id);
@@ -2332,6 +2405,36 @@ async function updateFeedbackStatus(id, status){
     toast('Could not update status: '+error.message);
   }
 }
+async function updateFeedbackPriority(id, priority){
+  if(!canConfig()){ toast('Your role cannot update feedback priority.'); return; }
+  const item=(CFG.feedbackItems||[]).find(x=>x.id===id);
+  const prev=item?item.priority:null;
+  if(item) item.priority=priority;
+  render();
+  const { error } = await sb.from('feedback_items').update({priority}).eq('id',id);
+  if(error){
+    if(item) item.priority=prev;
+    render();
+    toast('Could not update priority: '+error.message);
+  }
+}
+window.updateFeedbackPriority=updateFeedbackPriority;
+async function saveFeedbackNotes(id){
+  if(!canConfig()){ toast('Your role cannot edit feedback notes.'); return; }
+  const el=document.getElementById('fbNotesEdit'); if(!el) return;
+  const notes=el.value;
+  const item=(CFG.feedbackItems||[]).find(x=>x.id===id);
+  const prev=item?item.notes:null;
+  if(item) item.notes=notes;
+  const { error } = await sb.from('feedback_items').update({notes}).eq('id',id);
+  if(error){
+    if(item) item.notes=prev;
+    toast('Could not save notes: '+error.message);
+    return;
+  }
+  toast('Notes saved.');
+}
+window.saveFeedbackNotes=saveFeedbackNotes;
 
 const PAGES=[
   {id:'home',       ix:'0', label:'Home',            fn:pageHome},
@@ -2386,7 +2489,11 @@ const HELP_FAQ=[
   {q:"Why can't I see a module, or can't edit something?", a:'Access is layered: your organization sets the ceiling (which modules exist for anyone there), your role sets Configure/Publish/Can edit, and you personally have a Modules toggle in the Users table. Ask an admin to check all three.'},
   {q:"What's the difference between Simple and Expert mode?", a:'In Campaign Planning, Simple mode shows the core fields; Expert mode adds business case, sign-off, partner allocation and more \u2014 toggle it from Campaign Planning if your role allows it.'},
   {q:'What does Cross-region visibility mean?', a:'"Transparent" means you see every region in your organization. "Isolated" means you only see the regions specifically checked for you.'},
-  {q:'What is Super Admin?', a:"Super Admin isn't a role in the Roles table \u2014 it's a separate flag on a login that gives full cross-organization visibility in Configuration, independent of any one organization's roles."}
+  {q:'What is Super Admin?', a:"Super Admin isn't a role in the Roles table \u2014 it's a separate flag on a login that gives full cross-organization visibility in Configuration, independent of any one organization's roles."},
+  {q:'How do I get to Hub or Seek from North?', a:'Open Contact from the top-nav search, or go directly to your Hub/Seek link -- both now have a "North" link in their own sidebar/header to get back here, and a Help link that opens this same panel.'},
+  {q:'I\'m in Hub -- how do Contact records and campaigns relate to North?', a:'Hub and Seek share one pool of contact/outreach data per Hub login. A contact sourced in Seek becomes a real Hub contact immediately, and outreach/campaign activity in Hub is separate from North\'s own Campaign Planning module -- they are related tools, not the same data.'},
+  {q:'How do I report an issue from Hub or Seek?', a:'Use the red \ud83d\udcac button in the bottom-right corner of Hub or Seek, same as every North page. Reports from Hub/Seek are logged separately for now (their own admin list in Hub Settings) -- ask your North admin if you need something added to this Feedback tab as well.'},
+  {q:'Can an Admin move or copy a Hub user\'s data to another account?', a:'Hub\'s Settings \u2192 Users \u2192 Reassign data panel supports both Move (takes data off the source account) and, for accounts with the Duplicate capability, Copy (leaves the source untouched). Ask whoever holds that capability to grant it if you need Copy access.'}
 ];
 function helpPanelHtml(){
   const mod = MODULES.find(m=>m.id===THIS_MODULE) || {label:THIS_MODULE, desc:''};
@@ -2506,7 +2613,7 @@ function render(){
   document.getElementById('side').innerHTML=renderSide();
   document.getElementById('tnLinks').innerHTML=renderFilteredTnLinks();
   document.getElementById('tnAcct').innerHTML=renderTnAcct();
-  document.getElementById('main').innerHTML=p.fn() + (UI.orgEdit ? orgEditModalHtml() : '') + (UI.helpOpen ? helpPanelHtml() : '');
+  document.getElementById('main').innerHTML=p.fn() + (UI.orgEdit ? orgEditModalHtml() : '') + (UI.feedbackDetailId ? feedbackDetailModalHtml() : '') + (UI.helpOpen ? helpPanelHtml() : '');
   saveLocal();
   scheduleSupabaseSave();
 }

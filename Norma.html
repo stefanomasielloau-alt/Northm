@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Configuration — Shared Configuration</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2714%27%20fill%3D%27%23B5730E%27/%3E%3Ctext%20x%3D%2732%27%20y%3D%2743%27%20font-family%3D%27Arial%2CHelvetica%2Csans-serif%27%20font-size%3D%2726%27%20font-weight%3D%27900%27%20fill%3D%27white%27%20text-anchor%3D%27middle%27%3ECo%3C/text%3E%3C/svg%3E">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 :root{
@@ -582,6 +583,27 @@ const canManageOwnTeam=()=>{
   const r=(CFG.roles||[]).find(x=>x.id===(_myProfile||{}).role_id);
   return !!(r&&r.manageOwnTeam) || canConfig();
 };
+/* 2026-09-02 (Stef): "similar or higher" role lockdown for the Users table --
+   mirrors the same principle already shipped in Ordo.html's Strategy role
+   selector (7b1a959) and Hub-Backend's Users panel (007e915): seeing a
+   peer/higher-tier Admin is fine, changing anything about them is not.
+   North's roles aren't a fixed ladder like Hub's five tiers -- the only rank
+   distinction that exists here is the `config` flag (Admin/Super-Admin
+   tier) -- so "at or above" means "also config-tier", the same reading
+   Ordo.html already uses for its view-as list. CFG.isSuperAdmin (the
+   genuine cross-org Super Admin, backed by is_platform_admin()) is the one
+   bypass, same as everywhere else this pattern appears; your own row is
+   never locked by this. Client-side only, like the Ordo.html fix -- there
+   is no North backend server to enforce this on, and Supabase RLS has not
+   been separately audited for this (flagged, not yet done -- see the
+   running log's open architecture items). */
+function isLockedPeerUser(userId){
+  if(CFG.isSuperAdmin) return false;
+  if(userId===(_myProfile||{}).id) return false;
+  const u=byId(CFG.users,userId); if(!u) return false;
+  const r=byId(CFG.roles,u.roleId);
+  return !!(r&&r.config);
+}
 function myManagedUnitIds(){
   const myId=(_myProfile||{}).id; if(!myId) return [];
   const units=CFG.businessUnits||[];
@@ -601,6 +623,7 @@ function isInMyManagedScope(userId){
 }
 async function setUserRole(userId, roleId){
   if(!(canConfig() || (canManageOwnTeam() && isInMyManagedScope(userId)))){ toast('Your role cannot change access.'); return; }
+  if(isLockedPeerUser(userId)){ toast("You can't change a user at or above your own role tier."); return; }
   const u = byId(CFG.users, userId); if(!u) return;
   const old = u.roleId; u.roleId = roleId; render();
   const { error } = await sb.from('profiles').update({ role_id: roleId }).eq('id', userId);
@@ -611,6 +634,7 @@ async function setUserRole(userId, roleId){
 window.setUserRole = setUserRole;
 async function setUserName(userId, name){
   if(!canConfig()){ toast('Your role cannot edit users.'); return; }
+  if(isLockedPeerUser(userId)){ toast("You can't change a user at or above your own role tier."); return; }
   const u = byId(CFG.users, userId); if(!u) return;
   const trimmed = name.trim();
   if(trimmed === u.name) return;
@@ -637,6 +661,7 @@ async function setUserName(userId, name){
 window.setUserName = setUserName;
 async function resetUserPassword(userId){
   if(!canConfig()){ toast('Your role cannot reset passwords.'); return; }
+  if(isLockedPeerUser(userId)){ toast("You can't change a user at or above your own role tier."); return; }
   const u = byId(CFG.users, userId); if(!u) return;
   if(!u.email){ toast('This user has no email on file.'); return; }
   if(!confirm('Send a password-reset email to '+(u.name||u.email)+' ('+u.email+')? They\'ll get an email with a link to set a new password themselves — nobody, including you, sees or sets it directly.')) return;
@@ -648,6 +673,7 @@ async function resetUserPassword(userId){
 window.resetUserPassword = resetUserPassword;
 async function setContactAccess(userId){
   if(!canConfig()){ toast('Your role cannot change access.'); return; }
+  if(isLockedPeerUser(userId)){ toast("You can't change a user at or above your own role tier."); return; }
   const u = byId(CFG.users, userId); if(!u) return;
   const old = u.contactAccess; u.contactAccess = !old; render();
   const { error } = await sb.from('profiles').update({ contact_access: !old }).eq('id', userId);
@@ -666,6 +692,7 @@ window.setContactAccess = setContactAccess;
    this email) to already be a super_user there. */
 async function pushUserToHub(userId){
   if(!canConfig()){ toast('Your role cannot push users to Hub.'); return; }
+  if(isLockedPeerUser(userId)){ toast("You can't change a user at or above your own role tier."); return; }
   const u = byId(CFG.users, userId); if(!u) return;
   if(!u.email){ toast('This user has no email on file.'); return; }
   if(!u.contactAccess){ toast('Check "Contact access" for '+(u.name||u.email)+' before pushing them to Hub.'); return; }
@@ -697,6 +724,7 @@ async function pushUserToHub(userId){
 window.pushUserToHub = pushUserToHub;
 async function pushPasswordDirect(userId){
   if(!canConfig()){ toast('Your role cannot set passwords.'); return; }
+  if(isLockedPeerUser(userId)){ toast("You can't change a user at or above your own role tier."); return; }
   const u = byId(CFG.users, userId); if(!u) return;
   if(!u.email){ toast('This user has no email on file.'); return; }
   const newPassword = prompt('New password for '+(u.name||u.email)+' (min 8 characters). This gets set on their North account immediately and emailed to them.');
@@ -719,6 +747,7 @@ async function pushPasswordDirect(userId){
 window.pushPasswordDirect = pushPasswordDirect;
 async function pushEmailDirect(userId){
   if(!canConfig()){ toast('Your role cannot change emails.'); return; }
+  if(isLockedPeerUser(userId)){ toast("You can't change a user at or above your own role tier."); return; }
   const u = byId(CFG.users, userId); if(!u) return;
   if(!u.email){ toast('This user has no email on file yet -- set their name and have them sign up first.'); return; }
   const newEmail = prompt('New login email for '+(u.name||u.email)+' (currently '+u.email+'). This changes their actual North sign-in email immediately -- no confirmation email needed.');
@@ -756,6 +785,7 @@ async function setUserCrossRegion(userId){
 window.setUserCrossRegion = setUserCrossRegion;
 async function removeUserFromOrg(userId){
   if(!canConfig()){ toast('Your role cannot remove users.'); return; }
+  if(isLockedPeerUser(userId)){ toast("You can't change a user at or above your own role tier."); return; }
   const u = byId(CFG.users, userId); if(!u) return;
   if(!confirm('Remove '+u.name+' from this organization? They will lose access immediately.')) return;
   const { error } = await sb.from('profiles').delete().eq('id', userId);
@@ -827,6 +857,7 @@ window.toggleOrgModuleAccess = toggleOrgModuleAccess;
    pattern as new roles and new organizations. */
 async function toggleUserModuleAccess(userId, moduleKey){
   if(!(canConfig() || (canManageOwnTeam() && isInMyManagedScope(userId)))){ toast('Your role cannot change module access.'); return; }
+  if(isLockedPeerUser(userId)){ toast("You can't change a user at or above your own role tier."); return; }
   if(moduleKey==='Contact'){ setContactAccess(userId); return; }
   const u = byId(CFG.users, userId); if(!u) return;
   const old = !!u.moduleOverrides[moduleKey];
@@ -2153,11 +2184,19 @@ function pageUsers(){
     ${sortByKey(CFG.users.filter(u=>(!(sa&&UI.usersOrgFilter)||u.orgId===UI.usersOrgFilter)&&(!UI.usersRegionFilter||(u.regionIds||[]).includes(UI.usersRegionFilter))&&(!UI.usersTeamFilter||(CFG.teams.find(t=>t.id===UI.usersTeamFilter)||{memberIds:[]}).memberIds.includes(u.id))),'users',{org:u=>orgName(u.orgId),name:u=>u.name}).map(u=>{
       const orgRegions = CFG.regions.filter(r=>r.orgId===u.orgId);
       const rowDis = (canConfig()||(canManageOwnTeam()&&isInMyManagedScope(u.id)))?'':'disabled';
-      return `<tr id="userRow-${u.id}"><td class="lb"><input class="cel txt" style="width:150px" value="${esc(u.name)}" placeholder="add a name" ${dis} onchange="setUserName('${u.id}',this.value)"></td><td class="mini">${esc(u.email||'—')}</td>
+      /* 2026-09-02: peer/higher (also config-tier) lock -- see isLockedPeerUser()
+         above. Only covers the controls Stef flagged (name, role, module access,
+         password/email/Hub/remove actions), not cross-region visibility or regions
+         (those still use plain dis/rowDis, untouched). */
+      const peerLocked = isLockedPeerUser(u.id);
+      const lockDis = dis || (peerLocked?'disabled':'');
+      const lockRowDis = rowDis || (peerLocked?'disabled':'');
+      const lockTitle = peerLocked?' title="This account is at or above your own role tier -- you can view it but not change it."':'';
+      return `<tr id="userRow-${u.id}"${lockTitle}><td class="lb"><input class="cel txt" style="width:150px" value="${esc(u.name)}" placeholder="add a name" ${lockDis} onchange="setUserName('${u.id}',this.value)">${peerLocked?' <span class="mini" title="At or above your own role tier">🔒</span>':''}</td><td class="mini">${esc(u.email||'—')}</td>
       ${sa?`<td class="mini"><select class="cel txt" style="width:150px" onchange="setUserOrg('${u.id}',this.value)">
         ${(CFG.allOrganizations||[]).map(o=>`<option value="${o.id}" ${o.id===u.orgId?'selected':''}>${esc(o.name)}</option>`).join('')}
         </select>${u.orgId===_orgId?' <span class="tag">yours</span>':''}</td>`:''}
-      <td><select class="cel txt" style="width:130px" ${rowDis} onchange="setUserRole('${u.id}',this.value)">
+      <td><select class="cel txt" style="width:130px" ${lockRowDis} onchange="setUserRole('${u.id}',this.value)">
         ${!u.roleId?'<option value="" selected disabled>— choose a role —</option>':''}
         ${CFG.roles.filter(x=>x.orgId===u.orgId).map(x=>`<option value="${x.id}" ${x.id===u.roleId?'selected':''}>${esc(x.name)}</option>`).join('')}</select></td>
       <td><button class="btn sm" ${dis} onclick="setUserCrossRegion('${u.id}')">
@@ -2167,14 +2206,14 @@ function pageUsers(){
       ).join(''):'<span class="pill n">no regions in this org</span>')}</td>
       <td style="white-space:nowrap">${ACCESS_MODULES_ALL.map(m=>{
         const on = m.id==='Contact' ? !!u.contactAccess : !!u.moduleOverrides[m.id];
-        return moduleAccessBtnHtml(m, on, `toggleUserModuleAccess('${u.id}','${m.id}')`, rowDis);
+        return moduleAccessBtnHtml(m, on, `toggleUserModuleAccess('${u.id}','${m.id}')`, lockRowDis);
       }).join('')}</td>
       <td class="n" style="white-space:nowrap">
-        <button class="btn sm" ${dis} onclick="resetUserPassword('${u.id}')">Reset password</button>
-        <button class="btn sm" ${dis} onclick="pushPasswordDirect('${u.id}')">Set password</button>
-        <button class="btn sm" ${dis} onclick="pushEmailDirect('${u.id}')">Change email</button>
-        <button class="btn sm" ${dis} onclick="pushUserToHub('${u.id}')">Push to Hub</button>
-        ${u.id===(_myProfile||{}).id?'':`<button class="btn sm dgr" ${dis} onclick="removeUserFromOrg('${u.id}')">Remove</button>`}
+        <button class="btn sm" ${lockDis} onclick="resetUserPassword('${u.id}')">Reset password</button>
+        <button class="btn sm" ${lockDis} onclick="pushPasswordDirect('${u.id}')">Set password</button>
+        <button class="btn sm" ${lockDis} onclick="pushEmailDirect('${u.id}')">Change email</button>
+        <button class="btn sm" ${lockDis} onclick="pushUserToHub('${u.id}')">Push to Hub</button>
+        ${u.id===(_myProfile||{}).id?'':`<button class="btn sm dgr" ${lockDis} onclick="removeUserFromOrg('${u.id}')">Remove</button>`}
       </td>
       </tr>`;
     }).join('')}
@@ -2316,6 +2355,7 @@ function renderSide(){
       <span class="ix">${p.ix}</span><span>${p.label}</span>${locked?'<span class="lk">read only</span>':''}</a>`;
   });
   return h;
+  h+=`<div class="side-modver" style="padding:8px 14px 10px;margin-top:4px;border-top:1px solid var(--line,#DFE3EB);font-size:10px;color:var(--ink-3,#7C879E);letter-spacing:.02em">Configuration · v0.2708.9</div>`;
 }
 function renderTnAcct(){
   const nm=_myProfile?_myProfile.name:'';

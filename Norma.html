@@ -304,7 +304,7 @@ const CFG = {
   audit:[]
 };
 
-const UI = { page:'home', helpOpen:false, orgEdit:null, showArchivedInvites:false, usersOrgFilter:'', usersRegionFilter:'', usersTeamFilter:'', rolesSortKey:'org', rolesSortDir:'asc', usersSortKey:'org', usersSortDir:'asc' };
+const UI = { page:'home', helpOpen:false, orgEdit:null, showArchivedInvites:false, usersOrgFilter:'', usersRegionFilter:'', usersTeamFilter:'', rolesSortKey:'org', rolesSortDir:'asc', usersSortKey:'org', usersSortDir:'asc', alertsFilter:{role:'',unit:'',q:''}, buFilter:{role:'',q:''} };
 
 function logAudit(what,detail){
   CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
@@ -403,7 +403,7 @@ async function saveToSupabase(){
     upsertRows('cost_buckets', CFG.costBuckets, c=>({id:c.id,code:c.code,label:c.label,dept:c.dept||'Marketing',ext_code:c.extCode||''})),
     upsertRows('llm_providers', CFG.llmProviders, p=>({id:p.id,name:p.name,kind:p.kind,endpoint:p.endpoint||'',key_label:p.keyLabel||'',model:p.model||'',enabled:!!p.enabled})),
     upsertRows('audit_log', CFG.audit, a=>({ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null})),
-    upsertRows('teams', CFG.teams, t=>({id:t.id,name:t.name||'',member_ids:t.memberIds||[]})),
+    upsertRows('teams', CFG.teams, t=>({id:t.id,name:t.name||'',member_ids:t.memberIds||[],unit_ids:t.unitIds||[]})),
     (async()=>{
       const row = {
         org_id:_orgId, webhook_url:CFG.integrations.webhookUrl||'', webhook_enabled:!!CFG.integrations.webhookEnabled,
@@ -471,7 +471,7 @@ async function loadFromSupabase(){
        writes back to it; Schema is the only tool that creates/updates dispatches. Same
        read-only-mirror pattern as Cursus reading Eventus's events. */
     sb.from('agent_dispatches').select('id,automation_id,brief,destination_id,destination_name,status,result_detail,pushed_by,pushed_at,created_at').order('created_at',{ascending:false}).limit(200),
-    sb.from('teams').select('id,name,member_ids'),
+    sb.from('teams').select('id,name,member_ids,unit_ids'),
     sb.from('business_units').select('id,org_id,name,manager_id,parent_id,member_ids')
   ]);
   const [costBucketsR,llmR,orgSettingsR,auditR,rolesR,profilesR,invitesR,regionsR,agentDispR,teamsR,buR] = results;
@@ -535,7 +535,7 @@ async function loadFromSupabase(){
     destinationName:d.destination_name||'',status:d.status||'pending',resultDetail:d.result_detail||'',
     pushedBy:d.pushed_by,pushedAt:d.pushed_at,createdAt:d.created_at
   }));
-  CFG.teams = (teamsR.data||[]).map(t=>({id:t.id,name:t.name||'',memberIds:t.member_ids||[]}));
+  CFG.teams = (teamsR.data||[]).map(t=>({id:t.id,name:t.name||'',memberIds:t.member_ids||[],unitIds:t.unit_ids||[]}));
   CFG.businessUnits = (buR.data||[]).map(u=>({id:u.id,orgId:u.org_id,name:u.name||'',managerId:u.manager_id||null,parentId:u.parent_id||null,memberIds:u.member_ids||[]}));
 }
 /* Roles & users page (2026-08-27): org filter (Super Admin only -- everyone else already
@@ -621,6 +621,64 @@ function isInMyManagedScope(userId){
   if(canConfig()) return true;
   const unitIds=myManagedUnitIds(); if(!unitIds.length) return false;
   return (CFG.businessUnits||[]).some(u=>unitIds.includes(u.id) && (u.memberIds||[]).includes(userId));
+}
+/* 2026-09-03 (Stef): "look at all roles below me and assign individuals or business units" --
+   Alerts and Business units. Reuses the same managed-scope concept as isInMyManagedScope
+   above instead of inventing a separate role-rank ladder (North's roles aren't a fixed ladder
+   -- see isLockedPeerUser's comment). null = no restriction (canConfig()/Super Admin sees
+   everyone), an array = exactly the people currently in the caller's managed business
+   unit(s), recursively. */
+function myManagedScopeUserIds(){
+  if(canConfig()) return null;
+  const unitIds=myManagedUnitIds();
+  const set=new Set();
+  (CFG.businessUnits||[]).filter(u=>unitIds.includes(u.id)).forEach(u=>(u.memberIds||[]).forEach(id=>set.add(id)));
+  return [...set];
+}
+/* Shared picker UI for the Alerts and Business units cards below: a role/business-unit/text
+   filter bar plus a sorted (role, then name) checkbox list, scoped to myManagedScopeUserIds()
+   for anyone who isn't canConfig(). stateKey is a key on UI holding {role,unit,q} (unit is
+   optional -- Business units' own picker doesn't need it, it's already inside one unit). */
+function personPickerCandidates(pool, stateKey){
+  const f = UI[stateKey] || {};
+  const scope = myManagedScopeUserIds();
+  return pool.filter(u=>{
+    if(scope!==null && !scope.includes(u.id)) return false;
+    if(f.role && u.roleId!==f.role) return false;
+    if(f.unit && !(CFG.businessUnits||[]).some(bu=>bu.id===f.unit && (bu.memberIds||[]).includes(u.id))) return false;
+    if(f.q){
+      const q=f.q.toLowerCase();
+      if(!(u.name||'').toLowerCase().includes(q) && !(u.email||'').toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+}
+function personPickerFilterHtml(stateKey, includeUnitFilter){
+  const f = UI[stateKey];
+  const orgRoles = CFG.roles.filter(r=>r.orgId===_orgId);
+  const orgUnitsForFilter = CFG.businessUnits.filter(u=>u.orgId===_orgId);
+  return `<div class="row" style="gap:6px;flex-wrap:wrap;margin:2px 0 8px">
+    <select class="cel txt" style="width:150px" onchange="UI.${stateKey}.role=this.value;render()" title="Filter by role type">
+      <option value="">All roles</option>
+      ${orgRoles.map(r=>`<option value="${r.id}" ${r.id===f.role?'selected':''}>${esc(r.name)}</option>`).join('')}
+    </select>
+    ${includeUnitFilter?`<select class="cel txt" style="width:160px" onchange="UI.${stateKey}.unit=this.value;render()" title="Filter by business unit">
+      <option value="">All business units</option>
+      ${orgUnitsForFilter.map(u=>`<option value="${u.id}" ${u.id===f.unit?'selected':''}>${esc(u.name)}</option>`).join('')}
+    </select>`:''}
+    <input class="cel txt" style="width:160px" placeholder="Search name/email" value="${esc(f.q||'')}" oninput="UI.${stateKey}.q=this.value;render()">
+  </div>`;
+}
+function personPickerListHtml(candidates, checkedIds, toggleCallFn){
+  const sorted=[...candidates].sort((a,b)=>{
+    const ra=(byId(CFG.roles,a.roleId)||{}).name||''; const rb=(byId(CFG.roles,b.roleId)||{}).name||'';
+    return ra.localeCompare(rb) || (a.name||'').localeCompare(b.name||'');
+  });
+  if(!sorted.length) return `<p class="mini" style="margin:4px 0">No one matches these filters.</p>`;
+  return sorted.map(p=>{
+    const r=byId(CFG.roles,p.roleId);
+    return `<label style="margin-right:12px;display:inline-block;margin-bottom:4px"><input type="checkbox" ${(checkedIds||[]).includes(p.id)?'checked':''} onchange="${toggleCallFn(p.id)}"> ${esc(p.name||p.email||'—')} <span class="mini">(${esc(r?r.name:'—')})</span></label>`;
+  }).join('');
 }
 async function setUserRole(userId, roleId){
   if(!(canConfig() || (canManageOwnTeam() && isInMyManagedScope(userId)))){ toast('Your role cannot change access.'); return; }
@@ -1517,12 +1575,39 @@ function removeTeam(id){
 }
 window.removeTeam=removeTeam;
 function toggleTeamMember(teamId,userId){
-  if(!canConfig())return;
+  if(!(canConfig()||canManageOwnTeam())){ toast('Your role cannot manage alert groups.'); return; }
+  if(!canConfig()){
+    const scope=myManagedScopeUserIds()||[];
+    if(!scope.includes(userId)){ toast('You can only add people in your managed scope.'); return; }
+  }
   const t=byId(CFG.teams,teamId); if(!t)return;
   t.memberIds=t.memberIds||[];
   if(t.memberIds.includes(userId)) t.memberIds=t.memberIds.filter(id=>id!==userId);
   else t.memberIds.push(userId);
   logAudit('edit team membership',t.name); render();
+}
+/* 2026-09-03: attach a whole Business Unit as an Alert-group recipient, resolved live at
+   fire time (Schema.html's resolveTargetUserIds) -- adding someone to the unit later means
+   they're included in this alert group automatically, no need to also add them here as an
+   individual. A manager can only attach unit(s) they manage; canConfig() can attach any. */
+function toggleTeamUnit(teamId,unitId){
+  if(!(canConfig()||canManageOwnTeam())){ toast('Your role cannot manage alert groups.'); return; }
+  if(!canConfig() && !myManagedUnitIds().includes(unitId)){ toast("You can only attach business units you manage."); return; }
+  const t=byId(CFG.teams,teamId); if(!t)return;
+  t.unitIds=t.unitIds||[];
+  const has=t.unitIds.includes(unitId);
+  t.unitIds = has ? t.unitIds.filter(x=>x!==unitId) : [...t.unitIds, unitId];
+  logAudit('edit alert group units',t.name+(has?' -- unit removed':' -- unit added')); render();
+}
+window.toggleTeamUnit=toggleTeamUnit;
+/* Returns an Alert group's full effective recipient list -- individual memberIds plus every
+   current member of any attached business unit, deduped. Display-only here (the real fire-
+   time resolution lives in Schema.html's resolveTargetUserIds, same logic, kept in sync by
+   hand since these are independent files -- see the architecture note in the running log). */
+function teamEffectiveMemberIds(t){
+  const set=new Set(t.memberIds||[]);
+  (t.unitIds||[]).forEach(uid=>{ const u=byId(CFG.businessUnits,uid); if(u) (u.memberIds||[]).forEach(id=>set.add(id)); });
+  return [...set];
 }
 /* Business units (2026-09-01): org-chart-shaped, distinct from Alerts (a flat
    notification-recipient list). Structure edits (create/delete/assign manager/
@@ -1566,7 +1651,8 @@ async function setBusinessUnitParent(id,parentId){
 }
 window.setBusinessUnitParent=setBusinessUnitParent;
 async function toggleBusinessUnitMember(unitId,userId){
-  if(!canConfig()){ toast('Your role cannot manage business units.'); return; }
+  if(!(canConfig()||canManageOwnTeam())){ toast('Your role cannot manage business units.'); return; }
+  if(!canConfig() && !myManagedUnitIds().includes(unitId)){ toast("You can only manage units you're the manager of."); return; }
   const u=byId(CFG.businessUnits,unitId); if(!u)return;
   u.memberIds=u.memberIds||[];
   const has=u.memberIds.includes(userId);
@@ -1692,33 +1778,41 @@ function renderHubConnectionsCard(){
     </div></div></div>`;
 }
 function renderBusinessUnitsCard(){
-  const dis = canConfig()?'':'disabled';
+  const structDis = canConfig()?'':'disabled';
   const orgUsers = CFG.users.filter(u=>u.orgId===_orgId);
   const orgUnits = CFG.businessUnits.filter(u=>u.orgId===_orgId);
+  const myUnits = canConfig() ? null : myManagedUnitIds();
   return `<div class="card"><h3>Business units <span class="sp"></span>
-    <button class="btn sm pri" ${dis} onclick="addBusinessUnit()">Add business unit</button></h3>
+    <button class="btn sm pri" ${structDis} onclick="addBusinessUnit()">Add business unit</button></h3>
     <div class="bd"><p class="mini" style="margin:0 0 9px">Who reports to whom. A unit's manager can reassign the role
-      and toggle module access for people in it (and in any unit nested under it) from the Users table above --
-      nothing else. Give a role "Manage own team" (in the Roles table above) to let its holders use this.</p>
+      and toggle module access for people in it (and in any unit nested under it) from the Users table above, and can
+      add or remove people from the unit(s) they manage, below. Give a role "Manage own team" (in the Roles table
+      above) to let its holders use this. Restructuring a unit itself (rename, manager, nesting) stays Admin-only.</p>
+    ${(!canConfig()&&myUnits.length)?personPickerFilterHtml('buFilter',false):''}
     ${!orgUnits.length?`<p class="empty">No business units yet.</p>`:orgUnits.map(u=>{
       const parentOptions = orgUnits.filter(x=>x.id!==u.id && x.parentId!==u.id);
+      const canEditMembers = canConfig() || (myUnits&&myUnits.includes(u.id));
+      const candidates = canConfig() ? orgUsers : personPickerCandidates(orgUsers,'buFilter');
       return `<div class="note" style="margin-bottom:10px">
         <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-          <input class="cel txt" style="width:180px;font-weight:600" value="${esc(u.name)}" ${dis} onchange="renameBusinessUnit('${u.id}',this.value)">
-          <select class="cel txt" style="width:170px" ${dis} onchange="setBusinessUnitManager('${u.id}',this.value)" title="Manager">
+          <input class="cel txt" style="width:180px;font-weight:600" value="${esc(u.name)}" ${structDis} onchange="renameBusinessUnit('${u.id}',this.value)">
+          <select class="cel txt" style="width:170px" ${structDis} onchange="setBusinessUnitManager('${u.id}',this.value)" title="Manager">
             <option value="">— no manager —</option>
             ${orgUsers.map(p=>`<option value="${p.id}" ${p.id===u.managerId?'selected':''}>${esc(p.name||p.email||'—')}</option>`).join('')}
           </select>
-          <select class="cel txt" style="width:170px" ${dis} onchange="setBusinessUnitParent('${u.id}',this.value)" title="Nested under">
+          <select class="cel txt" style="width:170px" ${structDis} onchange="setBusinessUnitParent('${u.id}',this.value)" title="Nested under">
             <option value="">— top level —</option>
             ${parentOptions.map(p=>`<option value="${p.id}" ${p.id===u.parentId?'selected':''}>Under: ${esc(p.name)}</option>`).join('')}
           </select>
           <span class="pill n">${(u.memberIds||[]).length} member${(u.memberIds||[]).length===1?'':'s'}</span>
-          <button class="btn sm dgr" ${dis} onclick="removeBusinessUnit('${u.id}')">Remove</button>
+          ${(!canConfig()&&canEditMembers)?'<span class="pill ok">You manage this unit</span>':''}
+          <button class="btn sm dgr" ${structDis} onclick="removeBusinessUnit('${u.id}')">Remove</button>
         </div>
-        <div style="margin-top:8px">${orgUsers.map(p=>
-          `<label style="margin-right:12px;display:inline-block;margin-bottom:4px"><input type="checkbox" ${(u.memberIds||[]).includes(p.id)?'checked':''} ${dis} onchange="toggleBusinessUnitMember('${u.id}','${p.id}')"> ${esc(p.name||p.email||'—')}</label>`
-        ).join('')}</div>
+        <div style="margin-top:8px">${
+          canEditMembers
+            ? personPickerListHtml(candidates, u.memberIds||[], pid=>`toggleBusinessUnitMember('${u.id}','${pid}')`)
+            : (orgUsers.filter(p=>(u.memberIds||[]).includes(p.id)).map(p=>`<span class="pill n" style="margin-right:6px">${esc(p.name||p.email||'—')}</span>`).join('') || `<span class="mini">No members.</span>`)
+        }</div>
       </div>`;
     }).join('')}
     </div></div>`;
@@ -2249,25 +2343,40 @@ function pageUsers(){
       in that org's Edit screen). Turning on Contact here is what lets you push them to Hub below; once pushed, assign their
       Hub/Queue permissions in Hub's own Settings.</p></div></div>`;
 
-  h+=`<div class="card"><h3>Alerts <span class="sp"></span>
+  h+=(()=>{
+    const orgUsers=CFG.users.filter(u=>u.orgId===_orgId);
+    const orgUnits=CFG.businessUnits.filter(u=>u.orgId===_orgId);
+    const canEditMembership = canConfig() || canManageOwnTeam();
+    const myUnits = canConfig() ? null : myManagedUnitIds();
+    return `<div class="card"><h3>Alerts <span class="sp"></span>
     <button class="btn sm pri" ${dis} onclick="addTeam()">Add alert group</button></h3>
-    <div class="bd"><p class="mini" style="margin:0 0 9px">Named groups of people, for targeting an "Alert people" automation
-      in Process Maps at exactly who needs it -- a team and/or specific individuals (including Admins) -- instead of a whole
-      region or the whole org. Editable here; used there.</p>
+    <div class="bd"><p class="mini" style="margin:0 0 9px">Named groups of people and/or whole business units, for
+      targeting an "Alert people" automation in Process Maps at exactly who needs it -- instead of a whole region or the
+      whole org. A business unit added here stays live -- add someone to the unit later and they're alerted too.
+      Editable here; used there.</p>
+    ${(canEditMembership&&!canConfig())?personPickerFilterHtml('alertsFilter',true):''}
     ${!CFG.teams.length?`<p class="empty">No alert groups yet.</p>`:CFG.teams.map(t=>{
-      const orgUsers=CFG.users.filter(u=>u.orgId===_orgId);
+      const candidates = canConfig() ? orgUsers : personPickerCandidates(orgUsers,'alertsFilter');
+      const effIds = teamEffectiveMemberIds(t);
       return `<div class="note" style="margin-bottom:10px">
-        <div class="row" style="justify-content:space-between;align-items:center">
+        <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
           <input class="cel txt" style="width:200px;font-weight:600" value="${esc(t.name)}" ${dis} onchange="renameTeam('${t.id}',this.value)">
-          <span class="pill n">${(t.memberIds||[]).length} member${(t.memberIds||[]).length===1?'':'s'}</span>
+          <span class="pill n">${effIds.length} recipient${effIds.length===1?'':'s'}${(t.unitIds||[]).length?' (incl. '+(t.unitIds||[]).length+' unit'+((t.unitIds||[]).length===1?'':'s')+')':''}</span>
           <button class="btn sm dgr" ${dis} onclick="removeTeam('${t.id}')">Remove</button>
         </div>
-        <div style="margin-top:8px">${orgUsers.map(u=>
-          `<label style="margin-right:12px;display:inline-block;margin-bottom:4px"><input type="checkbox" ${(t.memberIds||[]).includes(u.id)?'checked':''} ${dis} onchange="toggleTeamMember('${t.id}','${u.id}')"> ${esc(u.name)}</label>`
-        ).join('')}</div>
+        ${orgUnits.length?`<div class="mini" style="margin-top:6px">Business units: ${orgUnits.map(bu=>{
+          const buDis=(canConfig()||(myUnits&&myUnits.includes(bu.id)))?'':'disabled';
+          return `<label style="margin-right:10px;display:inline-block"><input type="checkbox" ${(t.unitIds||[]).includes(bu.id)?'checked':''} ${buDis} onchange="toggleTeamUnit('${t.id}','${bu.id}')"> ${esc(bu.name)}</label>`;
+        }).join('')}</div>`:''}
+        <div style="margin-top:8px">${
+          canEditMembership
+            ? personPickerListHtml(candidates, t.memberIds||[], pid=>`toggleTeamMember('${t.id}','${pid}')`)
+            : (orgUsers.filter(u=>(t.memberIds||[]).includes(u.id)).map(u=>`<span class="pill n" style="margin-right:6px">${esc(u.name)}</span>`).join('') || `<span class="mini">No individual members.</span>`)
+        }</div>
       </div>`;
     }).join('')}
     </div></div>`;
+  })();
 
   h+=renderBusinessUnitsCard();
 

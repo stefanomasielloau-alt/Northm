@@ -415,7 +415,7 @@ async function loadFromSupabase(){
     /* Read-only, for the "Alert people" target picker (phase18) -- Schema doesn't own any
        of these three tables, it only resolves them down to a concrete list of user ids at
        fire time so the target can be stamped onto the audit_log row it writes. */
-    sb.from('profiles').select('id,name,region_ids,cross_region'),
+    sb.from('profiles').select('id,name,email,region_ids,cross_region'),
     sb.from('regions').select('id,name'),
     sb.from('teams').select('id,name,member_ids,unit_ids'),
     /* Read-only, narrow addition (2026-09-03): lets resolveTargetUserIds() expand a team's
@@ -475,7 +475,7 @@ async function loadFromSupabase(){
     destinationName:d.destination_name||'',status:d.status||'pending',resultDetail:d.result_detail||'',
     pushedBy:d.pushed_by,pushedAt:d.pushed_at,createdAt:d.created_at
   }));
-  CFG.orgUsers = (profilesR.data||[]).map(p=>({id:p.id,name:p.name||'',regionIds:p.region_ids||[],crossRegion:!!p.cross_region}));
+  CFG.orgUsers = (profilesR.data||[]).map(p=>({id:p.id,name:p.name||'',email:p.email||'',regionIds:p.region_ids||[],crossRegion:!!p.cross_region}));
   CFG.orgRegions = (regionsR.data||[]).map(r=>({id:r.id,name:r.name}));
   CFG.teams = (teamsR.data||[]).map(t=>({id:t.id,name:t.name||'',memberIds:t.member_ids||[],unitIds:t.unit_ids||[]}));
   /* Read-only, narrow: id + member list only, just enough for resolveTargetUserIds() to
@@ -995,6 +995,39 @@ function resolveTargetUserIds(a,m){
 }
 window.resolveTargetUserIds=resolveTargetUserIds;
 
+/* 2026-09-03: fires a real email on top of the in-app toast/audit_log alert every
+   'alert_people' action already produces (unconditionally, regardless of this call).
+   Deliberately conservative: only sends when targetUserIds is a concrete resolved list
+   (not null, the 'org'/everyone broadcast) -- blasting real email to the whole
+   organisation from one person's personal Gmail/SMTP quota every time a broad automation
+   fires is a very different cost and risk than a scoped alert to a manager or a named
+   group, so 'org' targeting stays in-app-only for now. Fire-and-forget: never awaited by
+   the caller, never toasts, never throws past this function -- an email failure (no Hub
+   account, no email method configured, a bad address) must never affect the in-app alert
+   that already fired via logAudit. Sent through the CURRENT user's own connected Hub
+   email method (see Hub-Backend's /automations/notify-email) -- i.e. whoever has this
+   page open when the automation's poll fires sends on the system's behalf, same
+   North-JWT-proves-identity pattern as the Board report's AI narrative/PPTX calls. */
+function sendAutomationEmailAlert(targetUserIds, subject, message){
+  if(!targetUserIds || !targetUserIds.length) return;
+  const recipients=(CFG.orgUsers||[])
+    .filter(u=>targetUserIds.includes(u.id) && u.email)
+    .map(u=>({email:u.email,name:u.name}));
+  if(!recipients.length) return;
+  (async()=>{
+    try{
+      const { data } = await sb.auth.getSession();
+      const token = data && data.session && data.session.access_token;
+      if(!token) return;
+      await fetch(CONTACT_URL+'/automations/notify-email', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ token, subject, message, recipients })
+      });
+    }catch(e){ console.warn('Automation email alert failed (in-app alert already fired regardless)', e); }
+  })();
+}
+window.sendAutomationEmailAlert=sendAutomationEmailAlert;
+
 function targetSummary(a){
   const type=a.actionTargetType||'org';
   if(type==='org') return 'Everyone';
@@ -1118,6 +1151,7 @@ function fireNewMatchesForAutomation(a, matches){
       const targetNote = (a.actionTargetType&&a.actionTargetType!=='org') ? (' → '+targetSummary(a)) : '';
       msg='🔔 Alert: '+msg+targetNote+(a.actionTargetAgent?' (flagged for AI agent)':'');
       if(a.actionTargetAgent) createAgentDispatch(a,m);
+      sendAutomationEmailAlert(targetUserIds, a.name, msg);
     }
     logAudit('automation: '+a.name, msg, targetUserIds);
     a.firedIds=(a.firedIds||[]).concat(m.id);
@@ -1173,6 +1207,7 @@ function runAutomationManual(id){
     const targetNote=(a.actionTargetType&&a.actionTargetType!=='org')?(' → '+targetSummary(a)):'';
     msg='🔔 Alert: '+msg+targetNote+(a.actionTargetAgent?' (flagged for AI agent)':'');
     if(a.actionTargetAgent) createAgentDispatch(a,m);
+    sendAutomationEmailAlert(targetUserIds, a.name, msg);
   }
   logAudit('automation: '+a.name, msg, targetUserIds);
   a.lastRunAt=new Date().toISOString();

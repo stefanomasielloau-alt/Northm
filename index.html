@@ -234,7 +234,7 @@ async function loadFromSupabase(){
   CFG.isSuperAdmin = !!isPA;
 
   const results = await Promise.all([
-    sb.from('organizations').select('id,name,hub_org_slug,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,access_contact').eq('id', prof.org_id).maybeSingle(),
+    sb.from('organizations').select('id,name,hub_org_slug,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,access_reportus,access_contact').eq('id', prof.org_id).maybeSingle(),
     sb.from('programmes').select('id,name'),
     sb.from('campaigns').select('id,name,budget,signoff_status,programme_id'),
     sb.from('tasks').select('id,campaign_id,status'),
@@ -521,7 +521,7 @@ function rollup(){
    same check. The module pages themselves independently enforce this too (see
    checkModuleAccess() in each), so this is belt-and-braces: hide what you can't
    reach, and refuse it server-side even if someone reaches it anyway. */
-const MODULE_DB_COL = {Ordo:'access_ordo',Cursus:'access_cursus',Eventus:'access_eventus',Custodia:'access_custodia',Prospectus:'access_prospectus',Augur:'access_augur',Schema:'access_schema',Norma:'access_norma',Contact:'access_contact'};
+const MODULE_DB_COL = {Ordo:'access_ordo',Cursus:'access_cursus',Eventus:'access_eventus',Custodia:'access_custodia',Prospectus:'access_prospectus',Augur:'access_augur',Schema:'access_schema',Norma:'access_norma',Reportus:'access_reportus',Contact:'access_contact'};
 function navVisible(moduleId){
   if(CFG.isSuperAdmin) return true;
   const orgAllows = !!(CFG.org && CFG.org[MODULE_DB_COL[moduleId]]);
@@ -687,6 +687,16 @@ function render(){
       </div>
     </div>
     ` : ''}
+    ${navVisible('Reportus') ? `
+<div class="card">
+      <div class="bar" style="background:#7C1F5A"></div>
+      <div class="bd">
+        <h3><span class="mk" style="background:#7C1F5A">Rp</span>Reporting</h3>
+        <p>Cross-module dashboards, the org and sub-org overview, and an index of reports including the Board report.</p>
+        <div class="row"><span class="pill ok">Live</span><a class="btn" href="Reportus.html" target="tool_Reportus">Open →</a></div>
+      </div>
+    </div>
+    ` : ''}
   </div>
 
   <div class="section-lbl">Recent activity</div>
@@ -709,7 +719,8 @@ const MODULES=[
   {id:'Prospectus',label:'Targets',desc:'ICP filters & opportunity reports',icon:'Ta'},
   {id:'Augur',label:'Scoring',desc:'Lead & deal scoring',icon:'Sc'},
   {id:'Schema',label:'Process Maps',desc:'Process maps & workflows',icon:'Pr'},
-  {id:'Norma',label:'Configuration',desc:'Shared configuration',icon:'Co'}
+  {id:'Norma',label:'Configuration',desc:'Shared configuration',icon:'Co'},
+  {id:'Reportus',label:'Reporting',desc:'Cross-module dashboards, org overview & board reports',icon:'Rp'}
 ];
 function tnSearchResults(q){
   q=(q||'').trim().toLowerCase(); if(!q) return [];

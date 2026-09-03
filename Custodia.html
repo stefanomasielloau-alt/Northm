@@ -596,7 +596,7 @@ function showAccessRestrictedGate(){
   document.getElementById('topnav').style.display = 'none';
   document.getElementById('wrap').style.display = 'none';
 }
-const MODULE_DB_COL = {Ordo:'access_ordo',Cursus:'access_cursus',Eventus:'access_eventus',Custodia:'access_custodia',Prospectus:'access_prospectus',Augur:'access_augur',Schema:'access_schema',Norma:'access_norma',Contact:'access_contact'};
+const MODULE_DB_COL = {Ordo:'access_ordo',Cursus:'access_cursus',Eventus:'access_eventus',Custodia:'access_custodia',Prospectus:'access_prospectus',Augur:'access_augur',Schema:'access_schema',Norma:'access_norma',Reportus:'access_reportus',Contact:'access_contact'};
 function navVisible(moduleId){
   if(CFG.isSuperAdmin) return true;
   const orgAllows = !!(CFG.orgModuleAccess && CFG.orgModuleAccess[MODULE_DB_COL[moduleId]]);
@@ -616,7 +616,7 @@ async function checkModuleAccess(){
   if(CFG.isSuperAdmin) return true;
   try{
     const [orgR, profR] = await Promise.all([
-      sb.from('organizations').select('access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,access_contact').eq('id', _orgId).single(),
+      sb.from('organizations').select('access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,access_reportus,access_contact').eq('id', _orgId).single(),
       sb.from('profiles').select('module_overrides,contact_access').eq('id', _myProfile.id).single()
     ]);
     if(orgR.error || profR.error) throw (orgR.error || profR.error);
@@ -1184,7 +1184,8 @@ const MODULES=[
   {id:'Prospectus',label:'Targets',desc:'ICP filters & opportunity reports',color:'#9C2B3C',icon:'Ta'},
   {id:'Augur',label:'Scoring',desc:'Lead & deal scoring',color:'#5A3E9C',icon:'Sc'},
   {id:'Schema',label:'Process Maps',desc:'Process maps & workflows',color:'#3A5A8C',icon:'Pr'},
-  {id:'Norma',label:'Configuration',desc:'Shared configuration',color:'#B5730E',icon:'Co'}
+  {id:'Norma',label:'Configuration',desc:'Shared configuration',color:'#B5730E',icon:'Co'},
+  {id:'Reportus',label:'Reporting',desc:'Cross-module dashboards, org overview & board reports',color:'#7C1F5A',icon:'Rp'}
 ];
 const THIS_MODULE='Custodia';
 const HELP_FAQ=[

@@ -1183,19 +1183,29 @@ async function cloneRolesIntoOrg(targetOrgId, sourceOrgId){
 }
 window.cloneRolesIntoOrg = cloneRolesIntoOrg;
 /* 2026-09-01: Super Admin previously had no way to move an EXISTING role to a
-   different org -- only whole-org role cloning existed. Mirrors setUserOrg()'s
-   pattern: confirm, warn if anyone's currently assigned this role (their access
-   may now resolve against a different org than they're in), write org_id, roll
-   back locally on error. */
+   different org -- only whole-org role cloning existed. Mirrors setUserOrg()'s pattern.
+   2026-09-03: HARDENED after this dropdown -- sitting inline in a dense table of otherwise
+   inert-looking selects, guarded only by a skippable confirm() -- caused a full production
+   incident: all 10 roles across every org ended up reassigned to Tac-Tik, stranding every
+   Bodgit&Scarpa and RLS Script Test user (see 2026-09-03-role-org-reassignment-fix.sql for
+   the repair). A "warn and proceed anyway" dialog is exactly the kind of prompt that gets
+   clicked through without being read, especially across several rows in a row. Moving a
+   role that still has real people on it is now a hard block, not a warning -- the only way
+   to move such a role is to reassign its users to a different role first (via the Users
+   table below), which is itself a deliberate, visible action per person rather than one
+   click that can silently strand several people at once. Moving a role nobody currently
+   holds is still just a lightweight confirm(), since nothing else can break. */
 async function setRoleOrg(roleId, newOrgId){
   if(!CFG.isSuperAdmin){ toast('Only Super Admin can move a role to a different organization.'); return; }
   const r = byId(CFG.roles, roleId); if(!r || newOrgId===r.orgId) return;
   const destName = orgName(newOrgId);
-  const inUse = CFG.users.some(u=>u.roleId===roleId);
-  const msg = inUse
-    ? 'This role is currently assigned to at least one user. Moving it to "'+destName+'" means their role will belong to a different organization than they do, which can break their access until you reassign them. Move it anyway?'
-    : 'Move role "'+r.name+'" to "'+destName+'"?';
-  if(!confirm(msg)) return;
+  const usersOnRole = CFG.users.filter(u=>u.roleId===roleId);
+  if(usersOnRole.length){
+    toast('Can\'t move "'+r.name+'" to "'+destName+'" -- '+usersOnRole.length+' user'+(usersOnRole.length===1?' still holds':'s still hold')+' this role ('+usersOnRole.map(u=>u.name||u.email).join(', ')+'). Reassign them to a different role first, then move it.');
+    render();
+    return;
+  }
+  if(!confirm('Move role "'+r.name+'" to "'+destName+'"? No one currently holds this role, so nothing else changes.')){ render(); return; }
   const old = r.orgId; r.orgId = newOrgId; render();
   const { error } = await sb.from('roles').update({ org_id: newOrgId }).eq('id', roleId);
   if(error){ r.orgId = old; render(); toast('Could not move role: '+error.message); return; }

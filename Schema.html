@@ -396,7 +396,12 @@ async function loadFromSupabase(){
   const results = await Promise.all([
     sb.from('schema_workflows').select('id,name,description,updated_at,tracking_ref,lanes,nodes,edges'),
     sb.from('schema_automations').select('id,name,trigger_type,trigger_value,action_type,action_message,action_target_agent,enabled,fired_ids,last_run_at,mode,schedule_time'),
-    sb.from('campaigns').select('id,name,signoff_status,budget,actual'),
+    /* 2026-09-03: added committed/start_date/end_date (so campaign_off_target can mirror
+       Ordo/Cursus's own "at risk" RAG check) and owner_id/owner_name/owner_email/
+       alert_threshold_pct (so campaign_ready_to_execute and campaign_off_target can resolve
+       "notify the manager" and per-campaign threshold overrides). Same read-only pattern as
+       every other eval* table below -- Schema doesn't own or write these columns. */
+    sb.from('campaigns').select('id,name,signoff_status,budget,actual,committed,start_date,end_date,owner_id,owner_name,owner_email,alert_threshold_pct'),
     sb.from('tasks').select('id,name,campaign_id,due_date,status'),
     /* Read-only additions (2026-09-03, phase 2 of item 15's automation-trigger expansion) --
        same "Schema doesn't own these tables" pattern as campaigns/tasks above. Only the
@@ -417,7 +422,7 @@ async function loadFromSupabase(){
        attached business units down to their live member lists at fire time -- same
        "Schema doesn't own this table" pattern as profiles/regions/teams above. Only the
        one field needed for that expansion. */
-    sb.from('business_units').select('id,member_ids'),
+    sb.from('business_units').select('id,member_ids,manager_id'),
     /* Read-only, narrow addition: lets this module know whether the signed-in user is a
        Viewer (read-only) or has the config flag, same roles table every other tool reads.
        Schema doesn't own or write this table. */
@@ -449,7 +454,12 @@ async function loadFromSupabase(){
   }));
   /* Read-only, for evaluating automation triggers against live state -- Schema
      doesn't own these tables and never writes back to them in this pass. */
-  CFG.evalCampaigns = (campaignsR.data||[]).map(c=>({id:c.id,name:c.name,signoffStatus:c.signoff_status||'',budget:c.budget||0,actual:c.actual||0}));
+  CFG.evalCampaigns = (campaignsR.data||[]).map(c=>({
+    id:c.id,name:c.name,signoffStatus:c.signoff_status||'',budget:c.budget||0,actual:c.actual||0,
+    committed:c.committed||0,start:c.start_date||'',end:c.end_date||'',
+    ownerId:c.owner_id||null,ownerName:c.owner_name||'',ownerEmail:c.owner_email||'',
+    alertThresholdPct:(c.alert_threshold_pct===undefined||c.alert_threshold_pct===null)?null:c.alert_threshold_pct
+  }));
   CFG.evalTasks = (tasksR.data||[]).map(t=>({id:t.id,name:t.name,campaignId:t.campaign_id,dueDate:t.due_date||'',status:t.status||''}));
   /* Read-only, phase 2 of item 15 -- same pattern as evalCampaigns/evalTasks above: just
      enough fields to evaluate a match, never written back to by Schema. */
@@ -470,7 +480,7 @@ async function loadFromSupabase(){
   CFG.teams = (teamsR.data||[]).map(t=>({id:t.id,name:t.name||'',memberIds:t.member_ids||[],unitIds:t.unit_ids||[]}));
   /* Read-only, narrow: id + member list only, just enough for resolveTargetUserIds() to
      expand a team's attached units. Schema doesn't own or write this table. */
-  CFG.businessUnits = (buR.data||[]).map(u=>({id:u.id,memberIds:u.member_ids||[]}));
+  CFG.businessUnits = (buR.data||[]).map(u=>({id:u.id,memberIds:u.member_ids||[],managerId:u.manager_id||null}));
   CFG.roles = (rolesR.data||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name,config:r.config,publish:r.publish,writeAll:r.write_all,scope:r.scope,desc:r.description||''}));
   /* trackingConfig: primary source since the org_settings.tracking_config read above, if that
      column/row exists and is populated -- otherwise falls back to whatever the manual JSON
@@ -889,7 +899,13 @@ const AUTOMATION_TEMPLATES=[
     row:{name:'Task overdue',triggerType:'task_overdue',triggerValue:'',actionType:'alert_people',actionMessage:''} },
   { key:'weekly_digest', label:'Weekly automation digest (log only)',
     desc:'A quiet weekly note in the audit log -- no alert -- as a starting point for your own weekly check-in rule.',
-    row:{name:'Weekly digest',triggerType:'time_based',triggerValue:'weekly',actionType:'log_note',actionMessage:''} }
+    row:{name:'Weekly digest',triggerType:'time_based',triggerValue:'weekly',actionType:'log_note',actionMessage:''} },
+  { key:'ready_to_execute_alert', label:'Alert manager when a campaign is ready to execute',
+    desc:'Notifies the campaign Owner\'s manager once a campaign is Approved and its start date has arrived.',
+    row:{name:'Campaign ready to execute',triggerType:'campaign_ready_to_execute',triggerValue:'',actionType:'alert_people',actionMessage:'',actionTargetType:'manager'} },
+  { key:'off_target_alert', label:'Alert manager when a campaign is off target',
+    desc:'Notifies the campaign Owner\'s manager when committed spend crosses the campaign\'s own threshold (or 100% of budget if none is set).',
+    row:{name:'Campaign off target',triggerType:'campaign_off_target',triggerValue:'',actionType:'alert_people',actionMessage:'',actionTargetType:'manager'} }
 ];
 function addAutomationFromTemplate(key){
   if(isViewer()){ toast('Your role is read-only — automation editing is disabled.'); return; }
@@ -932,9 +948,28 @@ window.toggleAutomationTargetId=toggleAutomationTargetId;
    for 'org' (today's broadcast-to-everyone behaviour, unchanged). Called at fire time,
    not at config time, so a region/team's membership as of right now is what's used --
    editing a team after the fact doesn't retroactively change who was alerted. */
-function resolveTargetUserIds(a){
+/* 2026-09-03: reverse of Norma.html's myManagedUnitIds() -- given a person, find who
+   manages them, via the same business-unit membership model (a person is "managed by"
+   whoever manages a business unit they're a member of). Used only by resolveTargetUserIds's
+   'manager' target type below. */
+function resolveManagerIds(ownerId){
+  if(!ownerId) return [];
+  const set=new Set();
+  (CFG.businessUnits||[]).filter(u=>(u.memberIds||[]).includes(ownerId)).forEach(u=>{ if(u.managerId) set.add(u.managerId); });
+  return Array.from(set);
+}
+function resolveTargetUserIds(a,m){
   const type=a.actionTargetType||'org';
   if(type==='org') return null;
+  if(type==='manager'){
+    /* Resolved PER MATCH, not per rule -- unlike every other target type, "the manager"
+       is a different person for every campaign this fires on, so it depends on which
+       record (m) actually matched, not just the automation (a). Falls back to nobody if
+       the matched record has no owner, or the owner isn't in any managed business unit --
+       same "empty target, nothing sent" behaviour as an unconfigured users/regions/teams
+       target, not an error. */
+    return resolveManagerIds(m && m.ownerId);
+  }
   const ids=a.actionTargetIds||[];
   if(!ids.length) return [];
   if(type==='users') return ids.slice();
@@ -968,10 +1003,16 @@ function targetSummary(a){
   if(type==='users') return ids.map(id=>{ const u=byId(CFG.orgUsers,id); return u?u.name:'—'; }).join(', ');
   if(type==='regions') return ids.map(id=>{ const r=byId(CFG.orgRegions,id); return r?r.name:'—'; }).join(', ');
   if(type==='teams') return ids.map(id=>{ const t=byId(CFG.teams,id); return t?t.name:'—'; }).join(', ');
+  if(type==='manager') return "Owner's manager (resolved per match, at fire time)";
   return '—';
 }
 window.targetSummary=targetSummary;
 
+/* Default off-target ratio when a campaign has no alertThresholdPct override -- same
+   value as Ordo/Cursus's own RAG_THRESHOLDS.atRiskCommittedRatio, kept as a separate named
+   constant here since Schema.html doesn't share a module with those files (see the
+   per-file architecture note in the backlog). */
+const CAMPAIGN_OFF_TARGET_DEFAULT_RATIO = 1.0;
 function automationMatches(a){
   if(a.triggerType==='campaign_signoff_status'){
     return CFG.evalCampaigns.filter(c=>c.signoffStatus===a.triggerValue).map(c=>({id:'camp:'+c.id,label:c.name}));
@@ -1017,6 +1058,33 @@ function automationMatches(a){
        no separate/duplicate threshold invented here. */
     return (CFG.evalCampaigns||[]).filter(c=>c.budget && c.actual>c.budget*1.1).map(c=>({id:'campover:'+c.id,label:c.name}));
   }
+  if(a.triggerType==='campaign_ready_to_execute'){
+    /* 2026-09-03: "ready to execute" = signed off (Approved) and its start date has
+       arrived, mirroring how Cursus already gates real execution (committing spend) on
+       Approved status -- this just adds the "and it's actually time" half nothing
+       currently checks. Campaigns only for now (scope decision 2026-09-03) -- activities/
+       events can follow the same shape later if useful. */
+    const today=new Date().toISOString().slice(0,10);
+    return (CFG.evalCampaigns||[]).filter(c=>c.signoffStatus==='Approved' && c.start && c.start<=today)
+      .map(c=>({id:'campready:'+c.id,label:c.name,ownerId:c.ownerId}));
+  }
+  if(a.triggerType==='campaign_off_target'){
+    /* Same "committed >= budget * ratio, while still running" definition Ordo/Cursus's own
+       RAG "At risk" check already uses (RAG_THRESHOLDS.atRiskCommittedRatio, both 1.0
+       today) -- except here the ratio can be overridden per campaign via
+       alertThresholdPct (set in Cursus.html's campaign detail card). No triggerValue
+       needed: every campaign is checked against its own threshold, or the shared default
+       if it doesn't have one. Deliberately excludes campaigns that have already finished --
+       that's what campaign_over_budget (actual > 110%) is for. */
+    const today=new Date().toISOString().slice(0,10);
+    return (CFG.evalCampaigns||[]).filter(c=>{
+      if(!c.budget) return false;
+      if(c.start && c.start>today) return false;
+      if(c.end && c.end<today) return false;
+      const ratio=(c.alertThresholdPct!=null) ? (c.alertThresholdPct/100) : CAMPAIGN_OFF_TARGET_DEFAULT_RATIO;
+      return c.committed>=c.budget*ratio;
+    }).map(c=>({id:'offtarget:'+c.id,label:c.name,ownerId:c.ownerId}));
+  }
   if(a.triggerType==='manual') return []; /* never auto-fires -- see runAutomationManual */
   return [];
 }
@@ -1046,7 +1114,7 @@ function fireNewMatchesForAutomation(a, matches){
        behaviour exactly as it was. actionTargetAgent is a separate flag: it also
        drafts an Agent Brief, independent of who the human alert reaches. */
     if(a.actionType==='alert_people'){
-      targetUserIds=resolveTargetUserIds(a);
+      targetUserIds=resolveTargetUserIds(a,m);
       const targetNote = (a.actionTargetType&&a.actionTargetType!=='org') ? (' → '+targetSummary(a)) : '';
       msg='🔔 Alert: '+msg+targetNote+(a.actionTargetAgent?' (flagged for AI agent)':'');
       if(a.actionTargetAgent) createAgentDispatch(a,m);
@@ -1271,8 +1339,9 @@ function pageAutomations(){
             <option value="users" ${targetType==='users'?'selected':''}>Specific people</option>
             <option value="regions" ${targetType==='regions'?'selected':''}>Region</option>
             <option value="teams" ${targetType==='teams'?'selected':''}>Alert group</option>
+            <option value="manager" ${targetType==='manager'?'selected':''}>Owner's manager</option>
           </select>
-          ${targetType==='org'?'':`<div class="mini" style="max-height:90px;overflow:auto;margin-top:4px;border:1px solid var(--line-2);padding:4px;border-radius:4px;min-width:130px">
+          ${(targetType==='org'||targetType==='manager')?'':`<div class="mini" style="max-height:90px;overflow:auto;margin-top:4px;border:1px solid var(--line-2);padding:4px;border-radius:4px;min-width:130px">
             ${optionsHtml||'<span class="mini">none configured</span>'}</div>`}
           <div class="mini" style="margin-top:2px;color:var(--ink-2)">${esc(targetSummary(a))}</div>`;
       }
@@ -1285,6 +1354,8 @@ function pageAutomations(){
         <option value="event_status_reached" ${a.triggerType==='event_status_reached'?'selected':''}>Event status reached</option>
         <option value="asset_low_stock" ${a.triggerType==='asset_low_stock'?'selected':''}>Asset low stock</option>
         <option value="campaign_over_budget" ${a.triggerType==='campaign_over_budget'?'selected':''}>Campaign over budget</option>
+        <option value="campaign_ready_to_execute" ${a.triggerType==='campaign_ready_to_execute'?'selected':''}>Campaign ready to execute</option>
+        <option value="campaign_off_target" ${a.triggerType==='campaign_off_target'?'selected':''}>Campaign off target</option>
         <option value="time_based" ${a.triggerType==='time_based'?'selected':''}>Time-based (scheduled)</option>
         <option value="manual" ${a.triggerType==='manual'?'selected':''}>Manual (run on demand)</option>
       </select></td>
@@ -1301,6 +1372,10 @@ function pageAutomations(){
         ?`<span class="mini">any asset at/under its low-stock threshold</span>`
         :a.triggerType==='campaign_over_budget'
         ?`<span class="mini">actual spend &gt; 110% of budget</span>`
+        :a.triggerType==='campaign_ready_to_execute'
+        ?`<span class="mini">Approved + start date reached</span>`
+        :a.triggerType==='campaign_off_target'
+        ?`<span class="mini">committed &ge; per-campaign threshold (else 100% of budget)</span>`
         :a.triggerType==='time_based'
         ?`<select class="cel txt" style="width:110px" onchange="setIn('automations','${a.id}','triggerValue',this.value)">
             ${[['daily','Daily'],['weekly','Weekly'],['hourly','Hourly']].map(([v,l])=>`<option value="${v}" ${(a.triggerValue||'daily')===v?'selected':''}>${l}</option>`).join('')}</select>`

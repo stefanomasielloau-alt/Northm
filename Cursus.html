@@ -419,6 +419,8 @@ async function saveToSupabase(){
       budget:c.budget||0,crm_ref:c.crmRef||null,
       period_type:c.periodType||null,period_label:c.periodLabel||null,tracking_ref:c.trackingRef||null,
       business_case:c.businessCase||'',signoff_status:c.signoffStatus||'Draft',po_number:c.poNumber||'',
+      owner_id:c.ownerId||null,owner_name:c.ownerName||'',owner_email:c.ownerEmail||'',
+      alert_threshold_pct:(c.alertThresholdPct===undefined||c.alertThresholdPct===null||c.alertThresholdPct==='')?null:c.alertThresholdPct,
       registration_url:c.registrationUrl||'',project_folder_url:c.projectFolderUrl||'',
       external_links:c.externalLinks||[],applicable_splits:c.applicableSplits||[],
       partner_motion_tags:c.partnerMotionTags||[],cloned_from_id:c.clonedFromId||null,
@@ -482,10 +484,14 @@ async function loadFromSupabase(){
 
   const results = await Promise.all([
     sb.from('roles').select('id,allow_expert_mode'),
+    /* Read-only, narrow addition (2026-09-03): id+name only, just enough to populate the
+       campaign Owner picker (see detailCampaignHtml) -- Campaign Planning doesn't own or
+       write this table. */
+    sb.from('profiles').select('id,name'),
     sb.from('regions').select('id,name'),
     sb.from('programmes').select('id,name'),
     sb.from('cost_buckets').select('id,code,label'),
-    sb.from('campaigns').select('id,name,programme_id,region_id,cost_bucket_id,start_date,end_date,budget,crm_ref,period_type,period_label,tracking_ref,business_case,signoff_status,po_number,registration_url,project_folder_url,external_links,applicable_splits,partner_motion_tags,cloned_from_id,contact_list_ref,icp_ref,sort_order,notes'),
+    sb.from('campaigns').select('id,name,programme_id,region_id,cost_bucket_id,start_date,end_date,budget,crm_ref,period_type,period_label,tracking_ref,business_case,signoff_status,po_number,registration_url,project_folder_url,external_links,applicable_splits,partner_motion_tags,cloned_from_id,contact_list_ref,icp_ref,sort_order,notes,owner_id,owner_name,owner_email,alert_threshold_pct'),
     sb.from('tasks').select('id,campaign_id,name,type,owner,start_date,due_date,status,notes,supplier,po,template_id,cost_bucket_id,planned_cost,committed_cost,actual_cost,tracking_ref,sort_order,event_id,contact_refs,planned_cost_fx'),
     sb.from('templates').select('id,name,type,default_cost_bucket_id,notes'),
     /* Read-only reference into the Events module's eventus_events table -- Campaign Planning never writes here, just
@@ -499,7 +505,7 @@ async function loadFromSupabase(){
     sb.from('assets').select('id,name,category'),
     sb.from('augur_deals').select('id,name,account,value,currency,close_date,campaign_id').eq('stage','Closed Won')
   ]);
-  const [rolesR,regionsR,programmesR,costBucketsR,campaignsR,tasksR,templatesR,eventsIdxR,orgSettingsR,auditR,partnersR,partnerAllocR,assetsR,wonDealsR] = results;
+  const [rolesR,profilesR,regionsR,programmesR,costBucketsR,campaignsR,tasksR,templatesR,eventsIdxR,orgSettingsR,auditR,partnersR,partnerAllocR,assetsR,wonDealsR] = results;
   for(const r of results){ if(r.error) throw r.error; }
 
   const myRole = (rolesR.data||[]).find(r=>r.id===_myProfile.role_id);
@@ -509,6 +515,8 @@ async function loadFromSupabase(){
   if(!CFG.canExpertMode) UI.mode = 'simple';
   if(UI.mode==='simple' && !SIMPLE_PAGES.includes(UI.page)) UI.page = 'home';
 
+  /* Read-only, id+name only -- feeds the campaign Owner picker. */
+  CFG.orgUsers = (profilesR.data||[]).map(p=>({id:p.id,name:p.name||''}));
   CFG.regions = (regionsR.data||[]).map(r=>({id:r.id,name:r.name}));
   CFG.programmes = (programmesR.data||[]).map(p=>({id:p.id,name:p.name}));
   CFG.costBuckets = (costBucketsR.data||[]).map(c=>({id:c.id,code:c.code,label:c.label}));
@@ -517,6 +525,13 @@ async function loadFromSupabase(){
     regionId:c.region_id,costBucketId:c.cost_bucket_id,crmRef:c.crm_ref||null,
     periodType:c.period_type||'Quarter',periodLabel:c.period_label||'',trackingRef:c.tracking_ref||null,
     businessCase:c.business_case||'',signoffStatus:c.signoff_status||'Draft',poNumber:c.po_number||'',
+    /* 2026-09-03, Alerts/Business Units follow-on: real owner (links to a person, for
+       "notify the manager" automations) with a free-text name/email fallback for anyone
+       not yet in the system. alertThresholdPct overrides the org-wide off-target ratio
+       for this one campaign; null/blank means "use the default" -- see Schema.html's
+       campaign_off_target trigger. */
+    ownerId:c.owner_id||null,ownerName:c.owner_name||'',ownerEmail:c.owner_email||'',
+    alertThresholdPct:(c.alert_threshold_pct===undefined||c.alert_threshold_pct===null)?null:c.alert_threshold_pct,
     registrationUrl:c.registration_url||'',projectFolderUrl:c.project_folder_url||'',
     externalLinks:c.external_links||[],applicableSplits:c.applicable_splits||[],
     partnerMotionTags:c.partner_motion_tags||[],clonedFromId:c.cloned_from_id||null,
@@ -1548,6 +1563,18 @@ function setIn(field,id,key,val,type){
   row[key]=v; logAudit('edit',field+'.'+key); render();
 }
 window.setIn=setIn;
+/* 2026-09-03: dedicated setter for the campaign-level off-target threshold override --
+   deliberately not routed through setIn's 'num' coercion, which turns a blank field into 0
+   (0% would mean "alert the instant anything is committed", not "no override"). Blank/NaN
+   here means null -- Schema.html's campaign_off_target trigger falls back to the org-wide
+   default ratio whenever this is null. */
+function setCampaignThreshold(id,val){
+  const c=byId(CFG.campaigns,id); if(!c)return;
+  const v=(val===''||val==null)?null:parseFloat(val);
+  c.alertThresholdPct=(v==null||isNaN(v))?null:v;
+  logAudit('edit','campaigns.alertThresholdPct'); render();
+}
+window.setCampaignThreshold=setCampaignThreshold;
 
 /* ---------- Sync bridge with Strategy ---------- */
 function handleOrdoImportFile(file){
@@ -2250,6 +2277,19 @@ function detailCampaignHtml(id){
         <div style="flex:1;min-width:110px"><label class="lbl">Budget</label>
           <input class="in" value="${c.budget||0}" onchange="setIn('campaigns','${c.id}','budget',this.value,'money')"></div>
       </div>
+      <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:8px">
+        <div style="flex:1;min-width:150px"><label class="lbl">Owner</label>
+          <select class="in" onchange="setIn('campaigns','${c.id}','ownerId',this.value||null)">
+            <option value="">— none / external —</option>
+            ${CFG.orgUsers.map(u=>`<option value="${u.id}" ${u.id===c.ownerId?'selected':''}>${esc(u.name)}</option>`).join('')}</select></div>
+        <div style="flex:1;min-width:130px"><label class="lbl">Owner name (if external)</label>
+          <input class="in" placeholder="only if no Owner selected" value="${esc(c.ownerName||'')}" onchange="setIn('campaigns','${c.id}','ownerName',this.value)"></div>
+        <div style="flex:1;min-width:150px"><label class="lbl">Owner email (if external)</label>
+          <input class="in" placeholder="only if no Owner selected" value="${esc(c.ownerEmail||'')}" onchange="setIn('campaigns','${c.id}','ownerEmail',this.value)"></div>
+        <div style="flex:1;min-width:120px"><label class="lbl">Off-target threshold %</label>
+          <input class="in" type="number" placeholder="default" value="${c.alertThresholdPct==null?'':c.alertThresholdPct}" onchange="setCampaignThreshold('${c.id}',this.value)"></div>
+      </div>
+      <p class="mini" style="margin-top:4px">Owner drives "notify the manager" automations in Process Maps (resolves to whoever manages the Owner's business unit). Off-target threshold overrides the org-wide default for this campaign only -- leave blank to use it.</p>
       <div class="kpis" style="margin-top:12px">
         <div class="kpi"><div class="k">Activities</div><div class="kpi-v">${tasks.length}</div></div>
         <div class="kpi"><div class="k">Committed</div><div class="kpi-v">${F.mk(tasksTotal(c.id,'committedCost'))}</div></div>

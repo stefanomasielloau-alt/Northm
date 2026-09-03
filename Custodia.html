@@ -289,6 +289,14 @@ function recomputeAssetCostFx(id){
   render();
 }
 window.recomputeAssetCostFx=recomputeAssetCostFx;
+/* Multi-currency phase 3 (2026-09-03, item 6 cont'd) -- Custodia's headline $ field is the
+   asset's cost per unit (chosen in phase 2), same fail-soft pattern as Ordo's
+   campaignBudgetMain()/Cursus's taskPlannedCostMain()/Eventus's eventBudgetMain(): only
+   diverges from the raw figure when a non-main-currency snapshot exists. Wired into the real
+   calculation/rollup/KPI sites below; the raw editable input (which already shows its own
+   "≈ converted" hint inline), CSV export, and DB persistence mapping are deliberately left
+   reading a.costPer directly, same reasoning as the other 3 modules' untouched sites. */
+function assetCostMain(a){ return (a.costPerFx && a.costPerFx.converted!=null) ? a.costPerFx.converted : (a.costPer||0); }
 
 const UI = { page:'home', helpOpen:false, assetDetailId:null, assetsFilter:'', assetsSortBy:null, assetsSortDir:'asc', assetsLowStockOnly:false, txFilter:'', txSortBy:null, txSortDir:'desc' };
 
@@ -915,7 +923,7 @@ function pageHome(){
   const today=new Date().toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'long'});
   const stockable=CFG.assets.filter(a=>a.category!=='Digital');
   const lowStock=stockable.filter(a=>a.lowStockAt!=null && a.stock!=null && a.stock<=a.lowStockAt);
-  const totalValue=sum(CFG.assets.map(a=>(a.stock||1)*(a.costPer||0)));
+  const totalValue=sum(CFG.assets.map(a=>(a.stock||1)*assetCostMain(a)));
 
   let h=`<div class="phead"><div><h1>${greeting}, ${esc(name)}</h1>
     <p>${today} · ${lowStock.length?`<b>${lowStock.length}</b> asset${lowStock.length===1?'':'s'} at or below low-stock threshold`:'Nothing urgent right now'}</p></div>
@@ -934,7 +942,7 @@ function pageHome(){
     <div class="card"><h3>Assets <span class="sp"></span><button class="btn sm" onclick="go('assets')">Open Assets</button></h3><div class="bd flush"><table><thead><tr>
       <th>Asset</th><th>Category</th><th class="n">Stock</th><th class="n">Cost per</th></tr></thead><tbody>
       ${CFG.assets.slice(0,6).map(a=>`<tr><td class="lb">${esc(a.name)}</td><td>${esc(a.category)}</td>
-        <td class="n">${a.stock==null?'—':a.stock}</td><td class="n calc">${F.mk(a.costPer||0)}</td></tr>`).join('')
+        <td class="n">${a.stock==null?'—':a.stock}</td><td class="n calc">${F.mk(assetCostMain(a))}</td></tr>`).join('')
         || '<tr><td colspan="4" class="empty">No assets yet — Quick Add to create the first one.</td></tr>'}
       </tbody></table></div></div>
   </div>`;
@@ -955,7 +963,7 @@ function pageHome(){
 function pageAssets(){
   const stockable=CFG.assets.filter(a=>a.category!=='Digital');
   const lowStock=stockable.filter(a=>a.lowStockAt!=null && a.stock!=null && a.stock<=a.lowStockAt);
-  const totalValue=sum(CFG.assets.map(a=>(a.stock||1)*(a.costPer||0)));
+  const totalValue=sum(CFG.assets.map(a=>(a.stock||1)*assetCostMain(a)));
   const visible=sortAssetsList(filterAssetsList(CFG.assets));
   let h=`<div class="phead"><div><h1>Assets</h1>
     <p>One list across Physical, Digital and Swag — filter by category as needed rather than juggling separate sheets.</p></div></div>`;
@@ -1021,7 +1029,7 @@ function pageEffectiveness(){
   const byCampaign={};
   checkouts.forEach(t=>{
     const a=byId(CFG.assets,t.assetId); if(!a) return;
-    const cost=Math.abs(t.qty)*(a.costPer||0);
+    const cost=Math.abs(t.qty)*assetCostMain(a);
     byCampaign[t.campaignId]=byCampaign[t.campaignId]||{cost:0,assetIds:new Set()};
     byCampaign[t.campaignId].cost+=cost;
     byCampaign[t.campaignId].assetIds.add(a.id);

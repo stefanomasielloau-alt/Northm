@@ -292,7 +292,7 @@ svg{display:block;max-width:100%}
    broadly (not just .boardreport) since Print is the only place window.print() is wired up --
    harmless for every other page since nothing else calls print(). */
 @media print{
-  .topnav,.ctxbar,.side,#layer,.btn,#northLoadingOverlay{display:none !important}
+  .topnav,.ctxbar,.side,#layer,.btn,#northLoadingOverlay,.no-print{display:none !important}
   .wrap{display:block !important}
   .main{margin:0 !important;padding:0 !important;max-width:100% !important}
   .card{break-inside:avoid;box-shadow:none !important;border:1px solid #ccc !important}
@@ -1451,6 +1451,21 @@ async function loadFromSupabase(){
   }catch(e){ /* prospectus_filters/augur_deals not reachable (RLS, or org hasn't run those
                 modules yet) -- Board Report's Targets/Scoring section just renders empty
                 rather than failing Ordo's own load. */ }
+
+  /* Board report commentary (2026-09-03, item 16 follow-up) -- dated, attributed notes a
+     person can add to the report, each independently toggled to appear in the printed/PPTX
+     output or stay internal-only. New table, same fail-soft pattern as the two blocks above:
+     an org that hasn't run 2026-09-03-board-report-notes-migration.sql yet just sees no
+     Commentary section rather than a broken load. */
+  CFG.boardReportNotes = [];
+  try{
+    const { data: notesData, error: notesErr } = await sb.from('board_report_notes')
+      .select('id,fy,note,visible_in_output,created_by,created_at')
+      .order('created_at',{ascending:false});
+    if(!notesErr) CFG.boardReportNotes = (notesData||[]).map(n=>({
+      id:n.id, fy:n.fy, note:n.note, visible:!!n.visible_in_output, createdBy:n.created_by||'', createdAt:n.created_at
+    }));
+  }catch(e){ /* board_report_notes migration not run yet -- Commentary section renders empty. */ }
 
   const rollupById = {};
   (rollupsR.data||[]).forEach(r=>{ rollupById[r.campaign_id] = {c:r.rollup_committed, a:r.rollup_actual}; });
@@ -3576,6 +3591,51 @@ async function generateBoardReportAiNarrative(){
 }
 window.generateBoardReportAiNarrative=generateBoardReportAiNarrative;
 
+/* Board report commentary CRUD (2026-09-03). fy is stamped from UI.fy at add-time so a note
+   stays attached to the report period it was written about, matching how the report itself
+   is always "for FY X" rather than a single running thread. visible_in_output defaults to
+   false (internal-only) -- an explicit opt-in to put something in front of a board, not an
+   accidental one. */
+async function addBoardReportNote(){
+  const ta=document.getElementById('brNoteText'); const cb=document.getElementById('brNoteVisible');
+  const text=(ta&&ta.value||'').trim();
+  if(!text){ toast('Write something first.'); return; }
+  const visible=!!(cb&&cb.checked);
+  const row={ org_id:_orgId, fy:UI.fy, note:text, visible_in_output:visible, created_by:(_myProfile&&_myProfile.name)||'' };
+  try{
+    const { data, error } = await sb.from('board_report_notes').insert(row).select().single();
+    if(error) throw error;
+    CFG.boardReportNotes.unshift({ id:data.id, fy:data.fy, note:data.note, visible:!!data.visible_in_output, createdBy:data.created_by||'', createdAt:data.created_at });
+    logAudit('board report note added', (visible?'visible in output':'internal only')+' · FY '+UI.fy);
+    if(ta) ta.value=''; if(cb) cb.checked=false;
+    render();
+  }catch(e){ console.warn('Could not save board report note', e); toast('Could not save that note: '+((e&&e.message)||e)); }
+}
+window.addBoardReportNote=addBoardReportNote;
+async function removeBoardReportNote(id){
+  const n=byId(CFG.boardReportNotes,id); if(!n) return;
+  try{
+    const { error } = await sb.from('board_report_notes').delete().eq('id',id);
+    if(error) throw error;
+    CFG.boardReportNotes=CFG.boardReportNotes.filter(x=>x.id!==id);
+    logAudit('board report note removed', 'FY '+n.fy);
+    render();
+  }catch(e){ console.warn('Could not remove board report note', e); toast('Could not remove that note: '+((e&&e.message)||e)); }
+}
+window.removeBoardReportNote=removeBoardReportNote;
+async function toggleBoardReportNoteVisible(id){
+  const n=byId(CFG.boardReportNotes,id); if(!n) return;
+  const next=!n.visible;
+  try{
+    const { error } = await sb.from('board_report_notes').update({visible_in_output:next}).eq('id',id);
+    if(error) throw error;
+    n.visible=next;
+    logAudit('board report note '+(next?'set visible in output':'set internal only'), 'FY '+n.fy);
+    render();
+  }catch(e){ console.warn('Could not update board report note', e); toast('Could not update that note: '+((e&&e.message)||e)); }
+}
+window.toggleBoardReportNoteVisible=toggleBoardReportNoteVisible;
+
 /* Real PPTX export (2026-09-03) -- opens natively in PowerPoint and Google Slides (Slides
    imports .pptx directly), so one file covers both without a separate Google Slides API
    integration. Server does no computation of its own -- UI._brPayload (built above,
@@ -3663,8 +3723,10 @@ function pageBoardReport(){
     targetsSummary: { filterCount: CFG.targetsSummary.filterCount||0, topFilters: CFG.targetsSummary.topFilters||[] },
     scoringSummary: { dealCount: CFG.scoringSummary.dealCount||0, byStage: CFG.scoringSummary.byStage||{} },
     narrative: (UI.brAi && UI.brAi.status==='done') ? UI.brAi.text : boardReportNarrative(winVar,spendVar,exitGate().name),
+    commentary: CFG.boardReportNotes.filter(n=>n.fy===UI.fy && n.visible).map(n=>({text:n.note, author:n.createdBy, ts:F.dt(n.createdAt)})),
     disclaimer: 'Generated '+F.dt(new Date().toISOString())+' from the '+version().name+' version, '+UI.fy+'. This is a point-in-time snapshot -- it does not update itself.'
   };
+  const fyNotes = CFG.boardReportNotes.filter(n=>n.fy===UI.fy);
 
   let h=`<div class="phead"><div><h1>Board report</h1>
     <p>One page for a board or exec audience -- headline numbers, what changed, and what needs a decision. Generated on demand from the live plan.</p></div>
@@ -3744,7 +3806,29 @@ function pageBoardReport(){
     </div></div>
   </div>`;
 
-  /* 6. What changed this period -- narrative. Computed template is the default and the
+  /* 6. Commentary -- dated, attributed notes, each independently shown or hidden on the
+     printed/PPTX output. Off by default (see addBoardReportNote's comment); toggled per note
+     after the fact via toggleBoardReportNoteVisible, not just at creation. Internal-only notes
+     get the no-print class (see @media print) so Print/Save-as-PDF never leaks them -- the
+     PPTX endpoint never even receives them, since UI._brPayload.commentary above is already
+     filtered to visible ones only. */
+  h+=`<div class="card no-print"><h3>Commentary</h3><div class="bd">
+    <textarea id="brNoteText" class="in" rows="2" style="width:100%;resize:vertical" placeholder="Add a note about this period's numbers..."></textarea>
+    <div class="row" style="margin-top:6px;justify-content:space-between">
+      <label class="mini" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="brNoteVisible"> Include in report output (print/PPTX)</label>
+      <button class="btn sm pri" onclick="addBoardReportNote()">Add note</button>
+    </div>
+  </div></div>`;
+  if(fyNotes.length){
+    h+=`<div class="card"><h3>Commentary <span class="pill n">${fyNotes.length}</span></h3><div class="bd flush"><table><thead><tr><th>Note</th><th>By</th><th>When</th><th></th><th class="no-print"></th></tr></thead><tbody>
+      ${fyNotes.map(n=>`<tr class="${n.visible?'':'no-print'}"><td class="lb">${esc(n.note)}</td><td class="mini">${esc(n.createdBy||'—')}</td><td class="mini">${esc(F.dt(n.createdAt))}</td>
+        <td><span class="pill ${n.visible?'ok':'n'}">${n.visible?'In report':'Internal only'}</span></td>
+        <td class="no-print"><a href="#" onclick="toggleBoardReportNoteVisible('${n.id}');return false">${n.visible?'Hide from report':'Show in report'}</a> ·
+          <a href="#" onclick="removeBoardReportNote('${n.id}');return false" style="color:var(--bad)">Remove</a></td></tr>`).join('')}
+      </tbody></table></div></div>`;
+  }
+
+  /* 7. What changed this period -- narrative. Computed template is the default and the
      fail-soft fallback; a button upgrades it to a real AI-written paragraph on demand. */
   h+=`<div class="card"><h3>What changed this period</h3><div class="bd">`;
   if(UI.brAi.status==='done'){
@@ -3759,7 +3843,7 @@ function pageBoardReport(){
   }
   h+=`</div></div>`;
 
-  /* 7. Disclaimer / generated-on footer */
+  /* 8. Disclaimer / generated-on footer */
   h+=`<div class="mini" style="margin-top:14px;padding-top:10px;border-top:1px solid var(--line,#DFE3EB)">
     Generated ${F.dt(new Date().toISOString())} from the <b>${esc(version().name)}</b> version, ${esc(UI.fy)}.
     This is a point-in-time snapshot -- reopen this page for a refreshed report; it does not update itself.</div>`;

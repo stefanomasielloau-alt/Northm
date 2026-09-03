@@ -442,6 +442,8 @@ async function loadFromSupabase(){
     if(tcR.data && tcR.data.tracking_config) CFG.trackingConfig = tcR.data.tracking_config;
   }catch(e){ console.warn('org_settings.tracking_config not available yet (migration pending?) -- keeping local/imported tracking config, if any.', e); }
 
+  await refreshExternalTriggerEvents();
+
   CFG.workflows = (workflowsR.data||[]).map(w=>({
     id:w.id,name:w.name,description:w.description||'',updatedAt:w.updated_at||'',
     trackingRef:w.tracking_ref||null,lanes:w.lanes||[],nodes:w.nodes||[],edges:w.edges||[]
@@ -468,6 +470,7 @@ async function loadFromSupabase(){
   CFG.evalDeals = (dealsR.data||[]).map(d=>({id:d.id,name:d.name,stage:d.stage||''}));
   CFG.evalEvents = (eventsR.data||[]).map(e=>({id:e.id,name:e.name,status:e.status||''}));
   CFG.evalAssets = (assetsR.data||[]).map(a=>({id:a.id,name:a.name,stock:a.stock,lowStockAt:a.low_stock_at}));
+  CFG.evalExternalEvents = CFG.evalExternalEvents || [];
   CFG.audit = (auditR.data||[]).map(a=>({ts:a.ts,what:a.what,detail:a.detail}));
   CFG.agentDestinations = (agentDestR.data||[]).map(d=>({
     id:d.id,name:d.name||'',type:d.type||'webhook',target:d.target||'',isOrgDefault:!!d.is_org_default
@@ -1079,6 +1082,49 @@ window.targetSummary=targetSummary;
    constant here since Schema.html doesn't share a module with those files (see the
    per-file architecture note in the backlog). */
 const CAMPAIGN_OFF_TARGET_DEFAULT_RATIO = 1.0;
+/* Process Maps phase 3 (backlog item 15): pulls events an external system (Zapier, Make, a
+   CRM's own outgoing webhook) posted to Hub-Backend's POST /automations/external-trigger,
+   via GET /automations/external-events. Same honest limitation as every other trigger type
+   in this file -- only fetched while this page is open (page load, or the 5-minute poll) --
+   plus one more of its own: Hub-Backend caps a single response at 200 rows, so if more than
+   200 events land between two polls, the oldest of that overflow are skipped rather than
+   fetched late (they're simply never returned once a later id supersedes them as
+   since_id). Both limits are disclosed rather than hidden: fine for the webhook-style,
+   human-in-the-loop-ish traffic this is designed for (a folder-watcher, a CRM stage
+   change), not a guarantee for high-volume or real-time firing.
+   The since_id cursor lives in localStorage purely as a bandwidth optimisation, not a
+   correctness requirement -- if it's ever lost (cleared storage, a new browser), events
+   simply get re-fetched from the start; actually re-firing an automation on them is still
+   blocked the normal way, by that automation's own firedIds (each match's id embeds the
+   event's own database id, so re-fetching a previously-seen event can never produce a new,
+   unfired match). Fails soft on any error (no token, network, Hub-Backend down) -- an
+   external-trigger fetch failure must never block the rest of Process Maps loading or
+   evaluation, same principle as every other fail-soft block in this file. */
+function _extEventsSinceKey(){ return 'schema_ext_events_since_'+(_orgId||'none'); }
+async function refreshExternalTriggerEvents(){
+  try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token) return;
+    const sinceId = localStorage.getItem(_extEventsSinceKey()) || '0';
+    const res = await fetch(CONTACT_URL+'/automations/external-events?token='+encodeURIComponent(token)+'&since_id='+encodeURIComponent(sinceId));
+    if(!res.ok) return;
+    const body = await res.json();
+    const events = (body && body.events) || [];
+    if(!events.length) return;
+    const existing = CFG.evalExternalEvents || [];
+    const known = new Set(existing.map(e=>e.id));
+    const merged = existing.concat(events.filter(e=>!known.has(e.id)).map(e=>({
+      id:e.id, triggerKey:e.trigger_key||'', payload:e.payload||{}, receivedAt:e.received_at||''
+    })));
+    /* Keep a rolling window rather than growing forever across a long-lived tab session. */
+    CFG.evalExternalEvents = merged.slice(-500);
+    const maxId = events.reduce((m,e)=>Math.max(m,e.id||0), Number(sinceId)||0);
+    if(maxId) localStorage.setItem(_extEventsSinceKey(), String(maxId));
+  }catch(e){ console.warn('External trigger events fetch failed (Process Maps continues with whatever it already had, if any).', e); }
+}
+window.refreshExternalTriggerEvents=refreshExternalTriggerEvents;
+
 function automationMatches(a){
   if(a.triggerType==='campaign_signoff_status'){
     return CFG.evalCampaigns.filter(c=>c.signoffStatus===a.triggerValue).map(c=>({id:'camp:'+c.id,label:c.name}));
@@ -1151,6 +1197,16 @@ function automationMatches(a){
       return c.committed>=c.budget*ratio;
     }).map(c=>({id:'offtarget:'+c.id,label:c.name,ownerId:c.ownerId}));
   }
+  if(a.triggerType==='external_trigger_key'){
+    /* Matches by trigger_key against whatever refreshExternalTriggerEvents() has fetched.
+       id embeds the event's own Hub-Backend database id (not just the trigger_key), so
+       every distinct event is its own dedupeable match -- two events with the same key
+       both fire (each once), rather than the second being silently swallowed because the
+       key alone was already in firedIds. */
+    if(!a.triggerValue) return [];
+    return (CFG.evalExternalEvents||[]).filter(ev=>ev.triggerKey===a.triggerValue)
+      .map(ev=>({id:'ext:'+ev.id, label:'External trigger: '+ev.triggerKey+(ev.receivedAt?' ('+F.dt(ev.receivedAt)+')':'')}));
+  }
   if(a.triggerType==='manual') return []; /* never auto-fires -- see runAutomationManual */
   return [];
 }
@@ -1204,8 +1260,9 @@ function fireNewMatchesForAutomation(a, matches){
    it does not guarantee a fire at that exact time if nobody has the page open then. True
    background/exact-time automation still needs a serverless function, same infra decision
    flagged elsewhere. */
-function runAutomations(silent){
+async function runAutomations(silent){
   if(isViewer()){ if(!silent) toast('Your role is read-only — it cannot run automations.'); return 0; }
+  await refreshExternalTriggerEvents();
   let totalFired=0;
   const nowHM=new Date().toTimeString().slice(0,5);
   CFG.automations.forEach(a=>{
@@ -1427,6 +1484,7 @@ function pageAutomations(){
         <option value="campaign_ready_to_execute" ${a.triggerType==='campaign_ready_to_execute'?'selected':''}>Campaign ready to execute</option>
         <option value="campaign_off_target" ${a.triggerType==='campaign_off_target'?'selected':''}>Campaign off target</option>
         <option value="time_based" ${a.triggerType==='time_based'?'selected':''}>Time-based (scheduled)</option>
+        <option value="external_trigger_key" ${a.triggerType==='external_trigger_key'?'selected':''}>External trigger (webhook)</option>
         <option value="manual" ${a.triggerType==='manual'?'selected':''}>Manual (run on demand)</option>
       </select></td>
       <td>${a.triggerType==='campaign_signoff_status'
@@ -1449,6 +1507,8 @@ function pageAutomations(){
         :a.triggerType==='time_based'
         ?`<select class="cel txt" style="width:110px" onchange="setIn('automations','${a.id}','triggerValue',this.value)">
             ${[['daily','Daily'],['weekly','Weekly'],['hourly','Hourly']].map(([v,l])=>`<option value="${v}" ${(a.triggerValue||'daily')===v?'selected':''}>${l}</option>`).join('')}</select>`
+        :a.triggerType==='external_trigger_key'
+        ?`<input class="cel txt" style="width:150px" placeholder="trigger key" value="${esc(a.triggerValue||'')}" onchange="setIn('automations','${a.id}','triggerValue',this.value)" title="Must exactly match the trigger_key an external system (Zapier, Make, a CRM webhook) POSTs to /automations/external-trigger. See Configuration for this org's webhook URL and token.">`
         :a.triggerType==='manual'
         ?`<button class="btn sm" ${(canConfig()&&a.enabled)?'':'disabled'} title="${a.enabled?'Run this automation now':'Enable it first'}" onclick="runAutomationManual('${a.id}')">Run now</button>`
         :`<span class="mini">past due date</span>`}</td>

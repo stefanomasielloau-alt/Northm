@@ -832,6 +832,38 @@ async function pushEmailDirect(userId){
   }catch(e){ toast('Could not reach Hub: '+(e&&e.message?e.message:'unknown error')); }
 }
 window.pushEmailDirect = pushEmailDirect;
+/* Process Maps phase 3 (backlog item 15): generates/rotates this org's external-trigger
+   webhook token. Same canConfig() client gate + live North-JWT proof as pushUserToHub/
+   pushPasswordDirect/pushEmailDirect above -- Hub-Backend independently re-checks the
+   caller is a super_user via that JWT (_authorize_north_super_user), so this client-side
+   gate is a UX convenience, not the real enforcement. Deliberately one-way: there is no
+   "view current token" call, so UI.lastExternalTriggerToken is cleared on reload/navigate
+   away -- if it's lost, generate a new one (same idiom as an invite code). */
+async function generateExternalTriggerToken(){
+  if(!canConfig()){ toast('Your role cannot manage the external-trigger token.'); return; }
+  if(!confirm('Generate a new external-trigger token? Any external system still using the previous token will stop working immediately.')) return;
+  try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
+    const r = await fetch(CONTACT_URL+'/automations/external-trigger-token', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token: token })
+    });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok){ toast(j.error||'Could not generate token.'); return; }
+    UI.lastExternalTriggerToken = j.trigger_token || '';
+    logAudit('external-trigger token rotated', '');
+    render();
+    toast('New token generated -- copy it now.');
+  }catch(e){ toast('Could not reach Hub: '+(e&&e.message?e.message:'unknown error')); }
+}
+window.generateExternalTriggerToken = generateExternalTriggerToken;
+function copyExternalTriggerToken(tok){
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(tok); toast('Token copied.'); }
+  else toast('Token: '+tok);
+}
+window.copyExternalTriggerToken = copyExternalTriggerToken;
 async function setUserCrossRegion(userId){
   if(!canConfig()){ toast('Your role cannot change access.'); return; }
   const u = byId(CFG.users, userId); if(!u) return;
@@ -2133,6 +2165,24 @@ function pageIntegrations(){
       <p class="mini">Because a push is a real cross-origin request from the browser, this tool can't guarantee every
         receiver will let it read back a success/failure response. Check your Zapier/Make/n8n run history to confirm
         delivery if you're not sure.</p>
+    </div></div>`;
+  h+=`<div class="card"><h3>Inbound webhook (external triggers)</h3>
+    <div class="bd">
+      <p class="mini" style="margin:0 0 9px">The reverse direction: lets an external system (a Zapier/Make/n8n
+        automation, a CRM's own outgoing webhook, a scheduled job watching a folder) fire a Process Maps
+        automation. Generate a token below, then in Process Maps → Automations add a rule with trigger type
+        "External trigger (webhook)" and a trigger key of your choosing (e.g. <code>new_contract_signed</code>).
+        Point the external system at the URL below with that same trigger key.</p>
+      <div class="note" style="margin-bottom:10px">
+        <div class="mini">Webhook URL (POST, JSON body <code>{"trigger_key":"…","payload":{…}}</code>)</div>
+        <div style="font-family:monospace;font-size:12px;word-break:break-all;margin-top:2px">${esc(CONTACT_URL)}/automations/external-trigger?token=YOUR_TOKEN</div>
+      </div>
+      <button class="btn sm pri" ${canConfig()?'':'disabled'} onclick="generateExternalTriggerToken()">Generate new token</button>
+      <span class="mini" style="margin-left:8px">Generating replaces any existing token immediately — update every external system using the old one.</span>
+      ${UI.lastExternalTriggerToken?`<div class="note" style="margin-top:10px"><strong>Token: <span style="font-size:13px;letter-spacing:0.5px;word-break:break-all">${esc(UI.lastExternalTriggerToken)}</span></strong>
+        <button class="btn sm" onclick="copyExternalTriggerToken('${esc(UI.lastExternalTriggerToken)}')">Copy</button>
+        <p class="mini" style="margin:6px 0 0">Shown once — copy it now and paste it into whatever external system will send this webhook (as the <code>token</code>
+          query param, or an <code>X-Trigger-Token</code> header). Not stored anywhere retrievable after you leave this page.</p></div>`:''}
     </div></div>`;
   return h;
 }

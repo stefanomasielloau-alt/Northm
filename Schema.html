@@ -359,7 +359,8 @@ async function saveToSupabase(){
       action_type:a.actionType||'log_note',action_message:a.actionMessage||'',enabled:!!a.enabled,
       action_target_agent:!!a.actionTargetAgent,fired_ids:a.firedIds||[],last_run_at:a.lastRunAt||null,
       action_target_type:a.actionTargetType||'org',action_target_ids:a.actionTargetIds||[],
-      mode:a.mode||'automatic',schedule_time:a.scheduleTime||null
+      mode:a.mode||'automatic',schedule_time:a.scheduleTime||null,
+      action_chat_dest_id:a.actionChatDestId||null
     })),
     upsertRows('audit_log', CFG.audit, a=>({ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null,target_user_ids:a.targetUserIds||null})),
     upsertRows('agent_destinations', CFG.agentDestinations, d=>({
@@ -395,7 +396,7 @@ async function loadFromSupabase(){
 
   const results = await Promise.all([
     sb.from('schema_workflows').select('id,name,description,updated_at,tracking_ref,lanes,nodes,edges'),
-    sb.from('schema_automations').select('id,name,trigger_type,trigger_value,action_type,action_message,action_target_agent,enabled,fired_ids,last_run_at,mode,schedule_time'),
+    sb.from('schema_automations').select('id,name,trigger_type,trigger_value,action_type,action_message,action_target_agent,enabled,fired_ids,last_run_at,mode,schedule_time,action_chat_dest_id'),
     /* 2026-09-03: added committed/start_date/end_date (so campaign_off_target can mirror
        Ordo/Cursus's own "at risk" RAG check) and owner_id/owner_name/owner_email/
        alert_threshold_pct (so campaign_ready_to_execute and campaign_off_target can resolve
@@ -450,7 +451,8 @@ async function loadFromSupabase(){
     actionType:a.action_type||'log_note',actionMessage:a.action_message||'',actionTargetAgent:!!a.action_target_agent,enabled:a.enabled!==false,
     firedIds:a.fired_ids||[],lastRunAt:a.last_run_at||'',
     actionTargetType:a.action_target_type||'org',actionTargetIds:a.action_target_ids||[],
-    mode:a.mode||'automatic',scheduleTime:a.schedule_time||''
+    mode:a.mode||'automatic',scheduleTime:a.schedule_time||'',
+    actionChatDestId:a.action_chat_dest_id||''
   }));
   /* Read-only, for evaluating automation triggers against live state -- Schema
      doesn't own these tables and never writes back to them in this pass. */
@@ -1028,6 +1030,37 @@ function sendAutomationEmailAlert(targetUserIds, subject, message){
 }
 window.sendAutomationEmailAlert=sendAutomationEmailAlert;
 
+/* 2026-09-03 (item 27): posts a real Slack or Teams message on top of the in-app alert,
+   same fire-and-forget/never-blocks-the-in-app-alert principle as sendAutomationEmailAlert
+   above -- no OAuth needed, just an incoming webhook URL, reusing the existing
+   agent_destinations table (already modelled as name/type/target/is_org_default) rather
+   than inventing a parallel destinations concept. destId is per-automation (actionChatDestId,
+   picked in the Rules table below), separate from actionTargetAgent's AI-brief flow -- an
+   AI agent brief is a human-reviewed draft pushed on demand from the queue below; a Slack/
+   Teams post is an immediate notification, same tier as the email alert, not something to
+   hold for review. Slack's incoming-webhook format is just {text}; Teams' classic
+   "Connector" MessageCard format is the current standard even though Microsoft has signalled
+   it's moving customers toward Power Automate/Workflows longer-term (flagged in the
+   connectors research doc) -- this targets today's still-working mechanism, not a
+   speculative future one. */
+function sendAutomationChatAlert(destId, subject, message){
+  if(!destId) return;
+  const dest=byId(CFG.agentDestinations, destId);
+  if(!dest || !dest.target) return;
+  let payload;
+  if(dest.type==='slack_webhook'){
+    payload={ text: '*'+subject+'*\n'+message };
+  }else if(dest.type==='teams_webhook'){
+    payload={ '@type':'MessageCard', '@context':'http://schema.org/extensions',
+      summary:subject, themeColor:'0076D7', title:subject, text:message };
+  }else{
+    return; // destination isn't a chat webhook (e.g. an AI-agent 'webhook'/'deep_link' dest) -- nothing to do
+  }
+  fetch(dest.target,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    .catch(e=>console.warn('Automation chat alert failed (in-app alert already fired regardless)', e));
+}
+window.sendAutomationChatAlert=sendAutomationChatAlert;
+
 function targetSummary(a){
   const type=a.actionTargetType||'org';
   if(type==='org') return 'Everyone';
@@ -1152,6 +1185,7 @@ function fireNewMatchesForAutomation(a, matches){
       msg='🔔 Alert: '+msg+targetNote+(a.actionTargetAgent?' (flagged for AI agent)':'');
       if(a.actionTargetAgent) createAgentDispatch(a,m);
       sendAutomationEmailAlert(targetUserIds, a.name, msg);
+      sendAutomationChatAlert(a.actionChatDestId, a.name, msg);
     }
     logAudit('automation: '+a.name, msg, targetUserIds);
     a.firedIds=(a.firedIds||[]).concat(m.id);
@@ -1208,6 +1242,7 @@ function runAutomationManual(id){
     msg='🔔 Alert: '+msg+targetNote+(a.actionTargetAgent?' (flagged for AI agent)':'');
     if(a.actionTargetAgent) createAgentDispatch(a,m);
     sendAutomationEmailAlert(targetUserIds, a.name, msg);
+    sendAutomationChatAlert(a.actionChatDestId, a.name, msg);
   }
   logAudit('automation: '+a.name, msg, targetUserIds);
   a.lastRunAt=new Date().toISOString();
@@ -1356,8 +1391,8 @@ function pageAutomations(){
   h+=`<div class="card"><h3>Rules <span class="sp"></span><span class="pill n">${CFG.automations.length}</span>
       <button class="btn sm pri" ${canConfig()?'':'disabled'} onclick="addAutomation()">Add automation</button></h3>
     <div class="bd flush"><div class="scroll"><table><thead><tr>
-      <th>Name</th><th>Trigger</th><th>When</th><th>Mode</th><th>Action</th><th>Message</th><th>Alert target</th><th>AI Agent</th><th>Enabled</th><th>Last run</th><th>Fired</th><th></th></tr></thead><tbody>
-    ${!CFG.automations.length?`<tr><td colspan="12" class="empty">No automations yet.</td></tr>`:CFG.automations.map(a=>{
+      <th>Name</th><th>Trigger</th><th>When</th><th>Mode</th><th>Action</th><th>Message</th><th>Alert target</th><th>Chat alert</th><th>AI Agent</th><th>Enabled</th><th>Last run</th><th>Fired</th><th></th></tr></thead><tbody>
+    ${!CFG.automations.length?`<tr><td colspan="13" class="empty">No automations yet.</td></tr>`:CFG.automations.map(a=>{
       const targetType=a.actionTargetType||'org';
       const isAlert=a.actionType==='alert_people';
       let targetPickerHtml='<span class="mini">n/a</span>';
@@ -1432,6 +1467,13 @@ function pageAutomations(){
       </select></td>
       <td><input class="cel txt" style="width:190px" placeholder="default message" value="${esc(a.actionMessage)}" onchange="setIn('automations','${a.id}','actionMessage',this.value)"></td>
       <td>${targetPickerHtml}</td>
+      <td>${isAlert
+        ? `<select class="cel txt" style="width:130px" onchange="setIn('automations','${a.id}','actionChatDestId',this.value)">
+            <option value="">— none —</option>
+            ${(CFG.agentDestinations||[]).filter(d=>d.type==='slack_webhook'||d.type==='teams_webhook')
+              .map(d=>`<option value="${d.id}" ${a.actionChatDestId===d.id?'selected':''}>${esc(d.name)} (${d.type==='slack_webhook'?'Slack':'Teams'})</option>`).join('')}
+          </select>`
+        : '<span class="mini">n/a</span>'}</td>
       <td class="n"><input type="checkbox" title="Also draft an Agent Brief when this fires, ready to push to an agent/app destination" ${a.actionTargetAgent?'checked':''} ${a.actionType!=='alert_people'?'disabled':''} onchange="setIn('automations','${a.id}','actionTargetAgent',this.checked,'bool')"></td>
       <td><input type="checkbox" ${a.enabled?'checked':''} onchange="setIn('automations','${a.id}','enabled',this.checked,'bool')"></td>
       <td class="mini">${a.lastRunAt?F.dt(a.lastRunAt):'never'}</td>
@@ -1445,9 +1487,11 @@ function pageAutomations(){
     <div class="bd flush"><table><thead><tr><th>Name</th><th>Type</th><th>Target</th><th>Org default</th><th></th></tr></thead><tbody>
     ${!CFG.agentDestinations.length?`<tr><td colspan="5" class="empty">No destinations yet — add one to push Agent Briefs somewhere.</td></tr>`:CFG.agentDestinations.map(d=>`<tr>
       <td><input class="cel txt" style="width:150px" value="${esc(d.name)}" onchange="setIn('agentDestinations','${d.id}','name',this.value)"></td>
-      <td><select class="cel txt" style="width:110px" onchange="setIn('agentDestinations','${d.id}','type',this.value)">
+      <td><select class="cel txt" style="width:130px" onchange="setIn('agentDestinations','${d.id}','type',this.value)">
         <option value="webhook" ${d.type==='webhook'?'selected':''}>Webhook</option>
         <option value="deep_link" ${d.type==='deep_link'?'selected':''}>Deep link</option>
+        <option value="slack_webhook" ${d.type==='slack_webhook'?'selected':''}>Slack (incoming webhook)</option>
+        <option value="teams_webhook" ${d.type==='teams_webhook'?'selected':''}>Teams (incoming webhook)</option>
       </select></td>
       <td><input class="cel txt" style="width:260px" placeholder="https://…" value="${esc(d.target)}" onchange="setIn('agentDestinations','${d.id}','target',this.value)"></td>
       <td class="n"><button class="btn sm ${d.isOrgDefault?'pri':''}" ${canConfig()?'':'disabled'} onclick="setAgentDestinationDefault('${d.id}')">${d.isOrgDefault?'Default':'Make default'}</button></td>
@@ -1455,7 +1499,9 @@ function pageAutomations(){
     </tbody></table></div>
     <div class="bd" style="border-top:1px solid var(--line-2)"><p class="mini" style="margin:0">Webhook destinations get a direct POST from the browser — if the receiving
       service doesn't allow cross-origin requests, the push will fail with a CORS error and log as a failure. Deep-link destinations open in a new tab with the
-      brief copied to your clipboard, since most agent apps have no way to accept a prefilled brief via URL.</p></div></div>`;
+      brief copied to your clipboard, since most agent apps have no way to accept a prefilled brief via URL. Slack/Teams (incoming webhook) destinations are for the
+      "Chat alert" column on the Rules table above, not the Agent Brief queue below — pasting a Slack "Incoming Webhook" URL or a Teams "Incoming Webhook" connector
+      URL into Target lets an "Alert people" rule post straight to that channel the moment it fires, no OAuth or app install needed.</p></div></div>`;
 
   const pendingDispatches=CFG.agentDispatches.filter(d=>d.status==='pending');
   h+=`<div class="card"><h3>Agent briefs <span class="sp"></span><span class="pill ${pendingDispatches.length?'warn':'n'}">${pendingDispatches.length} pending</span></h3>

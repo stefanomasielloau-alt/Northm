@@ -3684,8 +3684,10 @@ function pageBoardReport(){
       <div class="sub" style="color:${spendSt==='bad'?'var(--bad)':spendSt==='warn'?'var(--warn)':'var(--ok)'}">${F.sp(spendVar,0)} vs ${F.mk(budgeted)} budgeted</div></div>
   </div>`;
 
-  /* 2. Funnel snapshot */
+  /* 2. Funnel snapshot -- chart added 2026-09-03 (item: more charting in Reporting/Board
+     report), same data the table below already computes, no second calculation. */
   h+=`<div class="card"><h3>Funnel snapshot -- ${esc(version().name)} &middot; ${esc(UI.fy)}</h3>
+    <div class="bd">${svgFunnel(gates.map(g=>actualAcc[g.id]),gates.map(g=>g.name),640)}</div>
     <div class="bd flush"><table><thead><tr><th>Gate</th><th class="n">Plan</th><th class="n">Actual</th><th class="n">Var %</th><th>Status</th></tr></thead><tbody>
     ${gates.map(g=>{ const p=plan[g.id],a=actualAcc[g.id],pc=p?(a-p)/p:0;
       const st=Math.abs(pc)<0.1?'ok':Math.abs(pc)<0.25?'warn':'bad';
@@ -3701,6 +3703,7 @@ function pageBoardReport(){
     return {b,bud,com,act,spend,pct};
   }).filter(r=>r.bud||r.com||r.act);
   h+=`<div class="card"><h3>Budget summary, by cost bucket</h3>
+    <div class="bd">${bucketRows.length?svgBars(bucketRows.map(r=>({k:r.b.label,v:r.bud})),{money:true,h:180}):''}</div>
     <div class="bd flush"><table><thead><tr><th>Bucket</th><th class="n">Budget</th><th class="n">Committed</th><th class="n">Actual</th><th class="n">% of plan</th><th>Status</th></tr></thead><tbody>
     ${bucketRows.length?bucketRows.map(r=>{ const st=r.pct<=1?'ok':r.pct<1.15?'warn':'bad';
       return `<tr><td class="lb">${esc(r.b.label)}</td><td class="n calc">${F.mk(r.bud)}</td><td class="n calc">${F.mk(r.com)}</td><td class="n calc">${F.mk(r.act)}</td>

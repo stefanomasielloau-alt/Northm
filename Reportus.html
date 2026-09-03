@@ -680,11 +680,26 @@ function pageDashboards(){
     </div>`).join('')+`</div>`;
   const openT = tiles.find(t=>t.key===UI.openTile);
   if(openT){
+    /* 2026-09-03: a real chart above the list, not just numbers -- reuses shared/charts.js
+       (see that file's header). Only the two tiles with a natural chart shape get one:
+       campaign budget (top 8 by size) and open pipeline (top 8 deals by value). Everything
+       else stays a plain list -- a bar chart of "3 upcoming events" doesn't add anything. */
+    let chartHtml='';
+    if(openT.key==='budget' && camps.length){
+      const top=camps.slice().sort((a,b)=>campaignBudgetMain(b)-campaignBudgetMain(a)).slice(0,8);
+      chartHtml=svgBars(top.map(c=>({k:c.name,v:campaignBudgetMain(c)})),{money:true,h:200});
+    } else if(openT.key==='pipeline' && openDeals.length){
+      const top=openDeals.slice().sort((a,b)=>(b.value||0)-(a.value||0)).slice(0,8);
+      chartHtml=svgBars(top.map(d=>({k:d.name,k2:d.stage||'',v:d.value||0})),{money:true,h:200});
+    }
     h+=`<div class="card"><h3>${esc(openT.label)}</h3><div class="bd">
-      ${openT.list.length? '<ul style="margin:0;padding-left:18px">'+openT.list.map(x=>`<li style="margin-bottom:4px;font-size:12.5px">${x}</li>`).join('')+'</ul>' : '<div class="empty">Nothing here right now.</div>'}
+      ${chartHtml}
+      ${openT.list.length? '<ul style="margin:0;padding-left:18px'+(chartHtml?';margin-top:10px':'')+'">'+openT.list.map(x=>`<li style="margin-bottom:4px;font-size:12.5px">${x}</li>`).join('')+'</ul>' : '<div class="empty">Nothing here right now.</div>'}
     </div></div>`;
   }
-  h+=`<div class="card"><h3>Deals by stage</h3><div class="bd flush"><table><thead><tr><th>Stage</th><th class="n">Count</th></tr></thead><tbody>
+  h+=`<div class="card"><h3>Deals by stage</h3><div class="bd">
+    ${Object.keys(dealsByStage).length ? svgBars(Object.entries(dealsByStage).map(([s,n])=>({k:s,v:n})),{h:180}) : ''}
+  </div><div class="bd flush"><table><thead><tr><th>Stage</th><th class="n">Count</th></tr></thead><tbody>
     ${Object.keys(dealsByStage).length ? Object.entries(dealsByStage).map(([s,n])=>`<tr><td class="lb">${esc(s)}</td><td class="n">${n}</td></tr>`).join('') : '<tr><td colspan="2" class="empty">No deals yet.</td></tr>'}
   </tbody></table></div></div>`;
   return h;

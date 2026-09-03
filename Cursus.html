@@ -325,6 +325,13 @@ function recomputeTaskCostFx(id){
   render();
 }
 window.recomputeTaskCostFx=recomputeTaskCostFx;
+/* Multi-currency phase 3 (2026-09-03, item 6 cont'd) -- Cursus's headline $ field is the
+   activity's planned cost (chosen in phase 2), same fail-soft pattern as Ordo's
+   campaignBudgetMain(): only diverges from the raw figure when a non-main-currency snapshot
+   exists. Wired into the real calculation/rollup/board-display sites below; the raw editable
+   input, CSV export, and outbound webhook payload are deliberately left reading t.plannedCost
+   directly, same reasoning as Ordo's untouched persistence/export sites. */
+function taskPlannedCostMain(t){ return (t.plannedCostFx && t.plannedCostFx.converted!=null) ? t.plannedCostFx.converted : (t.plannedCost||0); }
 
 const UI = { page:'home', helpOpen:false, campaignId:null, wizard:null, moveDialog:null,
   planScope:'campaign', planView:'table', planProgrammeId:null, planCampaignId:null, detail:null,
@@ -2048,7 +2055,7 @@ function ragPillHtml(rag){
 function ragForActivity(t){
   const today=new Date().toISOString().slice(0,10);
   if(t.status==='Completed'){
-    const exceed=(t.plannedCost||0)>0 && (t.actualCost||0)>0 && t.actualCost<t.plannedCost*RAG_THRESHOLDS.exceedActualRatio;
+    const exceed=(taskPlannedCostMain(t))>0 && (t.actualCost||0)>0 && t.actualCost<taskPlannedCostMain(t)*RAG_THRESHOLDS.exceedActualRatio;
     return {tone:'green',label:'Completed',exceed};
   }
   if(t.dueDate && t.dueDate<today) return {tone:'red',label:'Behind'};
@@ -2608,7 +2615,7 @@ function planNestedTableHtml(levels){
           if(levels.includes('activity')){
             tasks.slice().sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0)).forEach(t=>{
               count++;
-              rows+=planNestedRowHtml('activity',t,2,{budget:t.plannedCost||0,committed:t.committedCost||0,actual:t.actualCost||0});
+              rows+=planNestedRowHtml('activity',t,2,{budget:taskPlannedCostMain(t),committed:t.committedCost||0,actual:t.actualCost||0});
             });
           }
         });
@@ -2616,7 +2623,7 @@ function planNestedTableHtml(levels){
     } else { // top === 'campaign' (Campaign + Activity combo)
       const c=topItem, tasks=TASK(c.id).slice().sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));
       rows+=planNestedRowHtml('campaign',c,0,{budget:c.budget||0,committed:sum(tasks.map(t=>t.committedCost||0)),actual:sum(tasks.map(t=>t.actualCost||0))});
-      tasks.forEach(t=>{ count++; rows+=planNestedRowHtml('activity',t,1,{budget:t.plannedCost||0,committed:t.committedCost||0,actual:t.actualCost||0}); });
+      tasks.forEach(t=>{ count++; rows+=planNestedRowHtml('activity',t,1,{budget:taskPlannedCostMain(t),committed:t.committedCost||0,actual:t.actualCost||0}); });
     }
   });
   const scopeLabel=(PLAN_SCOPES.find(s=>s.id===UI.planScope)||{}).label||'';
@@ -2648,7 +2655,7 @@ function planBoardHtml(level, items){
             style="background:var(--surface);border:1px solid var(--line);border-left:4px solid ${RAG_BAR_COLOR[rag.tone]};border-radius:6px;padding:8px;cursor:pointer;box-shadow:var(--sh)">
             <div style="font-weight:600;font-size:12.5px">${esc(t.name)}</div>
             <div class="mini">${esc(t.owner||'unassigned')}${t.dueDate?' · due '+F.d(t.dueDate):''}</div>
-            <div class="mini calc">${F.mk(t.plannedCost||0)}</div>
+            <div class="mini calc">${F.mk(taskPlannedCostMain(t))}</div>
             <div style="margin-top:3px">${ragPillHtml(rag)}</div>
           </div>`;}).join('')}
         </div></div>`;

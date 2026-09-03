@@ -263,6 +263,13 @@ function recomputeEventBudgetFx(id){
   render();
 }
 window.recomputeEventBudgetFx=recomputeEventBudgetFx;
+/* Multi-currency phase 3 (2026-09-03, item 6 cont'd) -- Eventus's headline $ field is the
+   event budget (chosen in phase 2), same fail-soft pattern as Ordo's campaignBudgetMain()/
+   Cursus's taskPlannedCostMain(): only diverges from the raw figure when a non-main-currency
+   snapshot exists. Wired into the real calculation/rollup/sort/display sites below; the raw
+   editable input, CSV export, and DB persistence are deliberately left reading e.budget
+   directly, same reasoning as Ordo/Cursus's untouched sites. */
+function eventBudgetMain(e){ return (e.budgetFx && e.budgetFx.converted!=null) ? e.budgetFx.converted : (e.budget||0); }
 
 const UI = { page:'home', helpOpen:false, eventId:null, rollupLevel:'programme', rollupProgrammeId:null, rollupCampaignId:null,
   eventsFilter:'', eventsSortBy:null, eventsSortDir:'asc', eventsUpcomingOnly:false };
@@ -312,7 +319,7 @@ function filteredSortedEvents(){
       let av,bv;
       if(UI.eventsSortBy==='name'){ av=(a.name||'').toLowerCase(); bv=(b.name||'').toLowerCase(); }
       else if(UI.eventsSortBy==='start'){ av=eventDateRange(a).start||''; bv=eventDateRange(b).start||''; }
-      else if(UI.eventsSortBy==='budget'){ av=a.budget||0; bv=b.budget||0; }
+      else if(UI.eventsSortBy==='budget'){ av=eventBudgetMain(a); bv=eventBudgetMain(b); }
       else { av=''; bv=''; }
       if(av<bv) return -1*dir; if(av>bv) return 1*dir; return 0;
     });
@@ -963,7 +970,7 @@ function pageHome(){
   const today=new Date().toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'long'});
   const todayIso=new Date().toISOString().slice(0,10);
   const upcoming=CFG.events.filter(e=>e.status!=='Completed'&&e.status!=='Cancelled'&&eventDateRange(e).start&&eventDateRange(e).start>=todayIso);
-  const totalBudget=sum(CFG.events.map(e=>e.budget));
+  const totalBudget=sum(CFG.events.map(e=>eventBudgetMain(e)));
 
   let h=`<div class="phead"><div><h1>${greeting}, ${esc(name)}</h1>
     <p>${today} · ${upcoming.length?`<b>${upcoming.length}</b> upcoming event${upcoming.length===1?'':'s'}`:'No upcoming events'}</p></div>
@@ -983,7 +990,7 @@ function pageHome(){
       ${CFG.events.slice(0,6).map(e=>{ const range=eventDateRange(e); return `<tr><td class="lb"><a href="#" onclick="go('event','${e.id}');return false">${esc(e.name)}</a></td>
         <td>${ragPillHtml(ragForEvent(e))}</td>
         <td class="mini">${F.d(range.start)}${range.end&&range.end!==range.start?' → '+F.d(range.end):''}</td>
-        <td class="n calc">${F.mk(e.budget)}</td></tr>`; }).join('')
+        <td class="n calc">${F.mk(eventBudgetMain(e))}</td></tr>`; }).join('')
         || '<tr><td colspan="4" class="empty">No events yet — Quick Add to create the first one.</td></tr>'}
       </tbody></table></div></div>
   </div>`;
@@ -1009,7 +1016,7 @@ function pageHome(){
   return h;
 }
 function pageEvents(){
-  const totalBudget=sum(CFG.events.map(e=>e.budget));
+  const totalBudget=sum(CFG.events.map(e=>eventBudgetMain(e)));
   const totalActual=sum(CFG.events.map(e=>costsTotal(e.id,'actualCost')||e.budget*0));
   const list=filteredSortedEvents();
   let h=`<div class="phead"><div><h1>Events</h1>
@@ -1039,7 +1046,7 @@ function pageEvents(){
         <td class="mini">${esc(eventVenueSummary(e))}</td>
         <td class="mini">${F.d(range.start)}${range.end&&range.end!==range.start?' → '+F.d(range.end):''}</td>
         <td class="n calc">${F.n(eventPax(e))}</td>
-        <td class="n calc">${F.mk(e.budget)}</td>
+        <td class="n calc">${F.mk(eventBudgetMain(e))}</td>
         <td class="n calc">${F.mk(committed)}</td>
         <td class="n calc">${F.mk(actual)}</td>
         <td><button class="btn sm pri" onclick="go('event','${e.id}')">Open →</button> <button class="btn sm" onclick="cloneEvent('${e.id}')" title="Deep-clones venues, cost lines, checklist and speakers; dates, registrations and actuals reset">Clone</button></td></tr>`;}).join('')}
@@ -1077,7 +1084,7 @@ window.goRollupEventsOfCampaign=goRollupEventsOfCampaign;
 function rollupStats(events){
   return {
     count: events.length,
-    budget: sum(events.map(e=>e.budget||0)),
+    budget: sum(events.map(e=>eventBudgetMain(e))),
     pax: sum(events.map(e=>eventPax(e))),
     registered: sum(events.map(e=>e.registered||0)),
     attended: sum(events.map(e=>e.attended||0)),
@@ -1134,7 +1141,7 @@ function pageRollups(){
           <td><span class="pill n">${esc(e.status)}</span></td>
           <td>${ragPillHtml(ragForEvent(e))}</td>
           <td class="mini">${F.d(range.start)}${range.end&&range.end!==range.start?' → '+F.d(range.end):''}</td>
-          <td class="n calc">${F.mk(e.budget||0)}</td>
+          <td class="n calc">${F.mk(eventBudgetMain(e))}</td>
           <td class="n calc">${F.mk(costsTotal(e.id,'actualCost'))}</td>
           <td class="n calc">${e.registered||0}</td>
           <td class="n calc">${e.attended||0}</td>
@@ -1250,9 +1257,9 @@ function pageEvent(){
   h+=`<div class="kpis">
     <div class="kpi"><div class="k">Total PAX</div><div class="kpi-v">${totalPax}</div><div class="sub">${venues.length} venue${venues.length===1?'':'s'}</div></div>
     <div class="kpi"><div class="k">Planned</div><div class="kpi-v">${F.mk(planned)}</div><div class="sub">${costs.length} cost line${costs.length===1?'':'s'}</div></div>
-    <div class="kpi hl"><div class="k">Committed</div><div class="kpi-v">${F.mk(committed)}</div><div class="sub">${F.p(e.budget?committed/e.budget:0)} of budget</div></div>
+    <div class="kpi hl"><div class="k">Committed</div><div class="kpi-v">${F.mk(committed)}</div><div class="sub">${F.p(eventBudgetMain(e)?committed/eventBudgetMain(e):0)} of budget</div></div>
     <div class="kpi"><div class="k">Actual</div><div class="kpi-v">${F.mk(actual)}</div>
-      <div class="sub" style="color:${actual>e.budget?'var(--bad)':'var(--ink-3)'}">${e.budget?F.p((actual-e.budget)/e.budget)+' vs budget':'—'}</div></div>
+      <div class="sub" style="color:${actual>eventBudgetMain(e)?'var(--bad)':'var(--ink-3)'}">${eventBudgetMain(e)?F.p((actual-eventBudgetMain(e))/eventBudgetMain(e))+' vs budget':'—'}</div></div>
     <div class="kpi"><div class="k">Checklist</div><div class="kpi-v">${doneCount}/${checklist.length}</div><div class="sub">tasks done</div></div>
   </div>`;
 

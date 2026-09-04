@@ -1467,6 +1467,23 @@ async function loadFromSupabase(){
     }));
   }catch(e){ /* board_report_notes migration not run yet -- Commentary section renders empty. */ }
 
+  /* Board report snapshot history (2026-09-04, backlog item 17) -- a DIFFERENT table from the
+     general CFG.snapshots/snapshots mechanism used on the Snapshots page. Deliberately kept
+     separate: CFG.snapshots captures the WHOLE plan and revertSnapshot() swaps it back in
+     wholesale -- mixing a small board-report-only payload into that same list would let someone
+     "revert" to one and wipe out their entire live plan by mistake. This is a small, read-only,
+     purpose-built history instead: just the already-computed report payload (UI._brPayload
+     shape), nothing that can be reverted to. Same fail-soft pattern as boardReportNotes above. */
+  CFG.boardReportSnapshots = [];
+  try{
+    const { data: brSnapData, error: brSnapErr } = await sb.from('board_report_snapshots')
+      .select('id,fy,name,payload,created_by,created_at')
+      .order('created_at',{ascending:false});
+    if(!brSnapErr) CFG.boardReportSnapshots = (brSnapData||[]).map(s=>({
+      id:s.id, fy:s.fy, name:s.name, payload:s.payload, createdBy:s.created_by||'', createdAt:s.created_at
+    }));
+  }catch(e){ /* board_report_snapshots migration not run yet -- history dropdown shows Live only. */ }
+
   const rollupById = {};
   (rollupsR.data||[]).forEach(r=>{ rollupById[r.campaign_id] = {c:r.rollup_committed, a:r.rollup_actual}; });
 
@@ -3636,6 +3653,88 @@ async function toggleBoardReportNoteVisible(id){
 }
 window.toggleBoardReportNoteVisible=toggleBoardReportNoteVisible;
 
+/* 2026-09-04, backlog item 17: save the CURRENT, already-computed report (UI._brPayload -- the
+   same object the PPTX export reads) as a named, timestamped, read-only history entry. Nothing
+   here is revertible -- see the load comment above for why that's a deliberate choice, not an
+   oversight. */
+async function saveBoardReportSnapshot(){
+  const el=document.getElementById('brSnapName'); const name=(el&&el.value||'').trim();
+  if(!name){ toast('Name this snapshot first.'); return; }
+  if(!UI._brPayload){ toast('Nothing computed to save yet.'); return; }
+  const row={ org_id:_orgId, fy:UI.fy, name:name, payload:UI._brPayload, created_by:(_myProfile&&_myProfile.name)||'' };
+  try{
+    const { data, error } = await sb.from('board_report_snapshots').insert(row).select().single();
+    if(error) throw error;
+    CFG.boardReportSnapshots.unshift({ id:data.id, fy:data.fy, name:data.name, payload:data.payload, createdBy:data.created_by||'', createdAt:data.created_at });
+    logAudit('board report snapshot saved', name+' · FY '+UI.fy);
+    if(el) el.value='';
+    render(); toast('Saved: '+name);
+  }catch(e){ console.warn('Could not save board report snapshot', e); toast('Could not save that snapshot: '+((e&&e.message)||e)); }
+}
+window.saveBoardReportSnapshot=saveBoardReportSnapshot;
+async function removeBoardReportSnapshot(id){
+  const s=byId(CFG.boardReportSnapshots,id); if(!s)return;
+  if(!confirm('Remove the saved board report "'+s.name+'"? This only removes it from history — it never affects the live plan.'))return;
+  try{
+    const { error } = await sb.from('board_report_snapshots').delete().eq('id',id);
+    if(error) throw error;
+    CFG.boardReportSnapshots=CFG.boardReportSnapshots.filter(x=>x.id!==id);
+    if(UI.brViewSnapId===id) UI.brViewSnapId=null;
+    logAudit('board report snapshot removed', s.name);
+    render();
+  }catch(e){ console.warn('Could not remove board report snapshot', e); toast('Could not remove that snapshot: '+((e&&e.message)||e)); }
+}
+window.removeBoardReportSnapshot=removeBoardReportSnapshot;
+function setBoardReportView(id){ UI.brViewSnapId = id||null; render(); }
+window.setBoardReportView=setBoardReportView;
+
+/* Read-only render of a saved board report snapshot, straight from its stored payload --
+   deliberately separate from pageBoardReport()'s own live computation above/below, so this
+   never touches (or risks breaking) the live report path. */
+function boardReportSnapshotView(snap){
+  const p=snap.payload||{};
+  const k=p.kpis||{};
+  let h=`<div class="note" style="margin-bottom:12px">Viewing a saved snapshot: <b>${esc(snap.name)}</b> &middot; saved ${esc(F.dt(snap.createdAt))} by ${esc(snap.createdBy||'—')}.
+    <a href="#" onclick="setBoardReportView(null);return false" style="margin-left:8px">&larr; Back to live report</a></div>`;
+  h+=`<div class="kpis">
+    <div class="kpi hl"><div class="k">${esc(k.exitGateName||'')} -- plan vs actual</div>
+      <div class="kpi-v">${F.n(k.exitActual||0)}<span class="mini"> / ${F.n(k.exitPlan||0)}</span></div>
+      <div class="sub" style="color:${k.exitStatus==='bad'?'var(--bad)':k.exitStatus==='warn'?'var(--warn)':'var(--ok)'}">${F.sp(k.exitVarPct||0,0)} vs plan &middot; ${esc(p.fy||'')}</div></div>
+    <div class="kpi"><div class="k">Pipeline value</div><div class="kpi-v">${F.mk(k.pipelineValue||0)}</div>
+      <div class="sub">${k.dealCount||0} tracked deals (Scoring)</div></div>
+    <div class="kpi"><div class="k">Revenue (actual, this FY)</div><div class="kpi-v">${F.mk(k.revenue||0)}</div>
+      <div class="sub">From recorded actuals</div></div>
+    <div class="kpi"><div class="k">Budget committed / spent</div><div class="kpi-v">${F.mk(k.committed||0)}<span class="mini"> / ${F.mk(k.actualSpend||0)}</span></div>
+      <div class="sub" style="color:${k.spendStatus==='bad'?'var(--bad)':k.spendStatus==='warn'?'var(--warn)':'var(--ok)'}">${F.sp(k.spendVarPct||0,0)} vs ${F.mk(k.budgeted||0)} budgeted</div></div>
+  </div>`;
+  h+=`<div class="card"><h3>Funnel snapshot -- ${esc(p.versionName||'')} &middot; ${esc(p.fy||'')}</h3>
+    <div class="bd flush"><table><thead><tr><th>Gate</th><th class="n">Plan</th><th class="n">Actual</th><th class="n">Var %</th><th>Status</th></tr></thead><tbody>
+    ${(p.funnel||[]).map(g=>`<tr><td class="lb">${esc(g.name)}</td><td class="n calc">${F.n(g.plan)}</td><td class="n calc">${F.n(g.actual)}</td>
+      <td class="n">${F.sp(g.varPct,0)}</td><td><span class="pill ${g.status}">${g.status==='ok'?'On plan':g.status==='warn'?'Watch':'Off plan'}</span></td></tr>`).join('')}
+    </tbody></table></div></div>`;
+  h+=`<div class="card"><h3>Budget summary, by cost bucket</h3>
+    <div class="bd flush"><table><thead><tr><th>Bucket</th><th class="n">Budget</th><th class="n">Committed</th><th class="n">Actual</th><th class="n">% of plan</th><th>Status</th></tr></thead><tbody>
+    ${(p.budgetByBucket||[]).length?(p.budgetByBucket||[]).map(r=>`<tr><td class="lb">${esc(r.bucket)}</td><td class="n calc">${F.mk(r.budget)}</td><td class="n calc">${F.mk(r.committed)}</td><td class="n calc">${F.mk(r.actual)}</td>
+      <td class="n">${F.p(r.pctOfPlan,0)}</td><td><span class="pill ${r.status}">${r.status==='ok'?'On plan':r.status==='warn'?'Watch':'Over plan'}</span></td></tr>`).join('')
+      :'<tr><td colspan="6" class="empty">No campaign budget recorded at the time this was saved.</td></tr>'}
+    </tbody></table></div></div>`;
+  h+=`<div class="card"><h3>Campaign highlights</h3>
+    <div class="bd flush"><table><thead><tr><th>Campaign</th><th>Sign-off</th><th class="n">Budget</th><th class="n">Spend</th><th class="n">Var %</th></tr></thead><tbody>
+    ${(p.campaignHighlights||[]).length?(p.campaignHighlights||[]).map(x=>{ const soClass=x.signoff==='Approved'?'ok':x.signoff==='Rejected'?'bad':x.signoff==='Submitted'?'warn':'n';
+      return `<tr><td class="lb">${esc(x.name)}</td><td><span class="pill ${soClass}">${esc(x.signoff||'Draft')}</span></td>
+        <td class="n calc">${F.mk(x.budget)}</td><td class="n calc">${F.mk(x.spend)}</td><td class="n">${F.sp(x.varPct,0)}</td></tr>`;}).join('')
+      :'<tr><td colspan="5" class="empty">Nothing flagged at the time this was saved.</td></tr>'}
+    </tbody></table></div></div>`;
+  if((p.commentary||[]).length){
+    h+=`<div class="card"><h3>Commentary</h3><div class="bd flush"><table><thead><tr><th>Note</th><th>By</th><th>When</th></tr></thead><tbody>
+      ${p.commentary.map(n=>`<tr><td class="lb">${esc(n.text)}</td><td class="mini">${esc(n.author||'—')}</td><td class="mini">${esc(n.ts)}</td></tr>`).join('')}
+      </tbody></table></div></div>`;
+  }
+  h+=`<div class="card"><h3>What changed this period</h3><div class="bd"><p style="margin:0;line-height:1.5">${esc(p.narrative||'')}</p></div></div>`;
+  h+=`<div class="mini" style="margin-top:14px;padding-top:10px;border-top:1px solid var(--line,#DFE3EB)">${esc(p.disclaimer||'')}</div>`;
+  return h;
+}
+
 /* Real PPTX export (2026-09-03) -- opens natively in PowerPoint and Google Slides (Slides
    imports .pptx directly), so one file covers both without a separate Google Slides API
    integration. Server does no computation of its own -- UI._brPayload (built above,
@@ -3728,10 +3827,37 @@ function pageBoardReport(){
   };
   const fyNotes = CFG.boardReportNotes.filter(n=>n.fy===UI.fy);
 
+  const brSorted=(CFG.boardReportSnapshots||[]).slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  const brViewing=UI.brViewSnapId?byId(brSorted,UI.brViewSnapId):null;
+
   let h=`<div class="phead"><div><h1>Board report</h1>
     <p>One page for a board or exec audience -- headline numbers, what changed, and what needs a decision. Generated on demand from the live plan.</p></div>
-    <div class="sp"></div><button class="btn sm" onclick="downloadBoardReportPptx()" id="brPptxBtn">Download PPTX</button>
-    <button class="btn sm" onclick="window.print()">Print / Save as PDF</button></div>`;
+    <div class="sp"></div>
+    <select class="in no-print" style="width:auto" onchange="setBoardReportView(this.value)">
+      <option value="">Live (current)</option>
+      ${brSorted.map(s=>`<option value="${s.id}" ${brViewing&&s.id===brViewing.id?'selected':''}>${esc(s.name)} — ${esc(F.dt(s.createdAt))}</option>`).join('')}
+    </select>
+    <button class="btn sm no-print" onclick="downloadBoardReportPptx()" id="brPptxBtn">Download PPTX</button>
+    <button class="btn sm no-print" onclick="window.print()">Print / Save as PDF</button></div>`;
+
+  /* Save-current-report-as-history row -- no-print since it's a control, not report content. */
+  h+=`<div class="card no-print"><h3>Board report history</h3><div class="bd">
+    <div class="row">
+      <input class="in" id="brSnapName" placeholder="e.g. FY27 Q2 board pack" style="max-width:300px"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();saveBoardReportSnapshot();}">
+      <button class="btn pri" onclick="saveBoardReportSnapshot()">Save this report to history</button>
+    </div>
+    <div class="mini" style="margin-top:6px">Saves the numbers exactly as computed right now, under a name you choose. Pick a saved
+      entry from the dropdown above to review it later -- this is read-only history, not a revertible snapshot of the whole plan
+      (that's what Snapshots, elsewhere in Strategy, is for).</div>
+    ${brSorted.length?`<div class="scroll cap" style="margin-top:10px"><table><thead><tr><th>Name</th><th>FY</th><th>Saved by</th><th>When</th><th></th></tr></thead><tbody>
+      ${brSorted.map(s=>`<tr><td class="lb">${esc(s.name)}</td><td>${esc(s.fy)}</td><td>${esc(s.createdBy||'—')}</td><td class="mini">${esc(F.dt(s.createdAt))}</td>
+        <td class="n"><button class="btn sm" onclick="setBoardReportView('${s.id}')">View</button>
+          <button class="btn sm dgr" onclick="removeBoardReportSnapshot('${s.id}')">Remove</button></td></tr>`).join('')}
+      </tbody></table></div>`:''}
+  </div></div>`;
+
+  if(brViewing) return h + boardReportSnapshotView(brViewing);
 
   /* 1. Headline KPI strip */
   h+=`<div class="kpis">

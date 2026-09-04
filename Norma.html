@@ -305,7 +305,7 @@ const CFG = {
   audit:[]
 };
 
-const UI = { page:'home', helpOpen:false, orgEdit:null, showArchivedInvites:false, usersOrgFilter:'', usersRegionFilter:'', usersTeamFilter:'', rolesSortKey:'org', rolesSortDir:'asc', usersSortKey:'org', usersSortDir:'asc', alertsFilter:{role:'',unit:'',q:''}, buFilter:{role:'',q:''} };
+const UI = { page:'home', helpOpen:false, orgEdit:null, showArchivedInvites:false, usersOrgFilter:'', usersRegionFilter:'', usersTeamFilter:'', rolesSortKey:'org', rolesSortDir:'asc', usersSortKey:'org', usersSortDir:'asc', alertsFilter:{role:'',unit:'',q:''}, buFilter:{role:'',q:''}, hubUsers:[], hubUsersLoaded:false, hubUsersLoading:false, hubUsersError:'', hubFeedback:[], hubFeedbackLoaded:false, hubFeedbackLoading:false, hubFeedbackError:'' };
 
 function logAudit(what,detail){
   CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
@@ -319,7 +319,14 @@ function toast(msg){
   const d=document.createElement('div'); d.className='toast'; d.textContent=msg;
   l.appendChild(d); setTimeout(()=>d.remove(),4200);
 }
-function go(page){ UI.page=page; render(); }
+function go(page){
+  UI.page=page;
+  // Item 26 phase 1: these two pages mirror live Hub data, not CFG -- fetch on first visit
+  // rather than at boot, since most sessions never open them.
+  if(page==='hubaccounts' && !UI.hubUsersLoaded && !UI.hubUsersLoading) loadHubUsers();
+  if(page==='hubfeedback' && !UI.hubFeedbackLoaded && !UI.hubFeedbackLoading) loadHubFeedback();
+  render();
+}
 window.go=go;
 /* bumped on every edit to costBuckets/trackingConfig/llmProviders -- the number a consuming
    module's Sync page compares its own "synced at version N" against, so a stale sync is
@@ -2621,6 +2628,179 @@ async function saveFeedbackNotes(id){
 }
 window.saveFeedbackNotes=saveFeedbackNotes;
 
+/* Item 26 phase 1 (backlog "Consolidate admin actions", 2026-09-04): mirrors Hub's own
+   Settings -> Users / Settings -> Feedback panels into North, using the same live-JWT
+   cross-system call already proven by pushUserToHub/pushPasswordDirect above -- Hub-Backend
+   independently re-verifies the token server-side (_authorize_north_super_user in
+   hub_local_api.py) and additionally requires the matching Hub account to already be
+   admin/super_user there, so this adds no new privilege, just a second UI for an action Hub
+   already allows. Hub's own Users/Feedback tabs are completely untouched and still work
+   exactly as before -- this is Phase 1 of 3 (mirror, additive, zero risk); see the
+   "Consolidate admin actions" scoping doc for phases 2/3. Deliberately does NOT include
+   Hub's "Reassign data" action (moving/copying a user's contacts and campaigns to another
+   account) -- held back for its own follow-up since it's materially more consequential than
+   list/create/change-role. */
+async function loadHubUsers(){
+  if(!canConfig()) return;
+  UI.hubUsersLoading=true; UI.hubUsersError=''; render();
+  try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token){ UI.hubUsersLoading=false; UI.hubUsersError='Your own North session has expired -- sign in again.'; render(); return; }
+    const r = await fetch(CONTACT_URL+'/auth/users?token='+encodeURIComponent(token));
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok){ UI.hubUsersLoading=false; UI.hubUsersError=j.error||'Could not load Hub accounts.'; render(); return; }
+    UI.hubUsers=j.users||[]; UI.hubUsersLoaded=true; UI.hubUsersLoading=false; render();
+  }catch(e){ UI.hubUsersLoading=false; UI.hubUsersError='Could not reach Hub: '+(e&&e.message?e.message:'unknown error'); render(); }
+}
+window.loadHubUsers=loadHubUsers;
+async function createHubUser(){
+  if(!canConfig()) return;
+  const usernameEl=document.getElementById('hubNewUsername'), nameEl=document.getElementById('hubNewName'),
+        passEl=document.getElementById('hubNewPassword'), roleEl=document.getElementById('hubNewRole');
+  const username=(usernameEl&&usernameEl.value)||'', name=(nameEl&&nameEl.value)||'',
+        password=(passEl&&passEl.value)||'', role=(roleEl&&roleEl.value)||'user';
+  if(!username.trim()||!password){ toast('Username and password are required.'); return; }
+  if(password.length<6){ toast('Password must be at least 6 characters.'); return; }
+  try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
+    const r = await fetch(CONTACT_URL+'/auth/users', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token, username: username.trim(), name: name.trim(), password, role })
+    });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok){ toast(j.error||'Could not create Hub account.'); return; }
+    logAudit('Hub account created', username.trim());
+    toast('Hub account created for '+username.trim()+'.');
+    if(usernameEl) usernameEl.value=''; if(nameEl) nameEl.value=''; if(passEl) passEl.value='';
+    UI.hubUsersLoaded=false; await loadHubUsers();
+  }catch(e){ toast('Could not reach Hub: '+(e&&e.message?e.message:'unknown error')); }
+}
+window.createHubUser=createHubUser;
+async function updateHubUserRoleAction(id, role){
+  if(!canConfig()) return;
+  try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token){ toast('Your own North session has expired -- sign in again.'); UI.hubUsersLoaded=false; await loadHubUsers(); return; }
+    const r = await fetch(CONTACT_URL+'/auth/users/'+encodeURIComponent(id)+'/role', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token, role })
+    });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok){ toast(j.error||'Could not change role.'); UI.hubUsersLoaded=false; await loadHubUsers(); return; }
+    logAudit('Hub account role changed', (j.username||id)+' -> '+role);
+    toast('Role updated.');
+    UI.hubUsersLoaded=false; await loadHubUsers();
+  }catch(e){ toast('Could not reach Hub: '+(e&&e.message?e.message:'unknown error')); }
+}
+window.updateHubUserRoleAction=updateHubUserRoleAction;
+const HUB_ROLE_LABEL={user:'Viewer',planner:'Planner',manager:'Manager',admin:'Admin',super_user:'Super User'};
+function pageHubAccounts(){
+  let h=`<div class="phead"><div><h1>Hub accounts</h1>
+    <p>Mirrors Hub's own Settings &rarr; Users panel so an admin can manage Hub/Queue accounts without leaving
+      North (backlog item 26, phase 1 of 3 -- additive only, Hub's own Users tab is untouched and still works
+      exactly as before). Reassigning a user's data to another account stays in Hub's own Settings for now.</p></div>
+      <div><button class="btn sm" onclick="UI.hubUsersLoaded=false;loadHubUsers()">Refresh</button></div></div>`;
+  if(UI.hubUsersLoading && !UI.hubUsersLoaded){ h+=`<div class="card"><div class="bd">Loading Hub accounts…</div></div>`; return h; }
+  if(UI.hubUsersError){ h+=`<div class="card"><div class="bd" style="color:#D0342C">${esc(UI.hubUsersError)}</div></div>`; return h; }
+  const rows=UI.hubUsers||[];
+  h+=`<div class="card"><h3>Create Hub account</h3><div class="bd"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <input class="cel txt" id="hubNewUsername" style="width:200px" placeholder="Username (their North email works well)" autocomplete="off">
+      <input class="cel txt" id="hubNewName" style="width:160px" placeholder="Name" autocomplete="off">
+      <input class="cel txt" id="hubNewPassword" type="password" style="width:160px" placeholder="Password (min 6 chars)" autocomplete="new-password">
+      <select id="hubNewRole">${['user','planner','manager','admin','super_user'].map(rl=>`<option value="${rl}">${HUB_ROLE_LABEL[rl]}</option>`).join('')}</select>
+      <button class="btn sm pri" onclick="createHubUser()">Create</button>
+    </div></div></div>`;
+  h+=`<div class="card"><h3>Hub accounts (${rows.length})</h3><div class="bd flush"><div class="scroll cap">
+    <table><thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Created</th><th>Grants</th></tr></thead><tbody>
+    ${!rows.length?`<tr><td colspan="5" class="empty">No Hub accounts yet.</td></tr>`:rows.map(u=>`<tr>
+      <td class="mini">${esc(u.username||'—')}</td>
+      <td>${esc(u.name||'—')}</td>
+      <td><select onchange="updateHubUserRoleAction('${u.id}',this.value)">
+        ${['user','planner','manager','admin','super_user'].map(rl=>`<option value="${rl}" ${u.role===rl?'selected':''}>${HUB_ROLE_LABEL[rl]}</option>`).join('')}
+      </select></td>
+      <td class="mini">${u.created_at?F.dt(u.created_at):'—'}</td>
+      <td class="mini">${esc((u.grants||[]).join(', ')||'—')}</td>
+    </tr>`).join('')}
+    </tbody></table>
+  </div></div></div>`;
+  return h;
+}
+async function loadHubFeedback(){
+  if(!canConfig()) return;
+  UI.hubFeedbackLoading=true; UI.hubFeedbackError=''; render();
+  try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token){ UI.hubFeedbackLoading=false; UI.hubFeedbackError='Your own North session has expired -- sign in again.'; render(); return; }
+    const r = await fetch(CONTACT_URL+'/admin/feedback?token='+encodeURIComponent(token));
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok){ UI.hubFeedbackLoading=false; UI.hubFeedbackError=j.error||'Could not load Hub feedback.'; render(); return; }
+    UI.hubFeedback=j.items||[]; UI.hubFeedbackLoaded=true; UI.hubFeedbackLoading=false; render();
+  }catch(e){ UI.hubFeedbackLoading=false; UI.hubFeedbackError='Could not reach Hub: '+(e&&e.message?e.message:'unknown error'); render(); }
+}
+window.loadHubFeedback=loadHubFeedback;
+async function updateHubFeedbackField(id, patch){
+  if(!canConfig()) return;
+  const item=(UI.hubFeedback||[]).find(x=>x.id===id);
+  const prev=item?Object.assign({},item):null;
+  if(item) Object.assign(item, patch);
+  render();
+  try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token){ if(item&&prev)Object.assign(item,prev); toast('Your own North session has expired -- sign in again.'); render(); return; }
+    const r = await fetch(CONTACT_URL+'/admin/feedback/'+encodeURIComponent(id), {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(Object.assign({ token }, patch))
+    });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok){ if(item&&prev)Object.assign(item,prev); toast(j.error||'Could not update.'); render(); return; }
+    toast('Updated.');
+  }catch(e){ if(item&&prev)Object.assign(item,prev); toast('Could not reach Hub: '+(e&&e.message?e.message:'unknown error')); render(); }
+}
+window.updateHubFeedbackField=updateHubFeedbackField;
+function saveHubFeedbackNotes(id){
+  const el=document.getElementById('hubFbNotes_'+id);
+  updateHubFeedbackField(id, { notes: el?el.value:'' });
+}
+window.saveHubFeedbackNotes=saveHubFeedbackNotes;
+function pageHubFeedback(){
+  let h=`<div class="phead"><div><h1>Hub feedback</h1>
+    <p>Mirrors Hub's own Settings &rarr; Feedback panel -- issues reported from Hub/Queue's own feedback button,
+      kept separate from North's own Feedback page above (backlog item 26, phase 1 of 3; additive only, Hub's own
+      Feedback tab is untouched and still works exactly as before).</p></div>
+      <div><button class="btn sm" onclick="UI.hubFeedbackLoaded=false;loadHubFeedback()">Refresh</button></div></div>`;
+  if(UI.hubFeedbackLoading && !UI.hubFeedbackLoaded){ h+=`<div class="card"><div class="bd">Loading Hub feedback…</div></div>`; return h; }
+  if(UI.hubFeedbackError){ h+=`<div class="card"><div class="bd" style="color:#D0342C">${esc(UI.hubFeedbackError)}</div></div>`; return h; }
+  const rows=UI.hubFeedback||[];
+  h+=`<div class="card"><h3>Reported issues (${rows.length})</h3><div class="bd flush"><div class="scroll cap">
+    <table><thead><tr><th>Code</th><th>Priority</th><th>Stage</th><th>Reported</th><th>By</th><th>Page</th><th>Description</th><th>Notes</th></tr></thead><tbody>
+    ${!rows.length?`<tr><td colspan="8" class="empty">No issues reported yet.</td></tr>`:rows.map(r=>{
+      const status=r.status||'new', priority=r.priority||'P3';
+      return `<tr>
+        <td class="mini">${esc(r.code||'—')}</td>
+        <td><select onchange="updateHubFeedbackField('${r.id}',{priority:this.value})">
+          ${FEEDBACK_PRIORITIES.map(p=>`<option value="${p}" ${priority===p?'selected':''}>${p}</option>`).join('')}
+        </select></td>
+        <td><select onchange="updateHubFeedbackField('${r.id}',{status:this.value})">
+          ${FEEDBACK_STAGES.map(s=>`<option value="${s.id}" ${status===s.id?'selected':''}>${esc(s.label)}</option>`).join('')}
+        </select></td>
+        <td class="mini">${r.created_at?F.dt(r.created_at):'—'}</td>
+        <td class="mini">${esc(r.reporter_name||'—')}</td>
+        <td class="mini">${esc(r.page||'—')}</td>
+        <td title="${esc(r.url||'')}">${esc((r.comment||'').slice(0,80))}${(r.comment||'').length>80?'…':''}</td>
+        <td><input class="cel txt" id="hubFbNotes_${r.id}" style="width:140px" value="${esc(r.notes||'')}" placeholder="Admins only" onchange="saveHubFeedbackNotes('${r.id}')"></td>
+      </tr>`;
+    }).join('')}
+    </tbody></table>
+  </div></div></div>`;
+  return h;
+}
+
 const PAGES=[
   {id:'home',       ix:'0', label:'Home',            fn:pageHome},
   {id:'users',      ix:'1', label:'Roles & users',   fn:pageUsers},
@@ -2632,13 +2812,15 @@ const PAGES=[
   {id:'integrations',ix:'7',label:'Integrations',    fn:pageIntegrations},
   {id:'agentactivity',ix:'8',label:'Agent activity',  fn:pageAgentActivity},
   {id:'sync',       ix:'9', label:'Export',          fn:pageSync},
-  {id:'feedback',   ix:'10',label:'Feedback',        fn:pageFeedback}
+  {id:'feedback',   ix:'10',label:'Feedback',        fn:pageFeedback},
+  {id:'hubaccounts',ix:'11',label:'Hub accounts',    fn:pageHubAccounts},
+  {id:'hubfeedback',ix:'12',label:'Hub feedback',    fn:pageHubFeedback}
 ];
 
 function renderSide(){
   let h='<h4>Shared configuration</h4>';
   PAGES.forEach(p=>{
-    const locked = (p.id==='users'||p.id==='feedback')&&!canConfig();
+    const locked = (p.id==='users'||p.id==='feedback'||p.id==='hubaccounts'||p.id==='hubfeedback')&&!canConfig();
     h+=`<a class="navi ${UI.page===p.id?'on':''}" href="#" onclick="go('${p.id}');return false">
       <span class="ix">${p.ix}</span><span>${p.label}</span>${locked?'<span class="lk">read only</span>':''}</a>`;
   });

@@ -461,7 +461,8 @@ const UI = {
   page:'home', helpOpen:false,adminTab:'gates',planTab:'top',insightTab:'season',baselineSnapId:null,calc:null,
   userId:'u_1',versionId:'v_fc',fy:'FY27',grain:'Quarter',
   regionId:'r_anz',activityId:'a_sdr',pending:null,overlay:null,repPodId:null,
-  dashRegionId:null,dashPodId:null,bizCampaignId:null,pendingEdit:null
+  dashRegionId:null,dashPodId:null,bizCampaignId:null,pendingEdit:null,
+  relFilterOwner:'',relFilterBiz:'',relFocusId:null,relZoom:1,relPanX:0,relPanY:0
 };
 
 /* lookups */
@@ -4345,6 +4346,257 @@ function pageCalculator(){
 
 
 /* ============================================================================
+   RELATIONSHIPS (item 23 v1, 2026-09-04)
+   Node-and-edge view of Campaign -> Owner (via the linked Programme's free-
+   text `owner` field) and Campaign -> Business unit (via Region.orgUnitId,
+   a real org_units hierarchy -- flattened to a single flat layer of nodes
+   for v1, per claude/2026-09-04-relationship-graph-v1-proposal.md).
+
+   Hand-rolled force-directed layout, no library (consistent with the rest
+   of North's zero-external-JS-dependency stance): nodes seed into a
+   deterministic 3-column start (Business units | Campaigns | Owners) so the
+   simulation always converges the same way and never degenerates into
+   random overlap, then a short spring/repulsion pass relaxes it. Positions
+   live in module-level _relPos (UI-only, not CFG) so a manual drag pins
+   that one node -- render() recomputes the rest fresh every time, same
+   commit-on-release idiom as Campaign Planning's Gantt bars
+   (Cursus.html ganttBarMouseDown): no live physics loop, no ghost node,
+   snaps to place on release.
+   ============================================================================ */
+const REL_W=900, REL_H=560;
+let _relPos={};      // nodeId -> {x,y} manual pin, survives re-render, resets on reload
+let _relDrag=null;   // in-flight node drag
+let _relPanDrag=null;// in-flight background pan
+
+function relOwnerName(o){ return (o||'').trim(); }
+function relOwnerId(name){ return 'owner:'+name.toLowerCase().replace(/[^a-z0-9]+/g,'-'); }
+
+function computeRelGraph(){
+  const visAll=visibleRegions(), visIds=visAll.map(r=>r.id);
+  const camps=CFG.campaigns.filter(cm=>visIds.includes(cm.regionId)||cm.regionId===unassignedRegionId());
+
+  const nodesById={}, edges=[];
+  const addNode=(id,type,label,extra)=>{ if(!nodesById[id]) nodesById[id]=Object.assign({id,type,label},extra||{}); return nodesById[id]; };
+
+  camps.forEach(c=>{
+    const p=c.programmeId?programme(c.programmeId):null;
+    const ownerName=p?relOwnerName(p.owner):'';
+    const r=c.regionId?region(c.regionId):null;
+    const ou=(r&&r.orgUnitId)?byId(CFG.orgUnits,r.orgUnitId):null;
+    const rag=ragForCampaign(c);
+    const cn=addNode('camp:'+c.id,'campaign',c.name,{rag,missingOwner:!ownerName,missingBiz:!ou,campaignId:c.id});
+    if(ownerName){ const on=addNode(relOwnerId(ownerName),'owner',ownerName,{}); edges.push({a:cn.id,b:on.id}); }
+    if(ou){ const bn=addNode('biz:'+ou.id,'biz',ou.name,{}); edges.push({a:cn.id,b:bn.id}); }
+  });
+
+  const allNodes=Object.values(nodesById);
+  const ownerOptions=allNodes.filter(n=>n.type==='owner').map(n=>n.label).sort((a,b)=>a.localeCompare(b));
+  const bizOptions=allNodes.filter(n=>n.type==='biz').map(n=>({id:n.id.slice(4),label:n.label})).sort((a,b)=>a.label.localeCompare(b.label));
+  const broken=allNodes.filter(n=>n.type==='campaign'&&(n.missingOwner||n.missingBiz)).length;
+
+  let nodes=allNodes, visEdges=edges;
+  if(UI.relFilterOwner || UI.relFilterBiz){
+    const keep=new Set();
+    if(UI.relFilterOwner) keep.add(relOwnerId(UI.relFilterOwner));
+    if(UI.relFilterBiz) keep.add('biz:'+UI.relFilterBiz);
+    const connected=new Set(keep);
+    edges.forEach(e=>{ if(keep.has(e.a)) connected.add(e.b); if(keep.has(e.b)) connected.add(e.a); });
+    nodes=allNodes.filter(n=>connected.has(n.id));
+    const nodeIds=new Set(nodes.map(n=>n.id));
+    visEdges=edges.filter(e=>nodeIds.has(e.a)&&nodeIds.has(e.b));
+  }
+  return {nodes,edges:visEdges,ownerOptions,bizOptions,total:camps.length,broken};
+}
+
+function relLayoutSeed(nodes){
+  const cols={biz:REL_W*0.14,campaign:REL_W*0.52,owner:REL_W*0.86};
+  const byType={biz:[],campaign:[],owner:[]};
+  nodes.forEach(n=>byType[n.type].push(n));
+  ['biz','campaign','owner'].forEach(t=>{
+    const list=byType[t].slice().sort((a,b)=>a.label.localeCompare(b.label));
+    const n=list.length, gap=n>1?(REL_H-60)/(n-1):0;
+    list.forEach((node,i)=>{
+      const pinned=_relPos[node.id];
+      node.x=pinned?pinned.x:cols[t];
+      node.y=pinned?pinned.y:(n===1?REL_H/2:30+i*gap);
+      node.pinned=!!pinned;
+    });
+  });
+}
+
+function relRunForces(nodes,edges,iterations){
+  iterations=iterations||120;
+  const idx={}; nodes.forEach((n,i)=>idx[n.id]=i);
+  for(let it=0;it<iterations;it++){
+    const fx=new Array(nodes.length).fill(0), fy=new Array(nodes.length).fill(0);
+    for(let i=0;i<nodes.length;i++){
+      for(let j=i+1;j<nodes.length;j++){
+        let dx=nodes[i].x-nodes[j].x, dy=nodes[i].y-nodes[j].y;
+        let d2=dx*dx+dy*dy; if(d2<1) d2=1;
+        const d=Math.sqrt(d2), rep=2200/d2, ux=dx/d, uy=dy/d;
+        fx[i]+=ux*rep; fy[i]+=uy*rep; fx[j]-=ux*rep; fy[j]-=uy*rep;
+      }
+    }
+    edges.forEach(e=>{
+      const i=idx[e.a], j=idx[e.b]; if(i==null||j==null) return;
+      let dx=nodes[j].x-nodes[i].x, dy=nodes[j].y-nodes[i].y;
+      const d=Math.sqrt(dx*dx+dy*dy)||1, target=170, f=(d-target)*0.02, ux=dx/d, uy=dy/d;
+      fx[i]+=ux*f; fy[i]+=uy*f; fx[j]-=ux*f; fy[j]-=uy*f;
+    });
+    nodes.forEach((n,i)=>{
+      const colX=n.type==='biz'?REL_W*0.14:n.type==='owner'?REL_W*0.86:REL_W*0.52;
+      fx[i]+=(colX-n.x)*0.01;
+    });
+    nodes.forEach((n,i)=>{
+      if(n.pinned) return;
+      n.x=clamp(n.x+fx[i]*0.5,40,REL_W-40);
+      n.y=clamp(n.y+fy[i]*0.5,30,REL_H-30);
+    });
+  }
+}
+
+function relNodeColor(n){
+  if(n.type==='biz') return '#3A5A8C';
+  if(n.type==='owner') return '#5A3E9C';
+  const tone=(n.rag&&n.rag.tone)||'grey';
+  return {grey:'#5B6472',blue:'#1F3AC7',amber:'#B5730E',red:'#9C2B3C',green:'#0E8A5F'}[tone]||'#5B6472';
+}
+
+function relSvgHtml(nodes,edges){
+  const focus=UI.relFocusId;
+  const connectedToFocus=new Set();
+  if(focus){
+    connectedToFocus.add(focus);
+    edges.forEach(e=>{ if(e.a===focus) connectedToFocus.add(e.b); if(e.b===focus) connectedToFocus.add(e.a); });
+  }
+  const dim=n=>focus && !connectedToFocus.has(n.id);
+  const idx={}; nodes.forEach(n=>idx[n.id]=n);
+
+  const lines=edges.map(e=>{
+    const a=idx[e.a], b=idx[e.b]; if(!a||!b) return '';
+    const faint=focus && !(connectedToFocus.has(e.a)&&connectedToFocus.has(e.b));
+    return `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${faint?'#E7EAF0':'#B7BFCE'}" stroke-width="1.4"></line>`;
+  }).join('');
+
+  const nodeShapes=nodes.map(n=>{
+    const color=relNodeColor(n), r=n.type==='campaign'?9:12, opacity=dim(n)?0.28:1;
+    const broken=n.type==='campaign'&&(n.missingOwner||n.missingBiz);
+    const label=n.label.length>22?n.label.slice(0,21)+'…':n.label;
+    const title=broken
+      ? esc(n.label)+' — missing '+[n.missingOwner?'owner':'',n.missingBiz?'business unit':''].filter(Boolean).join(' & ')
+      : esc(n.label);
+    return `<g class="grab" data-node="${n.id}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})" style="opacity:${opacity}" onmousedown="relNodeMouseDown(event,'${n.id}',${n.x.toFixed(2)},${n.y.toFixed(2)})"><title>${title}</title><circle r="${r}" fill="${color}" stroke="${broken?'#9C2B3C':'#fff'}" stroke-width="${broken?2:1.5}" stroke-dasharray="${broken?'3,2':'none'}"></circle><text x="${r+5}" y="4" font-size="10.5" fill="#45506B">${esc(label)}</text></g>`;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${REL_W} ${REL_H}" width="100%" height="560" style="background:#fff;border-radius:10px">
+    <rect x="0" y="0" width="${REL_W}" height="${REL_H}" fill="transparent" onmousedown="relPanMouseDown(event)"></rect>
+    <g class="relViewport" transform="translate(${UI.relPanX||0},${UI.relPanY||0}) scale(${UI.relZoom||1})">${lines}${nodeShapes}</g>
+  </svg>`;
+}
+
+function relNodeMouseDown(ev,id,x,y){
+  ev.preventDefault(); ev.stopPropagation();
+  const svg=ev.currentTarget.closest('svg'); if(!svg) return;
+  _relDrag={id,startClientX:ev.clientX,startClientY:ev.clientY,origX:x,origY:y,svg,moved:false,lastX:x,lastY:y};
+}
+window.relNodeMouseDown=relNodeMouseDown;
+
+function relPanMouseDown(ev){
+  const svg=ev.currentTarget.closest('svg'); if(!svg) return;
+  _relPanDrag={startClientX:ev.clientX,startClientY:ev.clientY,origPanX:UI.relPanX||0,origPanY:UI.relPanY||0,svg,moved:false,lastX:UI.relPanX||0,lastY:UI.relPanY||0};
+}
+window.relPanMouseDown=relPanMouseDown;
+
+document.addEventListener('mousemove',ev=>{
+  if(_relDrag){
+    const d=_relDrag;
+    if(Math.abs(ev.clientX-d.startClientX)>2||Math.abs(ev.clientY-d.startClientY)>2) d.moved=true;
+    if(!d.moved) return;
+    const r=d.svg.getBoundingClientRect(), zoom=UI.relZoom||1;
+    const sx=REL_W/(r.width||REL_W)/zoom, sy=REL_H/(r.height||REL_H)/zoom;
+    const nx=clamp(d.origX+(ev.clientX-d.startClientX)*sx,20,REL_W-20);
+    const ny=clamp(d.origY+(ev.clientY-d.startClientY)*sy,20,REL_H-20);
+    const g=d.svg.querySelector('[data-node="'+d.id+'"]');
+    if(g) g.setAttribute('transform','translate('+nx+','+ny+')');
+    d.lastX=nx; d.lastY=ny;
+  } else if(_relPanDrag){
+    const d=_relPanDrag;
+    const r=d.svg.getBoundingClientRect();
+    const sx=REL_W/(r.width||REL_W), sy=REL_H/(r.height||REL_H);
+    const nx=d.origPanX+(ev.clientX-d.startClientX)*sx;
+    const ny=d.origPanY+(ev.clientY-d.startClientY)*sy;
+    const g=d.svg.querySelector('.relViewport');
+    if(g) g.setAttribute('transform','translate('+nx+','+ny+') scale('+(UI.relZoom||1)+')');
+    d.lastX=nx; d.lastY=ny; d.moved=true;
+  }
+});
+document.addEventListener('mouseup',ev=>{
+  if(_relDrag){
+    const d=_relDrag; _relDrag=null;
+    if(!d.moved){ relFocus(d.id); return; }
+    _relPos[d.id]={x:d.lastX,y:d.lastY};
+    render();
+  } else if(_relPanDrag){
+    const d=_relPanDrag; _relPanDrag=null;
+    if(d.moved){ UI.relPanX=d.lastX; UI.relPanY=d.lastY; render(); }
+  }
+});
+
+function relFocus(id){ UI.relFocusId=(UI.relFocusId===id)?null:id; render(); }
+window.relFocus=relFocus;
+function relZoomBtn(dir){ const z=(UI.relZoom||1); UI.relZoom=clamp(dir==='in'?z*1.25:z/1.25,0.4,2.5); render(); }
+window.relZoomBtn=relZoomBtn;
+function relResetView(){ UI.relZoom=1; UI.relPanX=0; UI.relPanY=0; render(); }
+window.relResetView=relResetView;
+function relResetLayout(){ _relPos={}; render(); toast('Layout reset.'); }
+window.relResetLayout=relResetLayout;
+
+function pageRelationships(){
+  const g=computeRelGraph();
+  relLayoutSeed(g.nodes);
+  relRunForces(g.nodes,g.edges);
+
+  let h=`<div class="phead"><div><h1>Relationships</h1>
+    <p>How campaigns connect to their owner (Campaign Planning's Programme owner field) and business unit (via Region → Org unit). ${g.broken?'<b>'+g.broken+'</b> campaign'+(g.broken===1?'':'s')+' missing an owner or business unit':'Every visible campaign has both.'}</p></div>
+    <div class="sp"></div>
+    <button class="btn sm" onclick="relResetLayout()">Reset layout</button></div>`;
+
+  if(!g.total){
+    h+=`<div class="card"><div class="empty">No campaigns in scope yet, so there's nothing to graph.</div></div>`;
+    return h;
+  }
+
+  h+=`<div class="card"><div class="bd" style="padding:12px 14px">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+      <select class="in" style="width:auto" onchange="UI.relFilterOwner=this.value;render()">
+        <option value="">All owners</option>
+        ${g.ownerOptions.map(o=>`<option value="${esc(o)}" ${UI.relFilterOwner===o?'selected':''}>${esc(o)}</option>`).join('')}
+      </select>
+      <select class="in" style="width:auto" onchange="UI.relFilterBiz=this.value;render()">
+        <option value="">All business units</option>
+        ${g.bizOptions.map(b=>`<option value="${esc(b.id)}" ${UI.relFilterBiz===b.id?'selected':''}>${esc(b.label)}</option>`).join('')}
+      </select>
+      ${(UI.relFilterOwner||UI.relFilterBiz)?'<button class="btn sm" onclick="UI.relFilterOwner=\'\';UI.relFilterBiz=\'\';render()">Clear filters</button>':''}
+      <div class="sp"></div>
+      <button class="btn sm" onclick="relZoomBtn('out')">−</button>
+      <button class="btn sm" onclick="relZoomBtn('in')">+</button>
+      <button class="btn sm" onclick="relResetView()">Reset view</button>
+    </div>
+    ${relSvgHtml(g.nodes,g.edges)}
+    <div class="lgd" style="margin-top:10px">
+      <span><i class="sw" style="background:#3A5A8C"></i>Business unit</span>
+      <span><i class="sw" style="background:#5A3E9C"></i>Owner</span>
+      <span><i class="sw" style="background:#1F3AC7"></i>Campaign</span>
+      <span><i class="sw" style="background:#9C2B3C"></i>Campaign missing owner or business unit</span>
+    </div>
+    <div class="mini" style="margin-top:6px">Drag a node to pin it in place; click a node to highlight its connections, click again to clear. Layout resets on reload -- nothing here is saved to the plan.</div>
+  </div></div>`;
+  return h;
+}
+window.pageRelationships=pageRelationships;
+
+
+/* ============================================================================
    ROUTER + SHELL
    ============================================================================ */
 const PAGES=[
@@ -4361,6 +4613,7 @@ const PAGES=[
   {id:'actuals', ix:'7',label:'Actuals & history',fn:pageActuals,  grp:'Measure'},
   {id:'insight', ix:'8',label:'Insight',          fn:pageInsight,  grp:'Measure'},
   {id:'snapshots',ix:'9',label:'Snapshots',        fn:pageSnapshots,grp:'Measure'},
+  {id:'relationships',ix:'\u2194',label:'Relationships',fn:pageRelationships,grp:'Measure'},
   /* 2026-09-03: kept in PAGES (so routing/go()/audit-logging still work for a direct link)
      but hidden:true -- per Stef's call, the Board report now belongs to the Reporting module
      (Reportus.html), not Strategy's own nav. renderSide() and the Home page's Quick Links both

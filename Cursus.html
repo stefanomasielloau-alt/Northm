@@ -435,6 +435,16 @@ async function saveToSupabase(){
       id:a.id,campaign_id:a.campaignId,partner_id:a.partnerId,role:a.role||'',
       budget_share_pct:a.budgetSharePct||0,lead_share_pct:a.leadSharePct||0
     })),
+    /* 2026-09-04: additive N:M layer for activity attribution (backlog item 12) -- tasks.campaign_id
+       stays the single "primary" campaign, unchanged, so every existing rollup/export/clone/move
+       path keeps working exactly as before. This table only carries EXTRA secondary links, mirroring
+       campaign_partner_allocations' role + % share shape. upsertRows() itself no-ops on an empty
+       array and swallows its own errors (logs + toasts), so this is safe to ship ahead of the
+       migration being run -- it simply won't persist anything until task_campaign_links exists. */
+    upsertRows('task_campaign_links', CFG.taskCampaignLinks, l=>({
+      id:l.id,task_id:l.taskId,campaign_id:l.campaignId,role:l.role||'',
+      budget_share_pct:l.budgetSharePct||0
+    })),
     upsertRows('tasks', CFG.tasks, t=>({
       id:t.id,campaign_id:t.campaignId,name:t.name,type:t.type,owner:t.owner||'',
       start_date:t.startDate||null,due_date:t.dueDate||null,status:t.status,notes:t.notes||'',
@@ -605,6 +615,23 @@ async function loadFromSupabase(){
     }
   }catch(e){
     console.warn('Could not load org_settings.tracking_config (migration may not be run yet) -- falling back to manual Configuration import if any.', e);
+  }
+
+  /* task_campaign_links (2026-09-04, backlog item 12): additive secondary campaign links for an
+     activity/task, mirroring campaign_partner_allocations' role + % share shape. Kept as its own
+     query with its own try/catch, deliberately separate from the main Promise.all above -- the
+     table may not exist yet (migration pending, see Claude outputs/2026-09-04-task-campaign-links-migration.sql)
+     and a missing table must not take down the rest of the page load, same reasoning as tracking_config. */
+  CFG.taskCampaignLinks = [];
+  try{
+    const { data: linksData, error: linksErr } = await sb.from('task_campaign_links')
+      .select('id,task_id,campaign_id,role,budget_share_pct');
+    if(linksErr) throw linksErr;
+    CFG.taskCampaignLinks = (linksData||[]).map(l=>({
+      id:l.id,taskId:l.task_id,campaignId:l.campaign_id,role:l.role||'',budgetSharePct:l.budget_share_pct||0
+    }));
+  }catch(e){
+    console.warn('Could not load task_campaign_links (migration may not be run yet) -- secondary campaign links on activities will show as none until it is.', e);
   }
 
   /* Active AI provider for the 'Upload a document' campaign-wizard path (2026-08-31) --
@@ -878,7 +905,10 @@ function addTask(campaignId){
 function removeTask(id){
   const t=byId(CFG.tasks,id); if(!t)return;
   if(!confirm('Remove "'+t.name+'"? This cannot be undone.'))return;
+  const goingLinks=CFG.taskCampaignLinks.filter(l=>l.taskId===id).map(l=>l.id);
+  CFG.taskCampaignLinks=CFG.taskCampaignLinks.filter(l=>l.taskId!==id);
   CFG.tasks=CFG.tasks.filter(x=>x.id!==id); logAudit('remove activity',t.name); render();
+  goingLinks.forEach(x=>deleteRow('task_campaign_links',x));
   deleteRow('tasks',id);
 }
 function commitTask(id){
@@ -946,6 +976,23 @@ function removeCampaignPartnerAlloc(id){
   deleteRow('campaign_partner_allocations',id);
 }
 window.removeCampaignPartnerAlloc=removeCampaignPartnerAlloc;
+/* 2026-09-04, backlog item 12: secondary campaign links for an activity/task -- see the
+   task_campaign_links load/save comments above. The task's own campaignId (primary) is
+   untouched by any of this. */
+function addTaskCampaignLink(taskId){
+  const t=byId(CFG.tasks,taskId); if(!t)return;
+  const other=CFG.campaigns.find(c=>c.id!==t.campaignId);
+  if(!other){ toast('No other campaign to link to yet.'); return; }
+  CFG.taskCampaignLinks.push({id:uid('tcl'),taskId:taskId,campaignId:other.id,role:'',budgetSharePct:0});
+  logAudit('add secondary campaign link','on activity '+t.name); render();
+}
+window.addTaskCampaignLink=addTaskCampaignLink;
+function removeTaskCampaignLink(id){
+  CFG.taskCampaignLinks=CFG.taskCampaignLinks.filter(l=>l.id!==id);
+  logAudit('remove secondary campaign link',id); render();
+  deleteRow('task_campaign_links',id);
+}
+window.removeTaskCampaignLink=removeTaskCampaignLink;
 
 /* ---------- campaigns created here, not yet in Strategy ----------
    Campaign Planning can now originate a campaign instead of only receiving one. It is flagged _local
@@ -962,10 +1009,17 @@ function removeCampaign(id){
   if(!c._local){ toast('Only campaigns created here (not yet in Strategy) can be removed from Campaign Planning.'); return; }
   if(TASK(id).length && !confirm('This campaign has activities logged against it. Remove it and them anyway?'))return;
   const goingTaskIds=TASK(id).map(t=>t.id);
+  /* 2026-09-04, backlog item 12: a removed campaign can be either a task's primary campaign
+     (task itself is going away, handled below) or the target of a secondary attribution link on
+     a task that lives elsewhere -- both need to go, or a dangling campaign_id would be left
+     referencing a deleted campaign. */
+  const goingLinkIds=CFG.taskCampaignLinks.filter(l=>goingTaskIds.includes(l.taskId)||l.campaignId===id).map(l=>l.id);
+  CFG.taskCampaignLinks=CFG.taskCampaignLinks.filter(l=>!goingLinkIds.includes(l.id));
   CFG.tasks=CFG.tasks.filter(t=>t.campaignId!==id);
   CFG.campaigns=CFG.campaigns.filter(x=>x.id!==id);
   logAudit('remove campaign',c.name); render();
   deleteRow('campaigns',id); goingTaskIds.forEach(tid=>deleteRow('tasks',tid));
+  goingLinkIds.forEach(lid=>deleteRow('task_campaign_links',lid));
 }
 window.removeCampaign=removeCampaign;
 
@@ -1541,7 +1595,8 @@ function moveDialogPanel(){
   if(md.type==='task'){
     const t=byId(CFG.tasks,md.id); if(!t) return '';
     const opts=CFG.campaigns.map(c=>`<option value="${c.id}" ${c.id===md.targetId?'selected':''}>${esc(c.name)}</option>`).join('');
-    return `<div class="mask"><div class="modal" style="width:min(420px,100%)">
+    const links=CFG.taskCampaignLinks.filter(l=>l.taskId===t.id);
+    return `<div class="mask"><div class="modal" style="width:min(460px,100%)">
       <h3>Move activity</h3>
       <div class="bd">
         <p class="mini">Moving "<b>${esc(t.name)}</b>" re-parents it to a different campaign in place — no copy is made.</p>
@@ -1549,6 +1604,18 @@ function moveDialogPanel(){
         <select class="in" style="width:100%" onchange="setMoveTarget(this.value)">
           <option value="">— choose —</option>${opts}
         </select>
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line,#DFE3EB)">
+          <label class="lbl">Also counts toward (secondary campaigns, shared attribution)</label>
+          <p class="mini" style="margin:0 0 8px">This activity's cost stays booked to its primary campaign above. Secondary links are for attribution only — pick a role and % share for how much credit each extra campaign gets.</p>
+          ${links.map(l=>`<div class="row" style="gap:6px;margin-bottom:6px;flex-wrap:wrap">
+            <select class="in" style="flex:1;min-width:120px" onchange="setIn('taskCampaignLinks','${l.id}','campaignId',this.value)">
+              ${CFG.campaigns.map(c=>`<option value="${c.id}" ${c.id===l.campaignId?'selected':''}>${esc(c.name)}</option>`).join('')}
+            </select>
+            <input class="in" style="flex:1;min-width:90px" placeholder="Role" value="${esc(l.role)}" onchange="setIn('taskCampaignLinks','${l.id}','role',this.value)">
+            <input class="in cel w" value="${l.budgetSharePct}" onchange="setIn('taskCampaignLinks','${l.id}','budgetSharePct',this.value,'num')">% share
+            <button class="btn sm dgr" onclick="removeTaskCampaignLink('${l.id}')">Remove</button></div>`).join('')}
+          <button class="btn sm" onclick="addTaskCampaignLink('${t.id}')" ${CFG.campaigns.length>1?'':'disabled'}>+ Add secondary campaign</button>
+        </div>
       </div>
       <div class="ft"><button class="btn" onclick="closeMoveDialog()">Cancel</button><button class="btn pri" onclick="confirmMove()">Move</button></div>
     </div></div>`;

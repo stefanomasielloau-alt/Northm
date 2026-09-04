@@ -417,6 +417,12 @@ async function saveToSupabase(){
       company_size:f.companySize||'',target_titles:f.targetTitles||'',seniority:f.seniority||[],
       updated_at:f.updatedAt||null,tracking_ref:f.trackingRef||null
     })),
+    /* backlog item 14: separate upsert for the two new ICP fields, so a database that hasn't run
+       2026-09-04-icp-fields-migration.sql yet only fails THIS call (upsertRows already catches
+       its own errors) -- every other filter field keeps saving normally either way. */
+    upsertRows('prospectus_filters', CFG.filters.filter(f=>f.revenueRange||f.techStack), f=>({
+      id:f.id,revenue_range:f.revenueRange||'',tech_stack:f.techStack||''
+    })),
     upsertRows('prospectus_reports', CFG.reports, r=>({
       id:r.id,filter_id:r.filterId||null,name:r.name,generated_at:r.generatedAt||null,
       market_low:r.marketLow,market_high:r.marketHigh,active_in_market_pct:r.activeInMarketPct,
@@ -463,6 +469,24 @@ async function loadFromSupabase(){
     if((tcR.data||{}).tracking_config) CFG.trackingConfig = tcR.data.tracking_config;
   }catch(e){ console.warn('tracking_config column not available yet (migration pending?)', e); }
 
+  /* revenue_range/tech_stack (2026-09-04, backlog item 14): two extra ICP-filter fields, kept out
+     of the main throw-on-error select above since they may not exist yet (migration pending, see
+     Claude outputs/2026-09-04-icp-fields-migration.sql). Fetched separately and merged into
+     CFG.filters by id below -- same fail-soft reasoning as tracking_config just above. Manual-entry
+     only for now (Stef: "it can be either" -- starting with the simpler, no-new-cost path; an
+     enrichment-provider source can layer on top of the same two columns later without a schema
+     change). */
+  try{
+    const icpFieldsR = await sb.from('prospectus_filters').select('id,revenue_range,tech_stack');
+    if(icpFieldsR.error) throw icpFieldsR.error;
+    const icpFieldsById = {};
+    (icpFieldsR.data||[]).forEach(row=>{ icpFieldsById[row.id] = row; });
+    CFG._icpFieldsById = icpFieldsById;
+  }catch(e){
+    CFG._icpFieldsById = {};
+    console.warn('revenue_range/tech_stack columns not available yet (migration pending?)', e);
+  }
+
   const results = await Promise.all([
     sb.from('prospectus_filters').select('id,name,industry,what_you_sell,ideal_client,deal_value,currency,market,country,updated_at,tracking_ref,company_size,target_titles,seniority'),
     sb.from('prospectus_reports').select('id,filter_id,name,generated_at,market_low,market_high,active_in_market_pct,conversation_rate,opportunity_rate,win_rate,ramp_months,icp_headline,icp_attributes,icp_triggers,tracking_ref'),
@@ -479,7 +503,11 @@ async function loadFromSupabase(){
     id:f.id,name:f.name,industry:f.industry||'',whatYouSell:f.what_you_sell||'',idealClient:f.ideal_client||'',
     dealValue:f.deal_value||0,currency:f.currency||'AUD',market:f.market||'National',country:f.country||'',
     companySize:f.company_size||'',targetTitles:f.target_titles||'',seniority:f.seniority||[],
-    updatedAt:f.updated_at||'',trackingRef:f.tracking_ref||null
+    updatedAt:f.updated_at||'',trackingRef:f.tracking_ref||null,
+    /* backlog item 14 -- '' until 2026-09-04-icp-fields-migration.sql is run, same fail-soft
+       pattern as everything else new this session. */
+    revenueRange:(CFG._icpFieldsById[f.id]||{}).revenue_range||'',
+    techStack:(CFG._icpFieldsById[f.id]||{}).tech_stack||''
   }));
   CFG.reports = (reportsR.data||[]).map(r=>({
     id:r.id,filterId:r.filter_id,name:r.name,generatedAt:r.generated_at,
@@ -1017,8 +1045,8 @@ function pageFilters(){
       <button class="btn sm pri" ${dis} onclick="addFilter()">New filter</button></h3>
     <div class="bd flush"><div class="scroll cap"><table><thead><tr>
       <th>Name</th><th>Industry</th><th>What you sell</th><th>Ideal client</th><th class="n">Avg deal</th><th>Market</th><th>Country</th>
-      <th>Company size</th><th>Target titles</th><th>Seniority</th><th>Updated</th><th></th></tr></thead><tbody>
-    ${!CFG.filters.length?`<tr><td colspan="12" class="empty">No filters yet.</td></tr>`:CFG.filters.map(f=>`<tr>
+      <th>Company size</th><th>Target titles</th><th>Seniority</th><th>Revenue range</th><th>Tech stack</th><th>Updated</th><th></th></tr></thead><tbody>
+    ${!CFG.filters.length?`<tr><td colspan="14" class="empty">No filters yet.</td></tr>`:CFG.filters.map(f=>`<tr>
       <td><input class="cel txt" style="width:170px" ${dis} value="${esc(f.name)}" onchange="setIn('filters','${f.id}','name',this.value)"></td>
       <td><input class="cel txt" style="width:130px" ${dis} value="${esc(f.industry)}" onchange="setIn('filters','${f.id}','industry',this.value)"></td>
       <td><input class="cel txt" style="width:130px" ${dis} value="${esc(f.whatYouSell)}" onchange="setIn('filters','${f.id}','whatYouSell',this.value)"></td>
@@ -1035,6 +1063,8 @@ function pageFilters(){
       <td><input class="cel txt" style="width:150px" ${dis} placeholder="Head of Marketing, VP Sales..." value="${esc(f.targetTitles)}" onchange="setIn('filters','${f.id}','targetTitles',this.value)" title="Comma-separated"></td>
       <td><select class="cel" multiple size="3" style="width:80px;height:auto" ${dis} onchange="setFilterSeniority('${f.id}',this)">
         ${SENIORITY_LEVELS.map(s=>`<option ${(f.seniority||[]).includes(s)?'selected':''}>${s}</option>`).join('')}</select></td>
+      <td><input class="cel txt" style="width:110px" ${dis} placeholder="e.g. $10-50M" value="${esc(f.revenueRange)}" onchange="setIn('filters','${f.id}','revenueRange',this.value)"></td>
+      <td><input class="cel txt" style="width:150px" ${dis} placeholder="Salesforce, HubSpot..." value="${esc(f.techStack)}" onchange="setIn('filters','${f.id}','techStack',this.value)" title="Comma-separated"></td>
       <td class="mini">${F.d(f.updatedAt)}</td>
       <td class="n"><div class="row">
         <button class="btn sm pri" ${dis} onclick="generateReport('${f.id}')">Generate report</button>

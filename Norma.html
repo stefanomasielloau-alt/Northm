@@ -2098,11 +2098,10 @@ function pageCampaignNaming(){
 
 function pageCurrency(){
   let h=`<div class="phead"><div><h1>Currency</h1>
-    <p>Foundation piece only, right now: nothing elsewhere in North reads these rates yet.
-      Set your main currency and the rates other currencies convert to it at, ready for
-      whichever module gets multi-currency support first. Rates are entered by hand here --
-      there's no live exchange-rate feed -- editing a rate's value is what stamps its
-      "updated" date.</p></div></div>`;
+    <p>Set your main currency and the rates other currencies convert to it at. Ordo, Cursus,
+      Eventus and Custodia all read these live -- budgets, RAG status and rollups convert
+      through them automatically. Rates are entered by hand here -- there's no live
+      exchange-rate feed -- editing a rate's value is what stamps its "updated" date.</p></div></div>`;
   h+=`<div class="card"><h3>Main currency</h3>
     <div class="bd"><div class="field"><label class="lbl">All rates below convert to this currency</label>
       <input class="cel" style="width:80px;text-transform:uppercase" maxlength="3" value="${esc(CFG.currency.main)}" onchange="setCurrencyMain(this.value)"></div></div></div>`;

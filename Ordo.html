@@ -462,7 +462,8 @@ const UI = {
   userId:'u_1',versionId:'v_fc',fy:'FY27',grain:'Quarter',
   regionId:'r_anz',activityId:'a_sdr',pending:null,overlay:null,repPodId:null,
   dashRegionId:null,dashPodId:null,bizCampaignId:null,pendingEdit:null,
-  relFilterOwner:'',relFilterBiz:'',relFocusId:null,relZoom:1,relPanX:0,relPanY:0
+  relFilterOwner:'',relFilterBiz:'',relFocusId:null,relZoom:1,relPanX:0,relPanY:0,
+  askAlexOpen:false,askAlexStatus:'',askAlexText:'',askAlexError:''
 };
 
 /* lookups */
@@ -1533,6 +1534,10 @@ async function loadFromSupabase(){
      default when a real value is present. Read-only here; editing stays in Configuration. */
   if(os.currency_config) CFG.currency = os.currency_config;
   CFG.benchmarks = { industryExitRate: os.industry_exit_rate||0 };
+  /* Ask Alex (item 22 phase 1): same fail-soft shape as tracking_config/currency_config
+     above -- select('*') just omits the column silently if the migration hasn't run yet,
+     so this only turns the feature on when a real true value is present. Default off. */
+  CFG.aiScreenInterpreterEnabled = !!os.ai_screen_interpreter_enabled;
   /* 2026-09-02 bug fix: os.years||[default] is the classic JS empty-array gotcha -- []
      is truthy, so if a saved org_settings row ever has years:[] (not null/undefined),
      the "||" fallback never fires and CFG.time.years silently ends up empty, which
@@ -3610,6 +3615,102 @@ async function generateBoardReportAiNarrative(){
 }
 window.generateBoardReportAiNarrative=generateBoardReportAiNarrative;
 
+/* ---------- Ask Alex, AI screen interpreter (backlog item 22, phase 1) ----------
+   Per claude/2026-09-04-ai-screen-interpreter-phase1-proposal.md: pageContextForAI()
+   returns an aggregate SUMMARY (already-computed KPI numbers), never raw campaign
+   rows -- mirrors pageDashboard()'s own region/pod scoping so what gets explained
+   matches what's on screen. askAlex() then only ever sends the fields the matching
+   skill file's max_context_fields whitelists, loaded fresh from skills/ (not
+   hardcoded here) so the prompt/whitelist can be edited without touching this file.
+   Routed through Hub-Backend's existing /admin/ai-generate -- same pipe Board
+   report's AI narrative already uses (generateBoardReportAiNarrative above), not a
+   new integration. Gated on CFG.aiScreenInterpreterEnabled (Configuration ->
+   Integrations, default off, loaded fail-soft from org_settings in bootApp). */
+function pageContextForAI(){
+  const d=CFG.drivers, m=verMult()*segBlend();
+  const visAll=visibleRegions();
+  const vis = UI.dashRegionId ? visAll.filter(r=>r.id===UI.dashRegionId) : visAll;
+  const visIds=vis.map(r=>r.id);
+  const podShare = (UI.dashPodId && byId(CFG.pods,UI.dashPodId)) ? byId(CFG.pods,UI.dashPodId).share : 1;
+  const deal=blendedDeal();
+  const plan=backward(d.winTarget,m);
+  const actualAcc=histSlice({fy:UI.fy,regionIds:visIds}).acc;
+  const eg=exitGate();
+  const winVar=plan[eg.id]?(actualAcc[eg.id]-plan[eg.id])/plan[eg.id]:0;
+
+  const camps=CFG.campaigns.filter(cm=>visIds.includes(cm.regionId)||(!UI.dashRegionId&&cm.regionId===unassignedRegionId()));
+  const budgeted=sum(camps.map(cm=>campaignBudgetMain(cm))), committed=sum(camps.map(campaignCommitted)), actualSpend=sum(camps.map(campaignActualSpend));
+  const spendVar=budgeted?(actualSpend-budgeted)/budgeted:0;
+
+  const totAcv=sum(vis.map(r=>r.acvTarget))*podShare;
+  const accPot=sum(vis.map(r=>{ const wins=r.acvTarget/deal; return backward(wins,m)[eg.id]*deal; }))*podShare;
+  const acvVar=totAcv?(accPot-totAcv)/totAcv:0;
+
+  const atRisk = camps.filter(cm=>{ const rag=ragForCampaign(cm); return rag.tone==='amber'||rag.tone==='red'; }).length;
+
+  return {
+    module:'Ordo', page:'dashboard', fy:UI.fy,
+    scope: UI.dashRegionId ? (region(UI.dashRegionId)?region(UI.dashRegionId).name:'a region') : 'all regions I can see',
+    kpis: {
+      exitGate: eg.name,
+      exitGateActual: Math.round(actualAcc[eg.id]||0), exitGatePlan: Math.round(plan[eg.id]||0), exitGateVariancePct: Math.round(winVar*1000)/10,
+      budgeted: Math.round(budgeted), committed: Math.round(committed), actualSpend: Math.round(actualSpend), spendVariancePct: Math.round(spendVar*1000)/10,
+      acvTarget: Math.round(totAcv), demandPotential: Math.round(accPot), acvVariancePct: Math.round(acvVar*1000)/10
+    },
+    counts: { campaignsInScope: camps.length, campaignsAtRisk: atRisk, regionsInScope: vis.length }
+  };
+}
+window.pageContextForAI=pageContextForAI;
+
+async function askAlex(){
+  if(!CFG.aiScreenInterpreterEnabled){ toast('Ask Alex is off for this org -- enable it in Configuration -> Integrations.'); return; }
+  UI.askAlexOpen=true; UI.askAlexStatus='loading'; UI.askAlexText=''; UI.askAlexError=''; render();
+  try{
+    const skillResp = await fetch('skills/explain-strategy-dashboard.json');
+    if(!skillResp.ok) throw new Error('Could not load the Ask Alex skill definition (skills/explain-strategy-dashboard.json).');
+    const skill = await skillResp.json();
+    const fullContext = pageContextForAI();
+    const allow = new Set(skill.max_context_fields||[]);
+    const filtered = {};
+    Object.keys(fullContext).forEach(k=>{ if(allow.has(k)) filtered[k]=fullContext[k]; });
+
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token) throw new Error('Your own North session has expired -- sign in again.');
+    const resp = await fetch(CONTACT_URL+'/admin/ai-generate', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token, prompt:skill.instructions, context:JSON.stringify(filtered) })
+    });
+    const j = await resp.json().catch(()=>({}));
+    if(resp.status===501){ UI.askAlexStatus='unavailable'; UI.askAlexError=j.error||'AI provider not configured yet.'; render(); return; }
+    if(!resp.ok || !j.ok) throw new Error(j.error||('AI request failed ('+resp.status+')'));
+    const text=(j.raw||'').trim();
+    if(!text) throw new Error('AI returned nothing usable.');
+    UI.askAlexStatus='done'; UI.askAlexText=text;
+  }catch(e){
+    UI.askAlexStatus='error'; UI.askAlexError=String((e&&e.message)||e);
+  }
+  render();
+}
+window.askAlex=askAlex;
+function closeAskAlex(){ UI.askAlexOpen=false; render(); }
+window.closeAskAlex=closeAskAlex;
+
+function askAlexPanel(){
+  if(!UI.askAlexOpen) return '';
+  return `<div class="mask"><div class="modal" style="width:min(560px,100%)">
+    <h3>✨ Ask Alex <span class="sp"></span><button class="btn sm" onclick="closeAskAlex()">Close</button></h3>
+    <div class="body" style="padding:16px">
+      ${UI.askAlexStatus==='loading'?'<div class="empty">Reading the dashboard…</div>':''}
+      ${UI.askAlexStatus==='done'?`<div style="font-size:13px;line-height:1.6;color:var(--ink-2);white-space:pre-wrap">${esc(UI.askAlexText)}</div>`:''}
+      ${UI.askAlexStatus==='unavailable'?`<div class="note w">${esc(UI.askAlexError)}</div>`:''}
+      ${UI.askAlexStatus==='error'?`<div class="note b">Could not get an explanation: ${esc(UI.askAlexError)}<br><button class="btn sm" style="margin-top:8px" onclick="askAlex()">Try again</button></div>`:''}
+      <p class="mini" style="margin-top:14px">Alex sees a summary of the numbers on this screen -- fiscal-year totals and counts, not individual campaigns, contacts or deal records.</p>
+    </div>
+  </div></div>`;
+}
+
+
 /* Board report commentary CRUD (2026-09-03). fy is stamped from UI.fy at add-time so a note
    stays attached to the report period it was written about, matching how the report itself
    is always "for FY X" rather than a single running thread. visible_in_output defaults to
@@ -4128,7 +4229,9 @@ function pageDashboard(){
 
   let h=`<div class="phead"><div><h1>Dashboard</h1>
     <p>How the plan is tracking right now — funnel, spend, ACV and drift since your last named snapshot, in one look.</p></div>
-    <div class="sp"></div><span class="pill ${overall}" style="font-size:12px;padding:4px 12px">${overallLabel}</span></div>`;
+    <div class="sp"></div>
+    ${CFG.aiScreenInterpreterEnabled?`<button class="btn sm" onclick="askAlex()" title="AI explanation of this screen -- summary numbers only, never raw records">✨ Ask Alex</button>`:''}
+    <span class="pill ${overall}" style="font-size:12px;padding:4px 12px">${overallLabel}</span></div>`;
 
   h+=`<div class="card"><div class="bd" style="padding:10px 14px"><div class="row" style="gap:10px;flex-wrap:wrap">
     <span class="lbl">Viewing</span>
@@ -4818,7 +4921,7 @@ function render(){
   document.getElementById('tnLinks').innerHTML=renderFilteredTnLinks();
   document.getElementById('tnAcct').innerHTML=renderTnAcct();
   document.getElementById('main').innerHTML=p.fn() + (UI.helpOpen?helpPanelHtml():'');
-  document.getElementById('layer').innerHTML=impactPanel()+overlayPanel()+pendingEditPanel();
+  document.getElementById('layer').innerHTML=impactPanel()+overlayPanel()+pendingEditPanel()+askAlexPanel();
   renderCtx();
   saveLocal();
   scheduleSupabaseSave();

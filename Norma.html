@@ -305,7 +305,7 @@ const CFG = {
   audit:[]
 };
 
-const UI = { page:'home', helpOpen:false, orgEdit:null, showArchivedInvites:false, usersOrgFilter:'', usersRegionFilter:'', usersTeamFilter:'', rolesSortKey:'org', rolesSortDir:'asc', usersSortKey:'org', usersSortDir:'asc', alertsFilter:{role:'',unit:'',q:''}, buFilter:{role:'',q:''}, hubUsers:[], hubUsersLoaded:false, hubUsersLoading:false, hubUsersError:'', hubFeedback:[], hubFeedbackLoaded:false, hubFeedbackLoading:false, hubFeedbackError:'' };
+const UI = { page:'home', helpOpen:false, orgEdit:null, showArchivedInvites:false, usersOrgFilter:'', usersRegionFilter:'', usersTeamFilter:'', rolesSortKey:'org', rolesSortDir:'asc', usersSortKey:'org', usersSortDir:'asc', alertsFilter:{role:'',unit:'',q:''}, buFilter:{role:'',q:''}, hubUsers:[], hubUsersLoaded:false, hubUsersLoading:false, hubUsersError:'', hubFeedback:[], hubFeedbackLoaded:false, hubFeedbackLoading:false, hubFeedbackError:'', outboundWebhooks:[], outboundWebhooksLoaded:false, outboundWebhooksLoading:false, outboundWebhooksError:'', lastCreatedWebhookSecret:null };
 
 function logAudit(what,detail){
   CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
@@ -325,6 +325,7 @@ function go(page){
   // rather than at boot, since most sessions never open them.
   if(page==='hubaccounts' && !UI.hubUsersLoaded && !UI.hubUsersLoading) loadHubUsers();
   if(page==='hubfeedback' && !UI.hubFeedbackLoaded && !UI.hubFeedbackLoading) loadHubFeedback();
+  if(page==='integrations' && !UI.outboundWebhooksLoaded && !UI.outboundWebhooksLoading) loadOutboundWebhooks();
   render();
 }
 window.go=go;
@@ -2150,6 +2151,144 @@ function ragPillHtml(rag){
   return `<span class="rag rag-${rag.tone}">${esc(rag.label)}${rag.exceed?' <span class="rag-exceed">★</span>':''}</span>`;
 }
 
+/* Hub outbound-event webhooks (backlog items 18/19, 2026-09-04) -- config UI for
+   Hub-Backend's new /automations/outbound-webhooks endpoints. Same lazy-load-on-first-visit
+   + canConfig() gate + North-JWT-in-body pattern as loadHubUsers/pushEmailDirect above.
+   Distinct from CFG.integrations.webhookUrl below (that one is North's own client-side,
+   single-URL, export/import-synced value read by Campaign Planning -- no server involved).
+   This one is real signed HTTP pushed server-side by Hub-Backend; see pageIntegrations()
+   for the copy that explains the difference to Stef inline. */
+async function loadOutboundWebhooks(){
+  if(!canConfig()) return;
+  UI.outboundWebhooksLoading=true; UI.outboundWebhooksError=''; render();
+  try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token){ UI.outboundWebhooksLoading=false; UI.outboundWebhooksError='Your own North session has expired -- sign in again.'; render(); return; }
+    const r = await fetch(CONTACT_URL+'/automations/outbound-webhooks?token='+encodeURIComponent(token));
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok){ UI.outboundWebhooksLoading=false; UI.outboundWebhooksError=j.error||'Could not load webhooks.'; render(); return; }
+    UI.outboundWebhooks=j.webhooks||[]; UI.outboundWebhooksLoaded=true; UI.outboundWebhooksLoading=false; render();
+  }catch(e){ UI.outboundWebhooksLoading=false; UI.outboundWebhooksError='Could not reach Hub: '+(e&&e.message?e.message:'unknown error'); render(); }
+}
+window.loadOutboundWebhooks=loadOutboundWebhooks;
+
+async function createOutboundWebhookUI(){
+  if(!canConfig()) return;
+  const labelEl=document.getElementById('owhNewLabel'), urlEl=document.getElementById('owhNewUrl');
+  const label=(labelEl&&labelEl.value)||'', url=(urlEl&&urlEl.value)||'';
+  if(!url.trim()){ toast('Enter a URL first.'); return; }
+  try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
+    const r = await fetch(CONTACT_URL+'/automations/outbound-webhooks', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token: token, label: label, url: url, event_types: [] })
+    });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok){ toast(j.error||'Could not create webhook.'); return; }
+    UI.lastCreatedWebhookSecret = j.webhook ? j.webhook.secret : null;
+    logAudit('outbound webhook created', label||url);
+    toast('Webhook created -- copy the secret now, it will not be shown again.');
+    UI.outboundWebhooksLoaded=false; await loadOutboundWebhooks();
+  }catch(e){ toast('Could not reach Hub: '+(e&&e.message?e.message:'unknown error')); }
+}
+window.createOutboundWebhookUI=createOutboundWebhookUI;
+
+async function testOutboundWebhookUI(id){
+  if(!canConfig()) return;
+  try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
+    const r = await fetch(CONTACT_URL+'/automations/outbound-webhooks/'+id+'/test', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token: token })
+    });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok){ toast(j.error||'Could not send test event.'); return; }
+    toast(j.ok ? 'Test event delivered (HTTP '+j.status+').' : 'Test event failed: '+(j.error||('HTTP '+j.status)));
+    UI.outboundWebhooksLoaded=false; await loadOutboundWebhooks();
+  }catch(e){ toast('Could not reach Hub: '+(e&&e.message?e.message:'unknown error')); }
+}
+window.testOutboundWebhookUI=testOutboundWebhookUI;
+
+async function toggleOutboundWebhookActiveUI(id,current){
+  if(!canConfig()) return;
+  try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
+    const r = await fetch(CONTACT_URL+'/automations/outbound-webhooks/'+id+'/update', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token: token, active: !current })
+    });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok){ toast(j.error||'Could not update webhook.'); return; }
+    UI.outboundWebhooksLoaded=false; await loadOutboundWebhooks();
+  }catch(e){ toast('Could not reach Hub: '+(e&&e.message?e.message:'unknown error')); }
+}
+window.toggleOutboundWebhookActiveUI=toggleOutboundWebhookActiveUI;
+
+async function deleteOutboundWebhookUI(id,label){
+  if(!canConfig()) return;
+  if(!confirm('Remove the webhook'+(label?' "'+label+'"':'')+'? This stops it receiving events immediately.')) return;
+  try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
+    const r = await fetch(CONTACT_URL+'/automations/outbound-webhooks/'+id+'/delete', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token: token })
+    });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok){ toast(j.error||'Could not delete webhook.'); return; }
+    logAudit('outbound webhook deleted', label||('#'+id));
+    toast('Webhook removed.');
+    UI.outboundWebhooksLoaded=false; await loadOutboundWebhooks();
+  }catch(e){ toast('Could not reach Hub: '+(e&&e.message?e.message:'unknown error')); }
+}
+window.deleteOutboundWebhookUI=deleteOutboundWebhookUI;
+
+function outboundWebhooksPanelHtml(){
+  let h=`<div class="card"><h3>Hub event webhooks <span class="sp"></span>
+      <span class="pill n">${UI.outboundWebhooks.length} configured</span></h3>
+    <div class="bd">
+      <p class="mini" style="margin:0 0 9px">Different from the single URL above -- this is Hub-Backend itself pushing
+        real signed HTTP events out (HMAC-SHA256 over the JSON body, header <code>X-Hub-Webhook-Signature</code>), to
+        as many URLs as you want, each with its own secret. Point one at a Zapier/Make/n8n catch hook or a CRM's
+        inbound webhook the same way as the field above. <strong>Note:</strong> the plumbing and the "send test event"
+        button below are fully live; automatic firing on specific Hub/Queue events (a reply logged, a sequence
+        completing) is the next slice -- ask if you want that prioritized and which events matter most.</p>
+      ${UI.outboundWebhooksError?`<div class="note">${esc(UI.outboundWebhooksError)}</div>`:''}
+      ${UI.lastCreatedWebhookSecret?`<div class="note" style="margin-bottom:10px"><strong>Secret: <span style="font-size:13px;letter-spacing:0.5px;word-break:break-all">${esc(UI.lastCreatedWebhookSecret)}</span></strong>
+        <p class="mini" style="margin:6px 0 0">Shown once -- copy it now. The receiving system uses it to verify the <code>X-Hub-Webhook-Signature</code> header on each delivery.</p></div>`:''}
+      <table><thead><tr><th>Label</th><th>URL</th><th>Secret</th><th>Status</th><th>Last fired</th><th></th></tr></thead><tbody>
+      ${UI.outboundWebhooks.map(w=>`<tr>
+        <td class="lb">${esc(w.label||'(untitled)')}</td>
+        <td class="mini" style="word-break:break-all;max-width:220px">${esc(w.url)}</td>
+        <td class="mini">…${esc(w.secret_last4||'')}</td>
+        <td><span class="pill ${w.active?'ok':'n'}">${w.active?'Active':'Paused'}</span>
+          ${w.last_status!=null?`<span class="pill ${w.last_error?'warn':'ok'}" style="margin-left:4px">HTTP ${w.last_status}</span>`:''}</td>
+        <td class="mini">${w.last_fired_at?F.dt(w.last_fired_at):'never'}</td>
+        <td class="n">
+          <button class="btn sm" onclick="testOutboundWebhookUI(${w.id})">Send test</button>
+          <button class="btn sm" onclick="toggleOutboundWebhookActiveUI(${w.id},${w.active})">${w.active?'Pause':'Resume'}</button>
+          <button class="btn sm dgr" onclick="deleteOutboundWebhookUI(${w.id},'${esc(w.label||'')}')">Remove</button>
+        </td></tr>`).join('') || '<tr><td colspan="6" class="mini">No webhooks configured yet.</td></tr>'}
+      </tbody></table>
+      <div class="dv"></div>
+      <label class="mini" style="display:block;margin-bottom:4px">Add a webhook</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input id="owhNewLabel" class="cel txt" style="width:160px" placeholder="Label (optional)">
+        <input id="owhNewUrl" class="cel txt" style="width:320px" placeholder="https://hooks.zapier.com/hooks/catch/…">
+        <button class="btn sm pri" onclick="createOutboundWebhookUI()">Add webhook</button>
+      </div>
+    </div></div>`;
+  return h;
+}
+
 function pageIntegrations(){
   const wu=CFG.integrations.webhookUrl||'';
   let h=`<div class="phead"><div><h1>Integrations</h1>
@@ -2191,6 +2330,7 @@ function pageIntegrations(){
         <p class="mini" style="margin:6px 0 0">Shown once — copy it now and paste it into whatever external system will send this webhook (as the <code>token</code>
           query param, or an <code>X-Trigger-Token</code> header). Not stored anywhere retrievable after you leave this page.</p></div>`:''}
     </div></div>`;
+  h += outboundWebhooksPanelHtml();
   return h;
 }
 

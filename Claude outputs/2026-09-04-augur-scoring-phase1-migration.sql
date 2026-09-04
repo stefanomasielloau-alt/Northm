@@ -1,0 +1,65 @@
+-- 2026-09-04: Augur scoring model phase 1 -- backlog item 13
+-- Two new columns on augur_scoring_factors. Safe to run multiple times (IF NOT EXISTS guards).
+--
+-- (1) allow negative factor weights -- NO SCHEMA CHANGE NEEDED. weight is already a plain
+--     numeric column with no CHECK constraint, and Augur.html's setFactor()/weightedScore()
+--     already accept and handle negative values correctly. Confirmed by reading the code, not
+--     assumed.
+--
+-- (2) "type" tags a factor as 'fit' (the existing kind -- scored by a person, per deal) or
+--     'behavioral' (about buyer engagement). It's just a label for organizing/filtering factors
+--     in the UI -- a person can still add their own manual "behavioral" factor if they want one
+--     they score by hand.
+--
+-- (3) "auto_computed" marks the ONE specific factor (added via the "+ Add auto-computed
+--     (engagement)" button in Augur.html, not created automatically) that is scored by the app
+--     itself from crm_activities instead of a manual per-deal input -- see computeBehavioralScore()
+--     in Augur.html for the exact formula.
+
+ALTER TABLE augur_scoring_factors
+  ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'fit',
+  ADD COLUMN IF NOT EXISTS auto_computed BOOLEAN NOT NULL DEFAULT false;
+
+-- Augur.html already ships with fail-soft loading for these two columns (its 2026-09-04
+-- comments) -- nothing breaks if this hasn't been run yet. Every factor just behaves exactly as
+-- it does today (type 'fit', not auto-computed) until it has, and the new "+ Add auto-computed
+-- (engagement)" button/column simply won't persist across a reload.
+
+-- ---------------------------------------------------------------------------------------------
+-- Source and reasoning for the auto-computed "behavioral" factor's numbers
+-- (computeBehavioralScore() in Augur.html)
+-- ---------------------------------------------------------------------------------------------
+-- Stef's instruction: "Add scoring definitions from online benchmarks." Researched published
+-- B2B lead/engagement-scoring benchmarks (2026). Most sources found (e.g. Wikipedia's lead
+-- scoring article, monday.com's guide) are qualitative only -- no concrete point values, so
+-- nothing was invented to fill that gap. One source had concrete numbers:
+--
+--   prospeo.io, "Lead Temperature Scoring in 2026" (https://prospeo.io/s/lead-temperature-scoring)
+--   Positive signals (of 100): Meeting booked +50, Demo/pricing request +30-40, Webinar
+--   attended +15, Webinar registered +7, Email click +5 (capped at 3 occurrences), Pricing
+--   page view +15. Negative signals: Competitor match -50, Unsubscribe -25, Personal email
+--   domain -15, no engagement in 90 days -10. Recency bands: Hot = score >=75 AND activity
+--   within last 14 days; Warm = 50-74 within 30 days; Cold = 1-24 or no activity in 30 days.
+--   Decay: roughly -25%/month applied to engagement-derived scores.
+--
+-- Augur has no marketing/web-behavior data (no email clicks, page views, webinar signups) --
+-- only sales-rep-logged activities (Call/Email/Meeting/Note) on already-qualified deals, on
+-- Augur's existing 0-100 per-factor scale rather than the source's 0-100-with-negative-signals
+-- scale. The benchmark's numbers were adapted proportionally rather than copied verbatim:
+--
+--   BEHAVIORAL_POINTS = { Meeting: 30, Call: 20, Email: 8, Note: 0 }
+--     Relative ordering mirrors the source (Meeting/booked-call > Demo/pricing-ask > lower-
+--     intent touches), scaled down since these are sales activities on a qualified deal, not
+--     top-of-funnel marketing signals. Note excluded -- a note is a log entry, not evidence a
+--     touchpoint happened.
+--   BEHAVIORAL_DECAY_DAYS = 60, linear decay to zero
+--     Source uses a stepped ~25%/month decay and a 14-day "hot" / 30-day "cold" cutoff; a
+--     single 60-day linear decay was used instead for simplicity and because Augur's own
+--     "no black box" design principle (stated in the file's own header comment) favours a
+--     plain, inspectable constant over a stepped/monthly rule.
+--   Score clamped 0-100 to match every other factor's existing scale.
+--
+-- These are a defensible starting point grounded in a real published benchmark, adapted (not
+-- copied) to fit Augur's data shape -- not something Stef reviewed line-by-line. All three
+-- constants live as plain, commented values at the top of the "auto-computed behavioral factor"
+-- section in Augur.html and can be changed any time.

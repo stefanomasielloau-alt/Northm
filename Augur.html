@@ -352,6 +352,12 @@ async function saveToSupabase(){
   if(!_orgId) return;
   await Promise.all([
     upsertRows('augur_scoring_factors', CFG.scoringFactors, f=>({id:f.id,name:f.name,weight:f.weight||0})),
+    /* backlog item 13 phase 1: separate upsert for the two new columns, so a database that hasn't
+       run 2026-09-04-augur-scoring-phase1-migration.sql yet only fails THIS call (upsertRows
+       already catches its own errors) -- name/weight keep saving normally either way. */
+    upsertRows('augur_scoring_factors', CFG.scoringFactors.filter(f=>f.type!=='fit'||f.autoComputed), f=>({
+      id:f.id,type:f.type||'fit',auto_computed:!!f.autoComputed
+    })),
     upsertRows('augur_tiers', CFG.tiers, t=>({id:t.id,name:t.name,min_score:t.minScore||0,probability:t.probability||0})),
     upsertRows('augur_deals', CFG.deals, d=>({
       id:d.id,name:d.name,account:d.account||'',value:d.value||0,currency:d.currency||'AUD',
@@ -401,6 +407,18 @@ async function loadFromSupabase(){
     if((tcR.data||{}).tracking_config) CFG.trackingConfig = tcR.data.tracking_config;
   }catch(e){ console.warn('tracking_config column not available yet (migration pending?)', e); }
 
+  /* Fit/behavioral factor tag + auto-computed flag (2026-09-04, backlog item 13 phase 1) -- two
+     new columns on augur_scoring_factors, kept out of the main throw-on-error select below since
+     they may not exist yet (migration pending, see Claude outputs/2026-09-04-augur-scoring-phase1-migration.sql).
+     Own try/catch, merged in by id after the main load, same fail-soft reasoning as tracking_config
+     just above -- every factor just defaults to type 'fit', autoComputed false until it's run. */
+  CFG._factorFieldsById = {};
+  try{
+    const ffR = await sb.from('augur_scoring_factors').select('id,type,auto_computed');
+    if(ffR.error) throw ffR.error;
+    (ffR.data||[]).forEach(row=>{ CFG._factorFieldsById[row.id] = row; });
+  }catch(e){ console.warn('augur_scoring_factors.type/auto_computed not available yet (migration pending?)', e); }
+
   const results = await Promise.all([
     sb.from('augur_scoring_factors').select('id,name,weight'),
     sb.from('augur_tiers').select('id,name,min_score,probability'),
@@ -413,7 +431,13 @@ async function loadFromSupabase(){
   const [factorsR,tiersR,dealsR,campaignsR,contactsR,activitiesR,auditR] = results;
   for(const r of results){ if(r.error) throw r.error; }
 
-  CFG.scoringFactors = (factorsR.data||[]).map(f=>({id:f.id,name:f.name,weight:f.weight}));
+  CFG.scoringFactors = (factorsR.data||[]).map(f=>({
+    id:f.id,name:f.name,weight:f.weight,
+    /* backlog item 13 phase 1 -- 'fit' / autoComputed:false until the migration is run, same
+       fail-soft pattern as everything else new this session. */
+    type:(CFG._factorFieldsById[f.id]||{}).type||'fit',
+    autoComputed:!!(CFG._factorFieldsById[f.id]||{}).auto_computed
+  }));
   CFG.tiers = (tiersR.data||[]).map(t=>({id:t.id,name:t.name,minScore:t.min_score,probability:t.probability}));
   CFG.deals = (dealsR.data||[]).map(d=>({
     id:d.id,name:d.name,account:d.account||'',value:d.value,currency:d.currency||'AUD',
@@ -813,11 +837,21 @@ window.removeActivity=removeActivity;
 
 /* ---------- CRUD: scoring model ---------- */
 function addFactor(){
-  CFG.scoringFactors.push({id:uid('f'),name:'New factor',weight:10});
+  CFG.scoringFactors.push({id:uid('f'),name:'New factor',weight:10,type:'fit',autoComputed:false});
   CFG.deals.forEach(d=>{ d.factorScores=d.factorScores||{}; d.factorScores[CFG.scoringFactors[CFG.scoringFactors.length-1].id]=0; });
   render(); toast('Factor added.');
 }
 window.addFactor=addFactor;
+/* backlog item 13 phase 1: adds ONE auto-computed factor, scored automatically from crm_activities
+   (see computeBehavioralScore above) instead of a per-deal input. Deliberately a separate, explicit
+   button rather than something added silently -- a manual "behavioral" factor is still just a
+   regular typed-and-scored-by-hand factor via the type dropdown below. */
+function addBehavioralFactor(){
+  if(CFG.scoringFactors.some(f=>f.autoComputed)){ toast('You already have an auto-computed behavioral factor.'); return; }
+  CFG.scoringFactors.push({id:uid('f'),name:'Recent engagement (auto)',weight:15,type:'behavioral',autoComputed:true});
+  render(); toast('Auto-computed behavioral factor added — scored from logged Calls/Emails/Meetings, see tooltip.');
+}
+window.addBehavioralFactor=addBehavioralFactor;
 function removeFactor(id){
   CFG.scoringFactors=CFG.scoringFactors.filter(f=>f.id!==id);
   CFG.deals.forEach(d=>{ if(d.factorScores) delete d.factorScores[id]; });
@@ -841,10 +875,43 @@ function setTier(id,key,val){
 window.setTier=setTier;
 
 /* ---------- scoring & forecast math (transparent, deterministic) ---------- */
+/* ---------- auto-computed behavioral factor (2026-09-04, backlog item 13 phase 1) ----------
+   Recency-weighted engagement from crm_activities (Call/Email/Meeting; Note excluded -- a note
+   isn't evidence of a touchpoint happening, just a log entry). Point values and the "hot"
+   recency window are adapted from a published 2026 B2B engagement-scoring benchmark (meeting
+   booked highest-intent action ~50pts, demo/pricing request ~30-40pts, email click ~5pts capped,
+   "hot" = activity within 14 days, ~25%/month decay thereafter) -- see
+   2026-09-04-augur-scoring-phase1-migration.sql for the full citation and reasoning. Scaled down
+   to fit Augur's existing 0-100 factor-score range (manual factors are typed as 0-100 already)
+   and using a simple linear decay instead of the source's stepped/monthly one, in keeping with
+   Augur's own "no black box" design -- every number here is a plain constant Stef can see and
+   change, not a fitted model.
+   Stef: these are a defensible starting point from real-world benchmarks, not a policy you
+   signed off on line by line -- revisit any of the three constants below any time. */
+const BEHAVIORAL_POINTS = { Meeting:30, Call:20, Email:8, Note:0 };
+const BEHAVIORAL_DECAY_DAYS = 60;   // a touchpoint's contribution fades to zero linearly over this many days
+const BEHAVIORAL_HOT_DAYS = 14;     // informational threshold shown in the UI tooltip; not used in the math itself
+function computeBehavioralScore(dealId){
+  const acts=(CFG.activities||[]).filter(a=>a.dealId===dealId && a.type!=='Note');
+  if(!acts.length) return 0;
+  const now=Date.now();
+  let raw=0;
+  acts.forEach(a=>{
+    if(!a.occurredAt) return;
+    const days=(now-new Date(a.occurredAt).getTime())/86400000;
+    if(days<0||days>BEHAVIORAL_DECAY_DAYS) return;
+    const decay=1-(days/BEHAVIORAL_DECAY_DAYS);
+    raw += (BEHAVIORAL_POINTS[a.type]||0)*decay;
+  });
+  return Math.max(0,Math.min(100,raw));
+}
+function factorScoreFor(deal,factor){
+  return factor.autoComputed ? computeBehavioralScore(deal.id) : ((deal.factorScores&&deal.factorScores[factor.id])||0);
+}
 function weightedScore(deal){
   const totalW=sum(CFG.scoringFactors.map(f=>f.weight));
   if(!totalW) return 0;
-  const s=sum(CFG.scoringFactors.map(f=>(deal.factorScores&&deal.factorScores[f.id]||0)*f.weight));
+  const s=sum(CFG.scoringFactors.map(f=>factorScoreFor(deal,f)*f.weight));
   return s/totalW;
 }
 function tierFor(score){
@@ -1000,7 +1067,10 @@ function pageDeals(){
             <option value="">— not linked —</option>
             ${CFG.referenceList.campaigns.map(c=>`<option value="${c.id}" ${c.id===d.campaignId?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
           ${(!d.campaignId&&d.campaignRef)?`<div class="mini">legacy ref: ${esc(d.campaignRef)}</div>`:''}</td>
-        ${CFG.scoringFactors.map(f=>`<td class="n"><input class="cel w" value="${(d.factorScores&&d.factorScores[f.id])||0}" onchange="setFactorScore('${d.id}','${f.id}',this.value)"></td>`).join('')}
+        ${CFG.scoringFactors.map(f=>f.autoComputed
+          ?`<td class="n" title="Auto-computed from logged Calls/Emails/Meetings, decays over ${BEHAVIORAL_DECAY_DAYS} days. Not editable.">${F.n(computeBehavioralScore(d.id),0)}</td>`
+          :`<td class="n"><input class="cel w" value="${(d.factorScores&&d.factorScores[f.id])||0}" onchange="setFactorScore('${d.id}','${f.id}',this.value)"></td>`
+        ).join('')}
         <td class="n">${F.n(m.score,0)}</td>
         <td><span class="pill ${m.tier?m.tier.name.toLowerCase():'n'}">${m.tier?esc(m.tier.name):'—'}</span></td>
         <td class="n">${F.mk(m.weightedValue,CCY_SYM[d.currency])}</td>
@@ -1019,13 +1089,21 @@ function pageScoring(){
     <p>Factors and weights used to compute each deal's score, and the tiers that turn a score into a win probability.</p></div></div>`;
   h+=`<div class="card"><h3>Scoring factors <span class="sp"></span>
       <span class="pill ${totalW===100?'ok':'n'}">${totalW}% total</span>
+      <button class="btn sm" onclick="addBehavioralFactor()" title="Adds one factor auto-scored from logged Calls/Emails/Meetings — recency-weighted, decays over ${BEHAVIORAL_DECAY_DAYS} days. Point values adapted from a 2026 B2B engagement-scoring benchmark, see code comments.">+ Add auto-computed (engagement)</button>
       <button class="btn sm pri" onclick="addFactor()">Add factor</button></h3>
-    <div class="bd flush"><table><thead><tr><th>Factor</th><th class="n">Weight %</th><th></th></tr></thead><tbody>
+    <div class="bd flush"><table><thead><tr><th>Factor</th><th>Type</th><th class="n">Weight %</th><th></th></tr></thead><tbody>
     ${CFG.scoringFactors.map(f=>`<tr>
-      <td><input class="cel txt" style="width:220px" value="${esc(f.name)}" onchange="setFactor('${f.id}','name',this.value)"></td>
+      <td><input class="cel txt" style="width:220px" value="${esc(f.name)}" onchange="setFactor('${f.id}','name',this.value)" ${f.autoComputed?'disabled title="Auto-computed factors keep a fixed name."':''}></td>
+      <td>${f.autoComputed?'<span class="pill n" title="Scored automatically from logged activities, not a manual input.">Auto (behavioral)</span>':`<select class="cel txt" style="width:110px" onchange="setFactor('${f.id}','type',this.value)">
+          <option value="fit" ${(!f.type||f.type==='fit')?'selected':''}>Fit</option>
+          <option value="behavioral" ${f.type==='behavioral'?'selected':''}>Behavioral</option>
+        </select>`}</td>
       <td class="n"><input class="cel w" value="${f.weight}" onchange="setFactor('${f.id}','weight',this.value)"></td>
       <td class="n"><button class="btn sm dgr" onclick="removeFactor('${f.id}')">Remove</button></td></tr>`).join('')}
-    </tbody></table></div></div>`;
+    </tbody></table></div>
+    <div class="bd" style="border-top:1px solid var(--line-2)"><p class="mini" style="margin:0">Weights can be negative — a factor can pull the score down as easily as up. "Behavioral" is
+      just a label for organizing factors; the one factor marked "Auto (behavioral)" is scored automatically from logged Call/Email/Meeting
+      activity (recency-weighted, decays to 0 after ${BEHAVIORAL_DECAY_DAYS} days) instead of a manual per-deal input — see the Deals table.</p></div></div>`;
   h+=`<div class="card"><h3>Tiers &amp; win probability</h3><div class="bd flush"><table><thead><tr>
     <th>Tier</th><th class="n">Min score</th><th class="n">Win probability</th></tr></thead><tbody>
     ${[...CFG.tiers].sort((a,b)=>b.minScore-a.minScore).map(t=>`<tr>

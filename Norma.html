@@ -2490,8 +2490,9 @@ function pageFeedback(){
   const completedCount=rows.filter(r=>r.status==='completed').length;
   const p1Count=rows.filter(r=>r.priority==='P1'&&r.status!=='completed').length;
   let h=`<div class="phead"><div><h1>Feedback</h1>
-    <p>Issues reported from the floating feedback button on every North page, plus Hub and Seek. Name, page, and timestamp
-      are captured automatically -- only the description is typed by the reporter.</p></div>
+    <p>Issues reported from the floating feedback button on every North page. Name, page, and timestamp
+      are captured automatically -- only the description is typed by the reporter. Hub and Seek have their own
+      separate feedback list (Hub Settings) -- not shown here yet, see the Help &amp; FAQ for why.</p></div>
       <div><button class="btn sm" onclick="exportFeedbackCsv()">Export CSV</button></div></div>`;
   h+=`<div class="card"><h3>Summary</h3><div class="bd" style="display:flex;gap:24px;flex-wrap:wrap">
       <div><div class="mini">Total</div><div style="font-size:22px;font-weight:600">${rows.length}</div></div>

@@ -347,6 +347,7 @@ svg{display:block;max-width:100%}
 </script>
 <!-- ── End loading overlay ─────────────────────────────────────────────── -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="shared/moduleFooter.js"></script>
 <script src="shared/convertToMain.js"></script>
 <script src="shared/charts.js"></script>
 <div id="authGate" style="display:none"></div>
@@ -4408,7 +4409,7 @@ function renderSide(){
     <div class="dv"></div>
     <button class="btn sm" style="width:100%" onclick="exportCfg()">Export configuration</button>
   </div>`;
-  h+=`<div class="side-modver" style="padding:8px 14px 10px;margin-top:4px;border-top:1px solid var(--line,#DFE3EB);font-size:10px;color:var(--ink-3,#7C879E);letter-spacing:.02em">Strategy · v0.2708.14</div>`;
+  h+=moduleVersionFooterHtml('Strategy','v0.2708.14');
   return h;
 }
 function renderTnAcct(){

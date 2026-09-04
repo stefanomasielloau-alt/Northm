@@ -176,6 +176,7 @@ td.lb{font-weight:600;}
 </script>
 <!-- ── End loading overlay ─────────────────────────────────────────────── -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="shared/moduleFooter.js"></script>
 <script src="shared/convertToMain.js"></script>
 <div id="authGate" style="display:none"></div>
 <div class="topnav" id="topnav">
@@ -1172,7 +1173,7 @@ function renderSide(){
   let h='<h4>Assets</h4>';
   PAGES.forEach(p=>{ h+=`<a class="navi ${UI.page===p.id?'on':''}" href="#" onclick="go('${p.id}');return false">
     <span class="ix">${p.ix}</span><span>${p.label}</span></a>`; });
-  h+=`<div class="side-modver" style="padding:8px 14px 10px;margin-top:4px;border-top:1px solid var(--line,#DFE3EB);font-size:10px;color:var(--ink-3,#7C879E);letter-spacing:.02em">Assets · v0.2708.7</div>`;
+  h+=moduleVersionFooterHtml('Assets','v0.2708.7');
   return h;
 }
 function renderTnAcct(){

@@ -180,6 +180,7 @@ code{background:var(--canvas-2); padding:1px 5px; border-radius:4px; font-size:1
 </script>
 <!-- ── End loading overlay ─────────────────────────────────────────────── -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="shared/moduleFooter.js"></script>
 <script src="shared/convertToMain.js"></script>
 <div id="authGate" style="display:none"></div>
 <div class="topnav" id="topnav">
@@ -2641,7 +2642,7 @@ function renderSide(){
     h+=`<a class="navi ${UI.page===p.id?'on':''}" href="#" onclick="go('${p.id}');return false">
       <span class="ix">${p.ix}</span><span>${p.label}</span>${locked?'<span class="lk">read only</span>':''}</a>`;
   });
-  h+=`<div class="side-modver" style="padding:8px 14px 10px;margin-top:4px;border-top:1px solid var(--line,#DFE3EB);font-size:10px;color:var(--ink-3,#7C879E);letter-spacing:.02em">Configuration · v0.2708.11</div>`;
+  h+=moduleVersionFooterHtml('Configuration','v0.2708.11');
   return h;
 }
 function renderTnAcct(){

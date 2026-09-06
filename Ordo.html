@@ -2044,6 +2044,10 @@ function pageAdmin(){
 
   if(UI.adminTab==='geo'){
     h+=`<div class="note"><strong>Pod shares must total 100% within each region.</strong> The bar turns red if they don't, and publish is blocked.</div>`;
+    h+=`<div class="note"><strong>Regions and Pods are shared across every organization</strong> -- there is no
+      per-org copy of this geography list. A new or cloned organization sees the same shared Regions/Pods everyone
+      else does, not its own independent set. The org_units layer (optional) can restrict which regions a person
+      sees, but does not give an organization its own separate regions.</div>`;
     h+=`<div class="card"><h3>Regions <span class="sp"></span>
       <button class="btn sm pri" ${dis} onclick="addRegion()">Add region</button></h3>
       <div class="bd flush"><table ${ro}><thead><tr><th>Region</th><th>Code</th><th class="n">AE heads</th>
@@ -2051,7 +2055,7 @@ function pageAdmin(){
     CFG.regions.forEach(r=>{
       const t=podShareTotal(r.id),ok=Math.abs(t-1)<0.0001;
       h+=`<tr${r.unassigned?' style="opacity:.6"':''}>
-        <td class="lb">${esc(r.name)} ${r.unassigned?'<span class="tag">system</span>':''}</td>
+        <td class="lb">${r.unassigned?esc(r.name)+' <span class="tag">system</span>':`<input class="cel txt" style="width:140px" value="${esc(r.name)}" ${dis} onchange="setIn('regions','${r.id}','name',this.value)">`}</td>
         <td>${esc(r.code)}</td>
         <td class="n"><input class="cel w" value="${r.aeHeads}" ${dis} onchange="setIn('regions','${r.id}','aeHeads',this.value,'num')"></td>
         <td class="n"><input class="cel" value="${r.acvTarget}" ${dis} onchange="setIn('regions','${r.id}','acvTarget',this.value,'money')"></td>

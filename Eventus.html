@@ -669,7 +669,7 @@ function renderFilteredTnLinks(){
     const t = (m.desc||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
     return m.id===THIS_MODULE
       ? `<span class="tn-link on" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</span>`
-      : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
+      : `<a class="tn-link" href="${m.id}.html" target="tool_North" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
   }).join('') + (navVisible('Contact') ? '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">Ct</span>Contact</a>' : '');
 }
 async function checkModuleAccess(){
@@ -1419,7 +1419,7 @@ function renderTnModuleLinks(){
     const t = (m.desc||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
     return m.id===THIS_MODULE
       ? `<span class="tn-link on" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</span>`
-      : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
+      : `<a class="tn-link" href="${m.id}.html" target="tool_North" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
   }).join('') + '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">Ct</span>Contact</a>';
 }
 function tnSearchResults(q){
@@ -1439,7 +1439,7 @@ function tnSearch(q){
 window.tnSearch=tnSearch;
 function tnPick(i){
   const m=_tnResultList[i]; if(!m) return;
-  window.open(m.id+'.html','tool_'+m.id);
+  window.open(m.id+'.html','tool_North');
   document.getElementById('tnResults').innerHTML='';
   document.getElementById('tnSearchInput').value='';
 }
@@ -1467,7 +1467,7 @@ async function openContact(){
       toast('No live North session found -- sign in again, then try Contact.');
     }
   }catch(e){ toast('Could not start Contact sign-in: '+(e&&e.message?e.message:'unknown error')); }
-  window.open(url, 'tool_Contact');
+  window.open(url, 'tool_North');
 }
 window.openContact=openContact;
 function tnSearchKey(ev){

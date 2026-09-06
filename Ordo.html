@@ -1979,7 +1979,7 @@ function overlayPanel(){
 const ADMIN_TABS=[
   ['gates','Funnel gates'],['geo','Geography'],['streams','Streams'],['acts','Activities'],
   ['segs','Segments'],['camps','Campaigns'],['buckets','Cost buckets'],['time','Time'],['ver','Versions'],
-  ['users','Roles & users'],['feeds','Integrations'],['audit','Audit log']
+  ['users','Roles & users'],['feeds','Data feeds'],['audit','Audit log']
 ];
 function pageAdmin(){
   let h=`<div class="phead"><div><h1>Admin &amp; configuration</h1>
@@ -2113,7 +2113,7 @@ function pageAdmin(){
         <th class="n">Marketing contribution</th><th class="n">Wins @ target</th><th class="n">Mktg wins</th><th></th></tr></thead><tbody>`;
     const wt=CFG.drivers.winTarget;
     S().forEach(s=>{
-      h+=`<tr><td class="lb">${esc(s.name)}</td>
+      h+=`<tr><td class="lb"><input class="cel txt" style="width:150px" value="${esc(s.name)}" ${dis} onchange="setIn('streams','${s.id}','name',this.value)"></td>
         <td class="n"><input class="cel w" value="${(s.mix*100).toFixed(0)}" ${dis} onchange="setIn('streams','${s.id}','mix',this.value,'pct')"></td>
         <td><div class="bar" style="width:110px"><i style="width:${clamp(s.mix*100,0,100)}%"></i></div></td>
         <td class="n"><input class="cel w" value="${(s.mktContrib*100).toFixed(0)}" ${dis} onchange="setIn('streams','${s.id}','mktContrib',this.value,'pct')"></td>

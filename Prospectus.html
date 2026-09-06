@@ -435,7 +435,16 @@ async function saveToSupabase(){
       id:l.id,filter_id:l.filterId||null,company:l.company,domain:l.domain||'',
       contact_name:l.contactName||'',status:l.status||'New',notes:l.notes||''
     })),
-    upsertRows('audit_log', CFG.audit, a=>({ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null}))
+    upsertRows('audit_log', CFG.audit, a=>({ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null})),
+    /* item 46 -- no-ops safely (upsertRows already catches its own errors) until
+       2026-09-06-item46-prospectus-references-migration.sql has been run. */
+    upsertRows('prospectus_references', CFG.references, r=>({
+      id:r.id,name:r.name||'',doc_folder_url:r.docFolderUrl||'',notes:r.notes||'',
+      is_case_study:!!r.isCaseStudy,case_study_url:r.caseStudyUrl||'',case_study_date:r.caseStudyDate||null,
+      is_speaking:!!r.isSpeaking,speaking_event:r.speakingEvent||'',speaking_date:r.speakingDate||null,
+      is_webinar:!!r.isWebinar,webinar_url:r.webinarUrl||'',webinar_date:r.webinarDate||null,
+      is_testimonial:!!r.isTestimonial,testimonial_quote:r.testimonialQuote||'',testimonial_attribution:r.testimonialAttribution||''
+    }))
   ]);
 }
 
@@ -533,6 +542,25 @@ async function loadFromSupabase(){
      back to null here if neither the DB nor a manual import populated it. */
   CFG.trackingConfig = CFG.trackingConfig || null;
   CFG.meta = { normaSyncedAt:null, normaConfigVersion:null };
+
+  /* Reference tracking (2026-09-06, item 46) -- loaded in its own try/catch, outside the
+     Promise.all above, the same fail-soft pattern used for org_units elsewhere in North:
+     an org that hasn't run 2026-09-06-item46-prospectus-references-migration.sql yet must
+     keep the rest of Prospectus working exactly as before, not throw on load. */
+  CFG.references = [];
+  try{
+    const refR = await sb.from('prospectus_references')
+      .select('id,name,doc_folder_url,notes,is_case_study,case_study_url,case_study_date,is_speaking,speaking_event,speaking_date,is_webinar,webinar_url,webinar_date,is_testimonial,testimonial_quote,testimonial_attribution');
+    if(!refR.error){
+      CFG.references = (refR.data||[]).map(r=>({
+        id:r.id,name:r.name||'',docFolderUrl:r.doc_folder_url||'',notes:r.notes||'',
+        isCaseStudy:!!r.is_case_study,caseStudyUrl:r.case_study_url||'',caseStudyDate:r.case_study_date||'',
+        isSpeaking:!!r.is_speaking,speakingEvent:r.speaking_event||'',speakingDate:r.speaking_date||'',
+        isWebinar:!!r.is_webinar,webinarUrl:r.webinar_url||'',webinarDate:r.webinar_date||'',
+        isTestimonial:!!r.is_testimonial,testimonialQuote:r.testimonial_quote||'',testimonialAttribution:r.testimonial_attribution||''
+      }));
+    }
+  }catch(e){ /* table not created yet -- fine, this is additive and opt-in until the migration runs. */ }
 }
 
 /* ---------- Viewer gate (narrow, read-only) ----------
@@ -1264,6 +1292,80 @@ function pageSync(){
   return h;
 }
 
+/* Reference tracking (2026-09-06, item 46) -- who's given us a case study, spoken at an
+   event, appeared in a webinar, or given a testimonial, plus where the supporting material
+   lives. Standalone list, not tied to a specific Target/Partner record yet -- can be linked
+   later if that turns out to be wanted. Needs 2026-09-06-item46-prospectus-references-
+   migration.sql run before it saves anywhere but locally; see loadFromSupabase() above for
+   the matching fail-soft load. */
+function pageReferences(){
+  const dis=isViewer()?'disabled':'';
+  let h=`<div class="phead"><div><h1>References</h1>
+    <p>Customers and contacts who can support a pitch -- case studies, speaking slots, webinars, testimonials --
+      with a link to the supporting material and enough detail to actually use them.</p></div></div>`;
+  h+=`<div class="card"><h3>References <span class="sp"></span><span class="pill n">${CFG.references.length}</span>
+      <button class="btn sm pri" ${dis} onclick="addReference()">Add reference</button></h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>Name</th><th>Doc folder</th><th>Case study</th><th>Speaking</th><th>Webinar</th><th>Testimonial</th><th>Notes</th><th></th>
+    </tr></thead><tbody>
+    ${!CFG.references.length?`<tr><td colspan="8" class="empty">No references tracked yet.</td></tr>`:CFG.references.map(r=>`<tr>
+      <td><input class="cel txt" style="width:150px" ${dis} value="${esc(r.name)}" onchange="setIn('references','${r.id}','name',this.value)"></td>
+      <td><input class="cel txt" style="width:150px" placeholder="link to folder" ${dis} value="${esc(r.docFolderUrl)}" onchange="setIn('references','${r.id}','docFolderUrl',this.value)"></td>
+      <td><button class="btn sm" ${dis} onclick="toggleRefFlag('${r.id}','isCaseStudy')"><span class="pill ${r.isCaseStudy?'ok':'n'}">${r.isCaseStudy?'Yes':'No'}</span></button></td>
+      <td><button class="btn sm" ${dis} onclick="toggleRefFlag('${r.id}','isSpeaking')"><span class="pill ${r.isSpeaking?'ok':'n'}">${r.isSpeaking?'Yes':'No'}</span></button></td>
+      <td><button class="btn sm" ${dis} onclick="toggleRefFlag('${r.id}','isWebinar')"><span class="pill ${r.isWebinar?'ok':'n'}">${r.isWebinar?'Yes':'No'}</span></button></td>
+      <td><button class="btn sm" ${dis} onclick="toggleRefFlag('${r.id}','isTestimonial')"><span class="pill ${r.isTestimonial?'ok':'n'}">${r.isTestimonial?'Yes':'No'}</span></button></td>
+      <td><input class="cel txt" style="width:150px" ${dis} value="${esc(r.notes)}" onchange="setIn('references','${r.id}','notes',this.value)"></td>
+      <td class="n"><button class="btn sm dgr" ${dis} onclick="removeReference('${r.id}')">Remove</button></td>
+    </tr>`).join('')}
+    </tbody></table></div></div></div>`;
+
+  const active = CFG.references.filter(r=>r.isCaseStudy||r.isSpeaking||r.isWebinar||r.isTestimonial);
+  if(active.length){
+    h+=`<div class="card"><h3>Details <span class="sp"></span><span class="mini">only shown for a reference with at least one category checked</span></h3><div class="bd">`;
+    active.forEach(r=>{
+      h+=`<div style="padding:10px 0;border-top:1px solid var(--line)"><b>${esc(r.name)||'(unnamed)'}</b>`;
+      if(r.isCaseStudy) h+=`<div class="row" style="margin-top:6px"><span class="mini" style="width:90px">Case study</span>
+        <input class="cel txt" style="width:220px" placeholder="URL" ${dis} value="${esc(r.caseStudyUrl)}" onchange="setIn('references','${r.id}','caseStudyUrl',this.value)">
+        <input class="cel" style="width:130px" type="date" ${dis} value="${esc(r.caseStudyDate)}" onchange="setIn('references','${r.id}','caseStudyDate',this.value)"></div>`;
+      if(r.isSpeaking) h+=`<div class="row" style="margin-top:6px"><span class="mini" style="width:90px">Speaking</span>
+        <input class="cel txt" style="width:220px" placeholder="Event name" ${dis} value="${esc(r.speakingEvent)}" onchange="setIn('references','${r.id}','speakingEvent',this.value)">
+        <input class="cel" style="width:130px" type="date" ${dis} value="${esc(r.speakingDate)}" onchange="setIn('references','${r.id}','speakingDate',this.value)"></div>`;
+      if(r.isWebinar) h+=`<div class="row" style="margin-top:6px"><span class="mini" style="width:90px">Webinar</span>
+        <input class="cel txt" style="width:220px" placeholder="URL" ${dis} value="${esc(r.webinarUrl)}" onchange="setIn('references','${r.id}','webinarUrl',this.value)">
+        <input class="cel" style="width:130px" type="date" ${dis} value="${esc(r.webinarDate)}" onchange="setIn('references','${r.id}','webinarDate',this.value)"></div>`;
+      if(r.isTestimonial) h+=`<div class="row" style="margin-top:6px"><span class="mini" style="width:90px">Testimonial</span>
+        <input class="cel txt" style="width:260px" placeholder="Quote" ${dis} value="${esc(r.testimonialQuote)}" onchange="setIn('references','${r.id}','testimonialQuote',this.value)">
+        <input class="cel txt" style="width:150px" placeholder="Attribution (name, title)" ${dis} value="${esc(r.testimonialAttribution)}" onchange="setIn('references','${r.id}','testimonialAttribution',this.value)"></div>`;
+      h+=`</div>`;
+    });
+    h+=`</div></div>`;
+  }
+  return h;
+}
+function addReference(){
+  CFG.references.push({id:uid('ref'),name:'New reference',docFolderUrl:'',notes:'',
+    isCaseStudy:false,caseStudyUrl:'',caseStudyDate:'',isSpeaking:false,speakingEvent:'',speakingDate:'',
+    isWebinar:false,webinarUrl:'',webinarDate:'',isTestimonial:false,testimonialQuote:'',testimonialAttribution:''});
+  logAudit('add reference','New reference'); render(); toast('Reference added -- edit its fields below.');
+}
+window.addReference=addReference;
+function removeReference(id){
+  if(!confirm('Remove this reference?'))return;
+  CFG.references=CFG.references.filter(r=>r.id!==id);
+  logAudit('remove reference',id); render();
+  deleteRow('prospectus_references',id);
+}
+window.removeReference=removeReference;
+function toggleRefFlag(id,flag){
+  const r=byId(CFG.references,id); if(!r)return;
+  r[flag]=!r[flag];
+  logAudit('edit','references/'+(r.name||id)+'.'+flag+': '+!r[flag]+' → '+r[flag]);
+  render();
+}
+window.toggleRefFlag=toggleRefFlag;
+
+
 const PAGES=[
   {id:'home',         ix:'0', label:'Home',       fn:pageHome},
   {id:'filters',      ix:'1', label:'Filters',    fn:pageFilters},
@@ -1271,7 +1373,8 @@ const PAGES=[
   {id:'reports',      ix:'3', label:'Reports',    fn:pageReports},
   {id:'reportDetail', ix:'3', label:'Reports',    fn:pageReportDetail, hidden:true},
   {id:'compare',      ix:'4', label:'Compare',    fn:pageCompare},
-  {id:'sync',         ix:'5', label:'Shared config', fn:pageSync}
+  {id:'references',   ix:'5', label:'References', fn:pageReferences},
+  {id:'sync',         ix:'6', label:'Shared config', fn:pageSync}
 ];
 function renderSide(){
   let h='<h4>Targets</h4>';

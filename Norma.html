@@ -1322,7 +1322,21 @@ async function setRoleOrg(roleId, newOrgId){
     render();
     return;
   }
-  if(!confirm('Move role "'+r.name+'" to "'+destName+'"? No one currently holds this role, so nothing else changes.')){ render(); return; }
+  /* 2026-09-06 (item 39): even the "safe" no-users path was a plain confirm() sitting inline
+     in a dense table of otherwise-inert-looking selects -- exactly the dialog that gets
+     clicked through without being read, especially across several rows in a row. This is
+     the same class of failure that caused the 2026-09-03 incident, and it visibly recurred.
+     Nothing else technically breaks by moving an unused role, but the cost of the confusion
+     itself is real, so every move now requires TYPING the destination org's exact name,
+     not just clicking OK -- makes an accidental multi-row click-through structurally
+     impossible instead of just discouraged. */
+  const typed = prompt('Move role "'+r.name+'" to a different organization?\n\nNo one currently holds this role, so nothing else changes -- but to prevent moving the wrong role by mistake, type the destination organization\'s exact name to confirm:\n\n'+destName);
+  if(typed === null){ render(); return; }
+  if(typed.trim().toLowerCase() !== destName.trim().toLowerCase()){
+    toast('Typed name didn\'t match "'+destName+'" -- role not moved.');
+    render();
+    return;
+  }
   const old = r.orgId; r.orgId = newOrgId; render();
   const { error } = await sb.from('roles').update({ org_id: newOrgId }).eq('id', roleId);
   if(error){ r.orgId = old; render(); toast('Could not move role: '+error.message); return; }

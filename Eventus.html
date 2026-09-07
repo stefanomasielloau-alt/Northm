@@ -271,6 +271,20 @@ window.recomputeEventBudgetFx=recomputeEventBudgetFx;
    editable input, CSV export, and DB persistence are deliberately left reading e.budget
    directly, same reasoning as Ordo/Cursus's untouched sites. */
 function eventBudgetMain(e){ return (e.budgetFx && e.budgetFx.converted!=null) ? e.budgetFx.converted : (e.budget||0); }
+/* item 45 (2026-09-07): cost-overrun flagging. Per Stef's confirmed answer, "overrun"
+   fires at BOTH levels -- total event budget exceeded, and any individual cost line
+   exceeding its own planned cost -- shown separately so a planner can tell "this whole
+   event is over" from "this one supplier line ran over" at a glance. Zero-guarded: an
+   event/line with no budget/planned figure entered yet is never flagged, since that's
+   "not budgeted" rather than "over budget". */
+function eventBudgetOverrun(e){
+  const b = eventBudgetMain(e);
+  return b > 0 && costsTotal(e.id,'actualCost') > b;
+}
+function costLineOverrun(c){
+  const p = c.plannedCost||0;
+  return p > 0 && (c.actualCost||0) > p;
+}
 
 const UI = { page:'home', helpOpen:false, eventId:null, rollupLevel:'programme', rollupProgrammeId:null, rollupCampaignId:null,
   eventsFilter:'', eventsSortBy:null, eventsSortDir:'asc', eventsUpcomingOnly:false };
@@ -1036,12 +1050,14 @@ function pageEvents(){
   const totalBudget=sum(CFG.events.map(e=>eventBudgetMain(e)));
   const totalActual=sum(CFG.events.map(e=>costsTotal(e.id,'actualCost')||e.budget*0));
   const list=filteredSortedEvents();
+  const overrunCount=CFG.events.filter(eventBudgetOverrun).length;
   let h=`<div class="phead"><div><h1>Events</h1>
     <p>High-level event list. Open one to manage its cost lines, checklist, speakers and registration.</p></div></div>`;
   h+=`<div class="kpis">
     <div class="kpi hl"><div class="k">Events</div><div class="kpi-v">${CFG.events.length}</div><div class="sub">tracked here</div></div>
     <div class="kpi"><div class="k">Total budget</div><div class="kpi-v">${F.mk(totalBudget)}</div></div>
     <div class="kpi"><div class="k">Total actual spend</div><div class="kpi-v">${F.mk(sum(CFG.events.map(e=>costsTotal(e.id,'actualCost'))))}</div></div>
+    <div class="kpi"><div class="k">Over budget</div><div class="kpi-v" style="color:${overrunCount?'var(--bad)':'inherit'}">${overrunCount}</div><div class="sub">of ${CFG.events.length} events</div></div>
   </div>`;
   h+=`<div class="card"><h3>Events <span class="sp"></span>
       <input class="in" type="text" style="width:220px" placeholder="Search name, type, status, venue, country…" value="${esc(UI.eventsFilter||'')}" oninput="setEventsFilter(this.value)">
@@ -1065,7 +1081,7 @@ function pageEvents(){
         <td class="n calc">${F.n(eventPax(e))}</td>
         <td class="n calc">${F.mk(eventBudgetMain(e))}</td>
         <td class="n calc">${F.mk(committed)}</td>
-        <td class="n calc">${F.mk(actual)}</td>
+        <td class="n calc">${F.mk(actual)}${eventBudgetOverrun(e)?' <span class="pill bad" title="Actual spend exceeds this event\'s total budget">Over</span>':''}</td>
         <td><button class="btn sm pri" onclick="go('event','${e.id}')">Open →</button> <button class="btn sm" onclick="cloneEvent('${e.id}')" title="Deep-clones venues, cost lines, checklist and speakers; dates, registrations and actuals reset">Clone</button></td></tr>`;}).join('')}
     </tbody></table></div></div></div>`;
   return h;
@@ -1275,7 +1291,7 @@ function pageEvent(){
     <div class="kpi"><div class="k">Total PAX</div><div class="kpi-v">${totalPax}</div><div class="sub">${venues.length} venue${venues.length===1?'':'s'}</div></div>
     <div class="kpi"><div class="k">Planned</div><div class="kpi-v">${F.mk(planned)}</div><div class="sub">${costs.length} cost line${costs.length===1?'':'s'}</div></div>
     <div class="kpi hl"><div class="k">Committed</div><div class="kpi-v">${F.mk(committed)}</div><div class="sub">${F.p(eventBudgetMain(e)?committed/eventBudgetMain(e):0)} of budget</div></div>
-    <div class="kpi"><div class="k">Actual</div><div class="kpi-v">${F.mk(actual)}</div>
+    <div class="kpi"><div class="k">Actual${eventBudgetOverrun(e)?' <span class="pill bad">Over budget</span>':''}</div><div class="kpi-v">${F.mk(actual)}</div>
       <div class="sub" style="color:${actual>eventBudgetMain(e)?'var(--bad)':'var(--ink-3)'}">${eventBudgetMain(e)?F.p((actual-eventBudgetMain(e))/eventBudgetMain(e))+' vs budget':'—'}</div></div>
     <div class="kpi"><div class="k">Checklist</div><div class="kpi-v">${doneCount}/${checklist.length}</div><div class="sub">tasks done</div></div>
   </div>`;
@@ -1301,14 +1317,14 @@ function pageEvent(){
       <button class="btn sm pri" onclick="addCostLine('${e.id}')">Add cost line</button></h3>
     <div class="bd flush"><div class="scroll cap"><table><thead><tr>
       <th>Category</th><th>Supplier</th><th>Description</th><th class="n">Planned</th><th class="n">Committed</th><th class="n">Actual</th><th></th></tr></thead><tbody>
-    ${!costs.length?`<tr><td colspan="7" class="empty">No cost lines yet.</td></tr>`:costs.map(c=>`<tr>
+    ${!costs.length?`<tr><td colspan="7" class="empty">No cost lines yet.</td></tr>`:costs.map(c=>`<tr${costLineOverrun(c)?' style="background:var(--bad-bg,#fdecea)"':''}>
       <td><select class="cel txt" style="width:150px" onchange="setIn('costLines','${c.id}','category',this.value)">
         ${COST_CATEGORIES.map(cat=>`<option ${cat===c.category?'selected':''}>${cat}</option>`).join('')}</select></td>
       <td><input class="cel txt" style="width:150px" value="${esc(c.supplier)}" onchange="setIn('costLines','${c.id}','supplier',this.value)"></td>
       <td><input class="cel txt" style="width:200px" value="${esc(c.description)}" onchange="setIn('costLines','${c.id}','description',this.value)"></td>
       <td class="n"><input class="cel w" value="${c.plannedCost||0}" onchange="setIn('costLines','${c.id}','plannedCost',this.value,'money')"></td>
       <td class="n"><input class="cel w" value="${c.committedCost||0}" onchange="setIn('costLines','${c.id}','committedCost',this.value,'money')"></td>
-      <td class="n"><input class="cel w" value="${c.actualCost||0}" onchange="setIn('costLines','${c.id}','actualCost',this.value,'money')"></td>
+      <td class="n">${costLineOverrun(c)?'<span class="pill bad" title="Actual exceeds planned for this line">Over</span> ':''}<input class="cel w" value="${c.actualCost||0}" onchange="setIn('costLines','${c.id}','actualCost',this.value,'money')"></td>
       <td class="n"><button class="btn sm dgr" onclick="removeCostLine('${c.id}')">Remove</button></td></tr>`).join('')}
     <tr class="tot"><td colspan="3">Total</td><td class="n">${F.mk(planned)}</td><td class="n">${F.mk(committed)}</td><td class="n">${F.mk(actual)}</td><td></td></tr>
     </tbody></table></div></div></div>`;

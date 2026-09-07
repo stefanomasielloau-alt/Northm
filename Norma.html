@@ -320,6 +320,7 @@ function toast(msg){
   l.appendChild(d); setTimeout(()=>d.remove(),4200);
 }
 function go(page){
+  if(page==='licensing' && !CFG.isFullSuperAdmin){ toast('Licensing is limited to the full Super Admin.'); page='home'; }
   UI.page=page;
   // Item 26 phase 1: these two pages mirror live Hub data, not CFG -- fetch on first visit
   // rather than at boot, since most sessions never open them.
@@ -591,6 +592,37 @@ async function loadFromSupabase(){
       CFG.platformAdminGrants = (grantsR.data||[]).map(g=>({id:g.id,profileId:g.profile_id,grantedBy:g.granted_by,grantedAt:g.granted_at,note:g.note||''}));
     }
   }catch(e){ /* table not created yet -- fine, additive and opt-in until the migration runs. */ }
+
+  /* item 36 (2026-09-07): Licensing MVP -- plans + proforma invoices, loaded fail-soft.
+     Full Super Admin only in practice (RLS restricts rows to is_platform_admin()), but the
+     load itself is harmless to attempt for anyone -- it'll just come back empty. */
+  CFG.orgPlans = [];
+  CFG.orgPlanInvoices = [];
+  try{
+    const plansR = await sb.from('org_plans').select('*');
+    if(!plansR.error){
+      CFG.orgPlans = (plansR.data||[]).map(p=>({
+        id:p.id,orgId:p.org_id,planName:p.plan_name||'',status:p.status||'draft',
+        startDate:p.start_date||'',endDate:p.end_date||'',currency:p.currency||'AUD',
+        basePrice:p.base_price||0,rolePricing:p.role_pricing||{},
+        hostingGbIncluded:p.hosting_gb_included||0,hostingGbExtraPrice:p.hosting_gb_extra_price||0,
+        connectionPricing:p.connection_pricing||{},
+        benchmarkReportingAddon:!!p.benchmark_reporting_addon,benchmarkReportingPrice:p.benchmark_reporting_price||0,
+        benchmarkExclusionAddon:!!p.benchmark_exclusion_addon,benchmarkExclusionPrice:p.benchmark_exclusion_price||0,
+        notes:p.notes||''
+      }));
+    }
+  }catch(e){ /* table not created yet */ }
+  try{
+    const invR = await sb.from('org_plan_invoices').select('*').order('issue_date',{ascending:false});
+    if(!invR.error){
+      CFG.orgPlanInvoices = (invR.data||[]).map(i=>({
+        id:i.id,orgId:i.org_id,planId:i.plan_id,invoiceNumber:i.invoice_number||'',issueDate:i.issue_date||'',
+        periodStart:i.period_start||'',periodEnd:i.period_end||'',lineItems:i.line_items||[],
+        total:i.total||0,currency:i.currency||'AUD',status:i.status||'draft'
+      }));
+    }
+  }catch(e){ /* table not created yet */ }
 }
 /* Roles & users page (2026-08-27): org filter (Super Admin only -- everyone else already
    only sees their own org) + click-header-to-sort, so "look at all of one company's Roles,
@@ -3081,6 +3113,232 @@ function pageHubFeedback(){
   return h;
 }
 
+/* item 36 (2026-09-07) -- Licensing MVP. Full Super Admin only (isFullSuperAdmin) --
+   nav-hidden and go()-blocked for everyone else, this is defense in depth. MVP scope:
+   one plan record per org (commercial terms only -- module entitlements reuse the
+   existing access_* toggles, not duplicated here) + manual proforma invoice generation.
+   No live billing/Stripe wiring -- see the migration file's header for why. */
+function pageLicensing(){
+  if(!CFG.isFullSuperAdmin){
+    return '<div class="card" style="max-width:420px;margin-top:40px;padding:24px;text-align:center"><h2 style="margin:0 0 8px">Access restricted</h2><p class="sub">Licensing is limited to the full Super Admin.</p></div>';
+  }
+  const orgs = CFG.allOrganizations||[];
+  const selId = UI.licensingOrgId || (orgs[0] && orgs[0].id) || '';
+  const plan = CFG.orgPlans.find(p=>p.orgId===selId);
+  const invoices = CFG.orgPlanInvoices.filter(i=>i.orgId===selId);
+  const roleNames = Array.from(new Set(CFG.roles.filter(r=>r.orgId===selId).map(r=>r.name)));
+
+  let h = `<div class="phead"><div><h1>Licensing</h1>
+    <p>Plan terms, per-role pricing, hosting/benchmark add-ons, and proforma invoicing -- one organization at a time.
+      Needs 2026-09-07-item36-licensing-mvp-migration.sql run before anything here saves to the database.</p></div></div>`;
+
+  h += `<div class="card"><h3>Organization <span class="sp"></span></h3><div class="bd">
+    <select class="cel txt" style="width:260px" onchange="setLicensingOrg(this.value)">
+      ${orgs.map(o=>`<option value="${o.id}" ${o.id===selId?'selected':''}>${esc(o.name)}</option>`).join('')}
+    </select></div></div>`;
+
+  if(!plan){
+    h += `<div class="card"><h3>Plan <span class="sp"></span></h3><div class="bd">
+      <p class="mini" style="margin:0 0 10px">No plan set up yet for this organization.</p>
+      <button class="btn sm pri" onclick="createOrgPlan('${selId}')">Create plan</button>
+    </div></div>`;
+    return h;
+  }
+
+  h += `<div class="card"><h3>Plan <span class="sp"></span><span class="pill ${plan.status==='active'?'ok':'n'}">${esc(plan.status)}</span></h3>
+    <div class="bd">
+      <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <input class="cel txt" style="width:180px" placeholder="Plan name" value="${esc(plan.planName)}" onchange="setPlanField('${plan.id}','planName',this.value)">
+        <select class="cel" style="width:110px" onchange="setPlanField('${plan.id}','status',this.value)">
+          ${['draft','active','expired','cancelled'].map(s=>`<option ${s===plan.status?'selected':''}>${s}</option>`).join('')}</select>
+        <input class="cel" type="date" style="width:140px" value="${esc(plan.startDate)}" onchange="setPlanField('${plan.id}','startDate',this.value)">
+        <span class="mini">to</span>
+        <input class="cel" type="date" style="width:140px" value="${esc(plan.endDate)}" onchange="setPlanField('${plan.id}','endDate',this.value)">
+        <input class="cel txt" style="width:60px" value="${esc(plan.currency)}" onchange="setPlanField('${plan.id}','currency',this.value)">
+      </div>
+      <div class="row" style="gap:8px;align-items:center;margin-bottom:8px">
+        <span class="mini" style="width:110px">Base price</span>
+        <input class="cel w" value="${plan.basePrice}" onchange="setPlanField('${plan.id}','basePrice',this.value,'num')">
+      </div>
+      <h4 style="margin:12px 0 4px">Per-role pricing</h4>
+      <p class="mini" style="margin:0 0 8px">How many of each role tier are included in the base price, and $/extra user beyond that.</p>
+      <table><thead><tr><th>Role</th><th class="n">Included</th><th class="n">$ / extra user</th><th class="n">Current users</th></tr></thead><tbody>
+      ${roleNames.map(rn=>{
+        const rp = plan.rolePricing[rn]||{included:0,extra_price:0};
+        const current = CFG.users.filter(u=>u.orgId===selId && (CFG.roles.find(r=>r.id===u.roleId)||{}).name===rn).length;
+        return `<tr><td class="lb">${esc(rn)}</td>
+          <td class="n"><input class="cel w" value="${rp.included||0}" onchange="setPlanRolePricing('${plan.id}','${rn}','included',this.value)"></td>
+          <td class="n"><input class="cel w" value="${rp.extra_price||0}" onchange="setPlanRolePricing('${plan.id}','${rn}','extra_price',this.value)"></td>
+          <td class="n calc">${current}</td></tr>`;
+      }).join('')}
+      </tbody></table>
+      <h4 style="margin:12px 0 4px">Hosting</h4>
+      <div class="row" style="gap:8px;align-items:center;margin-bottom:8px">
+        <span class="mini" style="width:110px">GB included</span>
+        <input class="cel w" value="${plan.hostingGbIncluded}" onchange="setPlanField('${plan.id}','hostingGbIncluded',this.value,'num')">
+        <span class="mini" style="width:110px">$ / extra GB</span>
+        <input class="cel w" value="${plan.hostingGbExtraPrice}" onchange="setPlanField('${plan.id}','hostingGbExtraPrice',this.value,'num')">
+      </div>
+      <h4 style="margin:12px 0 4px">Benchmark add-ons</h4>
+      <div class="row" style="gap:16px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+        <label class="mini"><input type="checkbox" ${plan.benchmarkReportingAddon?'checked':''} onchange="setPlanField('${plan.id}','benchmarkReportingAddon',this.checked,'bool')"> Benchmark reporting</label>
+        <input class="cel w" value="${plan.benchmarkReportingPrice}" onchange="setPlanField('${plan.id}','benchmarkReportingPrice',this.value,'num')">
+        <label class="mini"><input type="checkbox" ${plan.benchmarkExclusionAddon?'checked':''} onchange="setPlanField('${plan.id}','benchmarkExclusionAddon',this.checked,'bool')"> Exclude our data from benchmark</label>
+        <input class="cel w" value="${plan.benchmarkExclusionPrice}" onchange="setPlanField('${plan.id}','benchmarkExclusionPrice',this.value,'num')">
+      </div>
+      <p class="mini">Benchmark reports themselves never include an org's name or identifiable data, regardless of this setting -- this only controls whether this org's (anonymized) data is included in the pooled benchmark at all.</p>
+      <textarea class="cel txt" style="width:100%;min-height:50px;margin-top:8px" placeholder="Notes" onchange="setPlanField('${plan.id}','notes',this.value)">${esc(plan.notes)}</textarea>
+    </div></div>`;
+
+  h += `<div class="card"><h3>Proforma invoices <span class="sp"></span>
+      <button class="btn sm pri" onclick="openGenerateInvoice('${plan.id}')">Generate invoice</button></h3>
+    <div class="bd flush">${!invoices.length?'<div class="empty">No invoices yet.</div>':`<table><thead><tr>
+      <th>Number</th><th>Issued</th><th>Period</th><th class="n">Total</th><th>Status</th><th></th></tr></thead><tbody>
+      ${invoices.map(inv=>`<tr><td class="lb">${esc(inv.invoiceNumber)}</td><td class="mini">${esc(inv.issueDate)}</td>
+        <td class="mini">${esc(inv.periodStart)} — ${esc(inv.periodEnd)}</td>
+        <td class="n calc">${esc(inv.currency)} ${inv.total.toFixed(2)}</td>
+        <td><select class="cel" onchange="setInvoiceStatus('${inv.id}',this.value)">${['draft','sent','paid','void'].map(s=>`<option ${s===inv.status?'selected':''}>${s}</option>`).join('')}</select></td>
+        <td class="n"><button class="btn sm" onclick="viewInvoiceText('${inv.id}')">View</button></td></tr>`).join('')}
+      </tbody></table>`}</div></div>`;
+
+  if(UI.invoiceDraft && UI.invoiceDraft.planId===plan.id){
+    h += invoiceDraftCardHtml(plan, selId);
+  }
+  return h;
+}
+function setLicensingOrg(orgId){ UI.licensingOrgId=orgId; UI.invoiceDraft=null; render(); }
+window.setLicensingOrg = setLicensingOrg;
+async function createOrgPlan(orgId){
+  if(!CFG.isFullSuperAdmin) return;
+  const { data, error } = await sb.from('org_plans').insert({ org_id: orgId, plan_name: 'New plan' }).select().single();
+  if(error){ toast('Could not create plan -- has the migration been run? ('+error.message+')'); return; }
+  CFG.orgPlans.push({id:data.id,orgId:data.org_id,planName:data.plan_name,status:data.status,startDate:data.start_date||'',endDate:data.end_date||'',currency:data.currency,basePrice:data.base_price,rolePricing:data.role_pricing||{},hostingGbIncluded:data.hosting_gb_included,hostingGbExtraPrice:data.hosting_gb_extra_price,connectionPricing:data.connection_pricing||{},benchmarkReportingAddon:!!data.benchmark_reporting_addon,benchmarkReportingPrice:data.benchmark_reporting_price,benchmarkExclusionAddon:!!data.benchmark_exclusion_addon,benchmarkExclusionPrice:data.benchmark_exclusion_price,notes:data.notes||''});
+  logAudit('create org plan', orgName(orgId));
+  render();
+}
+window.createOrgPlan = createOrgPlan;
+function setPlanField(planId,key,val,type){
+  const p = CFG.orgPlans.find(x=>x.id===planId); if(!p) return;
+  let v=val;
+  if(type==='num'){ v=parseFloat(val); if(isNaN(v))v=0; }
+  if(type==='bool'){ v=!!val; }
+  p[key]=v;
+  logAudit('edit plan', orgName(p.orgId)+'.'+key);
+  render();
+  scheduleLicensingSave();
+}
+window.setPlanField = setPlanField;
+function setPlanRolePricing(planId,roleName,key,val){
+  const p = CFG.orgPlans.find(x=>x.id===planId); if(!p) return;
+  const v = parseFloat(val); if(isNaN(v)) return;
+  p.rolePricing = Object.assign({}, p.rolePricing);
+  p.rolePricing[roleName] = Object.assign({included:0,extra_price:0}, p.rolePricing[roleName], {[key]:v});
+  logAudit('edit plan role pricing', orgName(p.orgId)+'.'+roleName+'.'+key);
+  render();
+  scheduleLicensingSave();
+}
+window.setPlanRolePricing = setPlanRolePricing;
+let _licensingSaveTimer=null;
+function scheduleLicensingSave(){
+  clearTimeout(_licensingSaveTimer);
+  _licensingSaveTimer=setTimeout(async ()=>{
+    const p = CFG.orgPlans.find(x=>x.id===(UI.licensingOrgId?CFG.orgPlans.find(y=>y.orgId===UI.licensingOrgId)||{}:{}).id) || CFG.orgPlans.find(x=>x.orgId===UI.licensingOrgId);
+    if(!p) return;
+    const { error } = await sb.from('org_plans').update({
+      plan_name:p.planName,status:p.status,start_date:p.startDate||null,end_date:p.endDate||null,currency:p.currency,
+      base_price:p.basePrice,role_pricing:p.rolePricing,hosting_gb_included:p.hostingGbIncluded,
+      hosting_gb_extra_price:p.hostingGbExtraPrice,connection_pricing:p.connectionPricing,
+      benchmark_reporting_addon:p.benchmarkReportingAddon,benchmark_reporting_price:p.benchmarkReportingPrice,
+      benchmark_exclusion_addon:p.benchmarkExclusionAddon,benchmark_exclusion_price:p.benchmarkExclusionPrice,
+      notes:p.notes,updated_at:new Date().toISOString()
+    }).eq('id', p.id);
+    if(error) toast('Could not save plan: '+error.message);
+  }, 900);
+}
+function invoiceDraftCardHtml(plan, orgId){
+  const d = UI.invoiceDraft;
+  return `<div class="card"><h3>New invoice <span class="sp"></span></h3><div class="bd">
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <input class="cel txt" style="width:150px" placeholder="Invoice number" value="${esc(d.invoiceNumber)}" onchange="setInvoiceDraft('invoiceNumber',this.value)">
+      <input class="cel" type="date" style="width:140px" value="${esc(d.periodStart)}" onchange="setInvoiceDraft('periodStart',this.value)">
+      <span class="mini">to</span>
+      <input class="cel" type="date" style="width:140px" value="${esc(d.periodEnd)}" onchange="setInvoiceDraft('periodEnd',this.value)">
+      <span class="mini" style="margin-left:8px">Extra hosting GB this period</span>
+      <input class="cel w" value="${d.extraGb}" onchange="setInvoiceDraft('extraGb',this.value)">
+    </div>
+    <table><thead><tr><th>Description</th><th class="n">Amount</th></tr></thead><tbody>
+      ${computeInvoiceLineItems(plan, orgId, d).map(li=>`<tr><td>${esc(li.description)}</td><td class="n calc">${esc(plan.currency)} ${li.amount.toFixed(2)}</td></tr>`).join('')}
+      <tr class="tot"><td>Total</td><td class="n">${esc(plan.currency)} ${computeInvoiceLineItems(plan, orgId, d).reduce((s,li)=>s+li.amount,0).toFixed(2)}</td></tr>
+    </tbody></table>
+    <div class="row" style="gap:8px;margin-top:10px">
+      <button class="btn sm pri" onclick="saveGeneratedInvoice('${plan.id}','${orgId}')">Save as draft invoice</button>
+      <button class="btn sm" onclick="UI.invoiceDraft=null;render()">Cancel</button>
+    </div></div></div>`;
+}
+function computeInvoiceLineItems(plan, orgId, d){
+  const items = [{description:'Base plan ('+plan.planName+')', amount:plan.basePrice}];
+  Object.keys(plan.rolePricing||{}).forEach(rn=>{
+    const rp = plan.rolePricing[rn];
+    const current = CFG.users.filter(u=>u.orgId===orgId && (CFG.roles.find(r=>r.id===u.roleId)||{}).name===rn).length;
+    const extra = Math.max(0, current - (rp.included||0));
+    if(extra>0 && rp.extra_price) items.push({description: extra+' extra '+rn+' seat'+(extra===1?'':'s'), amount: extra*rp.extra_price});
+  });
+  const extraGb = parseFloat(d.extraGb)||0;
+  if(extraGb>0 && plan.hostingGbExtraPrice) items.push({description: extraGb+' GB extra hosting', amount: extraGb*plan.hostingGbExtraPrice});
+  if(plan.benchmarkReportingAddon && plan.benchmarkReportingPrice) items.push({description:'Benchmark reporting', amount:plan.benchmarkReportingPrice});
+  if(plan.benchmarkExclusionAddon && plan.benchmarkExclusionPrice) items.push({description:'Benchmark data exclusion', amount:plan.benchmarkExclusionPrice});
+  return items;
+}
+function openGenerateInvoice(planId){
+  const p = CFG.orgPlans.find(x=>x.id===planId); if(!p) return;
+  const today = new Date().toISOString().slice(0,10);
+  UI.invoiceDraft = {planId, invoiceNumber:'INV-'+Date.now(), periodStart:p.startDate||today, periodEnd:p.endDate||today, extraGb:0};
+  render();
+}
+window.openGenerateInvoice = openGenerateInvoice;
+function setInvoiceDraft(key,val){ if(!UI.invoiceDraft)return; UI.invoiceDraft[key]=val; render(); }
+window.setInvoiceDraft = setInvoiceDraft;
+async function saveGeneratedInvoice(planId, orgId){
+  const p = CFG.orgPlans.find(x=>x.id===planId); if(!p) return;
+  const d = UI.invoiceDraft; if(!d) return;
+  const items = computeInvoiceLineItems(p, orgId, d);
+  const total = items.reduce((s,li)=>s+li.amount,0);
+  const { data, error } = await sb.from('org_plan_invoices').insert({
+    org_id: orgId, plan_id: planId, invoice_number: d.invoiceNumber, issue_date: new Date().toISOString().slice(0,10),
+    period_start: d.periodStart||null, period_end: d.periodEnd||null, line_items: items, total, currency: p.currency
+  }).select().single();
+  if(error){ toast('Could not save invoice: '+error.message); return; }
+  CFG.orgPlanInvoices.push({id:data.id,orgId:data.org_id,planId:data.plan_id,invoiceNumber:data.invoice_number,issueDate:data.issue_date,periodStart:data.period_start||'',periodEnd:data.period_end||'',lineItems:data.line_items||[],total:data.total,currency:data.currency,status:data.status});
+  logAudit('generate proforma invoice', d.invoiceNumber+' -- '+orgName(orgId));
+  UI.invoiceDraft=null;
+  render();
+  toast('Invoice '+d.invoiceNumber+' saved as draft.');
+}
+window.saveGeneratedInvoice = saveGeneratedInvoice;
+async function setInvoiceStatus(invId, status){
+  const inv = CFG.orgPlanInvoices.find(x=>x.id===invId); if(!inv) return;
+  inv.status = status; render();
+  const { error } = await sb.from('org_plan_invoices').update({status}).eq('id', invId);
+  if(error) toast('Could not update invoice status: '+error.message);
+}
+window.setInvoiceStatus = setInvoiceStatus;
+function viewInvoiceText(invId){
+  const inv = CFG.orgPlanInvoices.find(x=>x.id===invId); if(!inv) return;
+  const org = CFG.allOrganizations.find(o=>o.id===inv.orgId);
+  const lines = [
+    'PROFORMA INVOICE '+inv.invoiceNumber,
+    (org?org.name:'')+'  --  '+inv.issueDate,
+    'Period: '+inv.periodStart+' to '+inv.periodEnd,
+    '',
+    ...inv.lineItems.map(li=>li.description+': '+inv.currency+' '+li.amount.toFixed(2)),
+    '',
+    'TOTAL: '+inv.currency+' '+inv.total.toFixed(2)
+  ];
+  alert(lines.join('\n'));
+}
+window.viewInvoiceText = viewInvoiceText;
+
+
 const PAGES=[
   {id:'home',       ix:'0', label:'Home',            fn:pageHome},
   {id:'users',      ix:'1', label:'Roles & users',   fn:pageUsers},
@@ -3094,12 +3352,17 @@ const PAGES=[
   {id:'sync',       ix:'9', label:'Export',          fn:pageSync},
   {id:'feedback',   ix:'10',label:'Feedback',        fn:pageFeedback},
   {id:'hubaccounts',ix:'11',label:'Hub accounts',    fn:pageHubAccounts},
-  {id:'hubfeedback',ix:'12',label:'Hub feedback',    fn:pageHubFeedback}
+  {id:'hubfeedback',ix:'12',label:'Hub feedback',    fn:pageHubFeedback},
+  {id:'licensing',  ix:'13',label:'Licensing',       fn:pageLicensing}
 ];
 
 function renderSide(){
   let h='<h4>Shared configuration</h4>';
   PAGES.forEach(p=>{
+    /* item 36: Licensing is operator-only (full Super Admin) -- hidden from the nav
+       entirely for everyone else, not just marked read-only, since this is billing data
+       across every organization, not something an org's own admin should even see exists. */
+    if(p.id==='licensing' && !CFG.isFullSuperAdmin) return;
     const locked = (p.id==='users'||p.id==='feedback'||p.id==='hubaccounts'||p.id==='hubfeedback')&&!canConfig();
     h+=`<a class="navi ${UI.page===p.id?'on':''}" href="#" onclick="go('${p.id}');return false">
       <span class="ix">${p.ix}</span><span>${p.label}</span>${locked?'<span class="lk">read only</span>':''}</a>`;

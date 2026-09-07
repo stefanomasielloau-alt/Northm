@@ -1598,6 +1598,18 @@ async function loadFromSupabase(){
   UI.regionId = (CFG.regions.find(r=>!r.unassigned)||{}).id;
   UI.activityId = (CFG.activities.find(a=>!a.unassigned)||{}).id;
 
+  /* item 50 (2026-09-07): Board Report branding, fail-soft load. Only actually used by
+     downloadBoardReportPptx() below -- kept here rather than a new dedicated Branding page
+     in this module, since Configuration (Norma.html) is where it's set. */
+  CFG.orgBrand = null;
+  try{
+    const brandR = await sb.from('org_brand_settings').select('*').eq('org_id', _orgId).maybeSingle();
+    if(!brandR.error && brandR.data){
+      const b = brandR.data;
+      CFG.orgBrand = { primaryColor:b.primary_color||'', secondaryColor:b.secondary_color||'', logoUrl:b.logo_url||'', fontFamily:b.font_family||'' };
+    }
+  }catch(e){ /* table not created yet -- PPTX export just uses North's own default colors. */ }
+
   /* sample history depends on gates/regions/activities/segments/drivers/seasonality all
      being loaded — build it last, once everything above is in place. */
   buildHist();
@@ -3922,6 +3934,10 @@ function pageBoardReport(){
      deck can never show a different number than the on-screen report. */
   UI._brPayload = {
     versionName: version().name, fy: UI.fy, generatedAt: F.dt(new Date().toISOString()),
+    /* item 50 (2026-09-07): brand variables, applied server-side in _build_board_report_pptx.
+       null/omitted fields there fall back to North's own default look -- see Branding page
+       in Configuration (Norma.html) for where these are set. */
+    brand: CFG.orgBrand ? {primaryColor:CFG.orgBrand.primaryColor, secondaryColor:CFG.orgBrand.secondaryColor, logoUrl:CFG.orgBrand.logoUrl, fontFamily:CFG.orgBrand.fontFamily} : null,
     kpis: {
       exitGateName: exitGate().name, exitActual: actualAcc[exitId]||0, exitPlan: plan[exitId]||0,
       exitVarPct: winVar, exitStatus: winSt,
@@ -3954,7 +3970,8 @@ function pageBoardReport(){
   const brSorted=(CFG.boardReportSnapshots||[]).slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   const brViewing=UI.brViewSnapId?byId(brSorted,UI.brViewSnapId):null;
 
-  let h=`<div class="phead"><div><h1>Board report</h1>
+  let h=`<div class="crumb no-print" style="font-size:12px;color:var(--ink-2);margin-bottom:6px"><a href="Reportus.html" target="tool_North" style="color:inherit">Reporting</a> &rsaquo; Board report</div>
+  <div class="phead"><div><h1>Board report</h1>
     <p>One page for a board or exec audience -- headline numbers, what changed, and what needs a decision. Generated on demand from the live plan.</p></div>
     <div class="sp"></div>
     <select class="in no-print" style="width:auto" onchange="setBoardReportView(this.value)">
@@ -4767,7 +4784,31 @@ function go(page,tab){
 }
 window.go=go;
 
+function renderBoardReportSide(){
+  const brSorted = (CFG.boardReportSnapshots||[]).slice().sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  let h = `<div style="padding:14px 14px 4px">
+    <a href="Reportus.html" target="tool_North" style="font-size:12px;color:var(--ink-2);text-decoration:none">&larr; Back to Reporting</a>
+  </div>
+  <h4>Board report</h4>
+  <div style="padding:2px 14px 10px" class="mini">Read-only export -- headline numbers, what changed, what needs a decision. Not part of Strategy's own configuration.</div>`;
+  if(brSorted.length){
+    h += `<h4>Saved history</h4><div style="padding:2px 14px">`;
+    brSorted.slice(0,8).forEach(s=>{
+      h += `<a href="#" onclick="setBoardReportView('${s.id}');return false" style="display:block;font-size:12px;padding:4px 0;color:var(--ink);text-decoration:none;border-bottom:1px solid var(--line)">${esc(s.name)}<br><span class="mini">${esc(F.dt(s.createdAt))}</span></a>`;
+    });
+    h += `</div>`;
+  }
+  h += moduleVersionFooterHtml('Board report','v0.2708.14');
+  return h;
+}
 function renderSide(){
+  /* item 50 (2026-09-07): Board Report is reached from Reporting (Reportus.html links in
+     via ?page=boardreport, see bootApp() above) but was still showing Strategy's own full
+     nav + stats + "Strategy vX" footer underneath it -- reads as "did I just land inside
+     Strategy?" even though boardreport itself is hidden:true and not highlighted in that
+     list. Give it its own small, distinct sidebar instead of Strategy's, so it reads as
+     its own destination. */
+  if(UI.page==='boardreport') return renderBoardReportSide();
   let h='',grp=null;
   PAGES.filter(p=>!p.hidden).forEach(p=>{
     if(p.grp!==grp){ grp=p.grp; h+=`<h4>${grp}</h4>`; }

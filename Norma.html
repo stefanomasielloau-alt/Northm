@@ -623,6 +623,19 @@ async function loadFromSupabase(){
       }));
     }
   }catch(e){ /* table not created yet */ }
+
+  /* item 50 (2026-09-07): Board Report branding -- one row per org, fail-soft load.
+     Ordo.html loads the same table independently (its own loadFromSupabase()) since it's
+     the one that actually needs it for the PPTX export payload -- this copy is so the
+     Branding settings page here in Configuration has something to show/edit. */
+  CFG.orgBrand = null;
+  try{
+    const brandR = await sb.from('org_brand_settings').select('*').eq('org_id', _orgId).maybeSingle();
+    if(!brandR.error && brandR.data){
+      const b = brandR.data;
+      CFG.orgBrand = { id:b.id, orgId:b.org_id, primaryColor:b.primary_color||'', secondaryColor:b.secondary_color||'', logoUrl:b.logo_url||'', fontFamily:b.font_family||'' };
+    }
+  }catch(e){ /* table not created yet */ }
 }
 /* Roles & users page (2026-08-27): org filter (Super Admin only -- everyone else already
    only sees their own org) + click-header-to-sort, so "look at all of one company's Roles,
@@ -3339,6 +3352,48 @@ function viewInvoiceText(invId){
 window.viewInvoiceText = viewInvoiceText;
 
 
+/* item 50 (2026-09-07): Board Report branding. Org-scoped (any Configuration admin,
+   not full-super-admin-only -- unlike Licensing, this is this org's own data), applied
+   to the Board Report PPTX export in Ordo.html/hub_local_api.py. Leaving any field blank
+   keeps North's own default look for that piece (nav blue, no logo, PowerPoint's default
+   font) -- nothing here is required. */
+function pageBranding(){
+  const b = CFG.orgBrand || {primaryColor:'',secondaryColor:'',logoUrl:'',fontFamily:''};
+  const swatch = c => `<span style="display:inline-block;width:16px;height:16px;border-radius:3px;border:1px solid var(--line);vertical-align:-3px;margin-right:6px;background:${c&&/^#[0-9a-fA-F]{3,8}$/.test(c)?esc(c):'transparent'}"></span>`;
+  let h = `<div class="phead"><div><h1>Branding</h1>
+    <p>Applied to the Board Report PPTX export (title bars, table headers, title slide) --
+      see Strategy &gt; Board report. Leave anything blank to keep North's own default look
+      for that piece. No live preview here yet; download a Board Report PPTX to check the result.</p></div></div>`;
+  h += `<div class="card"><h3>Brand variables <span class="sp"></span></h3><div class="bd">
+    <div class="field"><label class="lbl">Primary color (hex)</label>
+      <div class="row" style="gap:0;align-items:center">${swatch(b.primaryColor)}<input class="cel txt" style="width:120px" placeholder="#1F3AC7" value="${esc(b.primaryColor)}" onchange="setBrandField('primaryColor',this.value)"></div></div>
+    <div class="field"><label class="lbl">Secondary color (hex)</label>
+      <div class="row" style="gap:0;align-items:center">${swatch(b.secondaryColor)}<input class="cel txt" style="width:120px" placeholder="#C9D4F7" value="${esc(b.secondaryColor)}" onchange="setBrandField('secondaryColor',this.value)"></div></div>
+    <div class="field"><label class="lbl">Logo URL</label>
+      <input class="cel txt" style="width:100%" placeholder="https://.../logo.png -- must be a publicly fetchable image URL" value="${esc(b.logoUrl)}" onchange="setBrandField('logoUrl',this.value)"></div>
+    <div class="field"><label class="lbl">Font family</label>
+      <input class="cel txt" style="width:220px" placeholder="e.g. Arial (PowerPoint's own default if blank)" value="${esc(b.fontFamily)}" onchange="setBrandField('fontFamily',this.value)"></div>
+  </div></div>`;
+  return h;
+}
+async function setBrandField(key, val){
+  if(!_orgId) return;
+  CFG.orgBrand = Object.assign({primaryColor:'',secondaryColor:'',logoUrl:'',fontFamily:''}, CFG.orgBrand, {[key]:val});
+  render();
+  const row = {
+    org_id: _orgId,
+    primary_color: CFG.orgBrand.primaryColor||'', secondary_color: CFG.orgBrand.secondaryColor||'',
+    logo_url: CFG.orgBrand.logoUrl||'', font_family: CFG.orgBrand.fontFamily||'',
+    updated_at: new Date().toISOString()
+  };
+  const { data, error } = await sb.from('org_brand_settings').upsert(row, {onConflict:'org_id'}).select().single();
+  if(error){ toast('Could not save branding -- has the migration been run? ('+error.message+')'); return; }
+  CFG.orgBrand.id = data.id;
+  logAudit('edit branding', key);
+}
+window.setBrandField = setBrandField;
+
+
 const PAGES=[
   {id:'home',       ix:'0', label:'Home',            fn:pageHome},
   {id:'users',      ix:'1', label:'Roles & users',   fn:pageUsers},
@@ -3353,7 +3408,8 @@ const PAGES=[
   {id:'feedback',   ix:'10',label:'Feedback',        fn:pageFeedback},
   {id:'hubaccounts',ix:'11',label:'Hub accounts',    fn:pageHubAccounts},
   {id:'hubfeedback',ix:'12',label:'Hub feedback',    fn:pageHubFeedback},
-  {id:'licensing',  ix:'13',label:'Licensing',       fn:pageLicensing}
+  {id:'licensing',  ix:'13',label:'Licensing',       fn:pageLicensing},
+  {id:'branding',   ix:'14',label:'Branding',        fn:pageBranding}
 ];
 
 function renderSide(){

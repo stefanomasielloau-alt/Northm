@@ -392,8 +392,24 @@ async function loadFromSupabase(){
   const { data: hubOrgRow } = await sb.from('organizations').select('hub_org_slug').eq('id', _orgId).maybeSingle();
   _hubOrgSlug = (hubOrgRow && hubOrgRow.hub_org_slug) || '';
 
-  const { data: isPA } = await sb.rpc('is_platform_admin');
-  CFG.isSuperAdmin = !!isPA;
+  /* item 38 (2026-09-07): platform_admin_level() adds an L1 "additional North Admin" tier
+     on top of the existing is_platform_admin() (now L0), without touching that function.
+     isSuperAdmin is true for L0 OR L1 -- extends everything it already gates to L1 too.
+     isFullSuperAdmin stays L0-only for the few things L1 shouldn't get (org creation, and
+     the Licensing admin panel once built). Fails soft to the exact old behavior if
+     2026-09-07-item38-platform-admin-l1-migration.sql hasn't been run yet. */
+  let _paLevel = null;
+  try{
+    const { data, error } = await sb.rpc('platform_admin_level');
+    if(error) throw error;
+    _paLevel = data || null;
+  }catch(e){
+    const { data: isPA } = await sb.rpc('is_platform_admin');
+    _paLevel = isPA ? 'L0' : null;
+  }
+  CFG.platformAdminLevel = _paLevel;
+  CFG.isFullSuperAdmin = _paLevel === 'L0';
+  CFG.isSuperAdmin = _paLevel === 'L0' || _paLevel === 'L1';
 
   const results = await Promise.all([
     sb.from('schema_workflows').select('id,name,description,updated_at,tracking_ref,lanes,nodes,edges'),

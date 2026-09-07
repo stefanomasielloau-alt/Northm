@@ -471,8 +471,24 @@ async function loadFromSupabase(){
   const { data: hubOrgRow } = await sb.from('organizations').select('hub_org_slug').eq('id', _orgId).maybeSingle();
   _hubOrgSlug = (hubOrgRow && hubOrgRow.hub_org_slug) || '';
 
-  const { data: isPA } = await sb.rpc('is_platform_admin');
-  CFG.isSuperAdmin = !!isPA;
+  /* item 38 (2026-09-07): platform_admin_level() adds an L1 "additional North Admin" tier
+     on top of the existing is_platform_admin() (now L0), without touching that function.
+     isSuperAdmin is true for L0 OR L1 -- extends everything it already gates to L1 too.
+     isFullSuperAdmin stays L0-only for the few things L1 shouldn't get (org creation, and
+     the Licensing admin panel once built). Fails soft to the exact old behavior if
+     2026-09-07-item38-platform-admin-l1-migration.sql hasn't been run yet. */
+  let _paLevel = null;
+  try{
+    const { data, error } = await sb.rpc('platform_admin_level');
+    if(error) throw error;
+    _paLevel = data || null;
+  }catch(e){
+    const { data: isPA } = await sb.rpc('is_platform_admin');
+    _paLevel = isPA ? 'L0' : null;
+  }
+  CFG.platformAdminLevel = _paLevel;
+  CFG.isFullSuperAdmin = _paLevel === 'L0';
+  CFG.isSuperAdmin = _paLevel === 'L0' || _paLevel === 'L1';
 
   const results = await Promise.all([
     sb.from('cost_buckets').select('id,code,label,dept,ext_code'),
@@ -564,6 +580,17 @@ async function loadFromSupabase(){
   }));
   CFG.teams = (teamsR.data||[]).map(t=>({id:t.id,name:t.name||'',memberIds:t.member_ids||[],unitIds:t.unit_ids||[]}));
   CFG.businessUnits = (buR.data||[]).map(u=>({id:u.id,orgId:u.org_id,name:u.name||'',managerId:u.manager_id||null,parentId:u.parent_id||null,memberIds:u.member_ids||[]}));
+
+  /* item 38 (2026-09-07): L1 "North Admin" grants -- loaded fail-soft, same pattern as
+     every other additive migration this session. Empty list (not an error) until
+     2026-09-07-item38-platform-admin-l1-migration.sql has been run. */
+  CFG.platformAdminGrants = [];
+  try{
+    const grantsR = await sb.from('platform_admin_grants').select('id,profile_id,granted_by,granted_at,note');
+    if(!grantsR.error){
+      CFG.platformAdminGrants = (grantsR.data||[]).map(g=>({id:g.id,profileId:g.profile_id,grantedBy:g.granted_by,grantedAt:g.granted_at,note:g.note||''}));
+    }
+  }catch(e){ /* table not created yet -- fine, additive and opt-in until the migration runs. */ }
 }
 /* Roles & users page (2026-08-27): org filter (Super Admin only -- everyone else already
    only sees their own org) + click-header-to-sort, so "look at all of one company's Roles,
@@ -1027,6 +1054,11 @@ async function setUserRegions(userId){
 }
 window.setUserRegions = setUserRegions;
 async function createOrgAsSuperAdmin(){
+  /* item 38: creating an org is one of the two things L1 "additional North Admin" doesn't
+     get (the other is the future Licensing admin panel) -- the platform_create_organization
+     RPC already enforces this server-side via the untouched is_platform_admin(), this is
+     just a clean client-side message instead of a raw RPC error. */
+  if(!CFG.isFullSuperAdmin){ toast('Creating organizations is limited to the full Super Admin.'); return; }
   const name = prompt('New organization name:'); if(!name) return;
   const { data, error } = await sb.rpc('platform_create_organization', { p_org_name: name });
   if(error){ toast('Could not create organization: '+error.message); return; }
@@ -1812,6 +1844,67 @@ async function registerHubOrgConnection(){
   }catch(e){ toast('Could not reach Hub: '+e.message); }
 }
 window.registerHubOrgConnection=registerHubOrgConnection;
+/* item 38 (2026-09-07) -- L1 "additional North Admin" management. Full Super Admin
+   (isFullSuperAdmin, i.e. L0) only -- an L1 can't grant or revoke L1 to anyone, including
+   themselves. L1 = full Super Admin minus org creation and this panel itself, per Stef's
+   confirmed recommendation ("go with recommendation"). */
+function renderNorthAdminsCard(){
+  const grants = CFG.platformAdminGrants||[];
+  const userById = id => CFG.users.find(u=>u.id===id);
+  const grantedUserIds = new Set(grants.map(g=>g.profileId));
+  const candidates = CFG.users.filter(u=>!grantedUserIds.has(u.id)).sort((a,b)=>(a.name||a.email||'').localeCompare(b.name||b.email||''));
+  return `<div class="card"><h3>North Admins <span class="sp"></span><span class="pill v">Full Super Admin only</span></h3>
+    <div class="bd">
+      <p class="mini" style="margin:0 0 10px">Grants the L1 tier: everything a full Super Admin can do across every
+        organization, except creating new organizations and managing this list. Needs
+        2026-09-07-item38-platform-admin-l1-migration.sql run before this saves anywhere but locally.</p>
+      <div class="row" style="gap:8px;margin-bottom:10px">
+        <select class="cel txt" id="northAdminCandidate" style="width:240px">
+          ${candidates.length?candidates.map(u=>`<option value="${u.id}">${esc(u.name||u.email)} (${esc(orgName(u.orgId))})</option>`).join(''):'<option value="">No eligible users</option>'}
+        </select>
+        <button class="btn sm pri" ${candidates.length?'':'disabled'} onclick="grantNorthAdmin()">Grant North Admin</button>
+      </div>
+      ${!grants.length?'<div class="empty">No additional North Admins yet.</div>':`<table><thead><tr>
+        <th>Name</th><th>Organization</th><th>Granted</th><th></th></tr></thead><tbody>
+        ${grants.map(g=>{ const u=userById(g.profileId); return `<tr>
+          <td class="lb">${u?esc(u.name||u.email):'(user not found)'}</td>
+          <td>${u?esc(orgName(u.orgId)):'—'}</td>
+          <td class="mini">${esc((g.grantedAt||'').slice(0,10))}</td>
+          <td class="n"><button class="btn sm dgr" onclick="revokeNorthAdmin('${g.id}')">Revoke</button></td>
+        </tr>`; }).join('')}
+      </tbody></table>`}
+    </div></div>`;
+}
+async function grantNorthAdmin(){
+  if(!CFG.isFullSuperAdmin){ toast('Only the full Super Admin can grant North Admin.'); return; }
+  const sel = document.getElementById('northAdminCandidate');
+  const profileId = sel && sel.value; if(!profileId) return;
+  const u = CFG.users.find(x=>x.id===profileId); if(!u) return;
+  if(!confirm('Grant North Admin (L1) to '+(u.name||u.email)+'? They will get full Super Admin access across every organization, except creating orgs and managing this list.')) return;
+  const { data, error } = await sb.from('platform_admin_grants').insert({
+    profile_id: profileId, granted_by: _myProfile?_myProfile.id:null
+  }).select().single();
+  if(error){ toast('Could not grant North Admin -- has the migration been run? ('+error.message+')'); return; }
+  CFG.platformAdminGrants.push({id:data.id,profileId:data.profile_id,grantedBy:data.granted_by,grantedAt:data.granted_at,note:data.note||''});
+  logAudit('grant north admin (L1)', u.name||u.email);
+  render();
+  toast((u.name||u.email)+' is now a North Admin.');
+}
+window.grantNorthAdmin = grantNorthAdmin;
+async function revokeNorthAdmin(grantId){
+  if(!CFG.isFullSuperAdmin){ toast('Only the full Super Admin can revoke North Admin.'); return; }
+  const g = CFG.platformAdminGrants.find(x=>x.id===grantId); if(!g) return;
+  const u = CFG.users.find(x=>x.id===g.profileId);
+  if(!confirm('Revoke North Admin from '+(u?(u.name||u.email):'this user')+'?')) return;
+  const { error } = await sb.from('platform_admin_grants').delete().eq('id', grantId);
+  if(error){ toast('Could not revoke North Admin: '+error.message); return; }
+  CFG.platformAdminGrants = CFG.platformAdminGrants.filter(x=>x.id!==grantId);
+  logAudit('revoke north admin (L1)', u?(u.name||u.email):grantId);
+  render();
+  toast('North Admin revoked.');
+}
+window.revokeNorthAdmin = revokeNorthAdmin;
+
 function renderHubConnectionsCard(){
   if(!CFG.isSuperAdmin) return '';
   if(!_hubSuper.token){
@@ -2513,7 +2606,7 @@ function pageUsers(){
 
   if(sa){
     h+=`<div class="card"><h3>All organizations <span class="sp"></span><span class="pill v">Super Admin view</span>
-      <button class="btn sm pri" style="margin-left:8px" onclick="createOrgAsSuperAdmin()">Add organization</button></h3>
+      ${CFG.isFullSuperAdmin?'<button class="btn sm pri" style="margin-left:8px" onclick="createOrgAsSuperAdmin()">Add organization</button>':'<span class="mini" style="margin-left:8px">Creating organizations is limited to the full Super Admin.</span>'}</h3>
       <div class="bd flush"><table><thead><tr><th>Organization</th><th class="n">Users</th><th>Modules</th><th class="n">Created</th><th></th></tr></thead><tbody>
       ${(CFG.allOrganizations||[]).map(o=>`<tr><td class="lb">${esc(o.name)}${o.id===_orgId?' <span class="tag">yours</span>':''}${o.parentOrgId?' <span class="mini">(sub-org of '+esc(orgName(o.parentOrgId))+')</span>':''}</td>
         <td class="n calc">${CFG.users.filter(u=>u.orgId===o.id).length}</td>
@@ -2526,6 +2619,7 @@ function pageUsers(){
         New organizations start with no regions, pods, or campaigns — their own Org Admin sets those up in Strategy,
         the same way Beta Testing did.</p></div></div>`;
     h+=renderHubConnectionsCard();
+    if(CFG.isFullSuperAdmin) h+=renderNorthAdminsCard();
   }
   h+=`<div class="row" style="gap:8px;align-items:center;margin:0 0 14px;flex-wrap:wrap">
     <label class="mini">Filter by region:</label>

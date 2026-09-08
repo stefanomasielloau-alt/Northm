@@ -349,6 +349,7 @@ svg{display:block;max-width:100%}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="shared/moduleFooter.js"></script>
 <script src="shared/convertToMain.js"></script>
+<script src="shared/currencyOptions.js"></script>
 <script src="shared/charts.js"></script>
 <div id="authGate" style="display:none"></div>
 <div class="topnav" id="topnav">
@@ -2315,7 +2316,7 @@ function pageAdmin(){
         <td><input class="cel txt ${bad?'bad':''}" style="width:104px" type="date" value="${c.end||''}" onchange="setIn('campaigns','${c.id}','end',this.value)"></td>
         <td class="n"><input class="cel" value="${c.budget}" onchange="setIn('campaigns','${c.id}','budget',this.value,'money');recomputeCampaignBudgetFx('${c.id}')">
           <div style="display:flex;align-items:center;gap:3px;margin-top:2px">
-            <input class="cel txt" style="width:42px;font-size:10px;padding:2px 4px" placeholder="${CFG.currency.main}" maxlength="3" value="${esc(c.budgetCcy||'')}" title="Currency this budget was entered in, if not ${CFG.currency.main}" onchange="setCampaignBudgetCurrency('${c.id}',this.value)">
+            <select class="cel txt" style="width:62px;font-size:10px;padding:2px 4px" title="Currency this budget was entered in, if not ${CFG.currency.main}" onchange="setCampaignBudgetCurrency('${c.id}',this.value)">${currencyOptionsHtml(c.budgetCcy, {blankLabel: CFG.currency.main+' (default)'})}</select>
             ${(c.budgetFx&&c.budgetFx.originalCurrency&&c.budgetFx.originalCurrency!==CFG.currency.main)?`<span class="mini" title="Converted ${esc(F.dt(c.budgetFx.convertedAt))} at rate ${c.budgetFx.rate}">≈ ${F.mk(c.budgetFx.converted)} ${CFG.currency.main}</span>`:''}
           </div></td>
         <td class="n"><input class="cel" value="${c.committed||0}" onchange="setIn('campaigns','${c.id}','committed',this.value,'money')"></td>

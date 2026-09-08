@@ -949,7 +949,7 @@ async function generateExternalTriggerToken(){
     if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
     const r = await fetch(CONTACT_URL+'/automations/external-trigger-token', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ token: token })
+      body: JSON.stringify({ token: token, org: _hubOrgSlug })
     });
     const j = await r.json().catch(()=>({}));
     if(!r.ok){ toast(j.error||'Could not generate token.'); return; }
@@ -2380,7 +2380,7 @@ async function loadOutboundWebhooks(){
     const { data } = await sb.auth.getSession();
     const token = data && data.session && data.session.access_token;
     if(!token){ UI.outboundWebhooksLoading=false; UI.outboundWebhooksError='Your own North session has expired -- sign in again.'; render(); return; }
-    const r = await fetch(CONTACT_URL+'/automations/outbound-webhooks?token='+encodeURIComponent(token));
+    const r = await fetch(CONTACT_URL+'/automations/outbound-webhooks?token='+encodeURIComponent(token)+'&org='+encodeURIComponent(_hubOrgSlug));
     const j = await r.json().catch(()=>({}));
     if(!r.ok){ UI.outboundWebhooksLoading=false; UI.outboundWebhooksError=j.error||'Could not load webhooks.'; render(); return; }
     UI.outboundWebhooks=j.webhooks||[]; UI.outboundWebhooksLoaded=true; UI.outboundWebhooksLoading=false; render();
@@ -2399,7 +2399,7 @@ async function createOutboundWebhookUI(){
     if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
     const r = await fetch(CONTACT_URL+'/automations/outbound-webhooks', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ token: token, label: label, url: url, event_types: [] })
+      body: JSON.stringify({ token: token, org: _hubOrgSlug, label: label, url: url, event_types: [] })
     });
     const j = await r.json().catch(()=>({}));
     if(!r.ok){ toast(j.error||'Could not create webhook.'); return; }
@@ -2419,7 +2419,7 @@ async function testOutboundWebhookUI(id){
     if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
     const r = await fetch(CONTACT_URL+'/automations/outbound-webhooks/'+id+'/test', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ token: token })
+      body: JSON.stringify({ token: token, org: _hubOrgSlug })
     });
     const j = await r.json().catch(()=>({}));
     if(!r.ok){ toast(j.error||'Could not send test event.'); return; }
@@ -2437,7 +2437,7 @@ async function toggleOutboundWebhookActiveUI(id,current){
     if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
     const r = await fetch(CONTACT_URL+'/automations/outbound-webhooks/'+id+'/update', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ token: token, active: !current })
+      body: JSON.stringify({ token: token, org: _hubOrgSlug, active: !current })
     });
     const j = await r.json().catch(()=>({}));
     if(!r.ok){ toast(j.error||'Could not update webhook.'); return; }
@@ -2455,7 +2455,7 @@ async function deleteOutboundWebhookUI(id,label){
     if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
     const r = await fetch(CONTACT_URL+'/automations/outbound-webhooks/'+id+'/delete', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ token: token })
+      body: JSON.stringify({ token: token, org: _hubOrgSlug })
     });
     const j = await r.json().catch(()=>({}));
     if(!r.ok){ toast(j.error||'Could not delete webhook.'); return; }
@@ -3017,7 +3017,7 @@ async function loadHubUsers(){
     const { data } = await sb.auth.getSession();
     const token = data && data.session && data.session.access_token;
     if(!token){ UI.hubUsersLoading=false; UI.hubUsersError='Your own North session has expired -- sign in again.'; render(); return; }
-    const r = await fetch(CONTACT_URL+'/auth/users?token='+encodeURIComponent(token));
+    const r = await fetch(CONTACT_URL+'/auth/users?token='+encodeURIComponent(token)+'&org='+encodeURIComponent(_hubOrgSlug));
     const j = await r.json().catch(()=>({}));
     if(!r.ok){ UI.hubUsersLoading=false; UI.hubUsersError=j.error||'Could not load Hub accounts.'; render(); return; }
     UI.hubUsers=j.users||[]; UI.hubUsersLoaded=true; UI.hubUsersLoading=false; render();
@@ -3038,7 +3038,7 @@ async function createHubUser(){
     if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
     const r = await fetch(CONTACT_URL+'/auth/users', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ token, username: username.trim(), name: name.trim(), password, role })
+      body: JSON.stringify({ token, org: _hubOrgSlug, username: username.trim(), name: name.trim(), password, role })
     });
     const j = await r.json().catch(()=>({}));
     if(!r.ok){ toast(j.error||'Could not create Hub account.'); return; }
@@ -3057,7 +3057,7 @@ async function updateHubUserRoleAction(id, role){
     if(!token){ toast('Your own North session has expired -- sign in again.'); UI.hubUsersLoaded=false; await loadHubUsers(); return; }
     const r = await fetch(CONTACT_URL+'/auth/users/'+encodeURIComponent(id)+'/role', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ token, role })
+      body: JSON.stringify({ token, org: _hubOrgSlug, role })
     });
     const j = await r.json().catch(()=>({}));
     if(!r.ok){ toast(j.error||'Could not change role.'); UI.hubUsersLoaded=false; await loadHubUsers(); return; }
@@ -3106,7 +3106,7 @@ async function loadHubFeedback(){
     const { data } = await sb.auth.getSession();
     const token = data && data.session && data.session.access_token;
     if(!token){ UI.hubFeedbackLoading=false; UI.hubFeedbackError='Your own North session has expired -- sign in again.'; render(); return; }
-    const r = await fetch(CONTACT_URL+'/admin/feedback?token='+encodeURIComponent(token));
+    const r = await fetch(CONTACT_URL+'/admin/feedback?token='+encodeURIComponent(token)+'&org='+encodeURIComponent(_hubOrgSlug));
     const j = await r.json().catch(()=>({}));
     if(!r.ok){ UI.hubFeedbackLoading=false; UI.hubFeedbackError=j.error||'Could not load Hub feedback.'; render(); return; }
     UI.hubFeedback=j.items||[]; UI.hubFeedbackLoaded=true; UI.hubFeedbackLoading=false; render();
@@ -3125,7 +3125,7 @@ async function updateHubFeedbackField(id, patch){
     if(!token){ if(item&&prev)Object.assign(item,prev); toast('Your own North session has expired -- sign in again.'); render(); return; }
     const r = await fetch(CONTACT_URL+'/admin/feedback/'+encodeURIComponent(id), {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(Object.assign({ token }, patch))
+      body: JSON.stringify(Object.assign({ token, org: _hubOrgSlug }, patch))
     });
     const j = await r.json().catch(()=>({}));
     if(!r.ok){ if(item&&prev)Object.assign(item,prev); toast(j.error||'Could not update.'); render(); return; }

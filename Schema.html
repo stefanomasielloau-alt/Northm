@@ -1043,7 +1043,7 @@ function sendAutomationEmailAlert(targetUserIds, subject, message){
       if(!token) return;
       await fetch(CONTACT_URL+'/automations/notify-email', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ token, subject, message, recipients })
+        body: JSON.stringify({ token, org: _hubOrgSlug, subject, message, recipients })
       });
     }catch(e){ console.warn('Automation email alert failed (in-app alert already fired regardless)', e); }
   })();
@@ -1124,7 +1124,7 @@ async function refreshExternalTriggerEvents(){
     const token = data && data.session && data.session.access_token;
     if(!token) return;
     const sinceId = localStorage.getItem(_extEventsSinceKey()) || '0';
-    const res = await fetch(CONTACT_URL+'/automations/external-events?token='+encodeURIComponent(token)+'&since_id='+encodeURIComponent(sinceId));
+    const res = await fetch(CONTACT_URL+'/automations/external-events?token='+encodeURIComponent(token)+'&org='+encodeURIComponent(_hubOrgSlug)+'&since_id='+encodeURIComponent(sinceId));
     if(!res.ok) return;
     const body = await res.json();
     const events = (body && body.events) || [];

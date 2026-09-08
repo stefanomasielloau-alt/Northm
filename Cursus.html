@@ -2629,7 +2629,7 @@ async function pushActivityContactsToHub(taskId){
     if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
     const r = await fetch(CONTACT_URL+'/admin/push-contacts', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ token: token, contacts: unpushed.map(c=>({name:c.name,company:c.company,email:c.email,li:c.li})) })
+      body: JSON.stringify({ token: token, org: _hubOrgSlug, contacts: unpushed.map(c=>({name:c.name,company:c.company,email:c.email,li:c.li})) })
     });
     const j = await r.json().catch(()=>({}));
     if(!r.ok){ toast(j.error||'Could not push to Hub Contacts.'); return; }
@@ -2657,7 +2657,7 @@ async function loadContactPickerResults(q){
   const token = data && data.session && data.session.access_token;
   if(!token){ UI.contactPicker.loading=false; UI.contactPicker.error='Your own North session has expired -- sign in again.'; render(); return; }
   try{
-    const url = CONTACT_URL+'/admin/list-contacts?token='+encodeURIComponent(token)+'&q='+encodeURIComponent(q||'');
+    const url = CONTACT_URL+'/admin/list-contacts?token='+encodeURIComponent(token)+'&org='+encodeURIComponent(_hubOrgSlug)+'&q='+encodeURIComponent(q||'');
     const r = await fetch(url);
     const j = await r.json().catch(()=>({}));
     if(!UI.contactPicker) return; // closed while the request was in flight

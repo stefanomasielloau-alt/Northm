@@ -51,13 +51,20 @@ BEGIN
   -- Assets (Custodia) -- 6 rows, 2 deliberately below their low_stock_at
   -- threshold so Custodia's own "low stock" KPI/filter has something real
   -- to show, matching this project's established seeding convention.
-  INSERT INTO assets (id, org_id, name, category, tags, stock, low_stock_at, cost_per, purchase_date, location, notes, tracking_ref) VALUES
-    (gen_random_uuid(), v_org_id, 'Honey Jar branded gift sets', 'Merchandise', ARRAY['event','gift'], 8, 15, 22.50, CURRENT_DATE - 30, 'ANZ warehouse', 'Example asset -- safe to delete.', 'demo-bg-2026-09-08-v2'),
-    (gen_random_uuid(), v_org_id, 'Pop-up banner: Hundred Acre Trading Co', 'Signage', ARRAY['event'], 40, 10, 0, CURRENT_DATE - 90, 'ANZ warehouse', 'Example asset -- safe to delete.', 'demo-bg-2026-09-08-v2'),
-    (gen_random_uuid(), v_org_id, 'Webinar hosting licence (annual)', 'Software', ARRAY['events','content'], 3, 5, 1200, CURRENT_DATE - 200, 'N/A (digital)', 'Example asset -- safe to delete.', 'demo-bg-2026-09-08-v2'),
-    (gen_random_uuid(), v_org_id, 'Piglet plush conference giveaway', 'Merchandise', ARRAY['event','gift'], 5, 20, 8.00, CURRENT_DATE - 10, 'ANZ warehouse', 'Example asset -- safe to delete. Below low-stock threshold on purpose.', 'demo-bg-2026-09-08-v2'),
-    (gen_random_uuid(), v_org_id, 'Case study template pack', 'Content', ARRAY['content'], 25, 5, 0, CURRENT_DATE - 60, 'N/A (digital)', 'Example asset -- safe to delete.', 'demo-bg-2026-09-08-v2'),
-    (gen_random_uuid(), v_org_id, 'Owl webinar backdrop (physical)', 'Signage', ARRAY['events'], 2, 4, 350, CURRENT_DATE - 15, 'SEA warehouse', 'Example asset -- safe to delete. Below low-stock threshold on purpose.', 'demo-bg-2026-09-08-v2');
+  -- NOTE: assets has no tracking_ref column (checked against Custodia.html's
+  -- real select list: id,name,category,tags,stock,low_stock_at,cost_per,
+  -- purchase_date,location,campaigns_used,campaign_id,source_task_id,
+  -- cost_bucket_id,notes,expiry_date,publish_date,signed_off_by,
+  -- signed_off_date,file_url,cost_per_fx -- no tracking_ref, unlike
+  -- campaigns/tasks/deals/events). The "safe to delete" text in notes is
+  -- the identifying marker for these rows instead.
+  INSERT INTO assets (id, org_id, name, category, tags, stock, low_stock_at, cost_per, purchase_date, location, notes) VALUES
+    (gen_random_uuid(), v_org_id, 'Honey Jar branded gift sets', 'Merchandise', ARRAY['event','gift'], 8, 15, 22.50, CURRENT_DATE - 30, 'ANZ warehouse', 'Example asset (demo-bg-2026-09-08-v2) -- safe to delete.'),
+    (gen_random_uuid(), v_org_id, 'Pop-up banner: Hundred Acre Trading Co', 'Signage', ARRAY['event'], 40, 10, 0, CURRENT_DATE - 90, 'ANZ warehouse', 'Example asset (demo-bg-2026-09-08-v2) -- safe to delete.'),
+    (gen_random_uuid(), v_org_id, 'Webinar hosting licence (annual)', 'Software', ARRAY['events','content'], 3, 5, 1200, CURRENT_DATE - 200, 'N/A (digital)', 'Example asset (demo-bg-2026-09-08-v2) -- safe to delete.'),
+    (gen_random_uuid(), v_org_id, 'Piglet plush conference giveaway', 'Merchandise', ARRAY['event','gift'], 5, 20, 8.00, CURRENT_DATE - 10, 'ANZ warehouse', 'Example asset (demo-bg-2026-09-08-v2) -- safe to delete. Below low-stock threshold on purpose.'),
+    (gen_random_uuid(), v_org_id, 'Case study template pack', 'Content', ARRAY['content'], 25, 5, 0, CURRENT_DATE - 60, 'N/A (digital)', 'Example asset (demo-bg-2026-09-08-v2) -- safe to delete.'),
+    (gen_random_uuid(), v_org_id, 'Owl webinar backdrop (physical)', 'Signage', ARRAY['events'], 2, 4, 350, CURRENT_DATE - 15, 'SEA warehouse', 'Example asset (demo-bg-2026-09-08-v2) -- safe to delete. Below low-stock threshold on purpose.');
 
   -- Deals (Augur / Scoring) -- 6 rows, one per pipeline stage, mixed
   -- currencies (same convention as the 2026-09-03 seed) so multi-currency

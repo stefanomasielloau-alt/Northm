@@ -2159,6 +2159,7 @@ function pageHome(){
     <div class="card"><h3>Quick links</h3><div class="bd" style="padding:10px 14px">
       <div style="display:flex;flex-wrap:wrap;gap:6px">
       ${PAGES.filter(p=>p.id!=='home').map(p=>`<a class="btn sm" href="#" onclick="go('${p.id}');return false">${esc(p.label)}</a>`).join('')}
+      <a class="btn sm" href="Cursus.html#page=partners" target="tool_North" title="Partners live in Campaign Planning (Cursus) since their per-campaign allocation editing has to stay there -- this is the same 'move nav only' pattern Board Report uses for Reportus.">Partners</a>
       </div>
     </div></div>
   </div>`;

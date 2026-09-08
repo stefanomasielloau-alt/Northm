@@ -337,7 +337,7 @@ function taskPlannedCostMain(t){ return (t.plannedCostFx && t.plannedCostFx.conv
 
 const UI = { page:'home', helpOpen:false, campaignId:null, wizard:null, moveDialog:null,
   planScope:'campaign', planView:'table', planProgrammeId:null, planCampaignId:null, detail:null,
-  contactPicker:null };
+  contactPicker:null, partnerDetailId:null };
 
 const bucket = id => byId(CFG.costBuckets,id);
 const programme = id => byId(CFG.programmes,id);
@@ -431,7 +431,9 @@ async function saveToSupabase(){
     })),
     upsertRows('partners', CFG.partners, p=>({
       id:p.id,name:p.name,type:p.type||'',contact_name:p.contactName||'',
-      contact_email:p.contactEmail||'',contact_phone:p.contactPhone||'',notes:p.notes||''
+      contact_email:p.contactEmail||'',contact_phone:p.contactPhone||'',notes:p.notes||'',
+      pod_id:p.podId||null,acv_target:(p.acvTarget==null||p.acvTarget===''?null:p.acvTarget),
+      contact_terms:p.contactTerms||[]
     })),
     upsertRows('campaign_partner_allocations', CFG.campaignPartnerAllocations, a=>({
       id:a.id,campaign_id:a.campaignId,partner_id:a.partnerId,role:a.role||'',
@@ -467,7 +469,8 @@ async function saveToSupabase(){
                     fy_start_month: cn.fyStartMonth||1,
                     campaign_naming_pattern: cn.campaignNamingPattern||'{fy}{period}{pod}-{seq}_{descriptor}',
                     campaign_naming_seq_scope: cn.campaignNamingSeqScope||'pod',
-                    campaign_naming_seq_counters: cn.campaignNamingSeqCounters||{} };
+                    campaign_naming_seq_counters: cn.campaignNamingSeqCounters||{},
+                    partner_type_presets: CFG.partnerTypePresets||[] };
       const { error } = await sb.from('org_settings').upsert(row, {onConflict:'org_id'});
       if(error){ console.error('Save failed for org_settings', error); }
     })()
@@ -517,6 +520,10 @@ async function loadFromSupabase(){
        write this table. */
     sb.from('profiles').select('id,name'),
     sb.from('regions').select('id,name'),
+    /* 2026-09-08 (item 41): Pod linkage for Partners -- id+name+region_id only, same
+       narrow-reference pattern as the profiles read just above. Cursus doesn't own or
+       edit pods (Strategy/Ordo.html does), just needs the list for a dropdown. */
+    sb.from('pods').select('id,name,region_id'),
     sb.from('programmes').select('id,name'),
     sb.from('cost_buckets').select('id,code,label'),
     sb.from('campaigns').select('id,name,programme_id,region_id,cost_bucket_id,start_date,end_date,budget,crm_ref,period_type,period_label,tracking_ref,business_case,signoff_status,po_number,registration_url,project_folder_url,external_links,applicable_splits,partner_motion_tags,cloned_from_id,contact_list_ref,icp_ref,sort_order,notes,owner_id,owner_name,owner_email,alert_threshold_pct'),
@@ -526,14 +533,14 @@ async function loadFromSupabase(){
        links an activity to an event and rolls up budget/pax/registered/attended for
        reporting (phase16, Planning drill-down + Events cross-link). */
     sb.from('eventus_events').select('id,name,type,status,campaign_id,budget,pax,registered,attended'),
-    sb.from('org_settings').select('webhook_url,webhook_enabled,fy_start_month,campaign_naming_pattern,campaign_naming_seq_scope,campaign_naming_seq_counters').eq('org_id',_orgId).maybeSingle(),
+    sb.from('org_settings').select('webhook_url,webhook_enabled,fy_start_month,campaign_naming_pattern,campaign_naming_seq_scope,campaign_naming_seq_counters,partner_type_presets').eq('org_id',_orgId).maybeSingle(),
     sb.from('audit_log').select('ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200),
-    sb.from('partners').select('id,name,type,contact_name,contact_email,contact_phone,notes'),
+    sb.from('partners').select('id,name,type,contact_name,contact_email,contact_phone,notes,pod_id,acv_target,contact_terms'),
     sb.from('campaign_partner_allocations').select('id,campaign_id,partner_id,role,budget_share_pct,lead_share_pct'),
     sb.from('assets').select('id,name,category'),
     sb.from('augur_deals').select('id,name,account,value,currency,close_date,campaign_id').eq('stage','Closed Won')
   ]);
-  const [rolesR,profilesR,regionsR,programmesR,costBucketsR,campaignsR,tasksR,templatesR,eventsIdxR,orgSettingsR,auditR,partnersR,partnerAllocR,assetsR,wonDealsR] = results;
+  const [rolesR,profilesR,regionsR,podsR,programmesR,costBucketsR,campaignsR,tasksR,templatesR,eventsIdxR,orgSettingsR,auditR,partnersR,partnerAllocR,assetsR,wonDealsR] = results;
   for(const r of results){ if(r.error) throw r.error; }
 
   const myRole = (rolesR.data||[]).find(r=>r.id===_myProfile.role_id);
@@ -546,6 +553,7 @@ async function loadFromSupabase(){
   /* Read-only, id+name only -- feeds the campaign Owner picker. */
   CFG.orgUsers = (profilesR.data||[]).map(p=>({id:p.id,name:p.name||''}));
   CFG.regions = (regionsR.data||[]).map(r=>({id:r.id,name:r.name}));
+  CFG.pods = (podsR.data||[]).map(p=>({id:p.id,name:p.name,regionId:p.region_id}));
   CFG.programmes = (programmesR.data||[]).map(p=>({id:p.id,name:p.name}));
   CFG.costBuckets = (costBucketsR.data||[]).map(c=>({id:c.id,code:c.code,label:c.label}));
   CFG.campaigns = (campaignsR.data||[]).map(c=>({
@@ -597,9 +605,14 @@ async function loadFromSupabase(){
     campaignNamingSeqCounters: os.campaign_naming_seq_counters||{}
   };
   CFG.audit = (auditR.data||[]).map(a=>({ts:a.ts,what:a.what,detail:a.detail}));
+  /* 2026-09-08 (item 41): editable preset list for the Partner 'type' dropdown -- starts
+     empty (fail-soft if the migration hasn't run), grows as anyone picks '+ Add new type'. */
+  CFG.partnerTypePresets = os.partner_type_presets || [];
   CFG.partners = (partnersR.data||[]).map(p=>({
     id:p.id,name:p.name,type:p.type||'',contactName:p.contact_name||'',
-    contactEmail:p.contact_email||'',contactPhone:p.contact_phone||'',notes:p.notes||''
+    contactEmail:p.contact_email||'',contactPhone:p.contact_phone||'',notes:p.notes||'',
+    podId:p.pod_id||null,acvTarget:(p.acv_target==null?null:p.acv_target),
+    contactTerms:Array.isArray(p.contact_terms)?p.contact_terms:[]
   }));
   CFG.campaignPartnerAllocations = (partnerAllocR.data||[]).map(a=>({
     id:a.id,campaignId:a.campaign_id,partnerId:a.partner_id,role:a.role||'',
@@ -968,7 +981,7 @@ function addTemplate(){
 window.addTemplate=addTemplate;
 
 function addPartner(){
-  CFG.partners.push({id:uid('ptn'),name:'New partner',type:'',contactName:'',contactEmail:'',contactPhone:'',notes:''});
+  CFG.partners.push({id:uid('ptn'),name:'New partner',type:'',contactName:'',contactEmail:'',contactPhone:'',notes:'',podId:null,acvTarget:null,contactTerms:[]});
   logAudit('add partner','New partner'); render(); toast('Partner added — edit its fields below.');
 }
 window.addPartner=addPartner;
@@ -982,6 +995,64 @@ function removePartner(id){
   goingAllocs.forEach(x=>deleteRow('campaign_partner_allocations',x));
 }
 window.removePartner=removePartner;
+/* 2026-09-08 (item 41): Partner type is now a real dropdown sourced from an editable,
+   org-level preset list (CFG.partnerTypePresets) instead of free text -- same pattern
+   recommended for asset tags in item 45. Picking '+ Add new type' prompts once, adds it
+   to the shared preset list (so it's available for every partner from then on, not just
+   this one), and selects it. */
+function setPartnerType(id, val){
+  const p = byId(CFG.partners, id); if(!p) return;
+  if(val === '__new__'){
+    const name = prompt('New partner type (e.g. Agency, Reseller, Referral):');
+    const trimmed = (name||'').trim();
+    if(!trimmed){ render(); return; }
+    if(!CFG.partnerTypePresets.includes(trimmed)) CFG.partnerTypePresets.push(trimmed);
+    p.type = trimmed;
+  } else {
+    p.type = val;
+  }
+  logAudit('edit','partners.type: '+p.type); render();
+}
+window.setPartnerType = setPartnerType;
+
+/* Dedicated setter, not setIn's 'num' coercion -- same reasoning as setCampaignThreshold:
+   a blank $ target should mean "none set", not 0 (a real, different, alertable value). */
+function setPartnerAcvTarget(id, val){
+  const p = byId(CFG.partners, id); if(!p) return;
+  const v = (val===''||val==null) ? null : parseFloat(val);
+  p.acvTarget = (v==null||isNaN(v)) ? null : v;
+  logAudit('edit','partners.acvTarget'); render();
+}
+window.setPartnerAcvTarget = setPartnerAcvTarget;
+
+function togglePartnerDetail(id){
+  UI.partnerDetailId = (UI.partnerDetailId===id) ? null : id;
+  render();
+}
+window.togglePartnerDetail = togglePartnerDetail;
+
+/* Multi-term contacts (item 41): a partner can have more than one contact/terms record
+   over time (e.g. a renewal with a new contact) -- these are ADDITIONAL to the partner's
+   single primary contact_name/contact_email/contact_phone (kept as-is, still the one shown
+   in the main table), not a replacement for it. */
+function addPartnerContactTerm(id){
+  const p = byId(CFG.partners, id); if(!p) return;
+  (p.contactTerms = p.contactTerms||[]).push({name:'',email:'',phone:'',termStart:'',termEnd:'',notes:''});
+  logAudit('add partner contact/term', p.name); render();
+}
+window.addPartnerContactTerm = addPartnerContactTerm;
+function setPartnerContactTerm(id, idx, key, val){
+  const p = byId(CFG.partners, id); if(!p || !p.contactTerms || !p.contactTerms[idx]) return;
+  p.contactTerms[idx][key] = val; render();
+}
+window.setPartnerContactTerm = setPartnerContactTerm;
+function removePartnerContactTerm(id, idx){
+  const p = byId(CFG.partners, id); if(!p || !p.contactTerms) return;
+  p.contactTerms.splice(idx,1);
+  logAudit('remove partner contact/term', p.name); render();
+}
+window.removePartnerContactTerm = removePartnerContactTerm;
+
 function addCampaignPartnerAlloc(campaignId){
   if(!CFG.partners.length){ toast('Add a partner first, on the Partners page.'); return; }
   CFG.campaignPartnerAllocations.push({id:uid('cpa'),campaignId:campaignId,partnerId:CFG.partners[0].id,role:'',budgetSharePct:0,leadSharePct:0});
@@ -3021,18 +3092,21 @@ function pageEffectiveness(){
 }
 
 function pagePartners(){
-  let h=`<div class="phead"><div><h1>Partners</h1>
+  let h=`<div style="padding:0 0 4px"><a href="Norma.html" target="tool_North" style="font-size:12px;color:var(--ink-2);text-decoration:none">&larr; Back to Configuration</a></div>`;
+  h+=`<div class="phead"><div><h1>Partners</h1>
     <p>Partners get the same shape of metrics a salesperson gets in this app elsewhere: a share of a parent entity's
       economics, rolled up into attributed numbers — based on each partner's per-campaign allocation (role, budget
-      share %, lead share %), set here or from a campaign's own detail panel.</p></div></div>`;
+      share %, lead share %), set here or from a campaign's own detail panel. Type, Pod and $ target are set here;
+      click Details on any partner for contact info, additional contacts/terms, and the full list of campaigns
+      they're attached to.</p></div></div>`;
   h+=`<div class="card"><h3>Partners <span class="sp"></span><span class="pill n">${CFG.partners.length}</span>
       <button class="btn sm pri" onclick="addPartner()">Add partner</button></h3>
     <div class="bd flush"><div class="scroll cap"><table><thead><tr>
-      <th>Name</th><th>Type</th><th>Contact</th><th class="n">Campaigns</th><th class="n">Attributed budget</th>
-      <th class="n">Won deals</th><th class="n">Attributed won value</th><th></th></tr></thead><tbody>
-    ${!CFG.partners.length?`<tr><td colspan="8" class="empty">No partners yet.</td></tr>`:CFG.partners.map(p=>{
+      <th>Name</th><th>Type</th><th>Pod</th><th class="n">$ target</th><th class="n">Campaigns</th>
+      <th class="n">Attributed budget</th><th class="n">Won deals</th><th class="n">Attributed won value</th><th></th></tr></thead><tbody>
+    ${!CFG.partners.length?`<tr><td colspan="9" class="empty">No partners yet.</td></tr>`:CFG.partners.map(p=>{
       const allocs=CFG.campaignPartnerAllocations.filter(a=>a.partnerId===p.id);
-      const campIds=new Set(allocs.map(a=>a.campaignId));
+      const campsAttached=[...new Set(allocs.map(a=>a.campaignId))].map(id=>byId(CFG.campaigns,id)).filter(Boolean);
       let attribBudget=0, attribWon=0, wonCount=0;
       allocs.forEach(a=>{
         const camp=byId(CFG.campaigns,a.campaignId); if(!camp) return;
@@ -3042,21 +3116,64 @@ function pagePartners(){
         wonCount += won.length;
         attribWon += sum(won.map(d=>d.value||0))*share;
       });
-      return `<tr><td><input class="cel txt" style="width:160px" value="${esc(p.name)}" onchange="setIn('partners','${p.id}','name',this.value)"></td>
-        <td><input class="cel txt" style="width:110px" placeholder="Agency, reseller…" value="${esc(p.type)}" onchange="setIn('partners','${p.id}','type',this.value)"></td>
-        <td class="mini">${p.contactName?esc(p.contactName):'—'}${p.contactEmail?' · '+esc(p.contactEmail):''}</td>
-        <td class="n calc">${campIds.size}</td>
+      const typeOptions=[''].concat(CFG.partnerTypePresets||[]);
+      if(p.type && !typeOptions.includes(p.type)) typeOptions.push(p.type);
+      const podOptions=CFG.pods||[];
+      const isOpen = UI.partnerDetailId===p.id;
+      let rows = `<tr><td><input class="cel txt" style="width:150px" value="${esc(p.name)}" onchange="setIn('partners','${p.id}','name',this.value)"></td>
+        <td><select class="cel txt" style="width:120px" onchange="setPartnerType('${p.id}',this.value)">
+          ${typeOptions.map(t=>`<option value="${esc(t)}" ${t===p.type?'selected':''}>${t?esc(t):'— choose —'}</option>`).join('')}
+          <option value="__new__">+ Add new type…</option></select></td>
+        <td><select class="cel txt" style="width:130px" onchange="setIn('partners','${p.id}','podId',this.value||null)">
+          <option value="" ${!p.podId?'selected':''}>— none —</option>
+          ${podOptions.map(pd=>`<option value="${pd.id}" ${pd.id===p.podId?'selected':''}>${esc(pd.name)}</option>`).join('')}</select></td>
+        <td class="n"><input class="cel txt n" style="width:90px" value="${p.acvTarget==null?'':p.acvTarget}" placeholder="—" onchange="setPartnerAcvTarget('${p.id}',this.value)"></td>
+        <td class="n calc">${campsAttached.length}</td>
         <td class="n calc">${F.mk(attribBudget)}</td>
         <td class="n calc">${wonCount}</td>
         <td class="n calc">${F.mk(attribWon)}</td>
-        <td class="n"><button class="btn sm dgr" onclick="removePartner('${p.id}')">Remove</button></td></tr>`;
+        <td class="n" style="white-space:nowrap"><button class="btn sm" onclick="togglePartnerDetail('${p.id}')">${isOpen?'Hide':'Details'}</button>
+          <button class="btn sm dgr" onclick="removePartner('${p.id}')">Remove</button></td></tr>`;
+      if(isOpen){
+        rows += `<tr><td colspan="9" style="background:var(--bg-2);padding:10px 14px">
+          <div class="row" style="gap:24px;flex-wrap:wrap;align-items:flex-start">
+            <div style="min-width:260px">
+              <label class="lbl">Primary contact</label>
+              <div class="row" style="gap:6px;margin-top:4px;flex-wrap:wrap">
+                <input class="cel txt" style="width:150px" placeholder="Name" value="${esc(p.contactName)}" onchange="setIn('partners','${p.id}','contactName',this.value)">
+                <input class="cel txt" style="width:170px" placeholder="Email" value="${esc(p.contactEmail)}" onchange="setIn('partners','${p.id}','contactEmail',this.value)">
+                <input class="cel txt" style="width:120px" placeholder="Phone" value="${esc(p.contactPhone)}" onchange="setIn('partners','${p.id}','contactPhone',this.value)">
+              </div>
+              <textarea class="cel txt" style="width:100%;margin-top:6px;min-height:40px" placeholder="Notes" onchange="setIn('partners','${p.id}','notes',this.value)">${esc(p.notes)}</textarea>
+            </div>
+            <div style="min-width:320px;flex:1">
+              <label class="lbl">Additional contacts / terms <span class="mini">(for multiple contacts over time, e.g. renewals)</span></label>
+              ${(p.contactTerms||[]).map((ct,i)=>`<div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--line);padding-top:6px">
+                <input class="cel txt" style="width:120px" placeholder="Name" value="${esc(ct.name)}" onchange="setPartnerContactTerm('${p.id}',${i},'name',this.value)">
+                <input class="cel txt" style="width:150px" placeholder="Email" value="${esc(ct.email)}" onchange="setPartnerContactTerm('${p.id}',${i},'email',this.value)">
+                <input class="cel txt" style="width:110px" placeholder="Phone" value="${esc(ct.phone)}" onchange="setPartnerContactTerm('${p.id}',${i},'phone',this.value)">
+                <input class="cel txt" type="date" style="width:130px" title="Term start" value="${esc(ct.termStart)}" onchange="setPartnerContactTerm('${p.id}',${i},'termStart',this.value)">
+                <input class="cel txt" type="date" style="width:130px" title="Term end" value="${esc(ct.termEnd)}" onchange="setPartnerContactTerm('${p.id}',${i},'termEnd',this.value)">
+                <input class="cel txt" style="width:140px" placeholder="Notes" value="${esc(ct.notes)}" onchange="setPartnerContactTerm('${p.id}',${i},'notes',this.value)">
+                <button class="btn sm dgr" onclick="removePartnerContactTerm('${p.id}',${i})">Remove</button></div>`).join('')}
+              <button class="btn sm" style="margin-top:6px" onclick="addPartnerContactTerm('${p.id}')">+ Add contact / term</button>
+            </div>
+            <div style="min-width:200px">
+              <label class="lbl">Attached campaigns (${campsAttached.length})</label>
+              ${!campsAttached.length?'<p class="mini" style="margin-top:4px">None yet — attach from a campaign\'s own detail panel.</p>':
+                `<ul class="mini" style="margin:4px 0 0;padding-left:16px">${campsAttached.map(c=>`<li>${esc(c.name)}</li>`).join('')}</ul>`}
+            </div>
+          </div></td></tr>`;
+      }
+      return rows;
     }).join('')}
     </tbody></table></div></div>
     <div class="bd" style="padding-top:0"><p class="mini">Attributed budget is each partner's budget-share % applied to
       the full budget of every campaign they're allocated to. Attributed won value applies that same share to the value
       of deals Scoring has marked closed-won and linked to that exact campaign — same live link Effectiveness uses, so
-      it carries the same known gap: a deal Scoring never linked to a campaign won't show up here either. Edit contact
-      details and per-campaign allocation from the row above or from that campaign's own detail panel.</p></div></div>`;
+      it carries the same known gap: a deal Scoring never linked to a campaign won't show up here either. Per-campaign
+      allocation itself is still edited from that campaign's own detail panel. $ target is this partner's own target,
+      independent of its Pod's derived target from Strategy's Region/Pod hierarchy.</p></div></div>`;
   return h;
 }
 
@@ -3328,6 +3445,14 @@ function applyHashRoute(){
   if(m){
     const camp=byId(CFG.campaigns,decodeURIComponent(m[1]));
     if(camp){ UI.page='planning'; UI.planScope='activity'; UI.planCampaignId=camp.id; UI.planProgrammeId=camp.programmeId||null; UI.campaignId=camp.id; }
+    return;
+  }
+  /* 2026-09-08 (item 41): generic #page=<id> deep link, e.g. Cursus.html#page=partners from
+     Configuration's Quick links -- lands directly on any real PAGES entry by id. */
+  const pm=/page=([^&]+)/.exec(location.hash);
+  if(pm){
+    const pageId=decodeURIComponent(pm[1]);
+    if(PAGES.some(p=>p.id===pageId)) UI.page=pageId;
   }
 }
 window.addEventListener('hashchange',()=>{ applyHashRoute(); render(); });

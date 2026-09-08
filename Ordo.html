@@ -348,6 +348,7 @@ svg{display:block;max-width:100%}
 <!-- ── End loading overlay ─────────────────────────────────────────────── -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="shared/moduleFooter.js"></script>
+<script src="shared/dateFormat.js"></script>
 <script src="shared/orgSwitcher.js"></script>
 <script src="shared/convertToMain.js"></script>
 <script src="shared/currencyOptions.js"></script>
@@ -405,7 +406,7 @@ const F = {
   p:(v,d=1)=>(v==null||isNaN(v))?'—':(v*100).toFixed(d)+'%',
   sp:(v,d=1)=>(v==null||isNaN(v))?'—':(v>=0?'+':'')+(v*100).toFixed(d)+'%',
   d:iso=>{ if(!iso)return '—'; return new Date(iso+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'2-digit'}); },
-  dt:iso=>{ if(!iso)return '—'; return new Date(iso).toLocaleString('en-AU',{day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+  dt:iso=>formatDt(iso)
 };
 const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fin=v=>(v==null||typeof v!=='number'||!isFinite(v))?0:v;

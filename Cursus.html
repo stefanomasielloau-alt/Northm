@@ -665,6 +665,28 @@ async function loadFromSupabase(){
     console.warn('Could not load task_campaign_links (migration may not be run yet) -- secondary campaign links on activities will show as none until it is.', e);
   }
 
+  /* campaign_execution_status (2026-09-08, backlog item 11): Hub/Queue campaign activity pushed
+     up from Hub-Backend, matched to a campaign by exact name. Read-only from here except for
+     clearing a manual conflict flag -- Hub-Backend owns every other field, written with its own
+     Supabase service-role key on its own schedule (see Sync page, card 8). Fail-soft, same
+     reasoning as task_campaign_links: the migration may not be run yet. */
+  CFG.campaignExecutionStatus = [];
+  try{
+    const { data: cesData, error: cesErr } = await sb.from('campaign_execution_status')
+      .select('id,campaign_id,campaign_name_matched,executed,executed_at,sent_count,opened_count,clicked_count,responded_count,connected_count,last_synced_at,conflict_flag')
+      .eq('org_id', _orgId);
+    if(cesErr) throw cesErr;
+    CFG.campaignExecutionStatus = (cesData||[]).map(s=>({
+      id:s.id, campaignId:s.campaign_id, campaignNameMatched:s.campaign_name_matched,
+      executed:!!s.executed, executedAt:s.executed_at,
+      sentCount:s.sent_count||0, openedCount:s.opened_count, clickedCount:s.clicked_count,
+      respondedCount:s.responded_count||0, connectedCount:s.connected_count||0,
+      lastSyncedAt:s.last_synced_at, conflictFlag:!!s.conflict_flag
+    })).sort((a,b)=>a.campaignNameMatched.localeCompare(b.campaignNameMatched));
+  }catch(e){
+    console.warn('Could not load campaign_execution_status (migration may not be run yet) -- Sync page will show no Hub/Queue execution data until it is.', e);
+  }
+
   /* Active AI provider for the 'Upload a document' campaign-wizard path (2026-08-31) --
      Norma's LLM providers page marks at most one row Active; this maps its Kind to the
      provider id Hub-Backend's /admin/ai-extract expects. Fail-soft, same reasoning as
@@ -1828,6 +1850,22 @@ function exportCampaignsCsv(){
   toast('Campaigns exported as CSV — ready to import into Excel, Monday, ClickUp, or Smartsheet.');
 }
 window.exportCampaignsCsv=exportCampaignsCsv;
+/* Manual conflict clearing for campaign_execution_status (2026-09-08, item 11) -- "conflict
+   handling: manual" per Stef, so this never auto-resolves anything, it just lets a person say
+   "I've looked at both sides, this is fine now" and clears the flag. */
+async function clearCampaignExecutionConflict(id){
+  if(!id) return;
+  try{
+    const { error } = await sb.from('campaign_execution_status').update({ conflict_flag:false }).eq('id', id).eq('org_id', _orgId);
+    if(error) throw error;
+    const row=CFG.campaignExecutionStatus.find(s=>s.id===id);
+    if(row) row.conflictFlag=false;
+    logAudit('cleared Hub/Queue sync conflict', row?row.campaignNameMatched:id);
+    render();
+    toast('Conflict cleared.');
+  }catch(e){ console.error('Could not clear conflict flag', e); toast('Could not clear the conflict flag — see console.'); }
+}
+window.clearCampaignExecutionConflict=clearCampaignExecutionConflict;
 function exportActivitiesCsv(){
   const headers=['Activity ID','Activity name','Type','Campaign','Programme','Owner','Start date','Due date','Status','Cost bucket','Planned cost','Committed cost','Actual cost','Supplier','PO','Notes','Tracking ref'];
   const rows=CFG.tasks.map(t=>{
@@ -3264,6 +3302,27 @@ function pageSync(){
       <p class="mini">In Scoring: Deals page → "Export closed-won for Strategy" (the same file works here). This is what powers
         the Effectiveness page — cost-per-outcome and revenue contribution against deals actually linked to a campaign here.</p>
       <label class="btn pri">Choose Scoring export file…<input type="file" accept="application/json" style="display:none" onchange="handleAugurImportFile(this.files[0])"></label>
+    </div></div>`;
+  h+=`<div class="card"><h3>8. Campaign execution status from Hub/Queue <span class="sp"></span>
+      ${CFG.campaignExecutionStatus.length?`<span class="pill ok">${CFG.campaignExecutionStatus.length} campaign${CFG.campaignExecutionStatus.length===1?'':'s'} tracked</span>`:`<span class="pill n">Nothing synced yet</span>`}</h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>Campaign</th><th>Status</th><th class="n">Sent</th><th class="n">Responded</th><th class="n">Connected</th><th>Last synced</th><th></th>
+    </tr></thead><tbody>
+      ${!CFG.campaignExecutionStatus.length?`<tr><td colspan="7" class="empty">No execution status pushed from Hub/Queue yet.</td></tr>`:
+        CFG.campaignExecutionStatus.map(s=>`<tr>
+          <td>${esc(s.campaignNameMatched)}${s.campaignId?'':' <span class="pill warn" title="No campaign here currently has this exact name">unmatched name</span>'}</td>
+          <td>${s.executed?'<span class="pill ok">Executed</span>':'<span class="pill n">Not started</span>'}</td>
+          <td class="n calc">${s.sentCount}</td>
+          <td class="n calc">${s.respondedCount}</td>
+          <td class="n calc">${s.connectedCount}</td>
+          <td class="mini">${s.lastSyncedAt?F.dt(s.lastSyncedAt):'—'}</td>
+          <td>${s.conflictFlag?`<button class="btn sm dgr" onclick="clearCampaignExecutionConflict('${s.id}')">Review &amp; clear conflict</button>`:''}</td>
+        </tr>`).join('')}
+    </tbody></table></div>
+    <p class="mini" style="padding:8px 14px 0">Pushed from Hub-Backend, matched to a campaign here by exact name (case-sensitive) — there's no
+      pull-on-demand from this side. Sent/Responded/Connected only: Hub/Queue has no email open/click tracking, so those two counters
+      from the original spec are intentionally never shown here rather than shown as a false zero. Push frequency and the manual
+      "Sync now" button live in Hub's own Settings → Sync to North, not here — Hub is the side that knows the org mapping and does the pushing.</p>
     </div></div>`;
   h+=`<div class="card"><h3>Local autosave</h3><div class="bd">
     <p class="mini" style="margin:0 0 8px">Campaigns, activities and templates save to this browser automatically. Local only —

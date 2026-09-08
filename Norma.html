@@ -378,7 +378,8 @@ let _hubOrgSlug = '', _orgId = null, _myProfile = null, _saveTimer = null, _real
    Hub auth token plus (briefly, mid-form) a DB connection string. This
    object is never written to localStorage/sessionStorage and evaporates
    on refresh/navigation, by design -- see hubSuperLogin()/hubSuperLogout(). */
-let _hubSuper = { token: '', username: '', orgs: [] };
+let _hubSuper = { token: '', username: '', orgs: [], viaNorth: false };
+let _hubAutoTried = false;
 /* Set right before an internal (non-user-initiated) signOut() -- e.g. bootApp()'s error path
    below -- so the global onAuthStateChange listener knows to skip its reload-on-SIGNED_OUT and
    let the error message stay on screen instead of wiping it out immediately. Without this, the
@@ -1848,6 +1849,34 @@ window.removeBusinessUnit=removeBusinessUnit;
    /api/orgs/register, stored encrypted server-side in Hub's control DB, and
    never read back by any endpoint, so there is nothing for North to leak
    even if it wanted to keep a copy. */
+/* 2026-09-08: auth consolidation ("move admin to North"). Hub-Backend's
+   org-lifecycle routes (GET/POST /api/orgs, /api/orgs/register) now also
+   accept a live North session JWT, verified server-side against North's
+   own platform_admin_level() RPC -- the SAME authority isFullSuperAdmin
+   above is built on. So whoever is already signed into North as a
+   platform admin needs NO separate Hub credential at all for this panel;
+   the manual username/password form below is now only a fallback (kept
+   for the case this fails, or for someone acting from Hub's own Cloud
+   Sync tab where there's no North session to lean on). */
+async function tryAutoHubConnect(force){
+  if(_hubAutoTried && !force) return;
+  _hubAutoTried = true;
+  try{
+    const { data } = await sb.auth.getSession();
+    const t = data && data.session && data.session.access_token;
+    if(!t){ if(force) toast('No live North session found -- sign in again.'); return; }
+    const res = await fetch(CONTACT_URL+'/api/orgs', { headers: { 'Authorization': 'Bearer '+t } });
+    if(!res.ok){ if(force) toast('Not authorized as a North platform admin for Hub connections ('+res.status+').'); return; }
+    const body = await res.json();
+    _hubSuper.token = t;
+    _hubSuper.username = (_myProfile && _myProfile.name) || 'your North session';
+    _hubSuper.viaNorth = true;
+    _hubSuper.orgs = body.orgs || [];
+    render();
+    if(force) toast('Connected to Hub via your North session.');
+  }catch(e){ if(force) toast('Could not reach Hub: '+(e&&e.message?e.message:e)); }
+}
+window.tryAutoHubConnect=tryAutoHubConnect;
 async function hubSuperLogin(){
   const userEl=document.getElementById('hubSuperUser'), passEl=document.getElementById('hubSuperPass');
   const username=(userEl&&userEl.value||'').trim(), password=(passEl&&passEl.value||'');
@@ -1864,7 +1893,7 @@ async function hubSuperLogin(){
 }
 window.hubSuperLogin=hubSuperLogin;
 function hubSuperLogout(){
-  _hubSuper={token:'',username:'',orgs:[]};
+  _hubSuper={token:'',username:'',orgs:[],viaNorth:false};
   render();
 }
 window.hubSuperLogout=hubSuperLogout;
@@ -1963,11 +1992,16 @@ window.revokeNorthAdmin = revokeNorthAdmin;
 function renderHubConnectionsCard(){
   if(!CFG.isSuperAdmin) return '';
   if(!_hubSuper.token){
+    if(!_hubAutoTried) tryAutoHubConnect();
     return `<div class="card"><h3>Hub database connections <span class="sp"></span><span class="pill v">Super Admin view</span></h3>
       <div class="bd"><p class="mini" style="margin:0 0 9px">Register or review which database backs each organization's
         Contact/Hub data (e.g. Bodgit&amp;Scarpa's separate Neon database) -- without North ever storing the connection
-        string. Sign in with your <b>Hub</b> super-admin account (separate from your North login) to continue; the
-        session lives only in this tab and is gone on refresh.</p>
+        string. Connecting as a North platform admin (you) should happen automatically -- if it hasn't after a moment,
+        use the button below, or fall back to a separate Hub super-admin account.</p>
+      <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="btn sm pri" onclick="tryAutoHubConnect(true)">Try my North session again</button>
+      </div>
+      <p class="mini" style="margin:0 0 9px">Or sign in with a separate <b>Hub</b> super-admin account (only needed if the above doesn't work):</p>
       <div class="row" style="gap:8px;flex-wrap:wrap">
         <input class="cel txt" id="hubSuperUser" style="width:180px" placeholder="Hub super-admin username" autocomplete="off">
         <input class="cel txt" id="hubSuperPass" type="password" style="width:180px" placeholder="Password" autocomplete="off" onkeydown="if(event.key==='Enter')hubSuperLogin()">
@@ -1975,7 +2009,7 @@ function renderHubConnectionsCard(){
       </div></div></div>`;
   }
   return `<div class="card"><h3>Hub database connections <span class="sp"></span><span class="pill v">Super Admin view</span>
-    <span class="pill ok" style="margin-left:8px">Connected as ${esc(_hubSuper.username)}</span>
+    <span class="pill ok" style="margin-left:8px">${_hubSuper.viaNorth?'Connected via your North session':'Connected as '+esc(_hubSuper.username)}</span>
     <button class="btn sm" style="margin-left:8px" onclick="hubSuperLogout()">Disconnect</button></h3>
     <div class="bd flush"><table><thead><tr><th>Organization</th><th>Slug</th><th>Status</th><th>Hub org ID (for scripts)</th><th class="n">Registered</th></tr></thead><tbody>
     ${!_hubSuper.orgs.length?`<tr><td colspan="5" class="empty">No organizations registered in Hub yet.</td></tr>`:_hubSuper.orgs.map(o=>

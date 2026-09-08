@@ -185,6 +185,7 @@ body{font-family:var(--sans); background:var(--canvas); color:var(--ink); font-s
 <div class="wrap" id="wrap"></div>
 <div class="foot" id="foot">North — a live cross-tool dashboard and directory.</div>
 <div id="layer"></div>
+<script src="shared/orgSwitcher.js"></script>
 <script>
 /* ============================================================================
    North — suite dashboard. Same Supabase auth pattern as every other tool in
@@ -228,7 +229,7 @@ async function loadFromSupabase(){
   const { data: prof, error: profErr } = await sb.from('profiles')
     .select('id,name,org_id,role_id,module_overrides,contact_access').eq('id', authUser.id).single();
   if(profErr || !prof){ const e = new Error('No profile linked yet.'); e.noProfile = true; throw e; }
-  _myProfile = prof; _orgId = prof.org_id;
+  _myProfile = prof; _orgId = prof.org_id; initOrgSwitcher();
 
   /* item 38 (2026-09-07): platform_admin_level() adds an L1 "additional North Admin" tier
      on top of the existing is_platform_admin() (now L0), without touching that function.

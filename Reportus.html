@@ -177,6 +177,7 @@ td.lb{font-weight:600;}
 <!-- ── End loading overlay ─────────────────────────────────────────────── -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="shared/moduleFooter.js"></script>
+<script src="shared/orgSwitcher.js"></script>
 <script src="shared/convertToMain.js"></script>
 <script src="shared/charts.js"></script>
 <div id="authGate" style="display:none"></div>
@@ -307,7 +308,7 @@ async function loadFromSupabase(){
   const { data: prof, error: profErr } = await sb.from('profiles')
     .select('id,name,org_id,role_id,region_ids,cross_region').eq('id', authUser.id).single();
   if(profErr || !prof){ const e = new Error('No profile linked yet.'); e.noProfile = true; throw e; }
-  _myProfile = prof; _orgId = prof.org_id;
+  _myProfile = prof; _orgId = prof.org_id; initOrgSwitcher();
 
   const { data: hubOrgRow } = await sb.from('organizations').select('hub_org_slug').eq('id', _orgId).maybeSingle();
   _hubOrgSlug = (hubOrgRow && hubOrgRow.hub_org_slug) || '';

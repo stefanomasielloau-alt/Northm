@@ -58,3 +58,39 @@ CREATE POLICY campaign_execution_status_org_isolation ON campaign_execution_stat
 
 -- Cursus.html ships with fail-soft loading for this table -- nothing breaks
 -- if this hasn't been run yet, campaign cards just show no execution badge.
+
+-- ---------------------------------------------------------------------------
+-- 2026-09-08 (follow-up, same day): campaigns.updated_at + auto-update trigger.
+-- This is the piece the migration above deliberately left out -- without a
+-- real "when was this campaign last touched in North" timestamp, Hub-Backend
+-- had nothing to compare against to detect a conflict (someone edited the
+-- campaign in North after Hub's last push). Purely additive: a new nullable
+-- column + a standard trigger that stamps it on every UPDATE. Nothing reads
+-- or requires this column elsewhere in North today, so this cannot break any
+-- existing upsert path (upsertRows('campaigns', ...) in Cursus.html sends an
+-- explicit column list that doesn't include updated_at -- Postgres fills it
+-- in via the trigger regardless of what the client sends).
+
+ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
+CREATE OR REPLACE FUNCTION set_campaigns_updated_at()
+RETURNS trigger AS $$
+BEGIN
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_campaigns_set_updated_at ON campaigns;
+CREATE TRIGGER trg_campaigns_set_updated_at
+  BEFORE UPDATE ON campaigns
+  FOR EACH ROW
+  EXECUTE FUNCTION set_campaigns_updated_at();
+
+-- Now that campaigns.updated_at is real and trigger-maintained, Hub-Backend's
+-- sync.py compares it against campaign_execution_status.last_synced_at at
+-- push time: if the campaign has been touched in North since Hub's last
+-- successful push, conflict_flag is set true (and stays true, even across
+-- later pushes, until a person uses Cursus.html's "Review & clear" button --
+-- conflict handling is manual, per Stef's original answer; the system can
+-- only raise the flag, never lower it).

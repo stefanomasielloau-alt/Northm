@@ -3322,7 +3322,9 @@ function pageSync(){
     <p class="mini" style="padding:8px 14px 0">Pushed from Hub-Backend, matched to a campaign here by exact name (case-sensitive) — there's no
       pull-on-demand from this side. Sent/Responded/Connected only: Hub/Queue has no email open/click tracking, so those two counters
       from the original spec are intentionally never shown here rather than shown as a false zero. Push frequency and the manual
-      "Sync now" button live in Hub's own Settings → Sync to North, not here — Hub is the side that knows the org mapping and does the pushing.</p>
+      "Sync now" button live in Hub's own Settings → Sync to North, not here — Hub is the side that knows the org mapping and does the pushing.
+      A conflict flag (2026-09-08) means this campaign was edited here in North after Hub's last successful push of it — Hub only ever
+      raises the flag, never clears it, so "Review & clear" is the one and only way it goes away once you've looked at both sides.</p>
     </div></div>`;
   h+=`<div class="card"><h3>Local autosave</h3><div class="bd">
     <p class="mini" style="margin:0 0 8px">Campaigns, activities and templates save to this browser automatically. Local only —

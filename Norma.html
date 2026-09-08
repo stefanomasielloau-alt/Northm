@@ -1711,6 +1711,14 @@ async function bootApp(){
   hideAuthGate();
   render();
   subscribeRealtime();
+  // 2026-09-08: fire Hub auto-connect right at boot, not only when the Roles & users
+  // page (where the Hub connections card lives) happens to render -- previously a
+  // fresh load / navigating straight to another page left _hubSuper empty with no
+  // attempt made at all until that specific page was opened, which is what made this
+  // look inconsistent ("sometimes shows Stefm/Bodgit, sometimes nothing"). Fire-and-
+  // forget, gated the same way the card itself is (isSuperAdmin) so this never fires
+  // a wasted network call for anyone who'd never see the card anyway.
+  if(CFG.isSuperAdmin) tryAutoHubConnect();
   if(new URLSearchParams(location.search).get('help')==='1'){ openHelpPanel(); }
 }
 

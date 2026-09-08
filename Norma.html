@@ -1415,7 +1415,16 @@ async function setRoleOrg(roleId, newOrgId){
     return;
   }
   const old = r.orgId; r.orgId = newOrgId; render();
-  const { error } = await sb.from('roles').update({ org_id: newOrgId }).eq('id', roleId);
+  /* 2026-09-08 (item 39, THIRD recurrence): moving org_id via a direct .update() never
+     actually stopped the corruption -- forensics on 2026-09-08 found the roles table's
+     org_id being reset to Tac-Tik with ZERO matching "move role to organization" audit_log
+     entries, meaning it was happening OUTSIDE this function entirely (most likely a raw SQL
+     statement run directly against Supabase, which this JS-level guard can never see or
+     stop). Switched to a guarded RPC (move_role_to_org, see the 2026-09-08 migration) that a
+     new BEFORE UPDATE trigger on roles now requires for ANY org_id change -- including a
+     raw SQL UPDATE run outside the app -- so the only way to move a role's org, from any
+     source, is through this one audited, Super-Admin-checked path. */
+  const { error } = await sb.rpc('move_role_to_org', { p_role_id: roleId, p_new_org_id: newOrgId });
   if(error){ r.orgId = old; render(); toast('Could not move role: '+error.message); return; }
   logAudit('move role to organization', r.name+' \u2192 '+destName);
   render();

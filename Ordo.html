@@ -1334,7 +1334,30 @@ async function saveToSupabase(){
     upsertRows('cost_buckets', CFG.costBuckets, c=>({id:c.id,code:c.code,label:c.label,dept:c.dept||'Marketing',ext_code:c.extCode||''})),
     upsertRows('programmes', CFG.programmes, p=>({id:p.id,name:p.name,owner:p.owner||'',focus:p.focus||'',status:p.status||'Active',tracking_ref:p.trackingRef||null,cloned_from_id:p.clonedFromId||null,notes:p.notes||''})),
     upsertRows('versions', CFG.versions, v=>({id:v.id,name:v.name,kind:v.kind,locked:!!v.locked})),
-    upsertRows('roles', CFG.roles, r=>({id:r.id,name:r.name,config:!!r.config,publish:!!r.publish,write_all:!!r.writeAll,scope:r.scope,description:r.desc||'',require_commit_on_edit:!!r.requireCommitOnEdit})),
+    /* NOT upsertRows() (2026-09-09 fix, live production bug): roles is NOT Strategy's table --
+       the only thing this page ever edits on a role is requireCommitOnEdit, via
+       toggleRequireCommit() above ("Requires commit on plan edits" panel). upsertRows()'s
+       generic helper stamps org_id:_orgId onto EVERY row it writes, unconditionally -- for a
+       Super Admin whose RLS grants cross-org SELECT on roles (needed so this page's own
+       permission checks work when Configuration shows another org's roles), that meant
+       CFG.roles could hold roles belonging to OTHER orgs, and this call would silently try to
+       reassign every one of them back into whichever org Strategy currently had open -- on
+       EVERY save. That is almost certainly the real root cause behind this project's three
+       historical role/org-corruption incidents (previously blamed on Norma.html's setRoleOrg()
+       and on raw SQL) -- it just always succeeded silently until item 39's guard trigger went
+       live and started rejecting the org_id change, which is the "cannot save roles to
+       database" toast Stef hit in Strategy on 2026-09-09. Fixed at the source: write ONLY the
+       one field this page actually owns, never org_id, so there is nothing left for the guard
+       trigger to reject and nothing left that could silently corrupt another org's role. */
+    (async()=>{
+      try{
+        const results = await Promise.all(CFG.roles.map(r=>
+          sb.from('roles').update({require_commit_on_edit: !!r.requireCommitOnEdit}).eq('id', r.id)
+        ));
+        const failed = results.find(x=>x.error);
+        if(failed) throw failed.error;
+      }catch(e){ console.error('Save failed for roles.require_commit_on_edit', e); toast('Could not save roles to the database — see console.'); }
+    })(),
     upsertRows('campaign_pod_allocations', CFG.campaignPodAllocations, a=>({id:a.id,campaign_id:a.campaignId,pod_id:a.podId,share_pct:a.sharePct||0})),
     upsertRows('snapshots', CFG.snapshots, s=>({id:s.id,name:s.name,created_by:s.createdBy,created_at:s.timestamp,data:s.data})),
     upsertRows('audit_log', CFG.audit, a=>({ts:a.ts,what:a.what,detail:a.detail,who:a.who,role:a.role,user_id:_myProfile?_myProfile.id:null})),

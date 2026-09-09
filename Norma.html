@@ -1216,6 +1216,41 @@ async function saveOrgHubSlug(orgId, newSlug){
   toast(trimmed ? 'Hub org slug set to '+trimmed+'.' : 'Hub org slug cleared -- Contact will fall back to the default Hub org.');
 }
 window.saveOrgHubSlug = saveOrgHubSlug;
+/* 2026-09-09 (item 56): manual re-seed / archive / restore of an org's
+   "auto-seed-example"-tagged starter-kit data (regions, cost buckets,
+   programmes, campaigns, tasks). All three call new Super-Admin-gated
+   Postgres RPCs (admin_reseed_organization / archive_seed_data /
+   restore_seed_data) -- the RPC itself re-checks admin status server-side,
+   this button-level gate is just so the option isn't even shown to anyone
+   who can't use it. Archiving moves the rows into archived_seed_rows and
+   removes them from the live tables (so they disappear from every module
+   that reads campaigns/tasks/etc, with zero changes needed to any of those
+   files); restoring puts them back exactly as they were. Never a hard
+   delete, per Stef's 2026-09-09 decision. */
+async function reseedOrgExampleData(orgId){
+  if(!CFG.isFullSuperAdmin){ toast('Only the full Super Admin can do this.'); return; }
+  const { error } = await sb.rpc('admin_reseed_organization', { p_org_id: orgId });
+  if(error){ toast('Could not seed example data: '+error.message); return; }
+  logAudit('seed example data', orgName(orgId));
+  toast('Example starter-kit data seeded for '+orgName(orgId)+' (no-op if it already had one).');
+}
+window.reseedOrgExampleData = reseedOrgExampleData;
+async function archiveOrgExampleData(orgId){
+  if(!CFG.isFullSuperAdmin){ toast('Only the full Super Admin can do this.'); return; }
+  const { data, error } = await sb.rpc('archive_seed_data', { p_org_id: orgId });
+  if(error){ toast('Could not archive example data: '+error.message); return; }
+  logAudit('archive example data', orgName(orgId)+' ('+data+' row(s))');
+  toast(data ? ('Archived '+data+' example row(s) for '+orgName(orgId)+' -- reversible, use Restore to bring them back.') : 'No example data to archive for '+orgName(orgId)+'.');
+}
+window.archiveOrgExampleData = archiveOrgExampleData;
+async function restoreOrgExampleData(orgId){
+  if(!CFG.isFullSuperAdmin){ toast('Only the full Super Admin can do this.'); return; }
+  const { data, error } = await sb.rpc('restore_seed_data', { p_org_id: orgId });
+  if(error){ toast('Could not restore example data: '+error.message); return; }
+  logAudit('restore example data', orgName(orgId)+' ('+data+' row(s))');
+  toast(data ? ('Restored '+data+' example row(s) for '+orgName(orgId)+'.') : 'No archived example data to restore for '+orgName(orgId)+'.');
+}
+window.restoreOrgExampleData = restoreOrgExampleData;
 async function setOrgParent(orgId, parentId){
   const o = byId(CFG.allOrganizations, orgId); if(!o) return;
   if(parentId===orgId){ toast('An organization cannot be its own parent.'); render(); return; }
@@ -1275,6 +1310,16 @@ function orgEditModalHtml(){
       <div class="mini" style="margin:4px 0 16px">${ACCESS_MODULES_ALL.map(m=>moduleAccessBtnHtml(m, !!o.moduleAccess[m.id], `toggleOrgModuleAccess('${o.id}','${m.id}')`)).join('')}
         <p class="mini" style="margin-top:6px">This is the ceiling, not the default -- each person still needs their own
           access turned on in the Users table below for anyone to actually get in.</p>
+      </div>
+
+      <label class="lbl">Example / starter data</label>
+      <div class="mini" style="margin:4px 0 16px">
+        <p class="mini" style="margin:0 0 8px">Fictional "auto-seed-example"-tagged data (a starter programme, 2 campaigns, 3 activities, plus supporting regions/cost buckets) -- either auto-created when this org was first created, or seeded on demand here. Archiving moves it out of every screen without deleting it; Restore brings it back exactly as it was.</p>
+        <div class="row" style="gap:8px">
+          <button class="btn sm" onclick="reseedOrgExampleData('${o.id}')">Seed / re-seed example data</button>
+          <button class="btn sm" onclick="archiveOrgExampleData('${o.id}')">Archive example data</button>
+          <button class="btn sm" onclick="restoreOrgExampleData('${o.id}')">Restore archived example data</button>
+        </div>
       </div>
 
       <label class="lbl">Roles</label>
@@ -3170,6 +3215,32 @@ async function updateHubUserRoleAction(id, role){
   }catch(e){ toast('Could not reach Hub: '+(e&&e.message?e.message:'unknown error')); }
 }
 window.updateHubUserRoleAction=updateHubUserRoleAction;
+/* 2026-09-09 (item 56, Stef's "soft-archive" decision): manual per-user
+   example-data actions, mirroring reseedOrgExampleData/archiveOrgExampleData/
+   restoreOrgExampleData above (which act on a whole North org's starter kit) --
+   these three act on one Hub user's example contacts/outreach instead, since
+   that's how Hub's own seeding (_seed_example_hub_records) is scoped. Same
+   cross-org North-JWT call pattern as updateHubUserRoleAction just above. */
+async function hubUserExampleDataAction(id, username, action, label){
+  if(!canConfig()){ toast('Your role cannot manage Hub example data.'); return; }
+  try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
+    const r = await fetch(CONTACT_URL+'/auth/users/'+encodeURIComponent(id)+'/'+action, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token, org: _hubOrgSlug })
+    });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok){ toast(j.error||('Could not '+label.toLowerCase()+' for '+username+'.')); return; }
+    let detail='';
+    if(typeof j.archived==='number') detail=' ('+j.archived+' row(s))';
+    else if(typeof j.restored==='number') detail=' ('+j.restored+' row(s))';
+    logAudit(label+' Hub example data', username+detail);
+    toast(label+' for '+username+detail+'.');
+  }catch(e){ toast('Could not reach Hub: '+(e&&e.message?e.message:'unknown error')); }
+}
+window.hubUserExampleDataAction=hubUserExampleDataAction;
 const HUB_ROLE_LABEL={user:'Viewer',planner:'Planner',manager:'Manager',admin:'Admin',super_user:'Super User'};
 function pageHubAccounts(){
   let h=`<div class="phead"><div><h1>Hub accounts</h1>
@@ -3188,8 +3259,8 @@ function pageHubAccounts(){
       <button class="btn sm pri" onclick="createHubUser()">Create</button>
     </div></div></div>`;
   h+=`<div class="card"><h3>Hub accounts (${rows.length})</h3><div class="bd flush"><div class="scroll cap">
-    <table><thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Created</th><th>Grants</th></tr></thead><tbody>
-    ${!rows.length?`<tr><td colspan="5" class="empty">No Hub accounts yet.</td></tr>`:rows.map(u=>`<tr>
+    <table><thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Created</th><th>Grants</th><th>Example data</th></tr></thead><tbody>
+    ${!rows.length?`<tr><td colspan="6" class="empty">No Hub accounts yet.</td></tr>`:rows.map(u=>`<tr>
       <td class="mini">${esc(u.username||'—')}</td>
       <td>${esc(u.name||'—')}</td>
       <td><select onchange="updateHubUserRoleAction('${u.id}',this.value)">
@@ -3197,6 +3268,11 @@ function pageHubAccounts(){
       </select></td>
       <td class="mini">${u.created_at?F.dt(u.created_at):'—'}</td>
       <td class="mini">${esc((u.grants||[]).join(', ')||'—')}</td>
+      <td class="mini"><div class="row" style="gap:4px;flex-wrap:wrap">
+        <button class="btn sm" title="Seed or re-seed this user's example contacts/outreach" onclick="hubUserExampleDataAction('${u.id}','${esc(u.username||'')}','seed-example-data','Seeded')">Seed</button>
+        <button class="btn sm" title="Archive this user's example contacts/outreach (reversible)" onclick="hubUserExampleDataAction('${u.id}','${esc(u.username||'')}','archive-example-data','Archived')">Archive</button>
+        <button class="btn sm" title="Restore this user's archived example contacts/outreach" onclick="hubUserExampleDataAction('${u.id}','${esc(u.username||'')}','restore-example-data','Restored')">Restore</button>
+      </div></td>
     </tr>`).join('')}
     </tbody></table>
   </div></div></div>`;

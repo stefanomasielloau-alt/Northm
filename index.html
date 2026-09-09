@@ -550,7 +550,7 @@ function renderFilteredTnLinks(){
   return MODULES.filter(m=>navVisible(m.id)).map(m=>{
     const t = (m.desc||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
     return `<a class="tn-link" href="${m.id}.html" target="tool_North" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
-  }).join('') + (navVisible('Contact') ? '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">Ct</span>Contact</a>' : '');
+  }).join('') + (navVisible('Contact') ? '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">AH</span>AH</a>' : '');
 }
 function renderFeed(){
   if(!CFG.audit.length) return '<div class="empty">No activity yet.</div>';
@@ -646,7 +646,7 @@ function render(){
 <div class="card">
       <div class="bar" style="background:#1F1F1F"></div>
       <div class="bd">
-        <h3><span class="mk" style="background:#1F1F1F">Ct</span>Contact</h3>
+        <h3><span class="mk" style="background:#1F1F1F">AH</span>Account Intelligence Hub</h3>
         <p>LinkedIn outreach, contact pipeline and campaign tracking. Separate tool — opens signed in automatically.</p>
         <div class="row"><span class="pill ok">Live</span><a class="btn" href="#" onclick="openContact();return false;">Open →</a></div>
       </div>
@@ -785,9 +785,9 @@ async function openContact(){
       url = CONTACT_URL + '/auth/sso?token=' + encodeURIComponent(t);
       if(CFG.org && CFG.org.hub_org_slug) url += '&org=' + encodeURIComponent(CFG.org.hub_org_slug);
     } else {
-      toast('No live North session found -- sign in again, then try Contact.');
+      toast('No live North session found -- sign in again, then try AH.');
     }
-  }catch(e){ toast('Could not start Contact sign-in: '+(e&&e.message?e.message:'unknown error')); }
+  }catch(e){ toast('Could not start AH sign-in: '+(e&&e.message?e.message:'unknown error')); }
   window.open(url, 'tool_North');
 }
 window.openContact=openContact;

@@ -898,7 +898,7 @@ async function pushUserToHub(userId){
     if(!r.ok){ toast(j.error||'Could not push to Hub.'); return; }
     logAudit('pushed to Hub', u.name||u.email);
     const hubRoleLabel = {user:'Viewer',planner:'Planner',manager:'Manager',admin:'Admin',super_user:'Super User'}[j.role] || 'Viewer';
-    toast(j.already_existed ? (u.name||u.email)+' already has a Hub account — role synced to '+hubRoleLabel+'.' : (u.name||u.email)+' pushed to Hub as '+hubRoleLabel+' — set their Hub/Queue access there.');
+    toast(j.already_existed ? (u.name||u.email)+' already has an AH account — role synced to '+hubRoleLabel+'.' : (u.name||u.email)+' pushed to AH as '+hubRoleLabel+' — set their AH/AQ access there.');
   }catch(e){ toast('Could not reach Hub: '+(e&&e.message?e.message:'unknown error')); }
 }
 window.pushUserToHub = pushUserToHub;
@@ -1214,7 +1214,7 @@ async function saveOrgHubSlug(orgId, newSlug){
   const { error } = await sb.from('organizations').update({ hub_org_slug: trimmed || null }).eq('id', orgId);
   if(error){ o.hubOrgSlug = old; render(); toast('Could not update Hub org slug: '+error.message); return; }
   logAudit('set Hub org slug', o.name+' -> '+(trimmed||'(cleared)'));
-  toast(trimmed ? 'Hub org slug set to '+trimmed+'.' : 'Hub org slug cleared -- Contact will fall back to the default Hub org.');
+  toast(trimmed ? 'AH org slug set to '+trimmed+'.' : 'AH org slug cleared -- AH will fall back to the default AH org.');
 }
 window.saveOrgHubSlug = saveOrgHubSlug;
 /* 2026-09-09 (item 56): manual re-seed / archive / restore of an org's
@@ -1300,7 +1300,7 @@ function orgEditModalHtml(){
         <button class="btn sm pri" onclick="saveOrgName('${o.id}', document.getElementById('orgEditName').value)">Save</button>
       </div>
 
-      <label class="lbl" title="Must exactly match the slug this org was registered with in Hub's control database -- used to route the Contact button to the right org instead of Hub's single default org">Hub org slug (Contact routing)</label>
+      <label class="lbl" title="Must exactly match the slug this org was registered with in AH's control database -- used to route the AH button to the right org instead of AH's single default org">AH org slug (AH routing)</label>
       <div class="row" style="gap:8px;margin:4px 0 16px">
         <input class="cel txt" id="orgEditHubSlug" style="flex:1" placeholder="e.g. bodgit-scarpa" value="${esc(o.hubOrgSlug||'')}">
         <button class="btn sm pri" onclick="saveOrgHubSlug('${o.id}', document.getElementById('orgEditHubSlug').value)">Save</button>
@@ -1713,7 +1713,7 @@ function renderFilteredTnLinks(){
     return m.id===THIS_MODULE
       ? `<span class="tn-link on" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</span>`
       : `<a class="tn-link" href="${m.id}.html" target="tool_North" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
-  }).join('') + (navVisible('Contact') ? '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">Ct</span>Contact</a>' : '');
+  }).join('') + (navVisible('Contact') ? '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">AH</span>AH</a>' : '');
 }
 async function checkModuleAccess(){
   if(CFG.isSuperAdmin) return true;
@@ -2916,7 +2916,7 @@ function pageUsers(){
     <div class="bd" style="padding-top:0"><p class="mini">"Transparent" sees every region in the organization.
       "Isolated" sees only the regions checked here — check none and they'll see nothing region-scoped until you assign some.
       <b>Modules</b> is per-person access to each of the 8 tools plus Contact — capped by what the organization allows (set
-      in that org's Edit screen). Turning on Contact here is what lets you push them to Hub below; once pushed, assign their
+      in that org's Edit screen). Turning on AH here is what lets you push them to AH below; once pushed, assign their
       Hub/Queue permissions in Hub's own Settings.</p></div></div>`;
 
   h+=(()=>{
@@ -3017,7 +3017,7 @@ function pageFeedback(){
   const p1Count=rows.filter(r=>r.priority==='P1'&&r.status!=='completed').length;
   let h=`<div class="phead"><div><h1>Feedback</h1>
     <p>Issues reported from the floating feedback button on every North page. Name, page, and timestamp
-      are captured automatically -- only the description is typed by the reporter. Hub and Seek have their own
+      are captured automatically -- only the description is typed by the reporter. AH and AQ have their own
       separate feedback list, mirrored into North on the "Hub feedback" page (left of this one) -- kept apart
       since they come from a different app with its own reporters, not merged into the table below.</p></div>
       <div><button class="btn sm" onclick="exportFeedbackCsv()">Export CSV</button></div></div>`;
@@ -3717,9 +3717,9 @@ const PAGES=[
   {id:'agentactivity',ix:'8',label:'Agent activity',  fn:pageAgentActivity},
   {id:'sync',       ix:'9', label:'Export',          fn:pageSync},
   {id:'feedback',   ix:'10',label:'Feedback',        fn:pageFeedback},
-  {id:'hubaccounts',ix:'11',label:'Hub accounts',    fn:pageHubAccounts},
-  {id:'hubfeedback',ix:'12',label:'Hub feedback',    fn:pageHubFeedback},
-  {id:'hubcompanies',ix:'13',label:'Hub companies',  fn:pageHubCompanies},
+  {id:'hubaccounts',ix:'11',label:'AH accounts',    fn:pageHubAccounts},
+  {id:'hubfeedback',ix:'12',label:'AH feedback',    fn:pageHubFeedback},
+  {id:'hubcompanies',ix:'13',label:'AH companies',  fn:pageHubCompanies},
   {id:'licensing',  ix:'14',label:'Licensing',       fn:pageLicensing},
   {id:'branding',   ix:'15',label:'Branding',        fn:pageBranding}
 ];
@@ -3769,9 +3769,9 @@ const HELP_FAQ=[
   {q:"What's the difference between Simple and Expert mode?", a:'In Campaign Planning, Simple mode shows the core fields; Expert mode adds business case, sign-off, partner allocation and more \u2014 toggle it from Campaign Planning if your role allows it.'},
   {q:'What does Cross-region visibility mean?', a:'"Transparent" means you see every region in your organization. "Isolated" means you only see the regions specifically checked for you.'},
   {q:'What is Super Admin?', a:"Super Admin isn't a role in the Roles table \u2014 it's a separate flag on a login that gives full cross-organization visibility in Configuration, independent of any one organization's roles."},
-  {q:'How do I get to Hub or Seek from North?', a:'Open Contact from the top-nav search, or go directly to your Hub/Seek link -- both now have a "North" link in their own sidebar/header to get back here, and a Help link that opens this same panel.'},
+  {q:'How do I get to AH or AQ from North?', a:'Open AH from the top-nav search, or go directly to your AH/AQ link -- both now have a "North" link in their own sidebar/header to get back here, and a Help link that opens this same panel.'},
   {q:'I\'m in Hub -- how do Contact records and campaigns relate to North?', a:'Hub and Seek share one pool of contact/outreach data per Hub login. A contact sourced in Seek becomes a real Hub contact immediately, and outreach/campaign activity in Hub is separate from North\'s own Campaign Planning module -- they are related tools, not the same data.'},
-  {q:'How do I report an issue from Hub or Seek?', a:'Use the red \ud83d\udcac button in the bottom-right corner of Hub or Seek, same as every North page. Reports from Hub/Seek are logged separately for now (their own admin list in Hub Settings) -- ask your North admin if you need something added to this Feedback tab as well.'},
+  {q:'How do I report an issue from AH or AQ?', a:'Use the red \ud83d\udcac button in the bottom-right corner of AH or AQ, same as every North page. Reports from AH/AQ are logged separately for now (their own admin list in AH Settings) -- ask your North admin if you need something added to this Feedback tab as well.'},
   {q:'Can an Admin move or copy a Hub user\'s data to another account?', a:'Hub\'s Settings \u2192 Users \u2192 Reassign data panel supports both Move (takes data off the source account) and, for accounts with the Duplicate capability, Copy (leaves the source untouched). Ask whoever holds that capability to grant it if you need Copy access.'},
   {q:'How does Hub\'s Post & Content Ideas / Talking point generation work?', a:'The Comms tab\'s Generate ideas, Brief, and Find content buttons call your organization\'s configured AI provider, grounded in your real pipeline stage counts, recent company signals, and the selected contact\'s actual title/company/signal -- never invented client names or figures. If no AI provider is configured yet (or the request fails), each falls back to example content instead of breaking.'},
   {q:'Who can use Hub\'s AI content-generation buttons?', a:'Any signed-in Hub user, not just admins -- same as document/brief AI extraction in Campaign Planning. Configure the provider once for the whole organization from Configuration \u2192 LLM providers.'}
@@ -3813,7 +3813,7 @@ function lockedDownModuleAccess(){
    MODULES itself stays the 8 North modules only, since that array also drives the
    top-nav rendering shared across all 9 files and Contact isn't a North page
    (2026-08-27, moving module access off Roles and onto Organization + User). */
-const ACCESS_MODULES_ALL = MODULES.concat([{id:'Contact',label:'Contact',desc:'Search contacts, notes and outreach',color:'#1F1F1F',icon:'Ct'}]);
+const ACCESS_MODULES_ALL = MODULES.concat([{id:'Contact',label:'AH',desc:'Account Intelligence Hub -- search contacts, notes and outreach',color:'#1F1F1F',icon:'AH'}]);
 /* 2026-08-27: shared markup for the module-access toggle buttons -- previously opacity was the
    ONLY signal for on/off, hard to read at a glance per Stef. Enabled now also gets a solid ring
    in the module's own color; disabled stays dim with no ring. Tooltip states the mode in words
@@ -3834,7 +3834,7 @@ function renderTnModuleLinks(){
     return m.id===THIS_MODULE
       ? `<span class="tn-link on" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</span>`
       : `<a class="tn-link" href="${m.id}.html" target="tool_North" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
-  }).join('') + '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">Ct</span>Contact</a>';
+  }).join('') + '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">AH</span>AH</a>';
 }
 function tnSearchResults(q){
   q=(q||'').trim().toLowerCase(); if(!q) return [];
@@ -3878,9 +3878,9 @@ async function openContact(){
       url = CONTACT_URL + '/auth/sso?token=' + encodeURIComponent(t);
       if(_hubOrgSlug) url += '&org=' + encodeURIComponent(_hubOrgSlug);
     } else {
-      toast('No live North session found -- sign in again, then try Contact.');
+      toast('No live North session found -- sign in again, then try AH.');
     }
-  }catch(e){ toast('Could not start Contact sign-in: '+(e&&e.message?e.message:'unknown error')); }
+  }catch(e){ toast('Could not start AH sign-in: '+(e&&e.message?e.message:'unknown error')); }
   window.open(url, 'tool_North');
 }
 window.openContact=openContact;

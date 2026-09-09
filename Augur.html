@@ -637,7 +637,7 @@ function renderFilteredTnLinks(){
     return m.id===THIS_MODULE
       ? `<span class="tn-link on" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</span>`
       : `<a class="tn-link" href="${m.id}.html" target="tool_North" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
-  }).join('') + (navVisible('Contact') ? '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">Ct</span>Contact</a>' : '');
+  }).join('') + (navVisible('Contact') ? '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">AH</span>AH</a>' : '');
 }
 async function checkModuleAccess(){
   if(CFG.isSuperAdmin) return true;
@@ -1392,7 +1392,7 @@ function renderTnModuleLinks(){
     return m.id===THIS_MODULE
       ? `<span class="tn-link on" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</span>`
       : `<a class="tn-link" href="${m.id}.html" target="tool_North" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
-  }).join('') + '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">Ct</span>Contact</a>';
+  }).join('') + '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">AH</span>AH</a>';
 }
 function tnSearchResults(q){
   q=(q||'').trim().toLowerCase(); if(!q) return [];
@@ -1436,9 +1436,9 @@ async function openContact(){
       url = CONTACT_URL + '/auth/sso?token=' + encodeURIComponent(t);
       if(_hubOrgSlug) url += '&org=' + encodeURIComponent(_hubOrgSlug);
     } else {
-      toast('No live North session found -- sign in again, then try Contact.');
+      toast('No live North session found -- sign in again, then try AH.');
     }
-  }catch(e){ toast('Could not start Contact sign-in: '+(e&&e.message?e.message:'unknown error')); }
+  }catch(e){ toast('Could not start AH sign-in: '+(e&&e.message?e.message:'unknown error')); }
   window.open(url, 'tool_North');
 }
 window.openContact=openContact;

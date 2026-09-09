@@ -1,0 +1,42 @@
+path = "Norma.html"
+with open(path, "r") as f:
+    content = f.read()
+
+replacements = [
+    ("async function loadOutboundWebhooks(){\n  if(!canConfig()) return;",
+     "async function loadOutboundWebhooks(){\n  if(!canConfig()){ toast('Your role cannot view outbound webhooks.'); return; }"),
+    ("async function createOutboundWebhookUI(){\n  if(!canConfig()) return;",
+     "async function createOutboundWebhookUI(){\n  if(!canConfig()){ toast('Your role cannot create webhooks.'); return; }"),
+    ("async function testOutboundWebhookUI(id){\n  if(!canConfig()) return;",
+     "async function testOutboundWebhookUI(id){\n  if(!canConfig()){ toast('Your role cannot test webhooks.'); return; }"),
+    ("async function toggleOutboundWebhookActiveUI(id,current){\n  if(!canConfig()) return;",
+     "async function toggleOutboundWebhookActiveUI(id,current){\n  if(!canConfig()){ toast('Your role cannot change webhooks.'); return; }"),
+    ("async function deleteOutboundWebhookUI(id,label){\n  if(!canConfig()) return;",
+     "async function deleteOutboundWebhookUI(id,label){\n  if(!canConfig()){ toast('Your role cannot delete webhooks.'); return; }"),
+    ("async function loadHubUsers(){\n  if(!canConfig()) return;",
+     "async function loadHubUsers(){\n  if(!canConfig()){ toast('Your role cannot view Hub accounts.'); return; }"),
+    ("async function createHubUser(){\n  if(!canConfig()) return;",
+     "async function createHubUser(){\n  if(!canConfig()){ toast('Your role cannot create Hub accounts.'); return; }"),
+    ("async function updateHubUserRoleAction(id, role){\n  if(!canConfig()) return;",
+     "async function updateHubUserRoleAction(id, role){\n  if(!canConfig()){ toast('Your role cannot change Hub account roles.'); return; }"),
+    ("async function loadHubFeedback(){\n  if(!canConfig()) return;",
+     "async function loadHubFeedback(){\n  if(!canConfig()){ toast('Your role cannot view Hub feedback.'); return; }"),
+    ("async function updateHubFeedbackField(id, patch){\n  if(!canConfig()) return;",
+     "async function updateHubFeedbackField(id, patch){\n  if(!canConfig()){ toast('Your role cannot update Hub feedback.'); return; }"),
+]
+
+missing = []
+for old, new in replacements:
+    if content.count(old) != 1:
+        missing.append((old[:60], content.count(old)))
+    else:
+        content = content.replace(old, new, 1)
+
+if missing:
+    print("PROBLEMS (not applied where count != 1):")
+    for m in missing:
+        print(m)
+else:
+    with open(path, "w") as f:
+        f.write(content)
+    print("all 10 patched ok")

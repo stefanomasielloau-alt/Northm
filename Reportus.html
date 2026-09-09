@@ -110,6 +110,12 @@ td.lb{font-weight:600;}
 .rag-green{background:#DCF3E9; color:#0E8A5F;}
 .rag-exceed{color:#C9971A;}
 .note{background:#EEF6E9;border-left:3px solid var(--nav);border-radius:0 var(--r-sm) var(--r-sm) 0; padding:10px 14px; margin-bottom:14px; font-size:12px; color:var(--ink-2);}
+/* item 47: drill-down graph legend/grab-cursor -- didn't exist here before, this file
+   never had a node graph until now. Same rules as Ordo's relationship graph. */
+.lgd{display:flex;gap:12px;flex-wrap:wrap;font-size:10.5px;color:var(--ink-2);padding:2px 0 0}
+.lgd i{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:4px;vertical-align:-1px}
+.sw{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:-1px}
+.grab{cursor:grab;color:var(--ink-3);user-select:none;font-size:13px}
 .in,input.in,select.in,.cel{border:1px solid #E1D3FA; border-radius:5px; padding:5px 7px; font-size:12.5px; background:var(--input-bg); color:var(--ink); font-family:inherit;}
 .in:focus,.cel:focus{outline:2px solid var(--input); outline-offset:0;}
 .cel.txt{width:100%;}
@@ -253,9 +259,14 @@ const CFG = {
    header comment). Ordo.html already carries both for other reasons; this module didn't have
    either until charts arrived here too. */
 const fin=v=>(v==null||typeof v!=='number'||!isFinite(v))?0:v;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,fin(v)));
 const SER=['#10AEBF','#3B4CB8','#E0447B','#F0A429','#7B3FE4','#0E8A5F','#C8791A','#45506B'];
 
-const UI = { page:'dashboards', helpOpen:false, openTile:null };
+const UI = { page:'dashboards', helpOpen:false, openTile:null,
+  /* item 47 drill-down graph state -- transient, not saved */
+  ddStartType:null, ddStartId:null, ddFilterRegion:null, ddFilterPod:null, ddFilterPartner:null,
+  ddMetric:'none', ddZoom:1, ddPanX:0, ddPanY:0, ddFocusId:null
+};
 
 function logAudit(what,detail){
   CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
@@ -358,15 +369,26 @@ async function loadFromSupabase(){
     sb.from('teams').select('id,name,member_ids'),
     sb.from('organizations').select('id,name,parent_org_id,hub_org_slug,created_at').order('created_at'),
     sb.from('profiles').select('id,name,role_id'),
-    sb.from('campaigns').select('id,name,region_id,budget,budget_fx,committed,actual,signoff_status'),
+    sb.from('campaigns').select('id,name,programme_id,activity_id,region_id,budget,budget_fx,committed,actual,signoff_status'),
     sb.from('augur_deals').select('id,name,stage,value'),
     sb.from('eventus_events').select('id,name,status,start_date'),
-    sb.from('assets').select('id,name,stock,low_stock_at'),
+    sb.from('assets').select('id,name,stock,low_stock_at,campaign_id'),
     sb.from('crm_activities').select('id,occurred_at'),
     sb.from('prospectus_leads').select('id,status'),
-    sb.from('audit_log').select('ts,what,detail,who,role').eq('org_id',_orgId).order('ts',{ascending:false}).limit(300)
+    sb.from('audit_log').select('ts,what,detail,who,role').eq('org_id',_orgId).order('ts',{ascending:false}).limit(300),
+    /* item 47 (v2 drill-down graph): Programme/Activity/Route/Pod/Partner weren't
+       previously loaded here -- Reportus only had Region + a narrower Campaigns
+       select. All 6 below are normalized Supabase tables already used elsewhere
+       (Ordo/Cursus), same query pattern as everything above. */
+    sb.from('programmes').select('id,name,owner,focus,status'),
+    sb.from('activities').select('id,name,route_id,cost_per,cap_month'),
+    sb.from('routes').select('id,name'),
+    sb.from('pods').select('id,name,region_id,share,unassigned'),
+    sb.from('partners').select('id,name,type,pod_id,acv_target'),
+    sb.from('campaign_partner_allocations').select('id,campaign_id,partner_id,role,budget_share_pct,lead_share_pct')
   ]);
-  const [regionsR,teamsR,orgsR,profilesR,campaignsR,dealsR,eventsR,assetsR,activitiesR,leadsR,auditR] = results;
+  const [regionsR,teamsR,orgsR,profilesR,campaignsR,dealsR,eventsR,assetsR,touchpointsR,leadsR,auditR,
+    programmesR,planActivitiesR,routesR,podsR,partnersR,campPartnerAllocR] = results;
   for(const r of results){ if(r.error) throw r.error; }
 
   CFG.roles = (rolesR.data||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name,scope:r.scope,reportScope:r.report_scope||'own_org'}));
@@ -375,15 +397,22 @@ async function loadFromSupabase(){
   CFG.organizations = (orgsR.data||[]).map(o=>({id:o.id,name:o.name,parentOrgId:o.parent_org_id||null,hubOrgSlug:o.hub_org_slug||'',createdAt:o.created_at}));
   CFG.profiles = (profilesR.data||[]).map(p=>({id:p.id,name:p.name,roleId:p.role_id}));
   CFG.campaigns = (campaignsR.data||[]).map(c=>({
-    id:c.id,name:c.name,regionId:c.region_id,budget:c.budget||0,budgetFx:c.budget_fx||null,
+    id:c.id,name:c.name,programmeId:c.programme_id||null,activityId:c.activity_id||null,regionId:c.region_id,
+    budget:c.budget||0,budgetFx:c.budget_fx||null,
     committed:c.committed||0,actual:c.actual||0,signoffStatus:c.signoff_status||'Draft'
   }));
   CFG.deals = (dealsR.data||[]).map(d=>({id:d.id,name:d.name,stage:d.stage,value:d.value||0}));
   CFG.events = (eventsR.data||[]).map(e=>({id:e.id,name:e.name,status:e.status,startDate:e.start_date||''}));
-  CFG.assets = (assetsR.data||[]).map(a=>({id:a.id,name:a.name,stock:a.stock,lowStockAt:a.low_stock_at}));
-  CFG.touchpoints = (activitiesR.data||[]).map(a=>({id:a.id,occurredAt:a.occurred_at}));
+  CFG.assets = (assetsR.data||[]).map(a=>({id:a.id,name:a.name,stock:a.stock,lowStockAt:a.low_stock_at,campaignId:a.campaign_id||null}));
+  CFG.touchpoints = (touchpointsR.data||[]).map(a=>({id:a.id,occurredAt:a.occurred_at}));
   CFG.leads = (leadsR.data||[]).map(l=>({id:l.id,status:l.status}));
   CFG.audit = (auditR.data||[]).map(a=>({ts:a.ts,what:a.what,detail:a.detail,who:a.who,role:a.role}));
+  CFG.programmes = (programmesR.data||[]).map(p=>({id:p.id,name:p.name,owner:p.owner||'',focus:p.focus||'',status:p.status||''}));
+  CFG.planActivities = (planActivitiesR.data||[]).map(a=>({id:a.id,name:a.name,routeId:a.route_id,costPer:a.cost_per||0,capMonth:a.cap_month||0}));
+  CFG.routes = (routesR.data||[]).map(r=>({id:r.id,name:r.name}));
+  CFG.pods = (podsR.data||[]).map(p=>({id:p.id,name:p.name,regionId:p.region_id,share:p.share||0,unassigned:!!p.unassigned}));
+  CFG.partners = (partnersR.data||[]).map(p=>({id:p.id,name:p.name,type:p.type||'',podId:p.pod_id||null,acvTarget:p.acv_target||null}));
+  CFG.campaignPartnerAllocations = (campPartnerAllocR.data||[]).map(a=>({id:a.id,campaignId:a.campaign_id,partnerId:a.partner_id,role:a.role||'',budgetSharePct:a.budget_share_pct||0,leadSharePct:a.lead_share_pct||0}));
 }
 
 /* Live notifications: same pattern as every other module -- subscribe to
@@ -778,10 +807,328 @@ function pageReports(){
   return h;
 }
 
+/* ============================================================================
+   DRILL-DOWN GRAPH (item 47) -- Programme/Region/Pod/Partner -> Campaign ->
+   Activity/Route/Asset, any start point, generic metric-driven color, force-
+   directed layout. Separate from and does not touch Ordo's Relationships graph
+   (pageRelationships() in Ordo.html) -- that one stays exactly as it is.
+   ============================================================================ */
+const DD_W=1200, DD_H=640;
+const DD_TYPE_ORDER=['programme','region','pod','partner','campaign','activity','route','asset'];
+const DD_TYPE_LABEL={programme:'Programme',region:'Region',pod:'Pod',partner:'Partner',campaign:'Campaign',activity:'Activity',route:'Route',asset:'Asset'};
+const DD_TYPE_COLOR={programme:'#5A3E9C',region:'#0E6B8A',pod:'#1F8A6B',partner:'#B5730E',campaign:'#1F3AC7',activity:'#9C6B2B',route:'#6B7280',asset:'#9C2B3C'};
+let _ddPos={}; /* pinned node positions, transient like Ordo's _relPos -- not saved */
+let _ddDrag=null, _ddPanDrag=null;
+
+const DD_METRICS=[
+  {id:'none', label:'None (color by type)', get:n=>null, fmt:v=>''},
+  {id:'campaign_budget', label:'Campaign budget', get:n=>n.type==='campaign'?(n.raw.budget||0):null, fmt:v=>F.mk(v)},
+  {id:'campaign_actual', label:'Campaign actual spend', get:n=>n.type==='campaign'?(n.raw.actual||0):null, fmt:v=>F.mk(v)},
+  {id:'campaign_variance', label:'Campaign variance (actual − budget)', get:n=>n.type==='campaign'?((n.raw.actual||0)-(n.raw.budget||0)):null, fmt:v=>F.mk(v)},
+  {id:'partner_budget_share', label:'Partner budget share %', get:n=>n.type==='partner'?n.raw.avgBudgetSharePct:null, fmt:v=>F.n(v,1)+'%'},
+  {id:'partner_lead_share', label:'Partner lead share %', get:n=>n.type==='partner'?n.raw.avgLeadSharePct:null, fmt:v=>F.n(v,1)+'%'},
+  {id:'activity_cost_per', label:'Activity cost per lead', get:n=>n.type==='activity'?(n.raw.costPer||0):null, fmt:v=>F.mk(v)},
+  {id:'asset_stock', label:'Asset stock level', get:n=>n.type==='asset'?(n.raw.stock==null?null:n.raw.stock):null, fmt:v=>F.n(v,0)}
+];
+function ddMetricDef(){ return DD_METRICS.find(m=>m.id===UI.ddMetric)||DD_METRICS[0]; }
+
+function computeDrilldownGraph(){
+  const startType=UI.ddStartType, startId=UI.ddStartId;
+  let camps=CFG.campaigns.slice();
+
+  if(startType && startId){
+    if(startType==='programme') camps=camps.filter(c=>c.programmeId===startId);
+    else if(startType==='campaign') camps=camps.filter(c=>c.id===startId);
+    else if(startType==='region') camps=camps.filter(c=>c.regionId===startId);
+    else if(startType==='pod'){
+      const partnerIds=new Set(CFG.partners.filter(p=>p.podId===startId).map(p=>p.id));
+      const campIds=new Set(CFG.campaignPartnerAllocations.filter(a=>partnerIds.has(a.partnerId)).map(a=>a.campaignId));
+      camps=camps.filter(c=>campIds.has(c.id));
+    }
+  } else {
+    camps=[]; /* item 47: drill-down starts narrow, unlike Ordo's "show everything, then filter" -- nothing to show until a start point is picked */
+  }
+
+  if(UI.ddFilterRegion) camps=camps.filter(c=>c.regionId===UI.ddFilterRegion);
+  if(UI.ddFilterPod){
+    const partnerIds=new Set(CFG.partners.filter(p=>p.podId===UI.ddFilterPod).map(p=>p.id));
+    const campIds=new Set(CFG.campaignPartnerAllocations.filter(a=>partnerIds.has(a.partnerId)).map(a=>a.campaignId));
+    camps=camps.filter(c=>campIds.has(c.id));
+  }
+  if(UI.ddFilterPartner){
+    const campIds=new Set(CFG.campaignPartnerAllocations.filter(a=>a.partnerId===UI.ddFilterPartner).map(a=>a.campaignId));
+    camps=camps.filter(c=>campIds.has(c.id));
+  }
+
+  const nodesById={}, edgeSet=new Set(), edges=[];
+  const addNode=(id,type,label,raw)=>{ if(!nodesById[id]) nodesById[id]={id,type,label,raw:raw||{}}; return nodesById[id]; };
+  const addEdge=(a,b)=>{ const key=a<b?a+'|'+b:b+'|'+a; if(edgeSet.has(key))return; edgeSet.add(key); edges.push({a,b}); };
+
+  camps.forEach(c=>{
+    const cn=addNode('camp:'+c.id,'campaign',c.name,c);
+
+    if(c.programmeId){
+      const p=byId(CFG.programmes,c.programmeId);
+      if(p){ const pn=addNode('prog:'+p.id,'programme',p.name,p); addEdge(pn.id,cn.id); }
+    }
+    if(c.regionId){
+      const r=byId(CFG.regions,c.regionId);
+      if(r){ const rn=addNode('reg:'+r.id,'region',r.name,r); addEdge(rn.id,cn.id); }
+    }
+    if(c.activityId){
+      const a=byId(CFG.planActivities,c.activityId);
+      if(a){
+        const an=addNode('act:'+a.id,'activity',a.name,a); addEdge(cn.id,an.id);
+        if(a.routeId){ const rt=byId(CFG.routes,a.routeId); if(rt){ const rtn=addNode('route:'+rt.id,'route',rt.name,rt); addEdge(an.id,rtn.id); } }
+      }
+    }
+    CFG.assets.filter(x=>x.campaignId===c.id).forEach(a=>{
+      const an=addNode('asset:'+a.id,'asset',a.name,a); addEdge(cn.id,an.id);
+    });
+    CFG.campaignPartnerAllocations.filter(al=>al.campaignId===c.id).forEach(al=>{
+      const p=byId(CFG.partners,al.partnerId); if(!p)return;
+      const pn=addNode('partner:'+p.id,'partner',p.name,Object.assign({},p,{_allocs:[]}));
+      pn.raw._allocs.push(al);
+      addEdge(cn.id,pn.id);
+      if(p.podId){
+        const pod=byId(CFG.pods,p.podId);
+        if(pod){
+          const podn=addNode('pod:'+pod.id,'pod',pod.name,pod); addEdge(pn.id,podn.id);
+          if(pod.regionId){ const r=byId(CFG.regions,pod.regionId); if(r){ const rn=addNode('reg:'+r.id,'region',r.name,r); addEdge(podn.id,rn.id); } }
+        }
+      }
+    });
+  });
+
+  /* derive per-partner average share metrics now that allocations are attached */
+  Object.values(nodesById).filter(n=>n.type==='partner').forEach(n=>{
+    const allocs=n.raw._allocs||[];
+    n.raw.avgBudgetSharePct=allocs.length?allocs.reduce((s,a)=>s+(a.budgetSharePct||0),0)/allocs.length:null;
+    n.raw.avgLeadSharePct=allocs.length?allocs.reduce((s,a)=>s+(a.leadSharePct||0),0)/allocs.length:null;
+  });
+
+  return {nodes:Object.values(nodesById), edges, campaignCount:camps.length, totalCampaigns:CFG.campaigns.length};
+}
+
+function ddLayoutSeed(nodes){
+  const cols={}; DD_TYPE_ORDER.forEach((t,i)=>{ cols[t]=DD_W*(0.08+0.84*(i/(DD_TYPE_ORDER.length-1))); });
+  const byType={}; DD_TYPE_ORDER.forEach(t=>byType[t]=[]);
+  nodes.forEach(n=>{ if(byType[n.type]) byType[n.type].push(n); });
+  DD_TYPE_ORDER.forEach(t=>{
+    const list=byType[t].slice().sort((a,b)=>a.label.localeCompare(b.label));
+    const n=list.length, gap=n>1?(DD_H-60)/(n-1):0;
+    list.forEach((node,i)=>{
+      const pinned=_ddPos[node.id];
+      node.x=pinned?pinned.x:cols[t];
+      node.y=pinned?pinned.y:(n===1?DD_H/2:30+i*gap);
+      node.pinned=!!pinned;
+    });
+  });
+}
+
+function ddRunForces(nodes,edges,iterations){
+  iterations=iterations||120;
+  const idx={}; nodes.forEach((n,i)=>idx[n.id]=i);
+  const colX={}; DD_TYPE_ORDER.forEach((t,i)=>{ colX[t]=DD_W*(0.08+0.84*(i/(DD_TYPE_ORDER.length-1))); });
+  for(let it=0;it<iterations;it++){
+    const fx=new Array(nodes.length).fill(0), fy=new Array(nodes.length).fill(0);
+    for(let i=0;i<nodes.length;i++){
+      for(let j=i+1;j<nodes.length;j++){
+        let dx=nodes[i].x-nodes[j].x, dy=nodes[i].y-nodes[j].y;
+        let d2=dx*dx+dy*dy; if(d2<1) d2=1;
+        const d=Math.sqrt(d2), rep=2200/d2, ux=dx/d, uy=dy/d;
+        fx[i]+=ux*rep; fy[i]+=uy*rep; fx[j]-=ux*rep; fy[j]-=uy*rep;
+      }
+    }
+    edges.forEach(e=>{
+      const i=idx[e.a], j=idx[e.b]; if(i==null||j==null) return;
+      let dx=nodes[j].x-nodes[i].x, dy=nodes[j].y-nodes[i].y;
+      const d=Math.sqrt(dx*dx+dy*dy)||1, target=150, f=(d-target)*0.02, ux=dx/d, uy=dy/d;
+      fx[i]+=ux*f; fy[i]+=uy*f; fx[j]-=ux*f; fy[j]-=uy*f;
+    });
+    nodes.forEach((n,i)=>{ fx[i]+=((colX[n.type]||DD_W/2)-n.x)*0.012; });
+    nodes.forEach((n,i)=>{
+      if(n.pinned) return;
+      n.x=clamp(n.x+fx[i]*0.5,40,DD_W-40);
+      n.y=clamp(n.y+fy[i]*0.5,30,DD_H-30);
+    });
+  }
+}
+
+function ddNodeColor(n){
+  const m=ddMetricDef();
+  const v=m.get(n);
+  if(v==null) return DD_TYPE_COLOR[n.type]||'#5B6472';
+  /* simple heat scale: below 0 red-ish, 0 grey, above 0 green-ish, scaled by magnitude relative to typical values -- kept
+     intentionally simple (v1) since "any metric" spans wildly different units; a fixed 3-point scale reads clearly enough
+     without needing per-metric calibration. */
+  if(v<0) return '#9C2B3C';
+  if(v===0) return '#5B6472';
+  return '#0E8A5F';
+}
+
+function ddSvgHtml(nodes,edges){
+  const focus=UI.ddFocusId;
+  const connected=new Set();
+  if(focus){ connected.add(focus); edges.forEach(e=>{ if(e.a===focus) connected.add(e.b); if(e.b===focus) connected.add(e.a); }); }
+  const dim=n=>focus && !connected.has(n.id);
+  const idx={}; nodes.forEach(n=>idx[n.id]=n);
+  const m=ddMetricDef();
+
+  const lines=edges.map(e=>{
+    const a=idx[e.a], b=idx[e.b]; if(!a||!b) return '';
+    const faint=focus && !(connected.has(e.a)&&connected.has(e.b));
+    return `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${faint?'#E7EAF0':'#B7BFCE'}" stroke-width="1.4"></line>`;
+  }).join('');
+
+  const nodeShapes=nodes.map(n=>{
+    const color=ddNodeColor(n), r=n.type==='campaign'?10:8, opacity=dim(n)?0.28:1;
+    const label=n.label.length>22?n.label.slice(0,21)+'…':n.label;
+    const v=m.get(n);
+    const title=esc(DD_TYPE_LABEL[n.type]+': '+n.label+(v!=null?' — '+esc(m.label)+': '+m.fmt(v):''));
+    return `<g class="grab" data-node="${n.id}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})" style="opacity:${opacity}" onmousedown="ddNodeMouseDown(event,'${n.id}',${n.x.toFixed(2)},${n.y.toFixed(2)})"><title>${title}</title><circle r="${r}" fill="${color}" stroke="#fff" stroke-width="1.5"></circle><text x="${r+5}" y="4" font-size="10.5" fill="#45506B">${esc(label)}</text></g>`;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${DD_W} ${DD_H}" width="100%" height="560" style="background:#fff;border-radius:10px">
+    <rect x="0" y="0" width="${DD_W}" height="${DD_H}" fill="transparent" onmousedown="ddPanMouseDown(event)"></rect>
+    <g class="ddViewport" transform="translate(${UI.ddPanX||0},${UI.ddPanY||0}) scale(${UI.ddZoom||1})">${lines}${nodeShapes}</g>
+  </svg>`;
+}
+
+function ddNodeMouseDown(ev,id,x,y){
+  ev.preventDefault(); ev.stopPropagation();
+  const svg=ev.currentTarget.closest('svg'); if(!svg) return;
+  _ddDrag={id,startClientX:ev.clientX,startClientY:ev.clientY,origX:x,origY:y,svg,moved:false,lastX:x,lastY:y};
+}
+window.ddNodeMouseDown=ddNodeMouseDown;
+function ddPanMouseDown(ev){
+  const svg=ev.currentTarget.closest('svg'); if(!svg) return;
+  _ddPanDrag={startClientX:ev.clientX,startClientY:ev.clientY,origPanX:UI.ddPanX||0,origPanY:UI.ddPanY||0,svg,moved:false,lastX:UI.ddPanX||0,lastY:UI.ddPanY||0};
+}
+window.ddPanMouseDown=ddPanMouseDown;
+document.addEventListener('mousemove',ev=>{
+  if(_ddDrag){
+    const d=_ddDrag;
+    if(Math.abs(ev.clientX-d.startClientX)>2||Math.abs(ev.clientY-d.startClientY)>2) d.moved=true;
+    if(!d.moved) return;
+    const r=d.svg.getBoundingClientRect(), zoom=UI.ddZoom||1;
+    const sx=DD_W/(r.width||DD_W)/zoom, sy=DD_H/(r.height||DD_H)/zoom;
+    const nx=clamp(d.origX+(ev.clientX-d.startClientX)*sx,20,DD_W-20);
+    const ny=clamp(d.origY+(ev.clientY-d.startClientY)*sy,20,DD_H-20);
+    const g=d.svg.querySelector('[data-node="'+d.id+'"]');
+    if(g) g.setAttribute('transform','translate('+nx+','+ny+')');
+    d.lastX=nx; d.lastY=ny;
+  } else if(_ddPanDrag){
+    const d=_ddPanDrag;
+    const r=d.svg.getBoundingClientRect();
+    const sx=DD_W/(r.width||DD_W), sy=DD_H/(r.height||DD_H);
+    const nx=d.origPanX+(ev.clientX-d.startClientX)*sx;
+    const ny=d.origPanY+(ev.clientY-d.startClientY)*sy;
+    const g=d.svg.querySelector('.ddViewport');
+    if(g) g.setAttribute('transform','translate('+nx+','+ny+') scale('+(UI.ddZoom||1)+')');
+    d.lastX=nx; d.lastY=ny; d.moved=true;
+  }
+});
+document.addEventListener('mouseup',ev=>{
+  if(_ddDrag){
+    const d=_ddDrag; _ddDrag=null;
+    if(!d.moved){ ddFocus(d.id); return; }
+    _ddPos[d.id]={x:d.lastX,y:d.lastY};
+    render();
+  } else if(_ddPanDrag){
+    const d=_ddPanDrag; _ddPanDrag=null;
+    if(d.moved){ UI.ddPanX=d.lastX; UI.ddPanY=d.lastY; render(); }
+  }
+});
+function ddFocus(id){ UI.ddFocusId=(UI.ddFocusId===id)?null:id; render(); }
+window.ddFocus=ddFocus;
+function ddZoomBtn(dir){ const z=(UI.ddZoom||1); UI.ddZoom=clamp(dir==='in'?z*1.25:z/1.25,0.4,2.5); render(); }
+window.ddZoomBtn=ddZoomBtn;
+function ddResetView(){ UI.ddZoom=1; UI.ddPanX=0; UI.ddPanY=0; render(); }
+window.ddResetView=ddResetView;
+function ddResetLayout(){ _ddPos={}; render(); toast('Layout reset.'); }
+window.ddResetLayout=ddResetLayout;
+function setDdStart(type,id){ UI.ddStartType=type||null; UI.ddStartId=id||null; UI.ddFocusId=null; render(); }
+window.setDdStart=setDdStart;
+function setDdFilter(which,val){
+  if(which==='region') UI.ddFilterRegion=val||null;
+  else if(which==='pod') UI.ddFilterPod=val||null;
+  else if(which==='partner') UI.ddFilterPartner=val||null;
+  render();
+}
+window.setDdFilter=setDdFilter;
+function setDdMetric(id){ UI.ddMetric=id; render(); }
+window.setDdMetric=setDdMetric;
+
+function pageDrilldown(){
+  const startOptions={
+    programme:CFG.programmes.slice().sort((a,b)=>a.name.localeCompare(b.name)),
+    campaign:CFG.campaigns.slice().sort((a,b)=>a.name.localeCompare(b.name)),
+    region:CFG.regions.slice().sort((a,b)=>a.name.localeCompare(b.name)),
+    pod:CFG.pods.slice().sort((a,b)=>a.name.localeCompare(b.name))
+  };
+  const g=computeDrilldownGraph();
+  if(g.nodes.length){ ddLayoutSeed(g.nodes); ddRunForces(g.nodes,g.edges); }
+
+  let h=`<div class="phead"><div><h1>Drill-down</h1>
+    <p>Start from a Programme, Campaign, Region or Pod and follow it out to Campaigns, Activities, Assets and the Partners
+      involved — pick any metric below to color the nodes. Separate from Strategy's own Relationships graph; nothing here
+      changes that one.</p></div></div>`;
+
+  h+=`<div class="card"><div class="bd" style="padding:12px 14px">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+      <span class="mini" style="font-weight:600">Start from:</span>
+      <select class="in" style="width:auto" onchange="const v=this.value.split('|'); setDdStart(v[0]||null,v[1]||null)">
+        <option value="">— pick a start point —</option>
+        <optgroup label="Programme">${startOptions.programme.map(p=>`<option value="programme|${p.id}" ${UI.ddStartType==='programme'&&UI.ddStartId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</optgroup>
+        <optgroup label="Campaign">${startOptions.campaign.map(c=>`<option value="campaign|${c.id}" ${UI.ddStartType==='campaign'&&UI.ddStartId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</optgroup>
+        <optgroup label="Region">${startOptions.region.map(r=>`<option value="region|${r.id}" ${UI.ddStartType==='region'&&UI.ddStartId===r.id?'selected':''}>${esc(r.name)}</option>`).join('')}</optgroup>
+        <optgroup label="Pod">${startOptions.pod.map(p=>`<option value="pod|${p.id}" ${UI.ddStartType==='pod'&&UI.ddStartId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</optgroup>
+      </select>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+      <span class="mini" style="font-weight:600">Slice by:</span>
+      <select class="in" style="width:auto" onchange="setDdFilter('region',this.value)">
+        <option value="">All regions</option>
+        ${CFG.regions.map(r=>`<option value="${r.id}" ${UI.ddFilterRegion===r.id?'selected':''}>${esc(r.name)}</option>`).join('')}
+      </select>
+      <select class="in" style="width:auto" onchange="setDdFilter('pod',this.value)">
+        <option value="">All pods</option>
+        ${CFG.pods.map(p=>`<option value="${p.id}" ${UI.ddFilterPod===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}
+      </select>
+      <select class="in" style="width:auto" onchange="setDdFilter('partner',this.value)">
+        <option value="">All partners</option>
+        ${CFG.partners.map(p=>`<option value="${p.id}" ${UI.ddFilterPartner===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}
+      </select>
+      <span class="sp"></span>
+      <span class="mini" style="font-weight:600">Color by:</span>
+      <select class="in" style="width:auto" onchange="setDdMetric(this.value)">
+        ${DD_METRICS.map(m=>`<option value="${m.id}" ${UI.ddMetric===m.id?'selected':''}>${esc(m.label)}</option>`).join('')}
+      </select>
+      <span class="sp"></span>
+      <button class="btn sm" onclick="ddZoomBtn('out')">−</button>
+      <button class="btn sm" onclick="ddZoomBtn('in')">+</button>
+      <button class="btn sm" onclick="ddResetView()">Reset view</button>
+      <button class="btn sm" onclick="ddResetLayout()">Reset layout</button>
+    </div>
+    ${!UI.ddStartType?`<div class="empty">Pick a start point above to draw the graph.</div>`
+      :!g.nodes.length?`<div class="empty">Nothing matches that start point and slice — try a different one.</div>`
+      :ddSvgHtml(g.nodes,g.edges)}
+    <div class="lgd" style="margin-top:10px">
+      ${DD_TYPE_ORDER.map(t=>`<span><i class="sw" style="background:${DD_TYPE_COLOR[t]}"></i>${esc(DD_TYPE_LABEL[t])}</span>`).join('')}
+    </div>
+    <div class="mini" style="margin-top:6px">Drag a node to pin it in place; click a node to highlight its connections, click again to clear.
+      ${g.nodes.length?`${g.campaignCount} of ${g.totalCampaigns} campaigns in view.`:''} Layout resets on reload — nothing here is saved.</div>
+  </div></div>`;
+  return h;
+}
+window.pageDrilldown=pageDrilldown;
+
 const PAGES=[
   {id:'dashboards',  ix:'0', label:'Dashboards',   fn:pageDashboards},
   {id:'organization',ix:'1', label:'Organization', fn:pageOrganization},
-  {id:'reports',     ix:'2', label:'Reports',      fn:pageReports}
+  {id:'drilldown',   ix:'2', label:'Drill-down',   fn:pageDrilldown},
+  {id:'reports',     ix:'3', label:'Reports',      fn:pageReports}
 ];
 function renderSide(){
   let h='<h4>Reporting</h4>';

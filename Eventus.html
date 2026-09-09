@@ -501,7 +501,7 @@ async function loadFromSupabase(){
     /* Read-only lookup so the roll-up can show which Campaign Planning activity (if any) an event is
        linked to, without Events owning that relationship -- the link itself lives on the
        Campaign Planning side (tasks.event_id, phase16). */
-    sb.from('tasks').select('id,name,campaign_id,event_id'),
+    sb.from('tasks').select('id,name,campaign_id,event_id,status,due_date,owner'),
     sb.from('audit_log').select('ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200),
     /* Read-only, narrow Viewer-role gate only (see isViewer()) -- no write_all/config/scope
        logic is consumed here, that's out of scope for this pass. */
@@ -531,13 +531,27 @@ async function loadFromSupabase(){
   CFG.campaigns = (campaignsR.data||[]).map(c=>({id:c.id,name:c.name,programmeId:c.programme_id||null}));
   CFG.programmes = (programmesR.data||[]).map(p=>({id:p.id,name:p.name}));
   /* Campaign Planning activities that reference an event, purely for display (e.g. "linked to: Venue booking"). */
-  CFG.linkedActivities = (tasksR.data||[]).filter(t=>t.event_id).map(t=>({id:t.id,name:t.name,campaignId:t.campaign_id,eventId:t.event_id}));
+  CFG.linkedActivities = (tasksR.data||[]).filter(t=>t.event_id).map(t=>({id:t.id,name:t.name,campaignId:t.campaign_id,eventId:t.event_id,status:t.status||'',dueDate:t.due_date||'',owner:t.owner||''}));
   CFG.audit = (auditR.data||[]).map(a=>({ts:a.ts,what:a.what,detail:a.detail}));
   CFG.roles = (rolesR.data||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name,config:r.config,publish:r.publish,writeAll:r.write_all,scope:r.scope,desc:r.description||''}));
   /* trackingConfig (Configuration's old generic {mod}-{type}-{seq} scheme) is now DB-backed via
      org_settings.tracking_config (read earlier in this function, defensively) — only fall
      back to null here if neither the DB nor a manual import populated it. */
   CFG.trackingConfig = CFG.trackingConfig || null;
+  /* 2026-09-09 (item 45, sub-ask 1, Assets half): kept OUT of the big Promise.all above
+     deliberately -- that batch does `if(r.error) throw r.error` for every query, so
+     selecting the not-yet-migrated assets.event_id column in there would break Eventus
+     entirely (every event, every page) for every user until the migration runs. This is
+     its own isolated, defensively-caught query instead, same fail-soft shape as the
+     tracking_config/currency_config reads elsewhere in this project -- CFG.assets just
+     stays empty (and the new Assets section on an event shows nothing to attach) until
+     2026-09-09-item45-assets-event-link-and-tag-presets-migration.sql has been run. */
+  CFG.assets = [];
+  try{
+    const assetsR = await sb.from('assets').select('id,name,category,event_id,campaign_id,stock,cost_per');
+    if(assetsR.error) throw assetsR.error;
+    CFG.assets = (assetsR.data||[]).map(a=>({id:a.id,name:a.name,category:a.category||'',eventId:a.event_id||null,campaignId:a.campaign_id||null,stock:a.stock,costPer:a.cost_per||0}));
+  }catch(e){ console.warn('assets.event_id not available yet (item 45 migration pending?)', e); }
   CFG.meta = { normaSyncedAt:null, normaConfigVersion:null };
 }
 /* Narrow, low-risk read-only gate (see task notes) -- checks ONLY the role's name being
@@ -1187,6 +1201,65 @@ function addVenue(eventId){
 window.addVenue=addVenue;
 function removeVenue(id){ if(isViewer()){ toast('Your role is view-only.'); return; } CFG.eventVenues=CFG.eventVenues.filter(v=>v.id!==id); logAudit('remove venue',id); render(); deleteRow('eventus_event_venues',id); }
 window.removeVenue=removeVenue;
+
+/* ---------- Assets (item 45, sub-ask 1, Assets half, 2026-09-09) ----------
+   Assets themselves are owned by Custodia (name/category/stock/tags/etc. are all edited
+   there) -- Eventus only reads the list (see the isolated CFG.assets load above) and
+   writes the one link field it owns: assets.event_id. So these three functions deliberately
+   do NOT go through saveToSupabase()'s shared Promise.all batch (that batch is Eventus's own
+   tables -- events/venues/costLines/checklist/speakers/audit -- adding a table Eventus
+   doesn't own to that array risks re-saving/clobbering unrelated Custodia edits on every
+   render()). Instead each one fires its own narrow, isolated, fail-soft Supabase call,
+   same shape as the CFG.assets load itself. */
+async function _saveAssetEventLink(assetId, eventId){
+  if(!_orgId || !assetId) return;
+  try{
+    const { error } = await sb.from('assets').update({event_id: eventId||null}).eq('id', assetId).eq('org_id', _orgId);
+    if(error) throw error;
+  }catch(e){ console.error('Could not save asset-event link', e); toast('Linked here, but the database save failed -- see console.'); }
+}
+async function _createAssetRow(asset){
+  if(!_orgId) return;
+  try{
+    const { error } = await sb.from('assets').insert({
+      id: asset.id, org_id:_orgId, name:asset.name, category:asset.category||'', event_id:asset.eventId||null,
+      campaign_id:asset.campaignId||null, stock:asset.stock||0, cost_per:asset.costPer||0
+    });
+    if(error) throw error;
+  }catch(e){ console.error('Could not create asset', e); toast('Created here, but the database save failed -- see console.'); }
+}
+function attachAssetToEvent(eventId, assetId){
+  if(isViewer()){ toast('Your role is view-only.'); return; }
+  if(!assetId) return;
+  const a=byId(CFG.assets, assetId); if(!a) return;
+  a.eventId=eventId;
+  logAudit('attach asset', a.name+' to event '+eventId); render();
+  _saveAssetEventLink(assetId, eventId);
+  toast('Asset attached.');
+}
+window.attachAssetToEvent=attachAssetToEvent;
+function detachAssetFromEvent(assetId){
+  if(isViewer()){ toast('Your role is view-only.'); return; }
+  const a=byId(CFG.assets, assetId); if(!a) return;
+  a.eventId=null;
+  logAudit('detach asset', a.name); render();
+  _saveAssetEventLink(assetId, null);
+  toast('Asset detached -- it still exists in Custodia, just unlinked from this event.');
+}
+window.detachAssetFromEvent=detachAssetFromEvent;
+function createAssetForEvent(eventId){
+  if(isViewer()){ toast('Your role is view-only.'); return; }
+  const name=(prompt('New asset name:')||'').trim();
+  if(!name) return;
+  const e=byId(CFG.events, eventId);
+  const asset={id:uid('asset'), name:name, category:'', eventId:eventId, campaignId:e?e.campaignId:null, stock:0, costPer:0};
+  CFG.assets.push(asset);
+  logAudit('create asset', name+' on event '+eventId); render();
+  _createAssetRow(asset);
+  toast('Asset created -- set category, stock and tags for it in Custodia.');
+}
+window.createAssetForEvent=createAssetForEvent;
+
 function addChecklistItem(eventId){
   if(isViewer()){ toast('Your role is view-only.'); return; }
   CFG.checklist.push({id:uid('chk'),eventId:eventId,item:'New task',done:false,dueDate:''});
@@ -1576,6 +1649,28 @@ function pageEvent(){
     <tr class="tot"><td colspan="3">Total</td><td class="n">${F.mk(planned)}</td><td class="n">${F.mk(committed)}</td><td class="n">${F.mk(actual)}</td><td></td></tr>
     </tbody></table></div></div></div>`;
 
+  h+=(()=>{
+    const eventAssets=CFG.assets.filter(a=>a.eventId===e.id);
+    const unattached=CFG.assets.filter(a=>!a.eventId);
+    return `<div class="card"><h3>Assets <span class="sp"></span>
+      <select class="in" id="attach-asset-sel" style="width:190px">
+        <option value="">-- attach existing asset --</option>
+        ${unattached.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('')}
+      </select>
+      <button class="btn sm" onclick="attachAssetToEvent('${e.id}', document.getElementById('attach-asset-sel').value)">Attach</button>
+      <button class="btn sm pri" onclick="createAssetForEvent('${e.id}')">+ New asset</button></h3>
+    <div class="bd flush"><table><thead><tr><th>Name</th><th>Category</th><th class="n">Stock</th><th class="n">Cost per</th><th></th></tr></thead><tbody>
+    ${!eventAssets.length?`<tr><td colspan="5" class="empty">No assets attached yet -- attach one above, or create a new one scoped to this event.</td></tr>`:eventAssets.map(a=>`<tr>
+      <td>${esc(a.name)}</td>
+      <td class="mini">${esc(a.category||'')}</td>
+      <td class="n">${a.stock!=null?F.n(a.stock):'--'}</td>
+      <td class="n">${a.costPer?F.mk(a.costPer):'--'}</td>
+      <td class="n"><button class="btn sm dgr" onclick="detachAssetFromEvent('${a.id}')">Detach</button></td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="mini" style="padding:0 12px 10px">Assets themselves are edited in Custodia (category, stock, cost, tags) -- this just links them to the event. If this list looks empty on every event, the item 45 assets migration probably hasn't run yet in Supabase.</p>
+    </div></div>`;
+  })();
+
   h+=`<div class="card"><h3>Checklist <span class="sp"></span>
       <button class="btn sm pri" onclick="addChecklistItem('${e.id}')">Add task</button></h3>
     <div class="bd flush"><table><thead><tr><th>Done</th><th>Task</th><th>Due</th><th></th></tr></thead><tbody>
@@ -1596,6 +1691,28 @@ function pageEvent(){
       <td><input class="cel txt" style="width:180px" value="${esc(s.contact)}" onchange="setIn('speakers','${s.id}','contact',this.value)"></td>
       <td class="n"><button class="btn sm dgr" onclick="removeSpeaker('${s.id}')">Remove</button></td></tr>`).join('')}
     </tbody></table></div></div>`;
+
+  h+=(()=>{
+    const acts=linkedActivitiesFor(e.id);
+    /* Read-only by design (item 45, sub-ask 1, Activities half, 2026-09-09): Eventus has
+       never written to the tasks table (see item 31's "Eventus has never written to the
+       tasks table before, and this keeps that true" comment nearby), and item 45's original
+       ask -- create/attach an Activity inline from an Event -- would break that invariant.
+       Rather than silently pick a side, this ships the safe half (a richer read-only view,
+       using the same linkedActivitiesFor() already used in the Events list/board views,
+       now with status/owner/due date too) and leaves the write-capability question flagged
+       for Stef's decision -- see the item 45 project doc and ledger note. */
+    return `<div class="card"><h3>Activities <span class="pill n" title="Read-only here by design -- see the item 45 note in the project doc">from Campaign Planning</span></h3>
+    <div class="bd flush"><table><thead><tr><th>Activity</th><th>Status</th><th>Owner</th><th>Due</th></tr></thead><tbody>
+    ${!acts.length?`<tr><td colspan="4" class="empty">No linked activities -- link a task to this event from Campaign Planning.</td></tr>`:acts.map(a=>`<tr>
+      <td>${esc(a.name)}</td>
+      <td>${a.status?`<span class="pill ${a.status==='Completed'?'ok':'n'}">${esc(a.status)}</span>`:'--'}</td>
+      <td class="mini">${esc(a.owner||'')}</td>
+      <td class="mini">${a.dueDate?F.d(a.dueDate):'--'}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="mini" style="padding:0 12px 10px">Edit or add activities from Campaign Planning -- this view is read-only in Eventus.</p>
+    </div></div>`;
+  })();
 
   h+=`<div class="card"><h3>Registration & attendance</h3><div class="bd">
     <div class="row" style="gap:16px;flex-wrap:wrap">

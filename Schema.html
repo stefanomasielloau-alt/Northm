@@ -126,6 +126,11 @@ svg.canvas{display:block; cursor:default;}
 .node.pending rect,.node.pending polygon,.node.pending ellipse{stroke:var(--ok); stroke-dasharray:5,3;}
 .node text{font-family:var(--sans); font-size:12px; fill:var(--ink); pointer-events:none;}
 .node{cursor:grab;}
+/* item 49: drag-to-connect handle -- hidden until hover, sits on top of the node so it
+   doesn't conflict with the existing Connect-mode click-click flow (still there, unchanged). */
+.connect-handle{fill:var(--nav); stroke:#fff; stroke-width:1.5; opacity:0; cursor:crosshair; transition:opacity .12s;}
+.node:hover .connect-handle{opacity:1;}
+#connectPreviewLine{pointer-events:none;}
 .edge path{stroke:var(--ink-2); stroke-width:1.6; fill:none;}
 .edge.sel path{stroke:var(--bad); stroke-width:2.4;}
 .edge text{font-family:var(--sans); font-size:11px; fill:var(--ink-2);}
@@ -279,6 +284,7 @@ const CFG = {};
 
 const UI = { page:'home', helpOpen:false, workflowId:null, mode:'select', selKind:null, selId:null, connectFromId:null, zoom:1 };
 let drag=null; /* {id,dx,dy} -- transient, not part of CFG */
+let connectDrag=null; /* {fromId} -- transient, item 49 drag-to-connect handle, not part of CFG */
 let undoStack=[]; /* {nodes,edges} snapshots for the open workflow -- transient, not persisted */
 let _automationsIntervalId=null; /* best-effort client-side scheduler for the Automations page --
   see updateAutomationsScheduler() below. Only ever runs while that page is open in this tab. */
@@ -1787,6 +1793,18 @@ function nodeMouseDown(evt,id){
   render();
 }
 window.nodeMouseDown=nodeMouseDown;
+/* item 49: drag directly from a node's connect-handle to another node -- additive,
+   doesn't touch or replace the existing Connect-mode click-click flow above (both call
+   the same addEdge()). Solves the "Connect button does nothing" report: turned out the
+   handle-drag pattern (Visio/Miro-style) is what was expected, not a toggled mode. */
+function startConnectHandle(evt,id){
+  evt.preventDefault(); evt.stopPropagation();
+  if(isViewer()){ toast('Your role is read-only — diagram editing is disabled.'); return; }
+  connectDrag={fromId:id};
+  UI.connectFromId=id; /* reuses the existing .pending highlight style */
+  render();
+}
+window.startConnectHandle=startConnectHandle;
 function nodeClickedForConnect(id){
   if(!UI.connectFromId){ UI.connectFromId=id; render(); return; }
   if(UI.connectFromId===id){ UI.connectFromId=null; render(); return; }
@@ -1812,14 +1830,46 @@ function deleteSelected(){
 window.deleteSelected=deleteSelected;
 
 document.addEventListener('mousemove', evt=>{
-  if(!drag)return;
-  const svg=document.getElementById('schemaCanvas'); if(!svg)return;
-  const zg=document.getElementById('zoomLayer')||svg;
-  const pt=svgPoint(svg,zg,evt);
-  moveNodeTo(drag.id, pt.x-drag.dx, pt.y-drag.dy);
-  renderCanvasOnly();
+  if(drag){
+    const svg=document.getElementById('schemaCanvas'); if(!svg)return;
+    const zg=document.getElementById('zoomLayer')||svg;
+    const pt=svgPoint(svg,zg,evt);
+    moveNodeTo(drag.id, pt.x-drag.dx, pt.y-drag.dy);
+    renderCanvasOnly();
+    return;
+  }
+  if(connectDrag){
+    const svg=document.getElementById('schemaCanvas'); if(!svg)return;
+    const zg=document.getElementById('zoomLayer')||svg;
+    const pt=svgPoint(svg,zg,evt);
+    const line=document.getElementById('connectPreviewLine');
+    if(line){ line.setAttribute('x2',pt.x); line.setAttribute('y2',pt.y); }
+  }
 });
-document.addEventListener('mouseup', ()=>{ if(drag){ drag=null; render(); } });
+document.addEventListener('mouseup', evt=>{
+  if(drag){ drag=null; render(); return; }
+  if(connectDrag){
+    const fromId=connectDrag.fromId;
+    connectDrag=null; UI.connectFromId=null;
+    const svg=document.getElementById('schemaCanvas');
+    const w=currentWorkflow();
+    if(svg && w){
+      const zg=document.getElementById('zoomLayer')||svg;
+      const pt=svgPoint(svg,zg,evt);
+      let targetId=null;
+      for(const n of w.nodes){
+        const def=NODE_TYPES[n.type]||NODE_TYPES.process;
+        if(pt.x>=n.x && pt.x<=n.x+def.w && pt.y>=n.y && pt.y<=n.y+def.h){ targetId=n.id; break; }
+      }
+      if(targetId && targetId!==fromId){
+        const newId=addEdge(fromId,targetId,'');
+        if(newId){ UI.selKind='edge'; UI.selId=newId; }
+        else toast('Those two nodes are already connected.');
+      }
+    }
+    render();
+  }
+});
 document.addEventListener('keydown', evt=>{
   if(UI.page!=='editor') return;
   if((evt.ctrlKey||evt.metaKey) && (evt.key==='z'||evt.key==='Z')){ evt.preventDefault(); undo(); }
@@ -1855,6 +1905,7 @@ function renderNode(w,n){
     ${shape}
     <text x="${def.w/2}" y="${def.h/2}" text-anchor="middle" dominant-baseline="middle">${esc(n.label).slice(0,22)}</text>
     ${hasAction?`<text x="${def.w-6}" y="14" text-anchor="end" font-size="13" title="Has an action configured">⚡</text>`:''}
+    <circle class="connect-handle" cx="${def.w}" cy="${def.h/2}" r="6" onmousedown="startConnectHandle(event,'${n.id}')"><title>Drag to another node to connect</title></circle>
   </g>`;
 }
 function renderEdge(w,e){
@@ -1864,6 +1915,14 @@ function renderEdge(w,e){
     <path d="${p.d}" marker-end="url(#arrow)"></path>
     ${e.label?`<text x="${p.mx}" y="${p.my-6}" text-anchor="middle">${esc(e.label)}</text>`:''}
   </g>`;
+}
+function renderConnectPreviewLine(w){
+  /* item 49: dashed rubber-band line shown while dragging from a node's connect-handle. */
+  if(!connectDrag) return '';
+  const a=byId(w.nodes,connectDrag.fromId); if(!a) return '';
+  const def=NODE_TYPES[a.type]||NODE_TYPES.process;
+  const ax=a.x+def.w/2, ay=a.y+def.h/2;
+  return `<line id="connectPreviewLine" x1="${ax}" y1="${ay}" x2="${ax}" y2="${ay}" stroke="var(--nav)" stroke-width="2" stroke-dasharray="5,4"></line>`;
 }
 function renderCanvasOnly(){
   const w=currentWorkflow(); if(!w)return;
@@ -2026,7 +2085,7 @@ function pageEditor(){
       <div class="field"><label class="lbl">Label</label><input class="cel txt" placeholder="e.g. Yes / No" value="${esc(sel.label)}" onchange="setEdgeLabel('${sel.id}',this.value)"></div>
       <button class="btn sm dgr" ${isViewer()?'disabled':''} onclick="deleteSelected()">Delete connector</button>`;
   } else {
-    inspector=`<h4>Nothing selected</h4><p class="mini">Click a node or connector to edit it. In Connect mode, click one node then another to draw an arrow between them.</p>
+    inspector=`<h4>Nothing selected</h4><p class="mini">Click a node or connector to edit it. To connect two nodes, hover a node and drag from the small dot on its edge to another node -- or use Connect mode (click one node, then another) if you prefer.</p>
       <div class="dv"></div>
       <h4>Lanes</h4>
       ${lanes.length?lanes.map(l=>`<div class="field"><div class="row">
@@ -2073,6 +2132,7 @@ function pageEditor(){
             <g id="lanesLayer">${renderLanes(w)}</g>
             <g id="edgesLayer">${w.edges.map(e=>renderEdge(w,e)).join('')}</g>
             <g id="nodesLayer">${w.nodes.map(n=>renderNode(w,n)).join('')}</g>
+            <g id="connectPreviewLayer">${renderConnectPreviewLine(w)}</g>
           </g>
         </svg>
       </div>

@@ -69,8 +69,10 @@ ALTER TABLE org_plan_invoices ENABLE ROW LEVEL SECURITY;
 
 -- Only the full Super Admin manages licensing -- this is operator-facing (you managing
 -- customer plans), not something an org's own admin should see or edit about themselves.
+DROP POLICY IF EXISTS org_plans_full_admin_only ON org_plans;
 CREATE POLICY org_plans_full_admin_only ON org_plans
   USING (is_platform_admin()) WITH CHECK (is_platform_admin());
+DROP POLICY IF EXISTS org_plan_invoices_full_admin_only ON org_plan_invoices;
 CREATE POLICY org_plan_invoices_full_admin_only ON org_plan_invoices
   USING (is_platform_admin()) WITH CHECK (is_platform_admin());
 

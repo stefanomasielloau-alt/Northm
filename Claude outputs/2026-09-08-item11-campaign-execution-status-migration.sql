@@ -52,6 +52,7 @@ ALTER TABLE campaign_execution_status ENABLE ROW LEVEL SECURITY;
 -- write allowed too (needed for the "Review & clear" conflict action,
 -- which just flips conflict_flag back to false).
 
+DROP POLICY IF EXISTS campaign_execution_status_org_isolation ON campaign_execution_status;
 CREATE POLICY campaign_execution_status_org_isolation ON campaign_execution_status
   USING (org_id IN (SELECT org_id FROM profiles WHERE profiles.id = auth.uid()))
   WITH CHECK (org_id IN (SELECT org_id FROM profiles WHERE profiles.id = auth.uid()));

@@ -47,6 +47,7 @@ ALTER TABLE profile_orgs ENABLE ROW LEVEL SECURITY;
 -- from platform_admin_level() -- item 38, 2026-09-07) sees/manages all,
 -- needed for the Norma "org memberships" admin panel this migration's
 -- companion frontend change adds.
+DROP POLICY IF EXISTS profile_orgs_visibility ON profile_orgs;
 CREATE POLICY profile_orgs_visibility ON profile_orgs
   USING (profile_id = auth.uid() OR platform_admin_level() IS NOT NULL)
   WITH CHECK (profile_id = auth.uid() OR platform_admin_level() IS NOT NULL);

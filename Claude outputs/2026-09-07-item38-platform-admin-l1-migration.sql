@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS platform_admin_grants (
 ALTER TABLE platform_admin_grants ENABLE ROW LEVEL SECURITY;
 
 -- Only a genuine L0 Super Admin can see or manage the L1 grant list.
+DROP POLICY IF EXISTS platform_admin_grants_l0_only ON platform_admin_grants;
 CREATE POLICY platform_admin_grants_l0_only ON platform_admin_grants
   USING (is_platform_admin())
   WITH CHECK (is_platform_admin());

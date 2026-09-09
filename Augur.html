@@ -1260,13 +1260,19 @@ function pageContacts(){
   return h;
 }
 
+// NOTE (item 48, 2026-09-09): Contacts removed from nav -- identifiable contact info
+// (name/email/phone) should never live in North per Stef's 2026-09-06 decision; the
+// real contact record lives in Hub. pageContacts() and CFG.contacts are left intact
+// below (data + function untouched, not deleted) so nothing already saved locally is
+// lost; only the nav entry that exposed the CRUD UI is removed. A read-only, non-PII
+// summary card (Deal detail in Augur + Prospectus) linking out to Hub replaces it --
+// see item 48 build notes.
 const PAGES=[
   {id:'home',     ix:'0', label:'Home',           fn:pageHome},
   {id:'deals',    ix:'1', label:'Deals',          fn:pageDeals},
   {id:'scoring',  ix:'2', label:'Scoring model',  fn:pageScoring},
   {id:'forecast', ix:'3', label:'Forecast',       fn:pageForecast},
-  {id:'contacts', ix:'4', label:'Contacts',       fn:pageContacts},
-  {id:'sync',     ix:'5', label:'Shared config',  fn:pageSync}
+  {id:'sync',     ix:'4', label:'Shared config',  fn:pageSync}
 ];
 function renderSide(){
   let h='<h4>Scoring</h4>';

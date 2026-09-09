@@ -1638,6 +1638,12 @@ async function loadFromSupabase(){
     }
   }catch(e){ /* table not created yet -- PPTX export just uses North's own default colors. */ }
 
+  /* item 50 part 2 (2026-09-09): Board Report -> Google Sheets export target. Read straight
+     off the org_settings row already fetched above (select('*')) -- safe even before the
+     board_report_sheet_id migration runs, since an unmigrated column just comes back
+     undefined here rather than erroring (same as calc_scenarios/asset_tag_presets elsewhere). */
+  CFG.boardReportSheetId = os.board_report_sheet_id || '';
+
   /* sample history depends on gates/regions/activities/segments/drivers/seasonality all
      being loaded — build it last, once everything above is in place. */
   buildHist();
@@ -3936,6 +3942,125 @@ async function downloadBoardReportPptx(){
   }
 }
 window.downloadBoardReportPptx=downloadBoardReportPptx;
+
+/* item 50 part 2 (2026-09-09): Board Report -> Google Sheets export. Reuses the same
+   UI._brPayload the PPTX export above builds -- one source of numbers for both exports,
+   same discipline as the PPTX comment already states. Writes into a single existing
+   spreadsheet the org points at (org_settings.board_report_sheet_id) via Hub-Backend's
+   /sheets/request proxy (extended 2026-09-09 to accept a North caller's own Supabase JWT
+   + org slug, same dual-auth pattern as list_companies_for_north) -- that endpoint only
+   supports get/update/clear against an EXISTING sheet, not creating one, so the first
+   export on an org prompts for a Google Sheet URL/ID once and remembers it. Uses the
+   signed-in North user's own matching Hub account's Google connection (Settings -> Google
+   in Hub) -- if that account has no Google token yet, the export fails with a clear message
+   rather than silently doing nothing. */
+async function saveBoardReportSheetId(newId){
+  const trimmed = (newId||'').trim();
+  const old = CFG.boardReportSheetId; CFG.boardReportSheetId = trimmed; render();
+  try{
+    const { error } = await sb.from('org_settings').upsert(
+      { org_id:_orgId, board_report_sheet_id: trimmed || null }, {onConflict:'org_id'}
+    );
+    if(error){
+      CFG.boardReportSheetId = old; render();
+      toast('Could not save the Sheet ID -- run the item 50 migration in Supabase first, then try again. ('+error.message+')');
+      return false;
+    }
+    return true;
+  }catch(e){
+    CFG.boardReportSheetId = old; render();
+    toast('Could not save the Sheet ID: '+((e&&e.message)||e));
+    return false;
+  }
+}
+window.saveBoardReportSheetId = saveBoardReportSheetId;
+
+function _extractSheetId(input){
+  const s=(input||'').trim();
+  const m = s.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if(m) return m[1];
+  return s; // assume they pasted the raw ID
+}
+
+function _brSheetRows(p){
+  const pct=v=>(v==null?'':v);
+  const rows = [
+    ['Board report', p.versionName||'', 'FY '+(p.fy||''), 'Generated '+(p.generatedAt||'')],
+    [],
+    ['KPIs'],
+    ['Exit gate', p.kpis.exitGateName, 'Actual', p.kpis.exitActual, 'Plan', p.kpis.exitPlan, 'Variance %', pct(p.kpis.exitVarPct), 'Status', p.kpis.exitStatus],
+    ['Pipeline value', p.kpis.pipelineValue, 'Deal count', p.kpis.dealCount, 'Revenue (FY actual)', p.kpis.revenue],
+    ['Budget committed', p.kpis.committed, 'Actual spend', p.kpis.actualSpend, 'Budgeted', p.kpis.budgeted, 'Spend variance %', pct(p.kpis.spendVarPct), 'Status', p.kpis.spendStatus],
+    [],
+    ['Funnel'],
+    ['Gate','Plan','Actual','Variance %','Status'],
+    ...(p.funnel||[]).map(g=>[g.name, g.plan, g.actual, pct(g.varPct), g.status]),
+    [],
+    ['Budget by bucket'],
+    ['Bucket','Budget','Committed','Actual','% of plan','Status'],
+    ...(p.budgetByBucket||[]).map(b=>[b.bucket, b.budget, b.committed, b.actual, pct(b.pctOfPlan), b.status]),
+    [],
+    ['Campaign highlights (submitted, or >15% variance)'],
+    ['Campaign','Signoff','Budget','Spend','Variance %'],
+    ...(p.campaignHighlights||[]).map(c=>[c.name, c.signoff, c.budget, c.spend, pct(c.varPct)]),
+    [],
+    ['Narrative'],
+    [p.narrative||''],
+    [],
+    ['Disclaimer'],
+    [p.disclaimer||'']
+  ];
+  return rows;
+}
+
+async function exportBoardReportToSheets(){
+  const btn=document.getElementById('brSheetsBtn');
+  const payload=UI._brPayload;
+  if(!payload){ toast('Open the Board report first, then try again.'); return; }
+  let sheetId = CFG.boardReportSheetId;
+  if(!sheetId){
+    const entered = prompt('Paste the Google Sheet URL or ID to export the Board report into.\n\nThis is a one-time setup per org -- North will remember it and reuse it for every export from here on. To point at a different sheet later, clear it via the small link next to the button.');
+    if(entered==null) return;
+    sheetId = _extractSheetId(entered);
+    if(!sheetId){ toast('No sheet ID recognised in that input.'); return; }
+    const saved = await saveBoardReportSheetId(sheetId);
+    if(!saved) return;
+  }
+  const orig=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='Exporting…'; }
+  try{
+    const { data } = await sb.auth.getSession();
+    const north_token = data && data.session && data.session.access_token;
+    if(!north_token) throw new Error('Your own North session has expired -- sign in again.');
+    const resp = await fetch(CONTACT_URL+'/sheets/request', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        north_token, org:_hubOrgSlug, method:'update', sheetId,
+        range:'A1', body:{ values:_brSheetRows(payload) }
+      })
+    });
+    const j = await resp.json().catch(()=>({}));
+    if(!resp.ok || j.error){
+      const msg = (j&&j.error) || ('Sheets export failed ('+resp.status+')');
+      throw new Error(msg);
+    }
+    toast('Board report exported to Sheets.');
+  }catch(e){
+    console.warn('Board report Sheets export failed', e);
+    toast('Could not export to Sheets: '+((e&&e.message)||e)+' -- if the sheet ID is wrong, use "change sheet" to fix it.');
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent=orig||'Export to Sheets'; }
+  }
+}
+window.exportBoardReportToSheets = exportBoardReportToSheets;
+
+async function changeBoardReportSheet(){
+  const entered = prompt('Paste the new Google Sheet URL or ID for Board report exports (leave blank to clear):', CFG.boardReportSheetId||'');
+  if(entered==null) return;
+  const trimmed=(entered||'').trim();
+  await saveBoardReportSheetId(trimmed?_extractSheetId(trimmed):'');
+}
+window.changeBoardReportSheet = changeBoardReportSheet;
 function pageBoardReport(){
   if(calcBlocked()) return blockedPanel('Board report');
   const d=CFG.drivers, m=verMult()*segBlend();
@@ -4007,6 +4132,8 @@ function pageBoardReport(){
       ${brSorted.map(s=>`<option value="${s.id}" ${brViewing&&s.id===brViewing.id?'selected':''}>${esc(s.name)} — ${esc(F.dt(s.createdAt))}</option>`).join('')}
     </select>
     <button class="btn sm no-print" onclick="downloadBoardReportPptx()" id="brPptxBtn">Download PPTX</button>
+    <button class="btn sm no-print" onclick="exportBoardReportToSheets()" id="brSheetsBtn">Export to Sheets</button>
+    ${CFG.boardReportSheetId?`<a href="#" class="mini no-print" style="align-self:center" onclick="changeBoardReportSheet();return false" title="Currently exporting into a saved Google Sheet -- click to point at a different one">(change sheet)</a>`:''}
     <button class="btn sm no-print" onclick="window.print()">Print / Save as PDF</button></div>`;
 
   /* Save-current-report-as-history row -- no-print since it's a control, not report content. */

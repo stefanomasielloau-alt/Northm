@@ -2475,7 +2475,7 @@ function ragPillHtml(rag){
    This one is real signed HTTP pushed server-side by Hub-Backend; see pageIntegrations()
    for the copy that explains the difference to Stef inline. */
 async function loadOutboundWebhooks(){
-  if(!canConfig()) return;
+  if(!canConfig()){ toast('Your role cannot view outbound webhooks.'); return; }
   UI.outboundWebhooksLoading=true; UI.outboundWebhooksError=''; render();
   try{
     const { data } = await sb.auth.getSession();
@@ -2490,7 +2490,7 @@ async function loadOutboundWebhooks(){
 window.loadOutboundWebhooks=loadOutboundWebhooks;
 
 async function createOutboundWebhookUI(){
-  if(!canConfig()) return;
+  if(!canConfig()){ toast('Your role cannot create webhooks.'); return; }
   const labelEl=document.getElementById('owhNewLabel'), urlEl=document.getElementById('owhNewUrl');
   const label=(labelEl&&labelEl.value)||'', url=(urlEl&&urlEl.value)||'';
   if(!url.trim()){ toast('Enter a URL first.'); return; }
@@ -2513,7 +2513,7 @@ async function createOutboundWebhookUI(){
 window.createOutboundWebhookUI=createOutboundWebhookUI;
 
 async function testOutboundWebhookUI(id){
-  if(!canConfig()) return;
+  if(!canConfig()){ toast('Your role cannot test webhooks.'); return; }
   try{
     const { data } = await sb.auth.getSession();
     const token = data && data.session && data.session.access_token;
@@ -2531,7 +2531,7 @@ async function testOutboundWebhookUI(id){
 window.testOutboundWebhookUI=testOutboundWebhookUI;
 
 async function toggleOutboundWebhookActiveUI(id,current){
-  if(!canConfig()) return;
+  if(!canConfig()){ toast('Your role cannot change webhooks.'); return; }
   try{
     const { data } = await sb.auth.getSession();
     const token = data && data.session && data.session.access_token;
@@ -2548,7 +2548,7 @@ async function toggleOutboundWebhookActiveUI(id,current){
 window.toggleOutboundWebhookActiveUI=toggleOutboundWebhookActiveUI;
 
 async function deleteOutboundWebhookUI(id,label){
-  if(!canConfig()) return;
+  if(!canConfig()){ toast('Your role cannot delete webhooks.'); return; }
   if(!confirm('Remove the webhook'+(label?' "'+label+'"':'')+'? This stops it receiving events immediately.')) return;
   try{
     const { data } = await sb.auth.getSession();
@@ -3113,7 +3113,7 @@ window.saveFeedbackNotes=saveFeedbackNotes;
    account) -- held back for its own follow-up since it's materially more consequential than
    list/create/change-role. */
 async function loadHubUsers(){
-  if(!canConfig()) return;
+  if(!canConfig()){ toast('Your role cannot view Hub accounts.'); return; }
   UI.hubUsersLoading=true; UI.hubUsersError=''; render();
   try{
     const { data } = await sb.auth.getSession();
@@ -3127,7 +3127,7 @@ async function loadHubUsers(){
 }
 window.loadHubUsers=loadHubUsers;
 async function createHubUser(){
-  if(!canConfig()) return;
+  if(!canConfig()){ toast('Your role cannot create Hub accounts.'); return; }
   const usernameEl=document.getElementById('hubNewUsername'), nameEl=document.getElementById('hubNewName'),
         passEl=document.getElementById('hubNewPassword'), roleEl=document.getElementById('hubNewRole');
   const username=(usernameEl&&usernameEl.value)||'', name=(nameEl&&nameEl.value)||'',
@@ -3152,7 +3152,7 @@ async function createHubUser(){
 }
 window.createHubUser=createHubUser;
 async function updateHubUserRoleAction(id, role){
-  if(!canConfig()) return;
+  if(!canConfig()){ toast('Your role cannot change Hub account roles.'); return; }
   try{
     const { data } = await sb.auth.getSession();
     const token = data && data.session && data.session.access_token;
@@ -3202,7 +3202,7 @@ function pageHubAccounts(){
   return h;
 }
 async function loadHubFeedback(){
-  if(!canConfig()) return;
+  if(!canConfig()){ toast('Your role cannot view Hub feedback.'); return; }
   UI.hubFeedbackLoading=true; UI.hubFeedbackError=''; render();
   try{
     const { data } = await sb.auth.getSession();
@@ -3216,7 +3216,7 @@ async function loadHubFeedback(){
 }
 window.loadHubFeedback=loadHubFeedback;
 async function updateHubFeedbackField(id, patch){
-  if(!canConfig()) return;
+  if(!canConfig()){ toast('Your role cannot update Hub feedback.'); return; }
   const item=(UI.hubFeedback||[]).find(x=>x.id===id);
   const prev=item?Object.assign({},item):null;
   if(item) Object.assign(item, patch);

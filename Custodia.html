@@ -904,8 +904,22 @@ function filterAssetsList(list){
 function sortAssetsList(list){
   const key=UI.assetsSortBy; if(!key) return list;
   const dir=UI.assetsSortDir==='desc'?-1:1;
+  // 2026-09-09 (item 45, sub-ask 3): sortAssetsList already handled every column
+  // generically via string compare -- fine for text columns, wrong for numbers
+  // (lexicographic '10' < '9') and for cost bucket (sorting by opaque id instead
+  // of its label). Both are called out explicitly rather than left as a silent
+  // wrong-order bug once more headers become clickable below.
+  const NUMERIC_KEYS=new Set(['stock','lowStockAt','costPer']);
   return [...list].sort((a,b)=>{
-    if(key==='stock'){ const av=a.stock==null?-Infinity:a.stock, bv=b.stock==null?-Infinity:b.stock; return (av-bv)*dir; }
+    if(NUMERIC_KEYS.has(key)){
+      const av=a[key]==null?-Infinity:Number(a[key]), bv=b[key]==null?-Infinity:Number(b[key]);
+      return (av-bv)*dir;
+    }
+    if(key==='costBucketId'){
+      const abk=byId(CFG.costBuckets,a.costBucketId), bbk=byId(CFG.costBuckets,b.costBucketId);
+      const av=(abk?abk.label:'').toLowerCase(), bv=(bbk?bbk.label:'').toLowerCase();
+      return (av<bv?-1:av>bv?1:0)*dir;
+    }
     const av=String(a[key]==null?'':a[key]).toLowerCase(), bv=String(b[key]==null?'':b[key]).toLowerCase();
     return (av<bv?-1:av>bv?1:0)*dir;
   });
@@ -1005,9 +1019,13 @@ function pageAssets(){
     <div class="bd flush"><div class="scroll cap"><table><thead><tr>
       <th style="cursor:pointer" onclick="setAssetsSort('name')">Asset${sortArrow(UI.assetsSortBy,'name')}</th><th>Status</th>
       <th style="cursor:pointer" onclick="setAssetsSort('category')">Category${sortArrow(UI.assetsSortBy,'category')}</th>
-      <th>Tags</th><th class="n" style="cursor:pointer" onclick="setAssetsSort('stock')">Stock${sortArrow(UI.assetsSortBy,'stock')}</th>
-      <th class="n">Low-stock at</th>
-      <th class="n">Cost per</th><th>Purchased</th><th>Location</th><th>Cost bucket</th><th>Campaigns used within</th><th></th></tr></thead><tbody>
+      <th style="cursor:pointer" onclick="setAssetsSort('tags')">Tags${sortArrow(UI.assetsSortBy,'tags')}</th><th class="n" style="cursor:pointer" onclick="setAssetsSort('stock')">Stock${sortArrow(UI.assetsSortBy,'stock')}</th>
+      <th class="n" style="cursor:pointer" onclick="setAssetsSort('lowStockAt')">Low-stock at${sortArrow(UI.assetsSortBy,'lowStockAt')}</th>
+      <th class="n" style="cursor:pointer" onclick="setAssetsSort('costPer')">Cost per${sortArrow(UI.assetsSortBy,'costPer')}</th>
+      <th style="cursor:pointer" onclick="setAssetsSort('purchaseDate')">Purchased${sortArrow(UI.assetsSortBy,'purchaseDate')}</th>
+      <th style="cursor:pointer" onclick="setAssetsSort('location')">Location${sortArrow(UI.assetsSortBy,'location')}</th>
+      <th style="cursor:pointer" onclick="setAssetsSort('costBucketId')">Cost bucket${sortArrow(UI.assetsSortBy,'costBucketId')}</th>
+      <th style="cursor:pointer" onclick="setAssetsSort('campaignsUsed')">Campaigns used within${sortArrow(UI.assetsSortBy,'campaignsUsed')}</th><th></th></tr></thead><tbody>
     ${!visible.length?`<tr><td colspan="12" class="empty">${CFG.assets.length?'No assets match your search.':'No assets yet.'}</td></tr>`:visible.map(a=>{
       const low=a.lowStockAt!=null && a.stock!=null && a.stock<=a.lowStockAt;
       return `<tr${low?' style="background:var(--bad-bg)"':''}>
@@ -1225,6 +1243,52 @@ const HELP_FAQ=[
   {q:'What does Cross-region visibility mean?', a:'"Transparent" means you see every region in your organization. "Isolated" means you only see the regions specifically checked for you.'},
   {q:'What is Super Admin?', a:"Super Admin isn't a role in the Roles table \u2014 it's a separate flag on a login that gives full cross-organization visibility in Configuration, independent of any one organization's roles."}
 ];
+/* 2026-09-09 (item 45, sub-ask 2): tags stays the same free-text, comma-separated
+   column it always was (setIn('assets',id,'tags',...) below is untouched, and the
+   plain-text cell in the Assets table still works exactly as before) -- this only
+   adds a guided preset+custom picker in the asset's Details modal on top of it, so
+   nothing about the existing storage shape changes and no migration is needed. */
+const jsAttr = s => String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const ASSET_TAG_PRESETS=['Signage','Giveaway','Booth','AV equipment','Printed collateral','Branded merchandise','Badge / lanyard','Furniture','Digital asset','Reusable'];
+function assetTagsList(a){
+  return String(a.tags||'').split(',').map(t=>t.trim()).filter(Boolean);
+}
+function toggleAssetTag(id,tag){
+  const a=byId(CFG.assets,id); if(!a)return;
+  let tags=assetTagsList(a);
+  if(tags.includes(tag)) tags=tags.filter(t=>t!==tag);
+  else tags.push(tag);
+  setIn('assets',id,'tags',tags.join(', '));
+}
+window.toggleAssetTag=toggleAssetTag;
+function addCustomAssetTag(id){
+  const el=document.getElementById('asset-tag-custom-'+id); if(!el)return;
+  const val=(el.value||'').trim(); if(!val)return;
+  const a=byId(CFG.assets,id); if(!a)return;
+  const tags=assetTagsList(a);
+  if(!tags.some(t=>t.toLowerCase()===val.toLowerCase())){ tags.push(val); setIn('assets',id,'tags',tags.join(', ')); }
+  el.value='';
+}
+window.addCustomAssetTag=addCustomAssetTag;
+function removeAssetTag(id,tag){
+  const a=byId(CFG.assets,id); if(!a)return;
+  setIn('assets',id,'tags',assetTagsList(a).filter(t=>t!==tag).join(', '));
+}
+window.removeAssetTag=removeAssetTag;
+function assetTagsEditorHtml(a){
+  const current=assetTagsList(a);
+  const chip=(t,onRemove)=>`<span class="pill n" style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px 2px 0">${esc(t)}<span style="cursor:pointer;opacity:.6" onclick="${onRemove}">&times;</span></span>`;
+  const presetBtn=(t)=>{const on=current.includes(t);return `<button type="button" class="btn sm${on?' pri':''}" style="margin:2px 4px 2px 0" onclick="toggleAssetTag('${a.id}','${t}')">${on?'&check; ':''}${esc(t)}</button>`;};
+  return `<div style="margin-top:4px">
+    ${current.length?current.map(t=>chip(t,`removeAssetTag('${a.id}','${jsAttr(t)}')`)).join(''):'<span class="mini" style="color:#999">No tags yet.</span>'}
+  </div>
+  <div class="mini" style="margin-top:8px;margin-bottom:2px;color:#888">Presets — click to add/remove</div>
+  <div>${ASSET_TAG_PRESETS.map(presetBtn).join('')}</div>
+  <div class="row" style="gap:6px;margin-top:8px">
+    <input class="in" id="asset-tag-custom-${a.id}" placeholder="Add a custom tag…" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomAssetTag('${a.id}');}">
+    <button class="btn sm" onclick="addCustomAssetTag('${a.id}')">Add</button>
+  </div>`;
+}
 function assetDetailHtml(){
   const a=byId(CFG.assets,UI.assetDetailId); if(!a) return '';
   return `<div class="mask" onclick="if(event.target===this)closeAssetDetail()"><div class="modal" style="width:min(560px,100%)">
@@ -1232,6 +1296,8 @@ function assetDetailHtml(){
     <div class="bd" style="max-height:70vh;overflow:auto">
       <label class="lbl">Notes</label>
       <textarea class="in" style="width:100%;box-sizing:border-box" rows="3" onchange="setIn('assets','${a.id}','notes',this.value)">${esc(a.notes||'')}</textarea>
+      <label class="lbl" style="margin-top:10px;display:block">Tags</label>
+      ${assetTagsEditorHtml(a)}
       <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:10px">
         <div style="flex:1;min-width:140px"><label class="lbl">Expiry date</label>
           <input class="in" style="width:100%;box-sizing:border-box" type="date" value="${a.expiryDate||''}" onchange="setIn('assets','${a.id}','expiryDate',this.value)"></div>

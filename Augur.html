@@ -1060,7 +1060,7 @@ function pageDeals(){
       <input id="dealsFilterInput" class="cel txt" style="width:200px" placeholder="Search deals…" value="${esc(UI.dealsFilter||'')}" oninput="setDealsFilter(this.value)">
       <button class="btn sm" onclick="exportClosedWonForOrdo()">Export closed-won for Strategy</button>
       <button class="btn sm pri" onclick="addDeal()">Add deal</button></h3>
-    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+    <div class="bd flush"><div class="scroll"><table><thead><tr>
       <th style="cursor:pointer" onclick="setDealsSort('name')">Deal${sortMark(UI.dealsSortBy,UI.dealsSortDir,'name')}</th><th>Progress</th>
       <th class="n" style="cursor:pointer" onclick="setDealsSort('value')">Value${sortMark(UI.dealsSortBy,UI.dealsSortDir,'value')}</th>
       <th>Stage</th>
@@ -1196,7 +1196,7 @@ function pageSync(){
     <p class="mini" style="margin:0 0 8px">Deals and scoring save to this browser automatically. Local only — export/import is still how
       data reaches other tools.</p>
     <button class="btn sm dgr" onclick="clearLocal()">Clear local autosave</button></div></div>`;
-  h+=`<div class="card"><h3>Activity log</h3><div class="bd flush"><div class="scroll cap"><table><thead><tr>
+  h+=`<div class="card"><h3>Activity log</h3><div class="bd flush"><div class="scroll"><table><thead><tr>
       <th>When</th><th>What</th><th>Detail</th></tr></thead><tbody>
       ${!CFG.audit.length?`<tr><td colspan="3" class="empty">Nothing yet.</td></tr>`:
         CFG.audit.map(a=>`<tr><td class="mini">${esc(a.ts)}</td><td>${esc(a.what)}</td><td class="mini">${esc(a.detail)}</td></tr>`).join('')}
@@ -1224,7 +1224,7 @@ function pageContacts(){
   h+=`<div class="card"><h3>Contacts <span class="sp"></span><span class="pill n">${CFG.contacts.length}</span>
       <input id="contactsFilterInput" class="cel txt" style="width:200px" placeholder="Search contacts…" value="${esc(UI.contactsFilter||'')}" oninput="setContactsFilter(this.value)">
       <button class="btn sm pri" onclick="addContact()">Add contact</button></h3>
-    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+    <div class="bd flush"><div class="scroll"><table><thead><tr>
       <th style="cursor:pointer" onclick="setContactsSort('name')">Name${sortMark(UI.contactsSortBy,UI.contactsSortDir,'name')}</th>
       <th>Title</th>
       <th style="cursor:pointer" onclick="setContactsSort('account')">Account${sortMark(UI.contactsSortBy,UI.contactsSortDir,'account')}</th>
@@ -1241,7 +1241,7 @@ function pageContacts(){
 
   const sorted=CFG.activities.slice().sort((a,b)=>(b.occurredAt||'').localeCompare(a.occurredAt||''));
   h+=`<div class="card"><h3>Touchpoints <span class="sp"></span><span class="pill n">${CFG.activities.length}</span></h3>
-    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+    <div class="bd flush"><div class="scroll"><table><thead><tr>
       <th>Date</th><th>Contact</th><th>Type</th><th>Summary</th><th>Related deal</th><th>Logged by</th><th></th></tr></thead><tbody>
     ${!sorted.length?`<tr><td colspan="7" class="empty">No touchpoints logged yet — add a contact, then log one.</td></tr>`:sorted.map(a=>{
       const contact=byId(CFG.contacts,a.contactId);

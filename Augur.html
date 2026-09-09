@@ -233,6 +233,13 @@ const AUTH_LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAEJwAAAZ2CAYAAAG
 
 const uid = _p => crypto.randomUUID();
 const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/* item 48: for free-text passed as a quoted-string ARGUMENT inside an inline onclick="..."
+   handler (e.g. an account name that may contain an apostrophe or quote) -- esc() alone
+   isn't enough there, since HTML-decoding the attribute before JS parses it would hand a
+   raw unescaped quote back to the JS engine. Escapes for the JS string literal first, then
+   for the surrounding HTML attribute. */
+const jsAttr = s => String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const byId = (a,id) => a.find(x=>x.id===id);
 const sum = a => a.reduce((x,y)=>x+(y||0),0);
 const F = {
@@ -252,7 +259,7 @@ const STAGES=['Prospecting','Qualifying','Proposal','Negotiation','Closed Won','
    nothing downstream needs to change; only the population source moved. */
 const CFG = {};
 
-const UI = { page:'home', helpOpen:false, dealsFilter:'', dealsSortBy:null, dealsSortDir:'asc', contactsFilter:'', contactsSortBy:null, contactsSortDir:'asc' };
+const UI = { page:'home', helpOpen:false, dealsFilter:'', dealsSortBy:null, dealsSortDir:'asc', contactsFilter:'', contactsSortBy:null, contactsSortDir:'asc', contactSummaryFor:null };
 
 function logAudit(what,detail){
   CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
@@ -1093,7 +1100,8 @@ function pageDeals(){
         <td class="n">${F.n(m.score,0)}</td>
         <td><span class="pill ${m.tier?m.tier.name.toLowerCase():'n'}">${m.tier?esc(m.tier.name):'—'}</span></td>
         <td class="n">${F.mk(m.weightedValue,CCY_SYM[d.currency])}</td>
-        <td class="n"><button class="btn sm dgr" onclick="removeDeal('${d.id}')">Remove</button></td></tr>`;
+        <td class="n"><button class="btn sm" title="Contacts for this account" onclick="openContactSummary('${jsAttr(d.account)}')">👥</button>
+          <button class="btn sm dgr" onclick="removeDeal('${d.id}')">Remove</button></td></tr>`;
     }).join('')}
     </tbody></table></div></div>
     <div class="bd" style="border-top:1px solid var(--line-2)"><p class="mini" style="margin:0">Campaign ref is a free-text pointer to a Strategy/Campaign Planning tracking ref (e.g. <code>ORD-CAM-0001</code>) for traceability.
@@ -1328,6 +1336,56 @@ function openHelpPanel(){ UI.helpOpen=true; render(); }
 function closeHelpPanel(){ UI.helpOpen=false; render(); }
 window.openHelpPanel=openHelpPanel; window.closeHelpPanel=closeHelpPanel;
 
+/* item 48: read-only, non-identifiable contact summary for a Deal's account, replacing
+   the old full Contacts CRUD page in this module's nav (hidden 2026-09-09 -- see PAGES
+   above). Never shows a name/email/phone -- just a count, the roles on file, and when the
+   account was last touched -- with a link out to Hub for the actual contact record. */
+function contactSummaryPanelHtml(account){
+  const acct=(account||'').trim();
+  const norm=acct.toLowerCase();
+  const matches=!norm?[]:CFG.contacts.filter(c=>(c.account||'').trim().toLowerCase()===norm);
+  const matchIds=matches.map(c=>c.id);
+  const touches=CFG.activities.filter(a=>matchIds.includes(a.contactId));
+  const lastTouch=touches.length?touches.reduce((m,a)=>(a.occurredAt||'')>m?(a.occurredAt||''):m,''):'';
+  const roles=[...new Set(matches.map(c=>(c.title||'').trim()).filter(Boolean))];
+  const rolesShown=roles.slice(0,4).join(', ')+(roles.length>4?` +${roles.length-4} more`:'');
+  return `<div class="mask" onclick="if(event.target===this)closeContactSummary()"><div class="modal" style="width:min(420px,100%)">
+    <h3>Contacts — ${esc(acct||'(no account set)')} <span class="sp"></span><button class="btn sm" onclick="closeContactSummary()">Close</button></h3>
+    <div class="bd">
+      ${!acct?`<p class="mini">This deal has no account name set, so there's nothing to look up yet.</p>`
+        :!matches.length?`<p class="mini">No contacts on file for this account yet.</p>`
+        :`<div class="kpis" style="margin-bottom:10px">
+            <div class="kpi"><div class="k">Contacts on file</div><div class="kpi-v">${matches.length}</div></div>
+            <div class="kpi"><div class="k">Last touchpoint</div><div class="kpi-v" style="font-size:15px">${lastTouch?F.dt(lastTouch):'—'}</div></div>
+          </div>
+          ${roles.length?`<p class="mini" style="margin:0 0 10px">Roles on file: ${esc(rolesShown)}</p>`:''}`}
+      <p class="mini" style="margin:0 0 10px;color:var(--ink-2)">The actual contact records (name, email, phone) live in Hub, not North —
+        open Hub to see or edit who they are.</p>
+      <button class="btn pri" ${acct?'':'disabled'} onclick="viewCompanyInHub('${jsAttr(acct)}')">Open in Hub →</button>
+    </div>
+  </div></div>`;
+}
+function openContactSummary(account){ UI.contactSummaryFor=(account||'').trim()||'(no account)'; UI.contactSummaryAccount=account||''; render(); }
+window.openContactSummary=openContactSummary;
+function closeContactSummary(){ UI.contactSummaryFor=null; UI.contactSummaryAccount=null; render(); }
+window.closeContactSummary=closeContactSummary;
+async function viewCompanyInHub(account){
+  let url = CONTACT_URL;
+  try{
+    const { data } = await sb.auth.getSession();
+    const t = data && data.session && data.session.access_token;
+    if(t){
+      url = CONTACT_URL + '/auth/sso?token=' + encodeURIComponent(t);
+      if(_hubOrgSlug) url += '&org=' + encodeURIComponent(_hubOrgSlug);
+      if(account) url += '&company=' + encodeURIComponent(account);
+    } else {
+      toast('No live North session found -- sign in again, then try again.');
+    }
+  }catch(e){ toast('Could not open Hub: '+(e&&e.message?e.message:'unknown error')); }
+  window.open(url, 'tool_North');
+}
+window.viewCompanyInHub=viewCompanyInHub;
+
 function renderTnModuleLinks(){
   return MODULES.map(m=>{
     const t = (m.desc||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
@@ -1401,7 +1459,7 @@ function render(){
   document.getElementById('side').innerHTML=renderSide();
   document.getElementById('tnLinks').innerHTML=renderFilteredTnLinks();
   document.getElementById('tnAcct').innerHTML=renderTnAcct();
-  document.getElementById('main').innerHTML=p.fn() + (UI.helpOpen?helpPanelHtml():'');
+  document.getElementById('main').innerHTML=p.fn() + (UI.helpOpen?helpPanelHtml():'') + (UI.contactSummaryFor!==null?contactSummaryPanelHtml(UI.contactSummaryAccount):'');
 
   if(activeId){
     const el=document.getElementById(activeId);

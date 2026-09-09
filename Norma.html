@@ -1386,10 +1386,21 @@ async function addRole(){
   const targetRoleOrgId = (CFG.isSuperAdmin && UI.usersOrgFilter) ? UI.usersOrgFilter : _orgId;
   /* New roles start with no module access and no edit rights -- unconfigured
      means nothing, not everything (2026-08-27). Turn on what this role needs
-     from the Modules column below. */
+     from the Modules column below.
+     2026-09-09 (item 38, "fold Reporting into Viewer"): the one deliberate
+     exception -- a role literally named "Viewer" (case-insensitive) gets
+     Reportus access on by default, since Reporting has no meaning to lock
+     behind an extra toggle for what is already the read-only tier. Every
+     other module stays locked-down-by-default as before; this doesn't touch
+     the isFullSuperAdmin/isSuperAdmin(L0/L1) logic at all. Existing "Viewer"
+     roles are backfilled separately -- see
+     2026-09-09-item38-viewer-reportus-backfill-migration.sql. */
+  const isViewerRoleName = name.trim().toLowerCase() === 'viewer';
+  const initialModuleAccess = lockedDownModuleAccess();
+  if(isViewerRoleName) initialModuleAccess.Reportus = true;
   const { data, error } = await sb.from('roles').insert({
     org_id:targetRoleOrgId, name, config:false, publish:false, write_all:false, scope:'own', description:'', is_system:false,
-    can_edit:false, ...moduleAccessToRow(lockedDownModuleAccess())
+    can_edit:false, ...moduleAccessToRow(initialModuleAccess)
   }).select().single();
   if(error){ toast('Could not create role: '+error.message); return; }
   CFG.roles.push({id:data.id,orgId:data.org_id,name:data.name,config:data.config,publish:data.publish,writeAll:data.write_all,scope:data.scope,desc:data.description||'',requireCommitOnEdit:data.require_commit_on_edit,allowExpertMode:data.allow_expert_mode,isSystem:false,moduleAccess:moduleAccessFromRow(data),canEdit:!!data.can_edit});

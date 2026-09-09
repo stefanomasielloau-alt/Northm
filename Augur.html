@@ -373,7 +373,8 @@ async function saveToSupabase(){
       id:d.id,name:d.name,account:d.account||'',value:d.value||0,currency:d.currency||'AUD',
       stage:d.stage||'Prospecting',close_date:d.closeDate||null,source:d.source||'Manual',
       campaign_ref:d.campaignRef||'',campaign_id:d.campaignId||null,
-      factor_scores:d.factorScores||{},tracking_ref:d.trackingRef||null
+      factor_scores:d.factorScores||{},tracking_ref:d.trackingRef||null,
+      partner_id:d.partnerId||null,commission_pct:d.commissionPct
     })),
     upsertRows('crm_contacts', CFG.contacts, c=>({
       id:c.id,name:c.name||'',title:c.title||'',account:c.account||'',email:c.email||'',phone:c.phone||'',notes:c.notes||''
@@ -445,6 +446,23 @@ async function loadFromSupabase(){
     (ffR.data||[]).forEach(row=>{ CFG._factorFieldsById[row.id] = row; });
   }catch(e){ console.warn('augur_scoring_factors.type/auto_computed not available yet (migration pending?)', e); }
 
+  /* 2026-09-09 (item 41, commission/attribution): partners live in Cursus's own table --
+     Augur never loaded it before. Kept isolated/fail-soft, same reasoning as every other
+     migration-pending addition this project makes: the shared Promise.all batch below does
+     `if(r.error) throw r.error` for every query, so selecting augur_deals' not-yet-migrated
+     partner_id/commission_pct columns in there would break the whole Deals page for every
+     org until the migration runs. This is its own isolated try/catch instead. */
+  CFG.partners = [];
+  CFG._dealPartnerFieldsById = {};
+  try{
+    const partnersR = await sb.from('partners').select('id,name');
+    if(partnersR.error) throw partnersR.error;
+    CFG.partners = (partnersR.data||[]).map(p=>({id:p.id,name:p.name||''}));
+    const dpR = await sb.from('augur_deals').select('id,partner_id,commission_pct');
+    if(dpR.error) throw dpR.error;
+    (dpR.data||[]).forEach(row=>{ CFG._dealPartnerFieldsById[row.id] = row; });
+  }catch(e){ console.warn('partners / augur_deals.partner_id-commission_pct not available yet (migration pending?)', e); }
+
   const results = await Promise.all([
     sb.from('augur_scoring_factors').select('id,name,weight'),
     sb.from('augur_tiers').select('id,name,min_score,probability'),
@@ -469,7 +487,12 @@ async function loadFromSupabase(){
     id:d.id,name:d.name,account:d.account||'',value:d.value,currency:d.currency||'AUD',
     stage:d.stage||'Prospecting',closeDate:d.close_date||'',source:d.source||'Manual',
     campaignRef:d.campaign_ref||'',campaignId:d.campaign_id||null,
-    factorScores:d.factor_scores||{},trackingRef:d.tracking_ref||null
+    factorScores:d.factor_scores||{},trackingRef:d.tracking_ref||null,
+    /* item 41: deal-level "sourced to" attribution -- distinct from campaign_partner_allocations
+       (a partner's budget/lead share across a whole campaign). This is one partner credited
+       with sourcing/influencing THIS specific deal, plus an optional commission %. */
+    partnerId:(CFG._dealPartnerFieldsById[d.id]||{}).partner_id||null,
+    commissionPct:(CFG._dealPartnerFieldsById[d.id]||{}).commission_pct||null
   }));
   CFG.contacts = (contactsR.data||[]).map(c=>({id:c.id,name:c.name||'',title:c.title||'',account:c.account||'',email:c.email||'',phone:c.phone||'',notes:c.notes||''}));
   CFG.activities = (activitiesR.data||[]).map(a=>({id:a.id,contactId:a.contact_id,dealId:a.deal_id||null,type:a.type||'Call',summary:a.summary||'',occurredAt:a.occurred_at||'',loggedBy:a.logged_by||''}));
@@ -1073,11 +1096,12 @@ function pageDeals(){
       <th>Stage</th>
       <th style="cursor:pointer" onclick="setDealsSort('closeDate')">Close date${sortMark(UI.dealsSortBy,UI.dealsSortDir,'closeDate')}</th>
       <th>Campaign</th>
+      <th>Sourced by</th><th class="n">Commission %</th>
       ${CFG.scoringFactors.map(f=>`<th class="n">${esc(f.name)}</th>`).join('')}
       <th class="n">Score</th><th>Tier</th>
       <th class="n" style="cursor:pointer" onclick="setDealsSort('weighted')">Weighted${sortMark(UI.dealsSortBy,UI.dealsSortDir,'weighted')}</th>
       <th></th></tr></thead><tbody>
-    ${!dealsView.length?`<tr><td colspan="${10+CFG.scoringFactors.length}" class="empty">${CFG.deals.length?'No deals match your search.':'No deals yet.'}</td></tr>`:dealsView.map(({d,m})=>{
+    ${!dealsView.length?`<tr><td colspan="${12+CFG.scoringFactors.length}" class="empty">${CFG.deals.length?'No deals match your search.':'No deals yet.'}</td></tr>`:dealsView.map(({d,m})=>{
       return `<tr>
         <td><input class="cel txt" style="width:190px" value="${esc(d.name)}" onchange="setIn('deals','${d.id}','name',this.value)">
           <div class="mini">${esc(d.account)}${d.trackingRef?' · '+esc(d.trackingRef):''}</div></td>
@@ -1093,6 +1117,11 @@ function pageDeals(){
             <option value="">— not linked —</option>
             ${CFG.referenceList.campaigns.map(c=>`<option value="${c.id}" ${c.id===d.campaignId?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
           ${(!d.campaignId&&d.campaignRef)?`<div class="mini">legacy ref: ${esc(d.campaignRef)}</div>`:''}</td>
+        <td><select class="cel txt" style="width:130px" onchange="setIn('deals','${d.id}','partnerId',this.value||null)" title="Which partner sourced or influenced this specific deal -- separate from a partner's overall budget/lead share on the linked campaign.">
+            <option value="">— none —</option>
+            ${CFG.partners.map(p=>`<option value="${p.id}" ${p.id===d.partnerId?'selected':''}>${esc(p.name)}</option>`).join('')}</select></td>
+        <td class="n"><input class="cel w" style="width:56px" value="${d.commissionPct!=null?d.commissionPct:''}" placeholder="—" title="Commission %, applied to this deal's value once Closed Won." onchange="setIn('deals','${d.id}','commissionPct',this.value,'num')">
+          ${(d.partnerId && d.commissionPct!=null && d.stage==='Closed Won')?`<div class="mini">${F.mk(d.value*d.commissionPct/100,CCY_SYM[d.currency])} owed</div>`:''}</td>
         ${CFG.scoringFactors.map(f=>f.autoComputed
           ?`<td class="n" title="Auto-computed from logged Calls/Emails/Meetings, decays over ${BEHAVIORAL_DECAY_DAYS} days. Not editable.">${F.n(computeBehavioralScore(d.id),0)}</td>`
           :`<td class="n"><input class="cel w" value="${(d.factorScores&&d.factorScores[f.id])||0}" onchange="setFactorScore('${d.id}','${f.id}',this.value)"></td>`
@@ -1106,7 +1135,9 @@ function pageDeals(){
     </tbody></table></div></div>
     <div class="bd" style="border-top:1px solid var(--line-2)"><p class="mini" style="margin:0">Campaign ref is a free-text pointer to a Strategy/Campaign Planning tracking ref (e.g. <code>ORD-CAM-0001</code>) for traceability.
       Closed-won deals export as JSON above, but Strategy does not import it yet — deliberately left for later so its win/actuals
-      engine gets a proper look before anything writes into it.</p></div></div>`;
+      engine gets a proper look before anything writes into it. "Sourced by"/Commission % (item 41) is per-deal attribution to one
+      Partner — separate from a Partner's overall budget/lead share on the linked campaign (edited in Cursus's Partners page); edit
+      the Partner list itself there too.</p></div></div>`;
   return h;
 }
 

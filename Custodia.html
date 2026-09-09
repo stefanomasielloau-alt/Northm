@@ -268,6 +268,14 @@ const CFG = {
   wonDeals:[],
   /* local/static for now, not persisted -- see Campaign Planning/Configuration for the same scope note. */
   trackingConfig:null,
+  /* 2026-09-09 (item 45, sub-ask 2, corrected): org-editable preset list, same
+     org_settings.<x>_presets pattern item 41 used for Partner types (and explicitly
+     proposed reusing here) -- NOT a hardcoded array. Seeded with a starter list as
+     this column's own DB default (see the migration) so a brand-new org isn't stuck
+     typing "Signage"/"AV equipment" in by hand; grows from there via "+ Add new tag".
+     This JS-side literal is only the pre-migration fallback, kept identical to the
+     column default so behavior doesn't visibly change the moment the migration runs. */
+  assetTagPresets:['Signage','Giveaway','Booth','AV equipment','Printed collateral','Branded merchandise','Badge / lanyard','Furniture','Digital asset','Reusable'],
   /* everything below is Supabase-backed now -- populated by loadFromSupabase(). */
   costBuckets:[],
   assets:[],
@@ -395,7 +403,13 @@ async function saveToSupabase(){
       id:t.id,asset_id:t.assetId,date:t.date||null,type:t.type,qty:t.qty||0,before:t.before,after:t.after,
       campaign_id:t.campaignId||null,campaign_ref:t.campaignRef||'',notes:t.notes||''
     })),
-    upsertRows('audit_log', CFG.audit, a=>({ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null}))
+    upsertRows('audit_log', CFG.audit, a=>({ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null})),
+    (async()=>{
+      const { error } = await sb.from('org_settings').upsert(
+        { org_id:_orgId, asset_tag_presets: CFG.assetTagPresets||[] }, {onConflict:'org_id'}
+      );
+      if(error){ console.error('Save failed for org_settings.asset_tag_presets', error); }
+    })()
   ]);
 }
 
@@ -450,6 +464,11 @@ async function loadFromSupabase(){
     if(tcR.error) throw tcR.error;
     if((tcR.data||{}).tracking_config) CFG.trackingConfig = tcR.data.tracking_config;
   }catch(e){ console.warn('tracking_config column not available yet (migration pending?)', e); }
+  try{
+    const atR = await sb.from('org_settings').select('asset_tag_presets').eq('org_id',_orgId).maybeSingle();
+    if(atR.error) throw atR.error;
+    if((atR.data||{}).asset_tag_presets && atR.data.asset_tag_presets.length) CFG.assetTagPresets = atR.data.asset_tag_presets;
+  }catch(e){ console.warn('asset_tag_presets column not available yet (migration pending?)', e); }
 
   const results = await Promise.all([
     sb.from('assets').select('id,name,category,tags,stock,low_stock_at,cost_per,purchase_date,location,campaigns_used,campaign_id,source_task_id,cost_bucket_id,notes,expiry_date,publish_date,signed_off_by,signed_off_date,file_url,cost_per_fx'),
@@ -1249,7 +1268,13 @@ const HELP_FAQ=[
    adds a guided preset+custom picker in the asset's Details modal on top of it, so
    nothing about the existing storage shape changes and no migration is needed. */
 const jsAttr = s => String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-const ASSET_TAG_PRESETS=['Signage','Giveaway','Booth','AV equipment','Printed collateral','Branded merchandise','Badge / lanyard','Furniture','Digital asset','Reusable'];
+function addNewAssetTagPreset(){
+  const name=prompt('New tag preset (e.g. Trade show, Signage, Giveaway):');
+  const trimmed=(name||'').trim(); if(!trimmed)return;
+  if(!CFG.assetTagPresets.includes(trimmed)) CFG.assetTagPresets.push(trimmed);
+  render();
+}
+window.addNewAssetTagPreset=addNewAssetTagPreset;
 function assetTagsList(a){
   return String(a.tags||'').split(',').map(t=>t.trim()).filter(Boolean);
 }
@@ -1278,14 +1303,14 @@ window.removeAssetTag=removeAssetTag;
 function assetTagsEditorHtml(a){
   const current=assetTagsList(a);
   const chip=(t,onRemove)=>`<span class="pill n" style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px 2px 0">${esc(t)}<span style="cursor:pointer;opacity:.6" onclick="${onRemove}">&times;</span></span>`;
-  const presetBtn=(t)=>{const on=current.includes(t);return `<button type="button" class="btn sm${on?' pri':''}" style="margin:2px 4px 2px 0" onclick="toggleAssetTag('${a.id}','${t}')">${on?'&check; ':''}${esc(t)}</button>`;};
+  const presetBtn=(t)=>{const on=current.includes(t);return `<button type="button" class="btn sm${on?' pri':''}" style="margin:2px 4px 2px 0" onclick="toggleAssetTag('${a.id}','${jsAttr(t)}')">${on?'&check; ':''}${esc(t)}</button>`;};
   return `<div style="margin-top:4px">
     ${current.length?current.map(t=>chip(t,`removeAssetTag('${a.id}','${jsAttr(t)}')`)).join(''):'<span class="mini" style="color:#999">No tags yet.</span>'}
   </div>
-  <div class="mini" style="margin-top:8px;margin-bottom:2px;color:#888">Presets — click to add/remove</div>
-  <div>${ASSET_TAG_PRESETS.map(presetBtn).join('')}</div>
+  <div class="mini" style="margin-top:8px;margin-bottom:2px;color:#888">Presets — click to add/remove, shared across every asset in your org</div>
+  <div>${CFG.assetTagPresets.map(presetBtn).join('')}<button type="button" class="btn sm" style="margin:2px 4px 2px 0" onclick="addNewAssetTagPreset()">+ Add new preset…</button></div>
   <div class="row" style="gap:6px;margin-top:8px">
-    <input class="in" id="asset-tag-custom-${a.id}" placeholder="Add a custom tag…" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomAssetTag('${a.id}');}">
+    <input class="in" id="asset-tag-custom-${a.id}" placeholder="Add a one-off custom tag…" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomAssetTag('${a.id}');}">
     <button class="btn sm" onclick="addCustomAssetTag('${a.id}')">Add</button>
   </div>`;
 }

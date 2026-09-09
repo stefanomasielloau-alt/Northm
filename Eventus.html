@@ -532,6 +532,11 @@ async function loadFromSupabase(){
   CFG.programmes = (programmesR.data||[]).map(p=>({id:p.id,name:p.name}));
   /* Campaign Planning activities that reference an event, purely for display (e.g. "linked to: Venue booking"). */
   CFG.linkedActivities = (tasksR.data||[]).filter(t=>t.event_id).map(t=>({id:t.id,name:t.name,campaignId:t.campaign_id,eventId:t.event_id,status:t.status||'',dueDate:t.due_date||'',owner:t.owner||''}));
+  /* item 45 write access (2026-09-09, Stef's explicit confirmation -- see the updated
+     item 31 comment above): the pool of activities NOT yet linked to any event, for the
+     "attach existing" dropdown below. Same tasksR query as linkedActivities just above,
+     just the other half of the same filter -- no extra query. */
+  CFG.unlinkedActivities = (tasksR.data||[]).filter(t=>!t.event_id).map(t=>({id:t.id,name:t.name,campaignId:t.campaign_id,status:t.status||'',dueDate:t.due_date||'',owner:t.owner||''}));
   CFG.audit = (auditR.data||[]).map(a=>({ts:a.ts,what:a.what,detail:a.detail}));
   CFG.roles = (rolesR.data||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name,config:r.config,publish:r.publish,writeAll:r.write_all,scope:r.scope,desc:r.description||''}));
   /* trackingConfig (Configuration's old generic {mod}-{type}-{seq} scheme) is now DB-backed via
@@ -860,13 +865,21 @@ function ragPillHtml(rag){
 
 /* ============================================================================
    Nested Campaign -> Events -> Activities Table/Board/Gantt (backlog item 31,
-   2026-09-09). Confirmed decision: nested, not flat. Activities are shown
-   read-only (linkedActivitiesFor) -- Eventus has never written to the tasks
-   table before, and this keeps that true; edit an activity from Campaign
-   Planning as before. Campaigns here don't carry dates/budget (Eventus's
-   own campaigns query only ever selected id/name/programme_id), so the
-   Gantt's campaign grouping is a visual section header, not its own bar --
-   the events underneath it are the real bars, same as Board's columns.
+   2026-09-09). Confirmed decision: nested, not flat. This table/board/Gantt use
+   linkedActivitiesFor() read-only, same as always. Campaigns here don't carry
+   dates/budget (Eventus's own campaigns query only ever selected
+   id/name/programme_id), so the Gantt's campaign grouping is a visual section
+   header, not its own bar -- the events underneath it are the real bars, same
+   as Board's columns.
+
+   UPDATE (item 45, 2026-09-09): the Event Detail page's own Activities card
+   (further down this file) now DOES write to tasks -- create/attach/detach --
+   per Stef's explicit "45 write access also" confirmation. That deliberately
+   ends the invariant this comment used to state ("Eventus has never written to
+   the tasks table"). Everywhere else in this file -- this Table/Board/Gantt
+   view included -- stays read-only; only the Event Detail card writes, and
+   only the three narrow, isolated calls right after the Assets block do it
+   (same shape as the Assets half already used for assets.event_id).
    ============================================================================ */
 const RAG_BAR_COLOR={grey:'#9AA3B5',blue:'#1F3AC7',amber:'#B5730E',red:'#9C2B3C',green:'#0E8A5F'};
 function allowDrop(ev){ ev.preventDefault(); }
@@ -1259,6 +1272,70 @@ function createAssetForEvent(eventId){
   toast('Asset created -- set category, stock and tags for it in Custodia.');
 }
 window.createAssetForEvent=createAssetForEvent;
+
+/* ---------- Activities write access (item 45, 2026-09-09) ----------
+   Per Stef's explicit "45 write access also" confirmation, this Event Detail card now
+   creates/attaches/detaches Activities (tasks), deliberately ending the "Eventus never
+   writes to tasks" invariant the item 31 comment above used to state (updated there too).
+   Same narrow-write shape as the Assets block just above: three isolated, fail-soft calls
+   outside saveToSupabase()'s shared batch, since tasks is Campaign Planning's table, not
+   Eventus's -- editing anything beyond the one link field (event_id) still happens in
+   Campaign Planning, same as before. Detach only clears the link; it never deletes the
+   activity itself (never-delete convention). Create requires the event to already have a
+   linked campaign (tasks.campaign_id is required) -- link one under "Linked campaign"
+   above first if the create button says so. */
+async function _saveActivityEventLink(taskId, eventId){
+  if(!_orgId || !taskId) return;
+  try{
+    const { error } = await sb.from('tasks').update({event_id: eventId||null}).eq('id', taskId);
+    if(error) throw error;
+  }catch(e){ console.error('Could not save activity-event link', e); toast('Linked here, but the database save failed -- see console.'); }
+}
+async function _createActivityRow(task){
+  if(!_orgId) return;
+  try{
+    const { error } = await sb.from('tasks').insert({
+      id: task.id, campaign_id:task.campaignId, name:task.name, type:'General', owner:'',
+      status:'Planned', notes:'', cost_bucket_id:task.costBucketId||null,
+      planned_cost:0, committed_cost:0, actual_cost:0, sort_order:0, event_id:task.eventId
+    });
+    if(error) throw error;
+  }catch(e){ console.error('Could not create activity', e); toast('Created here, but the database save failed -- see console.'); }
+}
+function attachActivityToEvent(eventId, taskId){
+  if(isViewer()){ toast('Your role is view-only.'); return; }
+  if(!taskId) return;
+  const t=byId(CFG.unlinkedActivities, taskId); if(!t) return;
+  CFG.unlinkedActivities=CFG.unlinkedActivities.filter(x=>x.id!==taskId);
+  CFG.linkedActivities.push({id:t.id,name:t.name,campaignId:t.campaignId,eventId:eventId,status:t.status||'',dueDate:t.dueDate||'',owner:t.owner||''});
+  logAudit('attach activity', t.name+' to event '+eventId); render();
+  _saveActivityEventLink(taskId, eventId);
+  toast('Activity attached.');
+}
+window.attachActivityToEvent=attachActivityToEvent;
+function detachActivityFromEvent(taskId){
+  if(isViewer()){ toast('Your role is view-only.'); return; }
+  const t=byId(CFG.linkedActivities, taskId); if(!t) return;
+  CFG.linkedActivities=CFG.linkedActivities.filter(x=>x.id!==taskId);
+  CFG.unlinkedActivities.push({id:t.id,name:t.name,campaignId:t.campaignId,status:t.status||''});
+  logAudit('detach activity', t.name); render();
+  _saveActivityEventLink(taskId, null);
+  toast('Activity detached -- it still exists in Campaign Planning, just unlinked from this event.');
+}
+window.detachActivityFromEvent=detachActivityFromEvent;
+function createActivityForEvent(eventId){
+  if(isViewer()){ toast('Your role is view-only.'); return; }
+  const e=byId(CFG.events, eventId);
+  if(!e || !e.campaignId){ toast('Link this event to a campaign first (see "Linked campaign" above) -- an activity needs one.'); return; }
+  const name=(prompt('New activity name:')||'').trim();
+  if(!name) return;
+  const task={id:uid('tk'), name:name, campaignId:e.campaignId, eventId:eventId, status:'Planned', dueDate:'', owner:'', costBucketId:(CFG.costBuckets[0]||{}).id||null};
+  CFG.linkedActivities.push(task);
+  logAudit('create activity', name+' on event '+eventId); render();
+  _createActivityRow(task);
+  toast('Activity created -- set owner, due date, cost and template in Campaign Planning.');
+}
+window.createActivityForEvent=createActivityForEvent;
 
 function addChecklistItem(eventId){
   if(isViewer()){ toast('Your role is view-only.'); return; }
@@ -1694,23 +1771,28 @@ function pageEvent(){
 
   h+=(()=>{
     const acts=linkedActivitiesFor(e.id);
-    /* Read-only by design (item 45, sub-ask 1, Activities half, 2026-09-09): Eventus has
-       never written to the tasks table (see item 31's "Eventus has never written to the
-       tasks table before, and this keeps that true" comment nearby), and item 45's original
-       ask -- create/attach an Activity inline from an Event -- would break that invariant.
-       Rather than silently pick a side, this ships the safe half (a richer read-only view,
-       using the same linkedActivitiesFor() already used in the Events list/board views,
-       now with status/owner/due date too) and leaves the write-capability question flagged
-       for Stef's decision -- see the item 45 project doc and ledger note. */
-    return `<div class="card"><h3>Activities <span class="pill n" title="Read-only here by design -- see the item 45 note in the project doc">from Campaign Planning</span></h3>
-    <div class="bd flush"><table><thead><tr><th>Activity</th><th>Status</th><th>Owner</th><th>Due</th></tr></thead><tbody>
-    ${!acts.length?`<tr><td colspan="4" class="empty">No linked activities -- link a task to this event from Campaign Planning.</td></tr>`:acts.map(a=>`<tr>
+    /* Write access (item 45, 2026-09-09, Stef's explicit "45 write access also" confirmation):
+       create/attach/detach here now writes to tasks -- see the isolated functions right after
+       the Assets block above for why this deliberately breaks the old "Eventus never writes to
+       tasks" invariant, and why it's still safe (three narrow calls, not a shared batch, and
+       every field beyond the event_id link still gets edited in Campaign Planning as before). */
+    const unattached=CFG.unlinkedActivities.filter(t=>!e.campaignId || t.campaignId===e.campaignId);
+    return `<div class="card"><h3>Activities <span class="sp"></span>
+      <select class="in" id="attach-activity-sel" style="width:190px">
+        <option value="">-- attach existing activity --</option>
+        ${unattached.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}
+      </select>
+      <button class="btn sm" onclick="attachActivityToEvent('${e.id}', document.getElementById('attach-activity-sel').value)">Attach</button>
+      <button class="btn sm pri" onclick="createActivityForEvent('${e.id}')">+ New activity</button></h3>
+    <div class="bd flush"><table><thead><tr><th>Activity</th><th>Status</th><th>Owner</th><th>Due</th><th></th></tr></thead><tbody>
+    ${!acts.length?`<tr><td colspan="5" class="empty">No activities linked yet -- attach one above, or create a new one scoped to this event.</td></tr>`:acts.map(a=>`<tr>
       <td>${esc(a.name)}</td>
       <td>${a.status?`<span class="pill ${a.status==='Completed'?'ok':'n'}">${esc(a.status)}</span>`:'--'}</td>
       <td class="mini">${esc(a.owner||'')}</td>
-      <td class="mini">${a.dueDate?F.d(a.dueDate):'--'}</td></tr>`).join('')}
+      <td class="mini">${a.dueDate?F.d(a.dueDate):'--'}</td>
+      <td class="n"><button class="btn sm dgr" onclick="detachActivityFromEvent('${a.id}')">Detach</button></td></tr>`).join('')}
     </tbody></table></div>
-    <p class="mini" style="padding:0 12px 10px">Edit or add activities from Campaign Planning -- this view is read-only in Eventus.</p>
+    <p class="mini" style="padding:0 12px 10px">Owner, due date, cost and templates are still edited in Campaign Planning -- this card only creates, attaches and detaches. ${!e.campaignId?'Link this event to a campaign above before creating a new activity.':''}</p>
     </div></div>`;
   })();
 

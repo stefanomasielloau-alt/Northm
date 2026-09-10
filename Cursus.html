@@ -574,6 +574,27 @@ async function loadFromSupabase(){
   }
   function orgScoped(q, col){ return _savOrgFilter===null ? q : q.eq(col||'org_id', _savOrgFilter); }
   function userScoped(q, col){ return _savUserFilter===null ? q : q.eq(col||'owner_id', _savUserFilter); }
+  /* item 68 v5 (2026-09-10): real cross-org reads for the 7 tables whose Super Admin
+     RLS bypass was rolled back in v3/v4 after it caused Cursus's statement timeout (see
+     2026-09-10-super-admin-rls-v3/v4-*.sql). Since then, "All organizations"/another org
+     silently fell back to the caller's own org (RLS just filters an unfiltered SELECT
+     down quietly) or, once bootApp()'s auto-recovery retry shipped, threw and got
+     silently reset back to "My organization" -- both of which read as "the toggle is
+     stuck," which is what Stef reported. admin_cross_org_<table>() (see
+     2026-09-10-super-admin-rls-v5-cross-org-security-definer-rpcs.sql) restores real
+     cross-org reads WITHOUT reintroducing the RLS-policy performance trap: it checks
+     admin status once per call, not once per row via an OR'd permissive policy, then
+     reads as the function's owner, bypassing RLS entirely. Only taken when genuinely
+     viewing cross-org (_savOrgFilter !== _orgId, which by construction only happens for
+     a Super Admin who has explicitly switched the selector) -- every normal 'own' mode
+     read, for everyone, is the exact same direct table query as before, completely
+     unchanged. If v5's migration hasn't been run yet, these calls fail with "function ...
+     does not exist" and bootApp()'s existing catch/resetToOwn() retry takes over exactly
+     as it does for any other boot failure -- so this fails safe either way. */
+  const _crossOrg = CFG.isSuperAdmin && _savOrgFilter !== _orgId;
+  function adminCrossOrg(table, extraParams){
+    return sb.rpc('admin_cross_org_'+table, Object.assign({p_org_id:_savOrgFilter}, extraParams||{}));
+  }
   /* 2026-09-10 fix: this used to eagerly fetch every organization on EVERY boot, even in
      'own' mode where the org picker isn't even open -- the one genuinely new query item
      68 added that ran unconditionally, unlike everything else here (which only runs when
@@ -614,19 +635,19 @@ async function loadFromSupabase(){
        narrow-reference pattern as the profiles read just above. Cursus doesn't own or
        edit pods (Strategy/Ordo.html does), just needs the list for a dropdown. */
     sb.from('pods').select('id,name,region_id'),
-    orgScoped(sb.from('programmes').select('id,name,org_id')),
+    _crossOrg ? adminCrossOrg('programmes') : orgScoped(sb.from('programmes').select('id,name,org_id')),
     sb.from('cost_buckets').select('id,code,label'),
-    userScoped(orgScoped(sb.from('campaigns').select('id,name,programme_id,region_id,cost_bucket_id,start_date,end_date,budget,crm_ref,period_type,period_label,tracking_ref,business_case,signoff_status,po_number,registration_url,project_folder_url,external_links,applicable_splits,partner_motion_tags,cloned_from_id,contact_list_ref,icp_ref,sort_order,notes,owner_id,owner_name,owner_email,alert_threshold_pct,org_id'))),
-    orgScoped(sb.from('tasks').select('id,campaign_id,name,type,owner,start_date,due_date,status,notes,supplier,po,template_id,cost_bucket_id,planned_cost,committed_cost,actual_cost,tracking_ref,sort_order,event_id,contact_refs,planned_cost_fx,org_id')),
-    orgScoped(sb.from('templates').select('id,name,type,default_cost_bucket_id,notes,org_id')),
+    _crossOrg ? adminCrossOrg('campaigns', {p_user_id:_savUserFilter}) : userScoped(orgScoped(sb.from('campaigns').select('id,name,programme_id,region_id,cost_bucket_id,start_date,end_date,budget,crm_ref,period_type,period_label,tracking_ref,business_case,signoff_status,po_number,registration_url,project_folder_url,external_links,applicable_splits,partner_motion_tags,cloned_from_id,contact_list_ref,icp_ref,sort_order,notes,owner_id,owner_name,owner_email,alert_threshold_pct,org_id'))),
+    _crossOrg ? adminCrossOrg('tasks') : orgScoped(sb.from('tasks').select('id,campaign_id,name,type,owner,start_date,due_date,status,notes,supplier,po,template_id,cost_bucket_id,planned_cost,committed_cost,actual_cost,tracking_ref,sort_order,event_id,contact_refs,planned_cost_fx,org_id')),
+    _crossOrg ? adminCrossOrg('templates') : orgScoped(sb.from('templates').select('id,name,type,default_cost_bucket_id,notes,org_id')),
     /* Read-only reference into the Events module's eventus_events table -- Campaign Planning never writes here, just
        links an activity to an event and rolls up budget/pax/registered/attended for
        reporting (phase16, Planning drill-down + Events cross-link). */
     sb.from('eventus_events').select('id,name,type,status,campaign_id,budget,pax,registered,attended'),
     sb.from('org_settings').select('webhook_url,webhook_enabled,fy_start_month,campaign_naming_pattern,campaign_naming_seq_scope,campaign_naming_seq_counters,partner_type_presets').eq('org_id',_orgId).maybeSingle(),
-    orgScoped(sb.from('audit_log').select('ts,what,detail').order('ts',{ascending:false}).limit(200)),
-    orgScoped(sb.from('partners').select('id,name,type,contact_name,contact_email,contact_phone,notes,pod_id,acv_target,contact_terms,org_id')),
-    orgScoped(sb.from('campaign_partner_allocations').select('id,campaign_id,partner_id,role,budget_share_pct,lead_share_pct,org_id')),
+    _crossOrg ? adminCrossOrg('audit_log', {p_limit:200}) : orgScoped(sb.from('audit_log').select('ts,what,detail').order('ts',{ascending:false}).limit(200)),
+    _crossOrg ? adminCrossOrg('partners') : orgScoped(sb.from('partners').select('id,name,type,contact_name,contact_email,contact_phone,notes,pod_id,acv_target,contact_terms,org_id')),
+    _crossOrg ? adminCrossOrg('campaign_partner_allocations') : orgScoped(sb.from('campaign_partner_allocations').select('id,campaign_id,partner_id,role,budget_share_pct,lead_share_pct,org_id')),
     sb.from('assets').select('id,name,category'),
     sb.from('augur_deals').select('id,name,account,value,currency,close_date,campaign_id').eq('stage','Closed Won')
   ]);

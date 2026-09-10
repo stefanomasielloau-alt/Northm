@@ -1412,8 +1412,22 @@ async function openContact(){
   // itself is the diagnostic.
   let url = CONTACT_URL;
   try{
-    const { data } = await sb.auth.getSession();
-    const t = data && data.session && data.session.access_token;
+    let { data } = await sb.auth.getSession();
+    let t = data && data.session && data.session.access_token;
+    if(!t){
+      /* 2026-09-10 fix: getSession() can come back empty right after a fresh page
+         load/hard-refresh even though a real session exists in storage -- a known
+         race in when the client finishes restoring it, not an actual sign-out. This
+         used to fall straight to the logged-out toast/bare-open below on the very
+         first empty check, which is exactly what "asks me to log in again, then
+         allows me to log in" looks like from the Hub side: no error, just the plain
+         Hub login form. One refreshSession() retry recovers that case. */
+      try{
+        const refreshed = await sb.auth.refreshSession();
+        data = refreshed.data;
+        t = data && data.session && data.session.access_token;
+      }catch(e2){ /* fall through to the toast below */ }
+    }
     if(t){
       url = CONTACT_URL + '/auth/sso?token=' + encodeURIComponent(t);
       if(_hubOrgSlug) url += '&org=' + encodeURIComponent(_hubOrgSlug);

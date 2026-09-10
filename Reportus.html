@@ -366,12 +366,26 @@ async function loadFromSupabase(){
     rolesR = await sb.from('roles').select('id,org_id,name,scope');
   }
 
+  /* item 68 v5 fix (2026-09-10): Reportus's existing reportScopeName()==='all' design
+     for a Super Admin depends on these 4 tables' RLS bypass to show every org merged --
+     v3/v4 (today, earlier) dropped that bypass on programmes/campaigns/partners/
+     campaign_partner_allocations to fix Cursus's statement timeout, which silently
+     regressed Reportus down to "just my own org" for a Super Admin too -- no error, no
+     visual cue, exactly the kind of thing that looks like "lost data." Swap to the same
+     admin_cross_org_<table>(null) SECURITY DEFINER RPCs v5 already built for Cursus (live
+     now, no new SQL needed here) -- p_org_id:null matches Reportus's own
+     reportScopeName()==='all' meaning "every organisation, merged." Zero change for
+     anyone who isn't a Super Admin -- the ternary's else branch is the exact original
+     query, byte-for-byte. */
+  function reportusCrossOrgSafe(table, plainQuery){
+    return CFG.isSuperAdmin ? sb.rpc('admin_cross_org_'+table, {p_org_id:null}) : plainQuery;
+  }
   const results = await Promise.all([
     sb.from('regions').select('id,org_id,name'),
     sb.from('teams').select('id,name,member_ids'),
     sb.from('organizations').select('id,name,parent_org_id,hub_org_slug,created_at').order('created_at'),
     sb.from('profiles').select('id,name,role_id'),
-    sb.from('campaigns').select('id,name,programme_id,activity_id,region_id,budget,budget_fx,committed,actual,signoff_status'),
+    reportusCrossOrgSafe('campaigns', sb.from('campaigns').select('id,name,programme_id,activity_id,region_id,budget,budget_fx,committed,actual,signoff_status')),
     sb.from('augur_deals').select('id,name,stage,value'),
     sb.from('eventus_events').select('id,name,status,start_date'),
     sb.from('assets').select('id,name,stock,low_stock_at,campaign_id'),
@@ -382,12 +396,12 @@ async function loadFromSupabase(){
        previously loaded here -- Reportus only had Region + a narrower Campaigns
        select. All 6 below are normalized Supabase tables already used elsewhere
        (Ordo/Cursus), same query pattern as everything above. */
-    sb.from('programmes').select('id,name,owner,focus,status'),
+    reportusCrossOrgSafe('programmes', sb.from('programmes').select('id,name,owner,focus,status')),
     sb.from('activities').select('id,name,route_id,cost_per,cap_month'),
     sb.from('routes').select('id,name'),
     sb.from('pods').select('id,name,region_id,share,unassigned'),
-    sb.from('partners').select('id,name,type,pod_id,acv_target'),
-    sb.from('campaign_partner_allocations').select('id,campaign_id,partner_id,role,budget_share_pct,lead_share_pct')
+    reportusCrossOrgSafe('partners', sb.from('partners').select('id,name,type,pod_id,acv_target')),
+    reportusCrossOrgSafe('campaign_partner_allocations', sb.from('campaign_partner_allocations').select('id,campaign_id,partner_id,role,budget_share_pct,lead_share_pct'))
   ]);
   const [regionsR,teamsR,orgsR,profilesR,campaignsR,dealsR,eventsR,assetsR,touchpointsR,leadsR,auditR,
     programmesR,planActivitiesR,routesR,podsR,partnersR,campPartnerAllocR] = results;

@@ -1220,7 +1220,7 @@ window.tnPick=tnPick;
 // back to a bare (logged-out) open if getSession() fails for any reason.
 const CONTACT_URL = 'https://hub-backend-psi.vercel.app';
 async function openContact(){
-  const _tnWin = window.open('', 'tool_North'); // opened synchronously so the click gesture still counts once the SSO token is ready (see fix note below)
+  const _tnWin = window.open('', 'tool_AH'); // opened synchronously so the click gesture still counts once the SSO token is ready (see fix note below). Dedicated name (not 'tool_North', shared by North's own inter-module links) so AH always reuses the same tab regardless of entry point -- see 2026-09-10 tab-reuse fix.
   // 2026-09-02: was a SILENT fall-through to a bare (logged-out) Contact
   // open whenever getSession() failed or returned no token -- looked
   // exactly like a normal login screen, no error, which is what made
@@ -1276,7 +1276,7 @@ async function openContact(){
   // itself was built correctly. Opening a blank window synchronously (right when the
   // click happens, above) and only setting its .location once the token is ready
   // keeps it tied to the gesture in every browser.
-  if(_tnWin){ _tnWin.location = url; } else { window.open(url, 'tool_North'); }
+  if(_tnWin){ _tnWin.location = url; } else { window.open(url, 'tool_AH'); }
 }
 window.openContact=openContact;
 function tnSearchKey(ev){

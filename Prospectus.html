@@ -1500,7 +1500,7 @@ window.tnPick=tnPick;
 // back to a bare (logged-out) open if getSession() fails for any reason.
 const CONTACT_URL = 'https://hub-backend-psi.vercel.app';
 async function openContact(){
-  const _tnWin = window.open('', 'tool_North'); // opened synchronously so the click gesture still counts once the SSO token is ready (see fix note below)
+  const _tnWin = window.open('', 'tool_AH'); // opened synchronously so the click gesture still counts once the SSO token is ready (see fix note below). Dedicated name (not 'tool_North', shared by North's own inter-module links) so AH always reuses the same tab regardless of entry point -- see 2026-09-10 tab-reuse fix.
   // 2026-09-02: was a SILENT fall-through to a bare (logged-out) Contact
   // open whenever getSession() failed or returned no token -- looked
   // exactly like a normal login screen, no error, which is what made
@@ -1556,7 +1556,7 @@ async function openContact(){
   // itself was built correctly. Opening a blank window synchronously (right when the
   // click happens, above) and only setting its .location once the token is ready
   // keeps it tied to the gesture in every browser.
-  if(_tnWin){ _tnWin.location = url; } else { window.open(url, 'tool_North'); }
+  if(_tnWin){ _tnWin.location = url; } else { window.open(url, 'tool_AH'); }
 }
 window.openContact=openContact;
 /* item 48: same SSO handoff as openContact() above, but for a specific account (used by
@@ -1564,11 +1564,36 @@ window.openContact=openContact;
    info lives in Hub, not here, so this just lands the visitor on that company's own
    detail panel there instead of North holding any of it itself). */
 async function viewCompanyInHub(company){
-  const _tnWin = window.open('', 'tool_North'); // opened synchronously so the click gesture still counts once the SSO token is ready (see fix note below)
+  const _tnWin = window.open('', 'tool_AH'); // opened synchronously so the click gesture still counts once the SSO token is ready (see fix note below). Dedicated name (not 'tool_North', shared by North's own inter-module links) so AH always reuses the same tab regardless of entry point -- see 2026-09-10 tab-reuse fix.
   let url = CONTACT_URL;
   try{
-    const { data } = await sb.auth.getSession();
-    const t = data && data.session && data.session.access_token;
+    /* 2026-09-10 (live-session fix, same as openContact() elsewhere in this file):
+       reads the continuously-updated _liveSession reference (kept current by the
+       onAuthStateChange subscription below) instead of racing a fresh getSession()
+       call at the moment of the click -- see openContact()'s own comment for the
+       full history. Falls back to getSession()/refreshSession()/a delayed retry
+       only if _liveSession genuinely hasn't been populated yet. */
+    let t = _liveSession && _liveSession.access_token;
+    let data;
+    if(!t){
+      ({ data } = await sb.auth.getSession());
+      t = data && data.session && data.session.access_token;
+    }
+    if(!t){
+      try{
+        const refreshed = await sb.auth.refreshSession();
+        data = refreshed.data;
+        t = data && data.session && data.session.access_token;
+      }catch(e2){ /* fall through to the delayed retry below */ }
+      if(!t){
+        await new Promise(r=>setTimeout(r,400));
+        try{
+          const retried = await sb.auth.getSession();
+          data = retried.data;
+          t = data && data.session && data.session.access_token;
+        }catch(e3){ /* fall through to the toast below */ }
+      }
+    }
     if(t){
       url = CONTACT_URL + '/auth/sso?token=' + encodeURIComponent(t);
       if(_hubOrgSlug) url += '&org=' + encodeURIComponent(_hubOrgSlug);
@@ -1585,7 +1610,7 @@ async function viewCompanyInHub(company){
   // itself was built correctly. Opening a blank window synchronously (right when the
   // click happens, above) and only setting its .location once the token is ready
   // keeps it tied to the gesture in every browser.
-  if(_tnWin){ _tnWin.location = url; } else { window.open(url, 'tool_North'); }
+  if(_tnWin){ _tnWin.location = url; } else { window.open(url, 'tool_AH'); }
 }
 window.viewCompanyInHub=viewCompanyInHub;
 function tnSearchKey(ev){

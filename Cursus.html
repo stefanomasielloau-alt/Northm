@@ -562,8 +562,17 @@ async function loadFromSupabase(){
     sb.from('roles').select('id,allow_expert_mode'),
     /* Read-only, narrow addition (2026-09-03): id+name only, just enough to populate the
        campaign Owner picker (see detailCampaignHtml) -- Campaign Planning doesn't own or
-       write this table. */
-    sb.from('profiles').select('id,name,org_id'),
+       write this table.
+       2026-09-10 fix (item 68 v5): this used to be a bare, unfiltered select, which for a
+       Super Admin relies on the table's own pre-existing cross-org bypass (see Norma.html)
+       and returns EVERY profile row in the whole project regardless of view mode -- even in
+       'own' mode. That's inconsistent with every other table here (all wrapped in
+       orgScoped()) and, given this project has been reseeded with test data across several
+       orgs, is a real candidate for the Cursus-only statement timeout Stef hit after v3/v4 --
+       not confirmed against an actual query plan, but wrapping it in orgScoped() is correct
+       regardless of whether it's the root cause: it was never supposed to ignore the
+       selected view like this. */
+    orgScoped(sb.from('profiles').select('id,name,org_id')),
     sb.from('regions').select('id,name'),
     /* 2026-09-08 (item 41): Pod linkage for Partners -- id+name+region_id only, same
        narrow-reference pattern as the profiles read just above. Cursus doesn't own or

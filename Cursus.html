@@ -524,14 +524,38 @@ async function loadFromSupabase(){
      isFullSuperAdmin stays L0-only for the few things L1 shouldn't get (org creation, and
      the Licensing admin panel once built). Fails soft to the exact old behavior if
      2026-09-07-item38-platform-admin-l1-migration.sql hasn't been run yet. */
+  /* 2026-09-10 TEMP DIAGNOSTIC (item 68) -- v3 through v7 each removed a different
+     candidate (RLS bypasses on every table Cursus's boot touches, then the unscoped
+     profiles/roles reads, then the eager org-list fetch) and NONE of them fixed the
+     Super-Admin-only "canceling statement due to statement timeout." Stef's own
+     hypothesis, and the only thing left untested: the platform_admin_level()/
+     is_platform_admin() RPC call itself (or something it triggers server-side) is the
+     actual slow statement, not any of the query-shape issues already ruled out.
+     Setting this true skips that RPC entirely and forces isSuperAdmin=false, so Cursus
+     boots exactly like a regular org user's session for EVERY account, Super Admin
+     included -- a live A/B test, not a real fix (the Super Admin toolbar/cross-org view
+     will not appear at all while this is on).
+     TO REVERT: set back to false (or remove this flag and the `if` below) once the
+     test result is in.
+     - If Cursus loads fast with this ON: the RPC / is_platform_admin()'s underlying SQL
+       is confirmed as the root cause -- needs its own investigation, which needs either
+       that function's actual definition or Supabase's own Postgres/query-performance
+       logs, neither reachable from here.
+     - If it STILL times out with this ON: the RPC is innocent, and the cause is
+       something else entirely -- no more client-side guessing at that point; next step
+       is pulling the actual cancelled statement from Supabase's logs directly. */
+  const _DIAG_SKIP_SUPER_ADMIN_CHECK = true;
+
   let _paLevel = null;
-  try{
-    const { data, error } = await sb.rpc('platform_admin_level');
-    if(error) throw error;
-    _paLevel = data || null;
-  }catch(e){
-    const { data: isPA } = await sb.rpc('is_platform_admin');
-    _paLevel = isPA ? 'L0' : null;
+  if(!_DIAG_SKIP_SUPER_ADMIN_CHECK){
+    try{
+      const { data, error } = await sb.rpc('platform_admin_level');
+      if(error) throw error;
+      _paLevel = data || null;
+    }catch(e){
+      const { data: isPA } = await sb.rpc('is_platform_admin');
+      _paLevel = isPA ? 'L0' : null;
+    }
   }
   CFG.platformAdminLevel = _paLevel;
   CFG.isFullSuperAdmin = _paLevel === 'L0';

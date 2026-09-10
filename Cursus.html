@@ -552,11 +552,15 @@ async function loadFromSupabase(){
   }
   function orgScoped(q, col){ return _savOrgFilter===null ? q : q.eq(col||'org_id', _savOrgFilter); }
   function userScoped(q, col){ return _savUserFilter===null ? q : q.eq(col||'owner_id', _savUserFilter); }
-  CFG.allOrganizations = [];
-  if(CFG.isSuperAdmin){
-    const { data: orgsForSav } = await sb.from('organizations').select('id,name').order('name');
-    CFG.allOrganizations = orgsForSav || [];
-  }
+  /* 2026-09-10 fix: this used to eagerly fetch every organization on EVERY boot, even in
+     'own' mode where the org picker isn't even open -- the one genuinely new query item
+     68 added that ran unconditionally, unlike everything else here (which only runs when
+     actually viewing cross-org data). Now loaded lazily -- see shared/superAdminView.js's
+     renderBar(), which only calls this the first time the org picker is opened. */
+  CFG.loadAllOrganizations = async function(){
+    const { data } = await sb.from('organizations').select('id,name').order('name');
+    return data || [];
+  };
 
   const results = await Promise.all([
     /* 2026-09-10 fix (item 68 v6): same issue as profiles below -- this was a bare,
@@ -1010,7 +1014,7 @@ async function bootApp(){
      who isn't CFG.isSuperAdmin, so this has zero effect for regular users. */
   SAV.renderBar({
     isSuperAdmin: CFG.isSuperAdmin,
-    organizations: CFG.allOrganizations,
+    loadOrganizations: CFG.loadAllOrganizations,
     usersForOrg: (orgId)=> (CFG.orgUsers||[]).filter(u=>u.orgId===orgId)
   });
   subscribeRealtime();

@@ -117,7 +117,18 @@
     renderBar(opts){
       opts = opts || {};
       if(!opts.isSuperAdmin) return;
-      const orgs = opts.organizations || [];
+      this._lastRenderOpts = opts;
+      /* 2026-09-10 fix: the org list used to be fetched eagerly on EVERY module boot
+         (even in 'own' mode, where the dropdown isn't even shown) just so it was ready
+         if the Super Admin opened the org picker. Confirmed by Stef live-testing this
+         was hurting Cursus specifically (only Super Admin logins were slow/timing out;
+         a regular org user was fine) -- this was the one genuinely NEW cross-org read
+         item 68 added that ran unconditionally on every boot, unlike everything else
+         which only runs when actually viewing cross-org data. Now it's lazy: pass
+         `loadOrganizations` (an async function returning the org list) instead of a
+         pre-fetched `organizations` array, and it's only called the first time the
+         Super Admin actually opens "Choose an organization...". */
+      const orgs = opts.organizations || this._loadedOrgs || [];
       const usersForOrg = opts.usersForOrg || function(){ return []; };
       const lockSel = opts.lockSelector || '#main';
 
@@ -158,12 +169,36 @@
         ((crossOrg && ctx.mode!=='all') ? `<button id="savEditBtn" style="margin-left:auto;font-weight:700;cursor:pointer;padding:4px 10px;border-radius:4px;border:1px solid rgba(255,255,255,.5);background:transparent;color:inherit;">${editing?'✏️ Editing enabled — click to lock':'🔒 Read-only — click to enable editing'}</button>` : '') +
         (crossOrg ? `<span style="opacity:.9;${ctx.mode==='all'?'margin-left:auto;':''}">${ctx.mode==='all'?'Viewing every organization merged together — always read-only. Pick a specific organization to edit its data.':'Viewing as if you belonged to this organization.'}</span>` : '');
 
+      // If the page loaded directly into 'org'/'user' mode (persisted from a previous
+      // visit), the org list is needed right away to show the current selection and let
+      // the Super Admin change it -- fetch once here rather than waiting for a change
+      // event that won't come until they touch the dropdown again.
+      if((ctx.mode==='org' || ctx.mode==='user') && !orgs.length && opts.loadOrganizations && !SAV._loadedOrgs && !SAV._loadingOrgs){
+        SAV._loadingOrgs = true;
+        opts.loadOrganizations().then(function(list){
+          SAV._loadedOrgs = list || [];
+          SAV._loadingOrgs = false;
+          SAV.renderBar(opts);
+        }).catch(function(){ SAV._loadingOrgs = false; });
+      }
+
       const modeSel = document.getElementById('savModeSel');
-      modeSel.onchange = function(){
+      modeSel.onchange = async function(){
         const v = this.value;
         if(v==='own') SAV.setMode('own');
         else if(v==='all') SAV.setMode('all');
-        else { document.getElementById('savOrgWrap').style.display='inline'; document.getElementById('savUserWrap').style.display='none'; }
+        else {
+          document.getElementById('savOrgWrap').style.display='inline';
+          document.getElementById('savUserWrap').style.display='none';
+          if(!orgs.length && opts.loadOrganizations && !SAV._loadedOrgs){
+            const orgSelEl = document.getElementById('savOrgSel');
+            if(orgSelEl) orgSelEl.innerHTML = '<option value="">Loading organizations…</option>';
+            try{
+              SAV._loadedOrgs = await opts.loadOrganizations() || [];
+            }catch(e){ SAV._loadedOrgs = []; }
+            SAV.renderBar(opts);
+          }
+        }
       };
       const orgSel = document.getElementById('savOrgSel');
       if(orgSel) orgSel.onchange = function(){ if(this.value) SAV.setMode('org', this.value, null); };

@@ -324,6 +324,7 @@ function toast(msg){
 }
 function go(page){
   if(page==='licensing' && !CFG.isFullSuperAdmin){ toast('Licensing is limited to the full Super Admin.'); page='home'; }
+  if(page==='regionsadmin' && !CFG.isSuperAdmin){ toast('This view is limited to Super Admin.'); page='home'; }
   UI.page=page;
   // Item 26 phase 1: these two pages mirror live Hub data, not CFG -- fetch on first visit
   // rather than at boot, since most sessions never open them.
@@ -569,6 +570,21 @@ async function loadFromSupabase(){
     CFG.allOrganizations = (orgs||[]).map(o=>({id:o.id,name:o.name,createdAt:o.created_at,parentOrgId:o.parent_org_id||null,hubOrgSlug:o.hub_org_slug||'',moduleAccess:orgModuleAccessFromRow(o)}));
     const { data: rels } = await sb.from('org_relations').select('id,org_a_id,org_b_id');
     CFG.orgRelations = rels || [];
+  }
+
+  /* item 66 (2026-09-10): Regions/Pods/Reps admin view -- Stef, live: "In Regions need
+     an Organisation colum. As super user I can see everything and when orgs have same
+     region names i need to see which they ar eassigned or belong to .. same with Pods /
+     Reps etc." CFG.regions above is already cross-org (deliberately unfiltered, same as
+     roles/profiles/org_invites/business_units); pods/reps were never loaded cross-org
+     here before now -- both genuinely have org_id columns (confirmed against the seed
+     scripts and each module's own upsertRows() call), so this is additive, no migration
+     needed. Super-Admin-only (same tier as allOrganizations/orgRelations above), read-only. */
+  if(CFG.isSuperAdmin){
+    const { data: allPods } = await sb.from('pods').select('id,org_id,name,region_id');
+    CFG.allPods = (allPods||[]).map(p=>({id:p.id,orgId:p.org_id,name:p.name,regionId:p.region_id}));
+    const { data: allReps } = await sb.from('reps').select('id,org_id,name,pod_id');
+    CFG.allReps = (allReps||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name,podId:r.pod_id}));
   }
 
   // 2026-09-08 (backlog item 6): org memberships, for the "Organization
@@ -3460,6 +3476,52 @@ function pageHubCompanies(){
   return h;
 }
 
+/* item 66 (2026-09-10) -- Regions/Pods/Reps across every org, with an Organisation
+   column, for Super Admin. Read-only mirror of CFG.regions/CFG.allPods/CFG.allReps
+   (all three loaded cross-org in loadFromSupabase() above, Super-Admin-only). Same
+   nav-hidden + go()-blocked + content-gated pattern as Licensing (item 36) below,
+   using isSuperAdmin (L0 or L1) rather than isFullSuperAdmin -- this is read-only
+   visibility, not a billing/ops action, so it matches the same tier as
+   allOrganizations/orgRelations rather than Licensing's stricter L0-only gate. */
+function pageRegionsAdmin(){
+  if(!CFG.isSuperAdmin){
+    return '<div class="card" style="max-width:420px;margin-top:40px;padding:24px;text-align:center"><h2 style="margin:0 0 8px">Access restricted</h2><p class="sub">This view is limited to Super Admin.</p></div>';
+  }
+  const orgName = id => { const o=(CFG.allOrganizations||[]).find(o=>o.id===id); return (o&&o.name)||'(unknown org)'; };
+  const regions = (CFG.regions||[]).slice().sort((a,b)=> orgName(a.orgId).localeCompare(orgName(b.orgId)) || a.name.localeCompare(b.name));
+  const pods = (CFG.allPods||[]).slice().sort((a,b)=> orgName(a.orgId).localeCompare(orgName(b.orgId)) || a.name.localeCompare(b.name));
+  const reps = (CFG.allReps||[]).slice().sort((a,b)=> orgName(a.orgId).localeCompare(orgName(b.orgId)) || a.name.localeCompare(b.name));
+  const regionName = id => { const r=(CFG.regions||[]).find(r=>r.id===id); return (r&&r.name)||'—'; };
+  const podName = id => { const p=(CFG.allPods||[]).find(p=>p.id===id); return (p&&p.name)||'—'; };
+  let h = `<div class="phead"><div><h1>Regions & pods (all orgs)</h1>
+    <p>Read-only, Super Admin only -- item 66: when two orgs happen to use the same region/pod/rep
+      name, this is where you tell them apart by Organisation. Adding or renaming a region/pod/rep
+      stays in each org's own Strategy &gt; Geography &amp; pods page; nothing here is editable.</p>
+    </div></div>`;
+  h += `<div class="card"><h3>Regions (${regions.length})</h3><div class="bd flush"><div class="scroll cap">
+    <table><thead><tr><th>Region</th><th>Organisation</th></tr></thead><tbody>
+    ${!regions.length?'<tr><td colspan="2" class="empty">No regions found.</td></tr>':regions.map(r=>`<tr>
+      <td>${esc(r.name)}</td><td class="mini">${esc(orgName(r.orgId))}</td>
+    </tr>`).join('')}
+    </tbody></table>
+  </div></div></div>`;
+  h += `<div class="card"><h3>Pods (${pods.length})</h3><div class="bd flush"><div class="scroll cap">
+    <table><thead><tr><th>Pod</th><th>Region</th><th>Organisation</th></tr></thead><tbody>
+    ${!pods.length?'<tr><td colspan="3" class="empty">No pods found.</td></tr>':pods.map(p=>`<tr>
+      <td>${esc(p.name)}</td><td class="mini">${esc(regionName(p.regionId))}</td><td class="mini">${esc(orgName(p.orgId))}</td>
+    </tr>`).join('')}
+    </tbody></table>
+  </div></div></div>`;
+  h += `<div class="card"><h3>Reps (${reps.length})</h3><div class="bd flush"><div class="scroll cap">
+    <table><thead><tr><th>Rep</th><th>Pod</th><th>Organisation</th></tr></thead><tbody>
+    ${!reps.length?'<tr><td colspan="3" class="empty">No reps found.</td></tr>':reps.map(r=>`<tr>
+      <td>${esc(r.name)}</td><td class="mini">${esc(podName(r.podId))}</td><td class="mini">${esc(orgName(r.orgId))}</td>
+    </tr>`).join('')}
+    </tbody></table>
+  </div></div></div>`;
+  return h;
+}
+
 /* item 36 (2026-09-07) -- Licensing MVP. Full Super Admin only (isFullSuperAdmin) --
    nav-hidden and go()-blocked for everyone else, this is defense in depth. MVP scope:
    one plan record per org (commercial terms only -- module entitlements reuse the
@@ -3744,7 +3806,8 @@ const PAGES=[
   {id:'hubfeedback',ix:'12',label:'AH feedback',    fn:pageHubFeedback},
   {id:'hubcompanies',ix:'13',label:'AH companies',  fn:pageHubCompanies},
   {id:'licensing',  ix:'14',label:'Licensing',       fn:pageLicensing},
-  {id:'branding',   ix:'15',label:'Branding',        fn:pageBranding}
+  {id:'branding',   ix:'15',label:'Branding',        fn:pageBranding},
+  {id:'regionsadmin',ix:'16',label:'Regions & pods (all orgs)', fn:pageRegionsAdmin}
 ];
 
 function renderSide(){
@@ -3754,6 +3817,7 @@ function renderSide(){
        entirely for everyone else, not just marked read-only, since this is billing data
        across every organization, not something an org's own admin should even see exists. */
     if(p.id==='licensing' && !CFG.isFullSuperAdmin) return;
+    if(p.id==='regionsadmin' && !CFG.isSuperAdmin) return;
     const locked = (p.id==='users'||p.id==='feedback'||p.id==='hubaccounts'||p.id==='hubfeedback'||p.id==='hubcompanies')&&!canConfig();
     h+=`<a class="navi ${UI.page===p.id?'on':''}" href="#" onclick="go('${p.id}');return false">
       <span class="ix">${p.ix}</span><span>${p.label}</span>${locked?'<span class="lk">read only</span>':''}</a>`;

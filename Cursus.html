@@ -559,7 +559,17 @@ async function loadFromSupabase(){
   }
 
   const results = await Promise.all([
-    sb.from('roles').select('id,allow_expert_mode'),
+    /* 2026-09-10 fix (item 68 v6): same issue as profiles below -- this was a bare,
+       unfiltered select, meaning a Super Admin's pre-existing cross-org bypass on 'roles'
+       (see Norma.html) returned every org's roles on every Cursus load regardless of view
+       mode. Confirmed by Stef live-testing: logging in as a real org user (stefanomasiello)
+       has no timeout at all, only Super Admin does -- so the difference has to be in code
+       that only runs differently for a Super Admin, which is exactly this bypass pattern.
+       organizations/regions/pods are already proven safe at this same cross-org scale
+       elsewhere (Norma's org admin + item 66's Regions/Pods/Reps view), so roles and
+       profiles (fixed in v5) were the two remaining untested bare cross-org reads
+       specific to Cursus's own boot. */
+    orgScoped(sb.from('roles').select('id,allow_expert_mode')),
     /* Read-only, narrow addition (2026-09-03): id+name only, just enough to populate the
        campaign Owner picker (see detailCampaignHtml) -- Campaign Planning doesn't own or
        write this table.

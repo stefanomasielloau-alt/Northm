@@ -212,6 +212,7 @@ input[type=date].cel{font-family:inherit;}
 <script src="shared/moduleFooter.js"></script>
 <script src="shared/dateFormat.js"></script>
 <script src="shared/orgSwitcher.js"></script>
+<script src="shared/superAdminView.js"></script>
 <script src="shared/convertToMain.js"></script>
 <script src="shared/currencyOptions.js"></script>
 <div id="authGate" style="display:none"></div>
@@ -390,6 +391,11 @@ window.clearLocal=clearLocal;
    DELETE, fired from each remove*() function alongside the local CFG filter.
    ============================================================================ */
 let _hubOrgSlug = '', _orgId = null, _myProfile = null, _saveTimer = null, _realtimeChannel = null;
+/* item 68 (2026-09-10): Super Admin cross-org view filters -- top-level (not local to
+   loadFromSupabase) so upsertRows()/deleteRow()/scheduleSupabaseSave() can see them too.
+   null _savOrgFilter means 'all organizations, no filter'; both stay equal to _orgId /
+   null for every non-Super-Admin, i.e. zero behavior change for them. */
+let _savOrgFilter = null, _savUserFilter = null;
 /* Set right before an internal (non-user-initiated) signOut() -- e.g. bootApp()'s error path
    below -- so the global onAuthStateChange listener knows to skip its reload-on-SIGNED_OUT and
    let the error message stay on screen instead of wiping it out immediately. Without this, the
@@ -398,16 +404,31 @@ let _skipNextSignOutReload = false;
 
 async function upsertRows(table, rows, mapFn){
   if(!rows || !rows.length) return;
+  if(CFG.isSuperAdmin && !SAV.canEdit()) return; // read-only cross-org view -- item 68
   try{
-    const payload = rows.map(r=>Object.assign(mapFn(r), {org_id:_orgId}));
+    /* item 68 (2026-09-10): stamp each row's OWN recorded org (r.orgId, populated on load
+       for every table this view can show cross-org) instead of the blind ambient _orgId --
+       otherwise viewing "All organizations" and triggering so much as one autosave would
+       silently rewrite every visible row's org_id to the viewer's own org. Rows that never
+       carry an orgId (new rows, or tables not wired into item 68) fall back to _orgId,
+       i.e. exactly today's behavior. */
+    const ambientOrgId = (_savOrgFilter!==null ? _savOrgFilter : _orgId);
+    const payload = rows.map(r=>Object.assign(mapFn(r), {org_id: SAV.stampOrgId(r.orgId, ambientOrgId)}));
     const { error } = await sb.from(table).upsert(payload);
     if(error) throw error;
   }catch(e){ console.error('Save failed for '+table, e); toast('Could not save '+table+' to the database — see console.'); }
 }
-async function deleteRow(table, id){
-  if(!_orgId || !id) return;
+async function deleteRow(table, id, rowOrgId){
+  if(CFG.isSuperAdmin && !SAV.canEdit()) return; // read-only cross-org view -- item 68
+  /* In 'org'/'user' mode every visible row genuinely belongs to the selected org, so
+     SAV.effectiveOrgId() (not the admin's own _orgId) is the correct fallback target --
+     'all' mode is excluded from canEdit() entirely (see superAdminView.js), so it can
+     never reach this line without an explicit rowOrgId already available. */
+  const ambientOrgId = (_savOrgFilter!==null ? _savOrgFilter : _orgId);
+  const targetOrgId = SAV.stampOrgId(rowOrgId, ambientOrgId);
+  if(!targetOrgId || !id) return;
   try{
-    const { error } = await sb.from(table).delete().eq('id', id).eq('org_id', _orgId);
+    const { error } = await sb.from(table).delete().eq('id', id).eq('org_id', targetOrgId);
     if(error) throw error;
   }catch(e){ console.error('Delete failed for '+table, e); toast('Removed here, but could not delete from the database — see console.'); }
 }
@@ -481,6 +502,7 @@ async function saveToSupabase(){
 
 function scheduleSupabaseSave(){
   if(!_orgId) return;
+  if(CFG.isSuperAdmin && !SAV.canEdit()) return; // read-only cross-org view -- item 68
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(()=>{ saveToSupabase(); }, 900);
 }
@@ -515,30 +537,51 @@ async function loadFromSupabase(){
   CFG.isFullSuperAdmin = _paLevel === 'L0';
   CFG.isSuperAdmin = _paLevel === 'L0' || _paLevel === 'L1';
 
+  /* item 68 (2026-09-10): Super Admin "view as All / a specific org / a specific user"
+     context -- see shared/superAdminView.js for the full design writeup. _savOrgFilter is
+     null in "All organizations" mode (meaning: do not filter by org_id at all -- read
+     everything) or a specific org id otherwise; orgScoped() applies it to a query the same
+     way every existing .eq('org_id',_orgId) call already did, so non-Super-Admins and
+     Super Admins who never touch the selector see zero change in behavior. */
+  SAV.init(_orgId);
+  _savOrgFilter = _orgId;
+  _savUserFilter = null;
+  if(CFG.isSuperAdmin){
+    _savOrgFilter = SAV.effectiveOrgId();
+    _savUserFilter = SAV.effectiveUserId();
+  }
+  function orgScoped(q, col){ return _savOrgFilter===null ? q : q.eq(col||'org_id', _savOrgFilter); }
+  function userScoped(q, col){ return _savUserFilter===null ? q : q.eq(col||'owner_id', _savUserFilter); }
+  CFG.allOrganizations = [];
+  if(CFG.isSuperAdmin){
+    const { data: orgsForSav } = await sb.from('organizations').select('id,name').order('name');
+    CFG.allOrganizations = orgsForSav || [];
+  }
+
   const results = await Promise.all([
     sb.from('roles').select('id,allow_expert_mode'),
     /* Read-only, narrow addition (2026-09-03): id+name only, just enough to populate the
        campaign Owner picker (see detailCampaignHtml) -- Campaign Planning doesn't own or
        write this table. */
-    sb.from('profiles').select('id,name'),
+    sb.from('profiles').select('id,name,org_id'),
     sb.from('regions').select('id,name'),
     /* 2026-09-08 (item 41): Pod linkage for Partners -- id+name+region_id only, same
        narrow-reference pattern as the profiles read just above. Cursus doesn't own or
        edit pods (Strategy/Ordo.html does), just needs the list for a dropdown. */
     sb.from('pods').select('id,name,region_id'),
-    sb.from('programmes').select('id,name').eq('org_id',_orgId),
+    orgScoped(sb.from('programmes').select('id,name,org_id')),
     sb.from('cost_buckets').select('id,code,label'),
-    sb.from('campaigns').select('id,name,programme_id,region_id,cost_bucket_id,start_date,end_date,budget,crm_ref,period_type,period_label,tracking_ref,business_case,signoff_status,po_number,registration_url,project_folder_url,external_links,applicable_splits,partner_motion_tags,cloned_from_id,contact_list_ref,icp_ref,sort_order,notes,owner_id,owner_name,owner_email,alert_threshold_pct').eq('org_id',_orgId),
-    sb.from('tasks').select('id,campaign_id,name,type,owner,start_date,due_date,status,notes,supplier,po,template_id,cost_bucket_id,planned_cost,committed_cost,actual_cost,tracking_ref,sort_order,event_id,contact_refs,planned_cost_fx').eq('org_id',_orgId),
-    sb.from('templates').select('id,name,type,default_cost_bucket_id,notes').eq('org_id',_orgId),
+    userScoped(orgScoped(sb.from('campaigns').select('id,name,programme_id,region_id,cost_bucket_id,start_date,end_date,budget,crm_ref,period_type,period_label,tracking_ref,business_case,signoff_status,po_number,registration_url,project_folder_url,external_links,applicable_splits,partner_motion_tags,cloned_from_id,contact_list_ref,icp_ref,sort_order,notes,owner_id,owner_name,owner_email,alert_threshold_pct,org_id'))),
+    orgScoped(sb.from('tasks').select('id,campaign_id,name,type,owner,start_date,due_date,status,notes,supplier,po,template_id,cost_bucket_id,planned_cost,committed_cost,actual_cost,tracking_ref,sort_order,event_id,contact_refs,planned_cost_fx,org_id')),
+    orgScoped(sb.from('templates').select('id,name,type,default_cost_bucket_id,notes,org_id')),
     /* Read-only reference into the Events module's eventus_events table -- Campaign Planning never writes here, just
        links an activity to an event and rolls up budget/pax/registered/attended for
        reporting (phase16, Planning drill-down + Events cross-link). */
     sb.from('eventus_events').select('id,name,type,status,campaign_id,budget,pax,registered,attended'),
     sb.from('org_settings').select('webhook_url,webhook_enabled,fy_start_month,campaign_naming_pattern,campaign_naming_seq_scope,campaign_naming_seq_counters,partner_type_presets').eq('org_id',_orgId).maybeSingle(),
-    sb.from('audit_log').select('ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200),
-    sb.from('partners').select('id,name,type,contact_name,contact_email,contact_phone,notes,pod_id,acv_target,contact_terms').eq('org_id',_orgId),
-    sb.from('campaign_partner_allocations').select('id,campaign_id,partner_id,role,budget_share_pct,lead_share_pct').eq('org_id',_orgId),
+    orgScoped(sb.from('audit_log').select('ts,what,detail').order('ts',{ascending:false}).limit(200)),
+    orgScoped(sb.from('partners').select('id,name,type,contact_name,contact_email,contact_phone,notes,pod_id,acv_target,contact_terms,org_id')),
+    orgScoped(sb.from('campaign_partner_allocations').select('id,campaign_id,partner_id,role,budget_share_pct,lead_share_pct,org_id')),
     sb.from('assets').select('id,name,category'),
     sb.from('augur_deals').select('id,name,account,value,currency,close_date,campaign_id').eq('stage','Closed Won')
   ]);
@@ -553,10 +596,10 @@ async function loadFromSupabase(){
   if(UI.mode==='simple' && !SIMPLE_PAGES.includes(UI.page)) UI.page = 'home';
 
   /* Read-only, id+name only -- feeds the campaign Owner picker. */
-  CFG.orgUsers = (profilesR.data||[]).map(p=>({id:p.id,name:p.name||''}));
+  CFG.orgUsers = (profilesR.data||[]).map(p=>({id:p.id,name:p.name||'',orgId:p.org_id}));
   CFG.regions = (regionsR.data||[]).map(r=>({id:r.id,name:r.name}));
   CFG.pods = (podsR.data||[]).map(p=>({id:p.id,name:p.name,regionId:p.region_id}));
-  CFG.programmes = (programmesR.data||[]).map(p=>({id:p.id,name:p.name}));
+  CFG.programmes = (programmesR.data||[]).map(p=>({id:p.id,name:p.name,orgId:p.org_id}));
   CFG.costBuckets = (costBucketsR.data||[]).map(c=>({id:c.id,code:c.code,label:c.label}));
   CFG.campaigns = (campaignsR.data||[]).map(c=>({
     id:c.id,name:c.name,programmeId:c.programme_id,budget:c.budget,start:c.start_date,end:c.end_date,
@@ -574,7 +617,7 @@ async function loadFromSupabase(){
     externalLinks:c.external_links||[],applicableSplits:c.applicable_splits||[],
     partnerMotionTags:c.partner_motion_tags||[],clonedFromId:c.cloned_from_id||null,
     contactListRef:c.contact_list_ref||'',icpRef:c.icp_ref||'',sortOrder:c.sort_order||0,
-    notes:c.notes||''
+    notes:c.notes||'',orgId:c.org_id
   }));
   CFG.tasks = (tasksR.data||[]).map(t=>({
     id:t.id,campaignId:t.campaign_id,name:t.name,type:t.type,owner:t.owner||'',
@@ -583,10 +626,10 @@ async function loadFromSupabase(){
     plannedCost:t.planned_cost,committedCost:t.committed_cost,actualCost:t.actual_cost,
     plannedCostFx:t.planned_cost_fx||null,plannedCostCcy:(t.planned_cost_fx&&t.planned_cost_fx.originalCurrency)||'',
     trackingRef:t.tracking_ref||null,sortOrder:t.sort_order||0,eventId:t.event_id||null,
-    contactRefs:t.contact_refs||[]
+    contactRefs:t.contact_refs||[],orgId:t.org_id
   }));
   CFG.templates = (templatesR.data||[]).map(t=>({
-    id:t.id,name:t.name,type:t.type,defaultCostBucketId:t.default_cost_bucket_id,notes:t.notes||''
+    id:t.id,name:t.name,type:t.type,defaultCostBucketId:t.default_cost_bucket_id,notes:t.notes||'',orgId:t.org_id
   }));
   /* Read-only mirror of Events' events -- lets Campaign Planning link an activity to a real event
      and roll up budget/pax/registered/attended without owning that data (phase16). */
@@ -614,11 +657,11 @@ async function loadFromSupabase(){
     id:p.id,name:p.name,type:p.type||'',contactName:p.contact_name||'',
     contactEmail:p.contact_email||'',contactPhone:p.contact_phone||'',notes:p.notes||'',
     podId:p.pod_id||null,acvTarget:(p.acv_target==null?null:p.acv_target),
-    contactTerms:Array.isArray(p.contact_terms)?p.contact_terms:[]
+    contactTerms:Array.isArray(p.contact_terms)?p.contact_terms:[],orgId:p.org_id
   }));
   CFG.campaignPartnerAllocations = (partnerAllocR.data||[]).map(a=>({
     id:a.id,campaignId:a.campaign_id,partnerId:a.partner_id,role:a.role||'',
-    budgetSharePct:a.budget_share_pct||0,leadSharePct:a.lead_share_pct||0
+    budgetSharePct:a.budget_share_pct||0,leadSharePct:a.lead_share_pct||0,orgId:a.org_id
   }));
   CFG.assets = (assetsR.data||[]).map(a=>({id:a.id,name:a.name,category:a.category||''}));
   /* Closed-won deals, read straight from Scoring's shared table now that a deal's campaign_id
@@ -944,6 +987,13 @@ async function bootApp(){
   hideAuthGate();
   applyHashRoute();
   render();
+  /* item 68 (2026-09-10): Super Admin cross-org view bar -- no-ops entirely for anyone
+     who isn't CFG.isSuperAdmin, so this has zero effect for regular users. */
+  SAV.renderBar({
+    isSuperAdmin: CFG.isSuperAdmin,
+    organizations: CFG.allOrganizations,
+    usersForOrg: (orgId)=> (CFG.orgUsers||[]).filter(u=>u.orgId===orgId)
+  });
   subscribeRealtime();
 }
 

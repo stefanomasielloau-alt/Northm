@@ -102,6 +102,24 @@
 
     _setAndReload(ctx){ saveCtx(ctx); location.reload(); },
     setMode(mode, orgId, userId){ this._setAndReload({mode, orgId:orgId||null, userId:userId||null, editing:false}); },
+
+    /* 2026-09-10 (item 68 follow-up): the persisted context (KEY, above) is what makes
+       'all'/'org'/'user' mode survive navigating between modules -- exactly as designed.
+       The failure mode that took most of today to trace: if that persisted mode is
+       anything other than 'own' (e.g. left on "All organizations" from an earlier test),
+       every subsequent boot silently re-attempts the same unfiltered cross-org read on
+       every orgScoped()/userScoped() call, with no visual cue unless you're looking
+       closely at the toolbar -- which is exactly what caused Cursus's "canceling
+       statement due to statement timeout" to keep recurring across v3-v7 even after
+       every RLS/query-shape fix, since a query that's correctly wrapped in orgScoped()
+       is still fully unfiltered the moment the stored context says 'all'.
+       Unlike setMode(), this does NOT reload -- it's meant to be called from a caller
+       already mid-boot (see Cursus.html's bootApp() retry), which re-runs its own load
+       right after this returns instead of forcing a second full page load. */
+    resetToOwn(){
+      this._ctx = {mode:'own', orgId:null, userId:null, editing:false};
+      saveCtx(this._ctx);
+    },
     setEditing(on){
       if(this._ctx.mode==='own') return;
       this._setAndReload(Object.assign({}, this._ctx, {editing:!!on}));

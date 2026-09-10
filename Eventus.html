@@ -487,12 +487,17 @@ async function loadFromSupabase(){
     if((curR.data||{}).currency_config) CFG.currency = curR.data.currency_config;
   }catch(e){ console.warn('currency_config column not available yet (migration pending?)', e); }
 
+  /* 2026-09-09 (systemic org_id audit): the five eventus_* tables below are all re-saved by
+     this page's own upsertRows() calls, same vulnerable shape as the roles bug (see
+     Ordo.html's fix). Filtered explicitly rather than relying on RLS alone. cost_buckets,
+     campaigns, programmes, tasks and roles below are all read-only here (Events never
+     writes any of them) so are left as-is. */
   const results = await Promise.all([
-    sb.from('eventus_events').select('id,name,type,status,start_date,end_date,country,venue,location,pax,requester,campaign_ref,campaign_id,budget,registered,attended,tracking_ref,is_template,budget_fx,sort_order'),
-    sb.from('eventus_event_venues').select('id,event_id,name,country,location,address,pax,start_date,end_date,status,sort_order'),
-    sb.from('eventus_cost_lines').select('id,event_id,category,supplier,description,planned_cost,committed_cost,actual_cost'),
-    sb.from('eventus_checklist').select('id,event_id,item,done,due_date'),
-    sb.from('eventus_speakers').select('id,event_id,name,company,topic,contact'),
+    sb.from('eventus_events').select('id,name,type,status,start_date,end_date,country,venue,location,pax,requester,campaign_ref,campaign_id,budget,registered,attended,tracking_ref,is_template,budget_fx,sort_order').eq('org_id',_orgId),
+    sb.from('eventus_event_venues').select('id,event_id,name,country,location,address,pax,start_date,end_date,status,sort_order').eq('org_id',_orgId),
+    sb.from('eventus_cost_lines').select('id,event_id,category,supplier,description,planned_cost,committed_cost,actual_cost').eq('org_id',_orgId),
+    sb.from('eventus_checklist').select('id,event_id,item,done,due_date').eq('org_id',_orgId),
+    sb.from('eventus_speakers').select('id,event_id,name,company,topic,contact').eq('org_id',_orgId),
     sb.from('cost_buckets').select('id,code,label'),
     sb.from('campaigns').select('id,name,programme_id'),
     /* Read-only, for the Programme/Campaign roll-up dashboard (phase16) -- Events never

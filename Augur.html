@@ -441,7 +441,7 @@ async function loadFromSupabase(){
      just above -- every factor just defaults to type 'fit', autoComputed false until it's run. */
   CFG._factorFieldsById = {};
   try{
-    const ffR = await sb.from('augur_scoring_factors').select('id,type,auto_computed');
+    const ffR = await sb.from('augur_scoring_factors').select('id,type,auto_computed').eq('org_id',_orgId);
     if(ffR.error) throw ffR.error;
     (ffR.data||[]).forEach(row=>{ CFG._factorFieldsById[row.id] = row; });
   }catch(e){ console.warn('augur_scoring_factors.type/auto_computed not available yet (migration pending?)', e); }
@@ -458,18 +458,23 @@ async function loadFromSupabase(){
     const partnersR = await sb.from('partners').select('id,name');
     if(partnersR.error) throw partnersR.error;
     CFG.partners = (partnersR.data||[]).map(p=>({id:p.id,name:p.name||''}));
-    const dpR = await sb.from('augur_deals').select('id,partner_id,commission_pct');
+    const dpR = await sb.from('augur_deals').select('id,partner_id,commission_pct').eq('org_id',_orgId);
     if(dpR.error) throw dpR.error;
     (dpR.data||[]).forEach(row=>{ CFG._dealPartnerFieldsById[row.id] = row; });
   }catch(e){ console.warn('partners / augur_deals.partner_id-commission_pct not available yet (migration pending?)', e); }
 
+  /* 2026-09-09 (systemic org_id audit): augur_scoring_factors, augur_tiers, augur_deals,
+     crm_contacts and crm_activities are all re-saved by this page's own upsertRows() calls,
+     which unconditionally stamp org_id:_orgId -- same vulnerable shape as the roles bug (see
+     Ordo.html's fix). Filtered explicitly rather than relying on RLS alone. campaigns is
+     read-only here (Augur never writes it) so is left as-is. */
   const results = await Promise.all([
-    sb.from('augur_scoring_factors').select('id,name,weight'),
-    sb.from('augur_tiers').select('id,name,min_score,probability'),
-    sb.from('augur_deals').select('id,name,account,value,currency,stage,close_date,source,campaign_ref,campaign_id,factor_scores,tracking_ref'),
+    sb.from('augur_scoring_factors').select('id,name,weight').eq('org_id',_orgId),
+    sb.from('augur_tiers').select('id,name,min_score,probability').eq('org_id',_orgId),
+    sb.from('augur_deals').select('id,name,account,value,currency,stage,close_date,source,campaign_ref,campaign_id,factor_scores,tracking_ref').eq('org_id',_orgId),
     sb.from('campaigns').select('id,name'),
-    sb.from('crm_contacts').select('id,name,title,account,email,phone,notes'),
-    sb.from('crm_activities').select('id,contact_id,deal_id,type,summary,occurred_at,logged_by'),
+    sb.from('crm_contacts').select('id,name,title,account,email,phone,notes').eq('org_id',_orgId),
+    sb.from('crm_activities').select('id,contact_id,deal_id,type,summary,occurred_at,logged_by').eq('org_id',_orgId),
     sb.from('audit_log').select('ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200)
   ]);
   const [factorsR,tiersR,dealsR,campaignsR,contactsR,activitiesR,auditR] = results;

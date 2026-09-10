@@ -420,8 +420,8 @@ async function loadFromSupabase(){
   CFG.isSuperAdmin = _paLevel === 'L0' || _paLevel === 'L1';
 
   const results = await Promise.all([
-    sb.from('schema_workflows').select('id,name,description,updated_at,tracking_ref,lanes,nodes,edges'),
-    sb.from('schema_automations').select('id,name,trigger_type,trigger_value,action_type,action_message,action_target_agent,enabled,fired_ids,last_run_at,mode,schedule_time,action_chat_dest_id'),
+    sb.from('schema_workflows').select('id,name,description,updated_at,tracking_ref,lanes,nodes,edges').eq('org_id',_orgId),
+    sb.from('schema_automations').select('id,name,trigger_type,trigger_value,action_type,action_message,action_target_agent,enabled,fired_ids,last_run_at,mode,schedule_time,action_chat_dest_id').eq('org_id',_orgId),
     /* 2026-09-03: added committed/start_date/end_date (so campaign_off_target can mirror
        Ordo/Cursus's own "at risk" RAG check) and owner_id/owner_name/owner_email/
        alert_threshold_pct (so campaign_ready_to_execute and campaign_off_target can resolve
@@ -436,8 +436,8 @@ async function loadFromSupabase(){
     sb.from('eventus_events').select('id,name,status'),
     sb.from('assets').select('id,name,stock,low_stock_at'),
     sb.from('audit_log').select('ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200),
-    sb.from('agent_destinations').select('id,name,type,target,is_org_default'),
-    sb.from('agent_dispatches').select('id,automation_id,brief,destination_id,destination_name,status,result_detail,pushed_by,pushed_at,created_at').order('created_at',{ascending:false}).limit(200),
+    sb.from('agent_destinations').select('id,name,type,target,is_org_default').eq('org_id',_orgId),
+    sb.from('agent_dispatches').select('id,automation_id,brief,destination_id,destination_name,status,result_detail,pushed_by,pushed_at,created_at').eq('org_id',_orgId).order('created_at',{ascending:false}).limit(200),
     /* Read-only, for the "Alert people" target picker (phase18) -- Schema doesn't own any
        of these three tables, it only resolves them down to a concrete list of user ids at
        fire time so the target can be stamped onto the audit_log row it writes. */

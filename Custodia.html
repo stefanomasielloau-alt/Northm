@@ -470,10 +470,15 @@ async function loadFromSupabase(){
     if((atR.data||{}).asset_tag_presets && atR.data.asset_tag_presets.length) CFG.assetTagPresets = atR.data.asset_tag_presets;
   }catch(e){ console.warn('asset_tag_presets column not available yet (migration pending?)', e); }
 
+  /* 2026-09-09 (systemic org_id audit): assets, asset_references and asset_transactions are
+     all re-saved by this page's own upsertRows() calls, same vulnerable shape as the roles
+     bug (see Ordo.html's fix). Filtered explicitly rather than relying on RLS alone.
+     cost_buckets and campaigns are read-only here (Custodia never writes them) so are left
+     as-is. */
   const results = await Promise.all([
-    sb.from('assets').select('id,name,category,tags,stock,low_stock_at,cost_per,purchase_date,location,campaigns_used,campaign_id,source_task_id,cost_bucket_id,notes,expiry_date,publish_date,signed_off_by,signed_off_date,file_url,cost_per_fx'),
-    sb.from('asset_references').select('id,client_name,contact_name,notes'),
-    sb.from('asset_transactions').select('id,asset_id,date,type,qty,before,after,campaign_id,campaign_ref,notes').order('date',{ascending:false}),
+    sb.from('assets').select('id,name,category,tags,stock,low_stock_at,cost_per,purchase_date,location,campaigns_used,campaign_id,source_task_id,cost_bucket_id,notes,expiry_date,publish_date,signed_off_by,signed_off_date,file_url,cost_per_fx').eq('org_id',_orgId),
+    sb.from('asset_references').select('id,client_name,contact_name,notes').eq('org_id',_orgId),
+    sb.from('asset_transactions').select('id,asset_id,date,type,qty,before,after,campaign_id,campaign_ref,notes').eq('org_id',_orgId).order('date',{ascending:false}),
     sb.from('cost_buckets').select('id,code,label'),
     sb.from('campaigns').select('id,name,programme_id'),
     sb.from('audit_log').select('ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200)

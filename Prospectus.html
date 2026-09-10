@@ -512,7 +512,7 @@ async function loadFromSupabase(){
      enrichment-provider source can layer on top of the same two columns later without a schema
      change). */
   try{
-    const icpFieldsR = await sb.from('prospectus_filters').select('id,revenue_range,tech_stack');
+    const icpFieldsR = await sb.from('prospectus_filters').select('id,revenue_range,tech_stack').eq('org_id',_orgId);
     if(icpFieldsR.error) throw icpFieldsR.error;
     const icpFieldsById = {};
     (icpFieldsR.data||[]).forEach(row=>{ icpFieldsById[row.id] = row; });
@@ -522,10 +522,15 @@ async function loadFromSupabase(){
     console.warn('revenue_range/tech_stack columns not available yet (migration pending?)', e);
   }
 
+  /* 2026-09-09 (systemic org_id audit): prospectus_filters, prospectus_reports and
+     prospectus_leads are all re-saved by this page's own upsertRows() calls, same
+     vulnerable shape as the roles bug (see Ordo.html's fix). Filtered explicitly rather
+     than relying on RLS alone. cost_buckets, llm_providers and roles are read-only here
+     (Prospectus never writes them) so are left as-is. */
   const results = await Promise.all([
-    sb.from('prospectus_filters').select('id,name,industry,what_you_sell,ideal_client,deal_value,currency,market,country,updated_at,tracking_ref,company_size,target_titles,seniority'),
-    sb.from('prospectus_reports').select('id,filter_id,name,generated_at,market_low,market_high,active_in_market_pct,conversation_rate,opportunity_rate,win_rate,ramp_months,icp_headline,icp_attributes,icp_triggers,tracking_ref'),
-    sb.from('prospectus_leads').select('id,filter_id,company,domain,contact_name,status,notes'),
+    sb.from('prospectus_filters').select('id,name,industry,what_you_sell,ideal_client,deal_value,currency,market,country,updated_at,tracking_ref,company_size,target_titles,seniority').eq('org_id',_orgId),
+    sb.from('prospectus_reports').select('id,filter_id,name,generated_at,market_low,market_high,active_in_market_pct,conversation_rate,opportunity_rate,win_rate,ramp_months,icp_headline,icp_attributes,icp_triggers,tracking_ref').eq('org_id',_orgId),
+    sb.from('prospectus_leads').select('id,filter_id,company,domain,contact_name,status,notes').eq('org_id',_orgId),
     sb.from('cost_buckets').select('id,code,label'),
     sb.from('llm_providers').select('id,name,kind,endpoint,key_label,enabled,priority,notes'),
     sb.from('audit_log').select('ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200),
@@ -575,7 +580,7 @@ async function loadFromSupabase(){
   CFG.references = [];
   try{
     const refR = await sb.from('prospectus_references')
-      .select('id,name,doc_folder_url,notes,is_case_study,case_study_url,case_study_date,is_speaking,speaking_event,speaking_date,is_webinar,webinar_url,webinar_date,is_testimonial,testimonial_quote,testimonial_attribution');
+      .select('id,name,doc_folder_url,notes,is_case_study,case_study_url,case_study_date,is_speaking,speaking_event,speaking_date,is_webinar,webinar_url,webinar_date,is_testimonial,testimonial_quote,testimonial_attribution').eq('org_id',_orgId);
     if(!refR.error){
       CFG.references = (refR.data||[]).map(r=>({
         id:r.id,name:r.name||'',docFolderUrl:r.doc_folder_url||'',notes:r.notes||'',

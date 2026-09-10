@@ -526,19 +526,19 @@ async function loadFromSupabase(){
        narrow-reference pattern as the profiles read just above. Cursus doesn't own or
        edit pods (Strategy/Ordo.html does), just needs the list for a dropdown. */
     sb.from('pods').select('id,name,region_id'),
-    sb.from('programmes').select('id,name'),
+    sb.from('programmes').select('id,name').eq('org_id',_orgId),
     sb.from('cost_buckets').select('id,code,label'),
-    sb.from('campaigns').select('id,name,programme_id,region_id,cost_bucket_id,start_date,end_date,budget,crm_ref,period_type,period_label,tracking_ref,business_case,signoff_status,po_number,registration_url,project_folder_url,external_links,applicable_splits,partner_motion_tags,cloned_from_id,contact_list_ref,icp_ref,sort_order,notes,owner_id,owner_name,owner_email,alert_threshold_pct'),
-    sb.from('tasks').select('id,campaign_id,name,type,owner,start_date,due_date,status,notes,supplier,po,template_id,cost_bucket_id,planned_cost,committed_cost,actual_cost,tracking_ref,sort_order,event_id,contact_refs,planned_cost_fx'),
-    sb.from('templates').select('id,name,type,default_cost_bucket_id,notes'),
+    sb.from('campaigns').select('id,name,programme_id,region_id,cost_bucket_id,start_date,end_date,budget,crm_ref,period_type,period_label,tracking_ref,business_case,signoff_status,po_number,registration_url,project_folder_url,external_links,applicable_splits,partner_motion_tags,cloned_from_id,contact_list_ref,icp_ref,sort_order,notes,owner_id,owner_name,owner_email,alert_threshold_pct').eq('org_id',_orgId),
+    sb.from('tasks').select('id,campaign_id,name,type,owner,start_date,due_date,status,notes,supplier,po,template_id,cost_bucket_id,planned_cost,committed_cost,actual_cost,tracking_ref,sort_order,event_id,contact_refs,planned_cost_fx').eq('org_id',_orgId),
+    sb.from('templates').select('id,name,type,default_cost_bucket_id,notes').eq('org_id',_orgId),
     /* Read-only reference into the Events module's eventus_events table -- Campaign Planning never writes here, just
        links an activity to an event and rolls up budget/pax/registered/attended for
        reporting (phase16, Planning drill-down + Events cross-link). */
     sb.from('eventus_events').select('id,name,type,status,campaign_id,budget,pax,registered,attended'),
     sb.from('org_settings').select('webhook_url,webhook_enabled,fy_start_month,campaign_naming_pattern,campaign_naming_seq_scope,campaign_naming_seq_counters,partner_type_presets').eq('org_id',_orgId).maybeSingle(),
     sb.from('audit_log').select('ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200),
-    sb.from('partners').select('id,name,type,contact_name,contact_email,contact_phone,notes,pod_id,acv_target,contact_terms'),
-    sb.from('campaign_partner_allocations').select('id,campaign_id,partner_id,role,budget_share_pct,lead_share_pct'),
+    sb.from('partners').select('id,name,type,contact_name,contact_email,contact_phone,notes,pod_id,acv_target,contact_terms').eq('org_id',_orgId),
+    sb.from('campaign_partner_allocations').select('id,campaign_id,partner_id,role,budget_share_pct,lead_share_pct').eq('org_id',_orgId),
     sb.from('assets').select('id,name,category'),
     sb.from('augur_deals').select('id,name,account,value,currency,close_date,campaign_id').eq('stage','Closed Won')
   ]);
@@ -658,7 +658,7 @@ async function loadFromSupabase(){
   CFG.taskCampaignLinks = [];
   try{
     const { data: linksData, error: linksErr } = await sb.from('task_campaign_links')
-      .select('id,task_id,campaign_id,role,budget_share_pct');
+      .select('id,task_id,campaign_id,role,budget_share_pct').eq('org_id',_orgId);
     if(linksErr) throw linksErr;
     CFG.taskCampaignLinks = (linksData||[]).map(l=>({
       id:l.id,taskId:l.task_id,campaignId:l.campaign_id,role:l.role||'',budgetSharePct:l.budget_share_pct||0

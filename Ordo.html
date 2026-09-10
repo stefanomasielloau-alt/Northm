@@ -1430,25 +1430,35 @@ async function loadFromSupabase(){
     CFG.allOrganizations = orgs || [];
   }
 
+  /* 2026-09-09 (systemic org_id audit, Stef's "investigate and rectify" instruction after the
+     Strategy roles bug): every table below is also written back by this page's own
+     upsertRows() calls, which unconditionally stamp org_id:_orgId onto whatever is in CFG.* --
+     the exact same shape that let a Super Admin's cross-org-visible roles get silently
+     reassigned (see the roles fix above). RLS may or may not already scope these to the
+     caller's own org for every role -- unconfirmed from this environment -- so each SELECT
+     below now filters explicitly rather than relying on RLS alone. This is a pure narrowing:
+     it cannot remove any row a normal user was ever meant to see, since Strategy has never
+     had a legitimate reason to load another org's plan data. campaign_rollups and profiles
+     are read-only here (never re-saved by this page) so are left as-is. */
   const results = await Promise.all([
-    sb.from('roles').select('id,name,config,publish,write_all,scope,description,require_commit_on_edit,allow_expert_mode'),
-    sb.from('regions').select('id,name,code,ae_heads,acv_target,unassigned'),
-    sb.from('pods').select('id,name,region_id,share,unassigned'),
-    sb.from('reps').select('id,name,pod_id,share'),
-    sb.from('gates').select('id,name,code,order,entry,rate,active,note').order('order'),
-    sb.from('streams').select('id,name,mix,mkt_contrib,unassigned'),
-    sb.from('routes').select('id,name'),
-    sb.from('activities').select('id,name,route_id,cost_per,cap_month,active,unassigned,pre_chain'),
-    sb.from('segments').select('id,name,tier,addressable,engaged,mix,rate_mult,deal_mult,unassigned'),
-    sb.from('cost_buckets').select('id,code,label,dept,ext_code'),
-    sb.from('programmes').select('id,name,owner,focus,status,tracking_ref,cloned_from_id,notes'),
-    sb.from('versions').select('id,name,kind,locked'),
-    sb.from('campaigns').select('id,name,programme_id,activity_id,segment_id,region_id,cost_bucket_id,start_date,end_date,budget,committed,actual,conv_override,rate_source,source,ext_ref,crm_ref,budget_fx,signoff_status'),
-    sb.from('campaign_pod_allocations').select('id,campaign_id,pod_id,share_pct'),
+    sb.from('roles').select('id,name,config,publish,write_all,scope,description,require_commit_on_edit,allow_expert_mode').eq('org_id',_orgId),
+    sb.from('regions').select('id,name,code,ae_heads,acv_target,unassigned').eq('org_id',_orgId),
+    sb.from('pods').select('id,name,region_id,share,unassigned').eq('org_id',_orgId),
+    sb.from('reps').select('id,name,pod_id,share').eq('org_id',_orgId),
+    sb.from('gates').select('id,name,code,order,entry,rate,active,note').eq('org_id',_orgId).order('order'),
+    sb.from('streams').select('id,name,mix,mkt_contrib,unassigned').eq('org_id',_orgId),
+    sb.from('routes').select('id,name').eq('org_id',_orgId),
+    sb.from('activities').select('id,name,route_id,cost_per,cap_month,active,unassigned,pre_chain').eq('org_id',_orgId),
+    sb.from('segments').select('id,name,tier,addressable,engaged,mix,rate_mult,deal_mult,unassigned').eq('org_id',_orgId),
+    sb.from('cost_buckets').select('id,code,label,dept,ext_code').eq('org_id',_orgId),
+    sb.from('programmes').select('id,name,owner,focus,status,tracking_ref,cloned_from_id,notes').eq('org_id',_orgId),
+    sb.from('versions').select('id,name,kind,locked').eq('org_id',_orgId),
+    sb.from('campaigns').select('id,name,programme_id,activity_id,segment_id,region_id,cost_bucket_id,start_date,end_date,budget,committed,actual,conv_override,rate_source,source,ext_ref,crm_ref,budget_fx,signoff_status').eq('org_id',_orgId),
+    sb.from('campaign_pod_allocations').select('id,campaign_id,pod_id,share_pct').eq('org_id',_orgId),
     sb.from('campaign_rollups').select('campaign_id,rollup_committed,rollup_actual'),
     sb.from('profiles').select('id,name,role_id,region_ids,cross_region'),
     sb.from('org_settings').select('*').eq('org_id',_orgId).maybeSingle(),
-    sb.from('snapshots').select('id,name,created_by,created_at,data').order('created_at',{ascending:false}),
+    sb.from('snapshots').select('id,name,created_by,created_at,data').eq('org_id',_orgId).order('created_at',{ascending:false}),
     sb.from('audit_log').select('ts,what,detail,who,role').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200)
   ]);
   const [rolesR,regionsR,podsR,repsR,gatesR,streamsR,routesR,activitiesR,segmentsR,costBucketsR,
@@ -1466,7 +1476,7 @@ async function loadFromSupabase(){
     const [ou,oua,rou] = await Promise.all([
       sb.from('org_units').select('id,parent_id,name,kind'),
       sb.from('org_unit_access').select('id,org_unit_id,profile_id,level'),
-      sb.from('regions').select('id,org_unit_id')
+      sb.from('regions').select('id,org_unit_id').eq('org_id',_orgId)
     ]);
     if(!ou.error) orgUnitsData = ou.data||[];
     if(!oua.error) orgUnitAccessData = oua.data||[];

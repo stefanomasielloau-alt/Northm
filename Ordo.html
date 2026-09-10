@@ -5131,20 +5131,24 @@ async function openContact(){
   // itself is the diagnostic.
   let url = CONTACT_URL;
   try{
-    let { data } = await sb.auth.getSession();
-    let t = data && data.session && data.session.access_token;
+    /* 2026-09-10 (live-session fix, replaces the three narrower timing fixes above --
+       see the running-log for the full trail): every earlier fix here re-checked
+       getSession() fresh at the moment of the click, which is exactly what raced
+       against Supabase's own session-restore/refresh cycle right after a reload (a
+       hard refresh, or shared/superAdminView.js's setMode() reload when switching --
+       or shedding -- the Super Admin "view as" toggle). _liveSession (declared with
+       the onAuthStateChange subscription near the bottom of this file) is instead
+       kept continuously current by Supabase itself, so by the time a click is even
+       possible it has already settled -- nothing to race against. The getSession()/
+       refreshSession()/delayed-retry chain below is kept only as a defensive
+       fallback for the unlikely case _liveSession hasn't been populated yet. */
+    let t = _liveSession && _liveSession.access_token;
+    let data;
     if(!t){
-      /* 2026-09-10 fix: getSession() can come back empty right after a fresh page
-         load/hard-refresh (a manual one, OR the reload shared/superAdminView.js's
-         setMode() does when switching the Super Admin "view as" org/user -- Stef hit
-         this right after using that toggle) even though a real session exists in
-         storage -- a known race in when the client finishes restoring it, not an
-         actual sign-out. This used to fall straight to the logged-out toast/bare-open
-         below on the very first empty check, which is exactly what "asks me to log in
-         again, then allows me to log in" looks like from the Hub side: no error, just
-         the plain Hub login form. Widened to two recovery attempts (refreshSession()
-         immediately, then one more getSession() after a short pause) since a single
-         immediate retry still wasn't always enough right after a reload. */
+      ({ data } = await sb.auth.getSession());
+      t = data && data.session && data.session.access_token;
+    }
+    if(!t){
       try{
         const refreshed = await sb.auth.refreshSession();
         data = refreshed.data;
@@ -5242,7 +5246,16 @@ document.getElementById('cRole').onchange=e=>{UI.userId=e.target.value;render();
 document.getElementById('cVer').onchange=e=>{UI.versionId=e.target.value;render();};
 document.getElementById('cFy').onchange=e=>{UI.fy=e.target.value;render();};
 document.getElementById('cGrain').onchange=e=>{UI.grain=e.target.value;CFG.time.grain=e.target.value;render();};
-sb.auth.onAuthStateChange((event)=>{
+/* 2026-09-10 (live-session fix): kept continuously up to date so openContact()
+   below never has to guess whether a freshly-reloaded page's Supabase client has
+   finished restoring its session yet -- see openContact()'s own comment for the
+   full story (three narrower timing fixes here before this one). Supabase fires
+   this callback with the current session as soon as it has one to report,
+   including once immediately on subscription (event 'INITIAL_SESSION'), so this
+   is populated before a user could realistically click anything. */
+let _liveSession = null;
+sb.auth.onAuthStateChange((event, session)=>{
+  _liveSession = session;
   if(event==='SIGNED_OUT'){
     if(_skipNextSignOutReload){ _skipNextSignOutReload=false; return; }
     location.reload();

@@ -15,6 +15,7 @@
 -- stuck to My Organisation... seems to revert to My org." That symptom is consistent with
 -- exactly this trade-off, now surfaced through bootApp()'s new auto-recovery retry
 -- (SAV.resetToOwn(), shipped earlier today): when one of these 7 reads comes back
+-- unexpectedly empty in 'all'/'org' mode and something downstream throws on it, the retry
 -- catches that and silently reverts the view to "My organization" -- which looks exactly
 -- like the toggle "not working," even though it's the auto-recovery doing its job against
 -- a real, pre-existing DB-level gap.

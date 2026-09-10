@@ -186,6 +186,7 @@ tr.tot td{font-weight:800; border-top:2px solid var(--line);}
 <script src="shared/moduleFooter.js"></script>
 <script src="shared/dateFormat.js"></script>
 <script src="shared/orgSwitcher.js"></script>
+<script src="shared/superAdminView.js"></script>
 <script src="shared/convertToMain.js"></script>
 <script src="shared/currencyOptions.js"></script>
 <div id="authGate" style="display:none"></div>
@@ -385,6 +386,8 @@ window.clearLocal=clearLocal;
    DELETE, fired from each remove*() function alongside the local CFG filter.
    ============================================================================ */
 let _hubOrgSlug = '', _orgId = null, _myProfile = null, _saveTimer = null, _realtimeChannel = null;
+/* item 68 rollout (2026-09-10): Super Admin cross-org view filters -- see shared/superAdminView.js / Cursus.html. */
+let _savOrgFilter = null, _savUserFilter = null;
 /* Set right before an internal (non-user-initiated) signOut() -- e.g. bootApp()'s error path
    below -- so the global onAuthStateChange listener knows to skip its reload-on-SIGNED_OUT and
    let the error message stay on screen instead of wiping it out immediately. Without this, the
@@ -393,16 +396,21 @@ let _skipNextSignOutReload = false;
 
 async function upsertRows(table, rows, mapFn){
   if(!rows || !rows.length) return;
+  if(CFG.isSuperAdmin && !SAV.canEdit()) return; // read-only cross-org view -- item 68
   try{
-    const payload = rows.map(r=>Object.assign(mapFn(r), {org_id:_orgId}));
+    const ambientOrgId = (_savOrgFilter!==null ? _savOrgFilter : _orgId);
+    const payload = rows.map(r=>Object.assign(mapFn(r), {org_id: SAV.stampOrgId(r.orgId, ambientOrgId)}));
     const { error } = await sb.from(table).upsert(payload);
     if(error) throw error;
   }catch(e){ console.error('Save failed for '+table, e); toast('Could not save '+table+' to the database — see console.'); }
 }
-async function deleteRow(table, id){
-  if(!_orgId || !id) return;
+async function deleteRow(table, id, rowOrgId){
+  if(CFG.isSuperAdmin && !SAV.canEdit()) return; // read-only cross-org view -- item 68
+  const ambientOrgId = (_savOrgFilter!==null ? _savOrgFilter : _orgId);
+  const targetOrgId = SAV.stampOrgId(rowOrgId, ambientOrgId);
+  if(!targetOrgId || !id) return;
   try{
-    const { error } = await sb.from(table).delete().eq('id', id).eq('org_id', _orgId);
+    const { error } = await sb.from(table).delete().eq('id', id).eq('org_id', targetOrgId);
     if(error) throw error;
   }catch(e){ console.error('Delete failed for '+table, e); toast('Removed here, but could not delete from the database — see console.'); }
 }
@@ -437,6 +445,7 @@ async function saveToSupabase(){
 
 function scheduleSupabaseSave(){
   if(!_orgId) return;
+  if(CFG.isSuperAdmin && !SAV.canEdit()) return; // read-only cross-org view -- item 68
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(()=>{ saveToSupabase(); }, 900);
 }
@@ -471,6 +480,25 @@ async function loadFromSupabase(){
   CFG.isFullSuperAdmin = _paLevel === 'L0';
   CFG.isSuperAdmin = _paLevel === 'L0' || _paLevel === 'L1';
 
+  /* item 68 rollout (2026-09-10): Super Admin "view as" context -- see shared/superAdminView.js.
+     Eventus's own eventus_* tables kept their original RLS bypass (v3/v4 only rolled it back
+     on Cursus's 7 tables), so a plain filter swap gives real cross-org reads -- no new RPC
+     needed. audit_log's bypass WAS rolled back table-wide, so that one reuses the
+     admin_cross_org_audit_log RPC already built for Cursus. */
+  SAV.init(_orgId);
+  _savOrgFilter = _orgId;
+  _savUserFilter = null;
+  if(CFG.isSuperAdmin){
+    _savOrgFilter = SAV.effectiveOrgId();
+    _savUserFilter = SAV.effectiveUserId();
+  }
+  function orgScoped(q, col){ return _savOrgFilter===null ? q : q.eq(col||'org_id', _savOrgFilter); }
+  const _crossOrgAudit = CFG.isSuperAdmin && _savOrgFilter !== _orgId;
+  CFG.loadAllOrganizations = async function(){
+    const { data } = await sb.from('organizations').select('id,name').order('name');
+    return data || [];
+  };
+
   /* tracking_config: DB-backed now (org_settings.tracking_config, added 2026-08-19) instead of
      requiring a manual JSON re-import from Configuration every session. Separate, defensively
      wrapped query -- the column may not exist yet if the migration hasn't been run, and that
@@ -495,11 +523,11 @@ async function loadFromSupabase(){
      campaigns, programmes, tasks and roles below are all read-only here (Events never
      writes any of them) so are left as-is. */
   const results = await Promise.all([
-    sb.from('eventus_events').select('id,name,type,status,start_date,end_date,country,venue,location,pax,requester,campaign_ref,campaign_id,budget,registered,attended,tracking_ref,is_template,budget_fx,sort_order').eq('org_id',_orgId),
-    sb.from('eventus_event_venues').select('id,event_id,name,country,location,address,pax,start_date,end_date,status,sort_order').eq('org_id',_orgId),
-    sb.from('eventus_cost_lines').select('id,event_id,category,supplier,description,planned_cost,committed_cost,actual_cost').eq('org_id',_orgId),
-    sb.from('eventus_checklist').select('id,event_id,item,done,due_date').eq('org_id',_orgId),
-    sb.from('eventus_speakers').select('id,event_id,name,company,topic,contact').eq('org_id',_orgId),
+    orgScoped(sb.from('eventus_events').select('id,org_id,name,type,status,start_date,end_date,country,venue,location,pax,requester,campaign_ref,campaign_id,budget,registered,attended,tracking_ref,is_template,budget_fx,sort_order')),
+    orgScoped(sb.from('eventus_event_venues').select('id,org_id,event_id,name,country,location,address,pax,start_date,end_date,status,sort_order')),
+    orgScoped(sb.from('eventus_cost_lines').select('id,org_id,event_id,category,supplier,description,planned_cost,committed_cost,actual_cost')),
+    orgScoped(sb.from('eventus_checklist').select('id,org_id,event_id,item,done,due_date')),
+    orgScoped(sb.from('eventus_speakers').select('id,org_id,event_id,name,company,topic,contact')),
     sb.from('cost_buckets').select('id,code,label'),
     sb.from('campaigns').select('id,name,programme_id'),
     /* Read-only, for the Programme/Campaign roll-up dashboard (phase16) -- Events never
@@ -509,31 +537,33 @@ async function loadFromSupabase(){
        linked to, without Events owning that relationship -- the link itself lives on the
        Campaign Planning side (tasks.event_id, phase16). */
     sb.from('tasks').select('id,name,campaign_id,event_id,status,due_date,owner'),
-    sb.from('audit_log').select('ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200),
+    (_crossOrgAudit ? sb.rpc('admin_cross_org_audit_log', {p_org_id:_savOrgFilter, p_limit:200}) : sb.from('audit_log').select('ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200)),
     /* Read-only, narrow Viewer-role gate only (see isViewer()) -- no write_all/config/scope
        logic is consumed here, that's out of scope for this pass. */
-    sb.from('roles').select('id,org_id,name,config,publish,write_all,scope,description')
+    sb.from('roles').select('id,org_id,name,config,publish,write_all,scope,description'),
+    orgScoped(sb.from('profiles').select('id,name,org_id'))
   ]);
-  const [eventsR,venuesR,costLinesR,checklistR,speakersR,costBucketsR,campaignsR,programmesR,tasksR,auditR,rolesR] = results;
+  const [eventsR,venuesR,costLinesR,checklistR,speakersR,costBucketsR,campaignsR,programmesR,tasksR,auditR,rolesR,profilesR] = results;
   for(const r of results){ if(r.error) throw r.error; }
 
   CFG.events = (eventsR.data||[]).map(e=>({
-    id:e.id,name:e.name,type:e.type||'',status:e.status||'Planned',start:e.start_date||'',end:e.end_date||'',
+    id:e.id,orgId:e.org_id,name:e.name,type:e.type||'',status:e.status||'Planned',start:e.start_date||'',end:e.end_date||'',
     country:e.country||'',venue:e.venue||'',location:e.location||'',pax:e.pax||0,requester:e.requester||'',
     campaignRef:e.campaign_ref||'',campaignId:e.campaign_id||null,budget:e.budget||0,registered:e.registered||0,attended:e.attended||0,
     budgetFx:e.budget_fx||null,budgetCcy:(e.budget_fx&&e.budget_fx.originalCurrency)||'',
     trackingRef:e.tracking_ref||null,isTemplate:!!e.is_template,sortOrder:e.sort_order||0
   }));
   CFG.eventVenues = (venuesR.data||[]).map(v=>({
-    id:v.id,eventId:v.event_id,name:v.name||'',country:v.country||'',location:v.location||'',address:v.address||'',
+    id:v.id,orgId:v.org_id,eventId:v.event_id,name:v.name||'',country:v.country||'',location:v.location||'',address:v.address||'',
     pax:v.pax||0,start:v.start_date||'',end:v.end_date||'',status:v.status||'Planned',sortOrder:v.sort_order||0
   }));
   CFG.costLines = (costLinesR.data||[]).map(c=>({
-    id:c.id,eventId:c.event_id,category:c.category||'',supplier:c.supplier||'',description:c.description||'',
+    id:c.id,orgId:c.org_id,eventId:c.event_id,category:c.category||'',supplier:c.supplier||'',description:c.description||'',
     plannedCost:c.planned_cost,committedCost:c.committed_cost,actualCost:c.actual_cost
   }));
-  CFG.checklist = (checklistR.data||[]).map(c=>({id:c.id,eventId:c.event_id,item:c.item,done:!!c.done,dueDate:c.due_date||''}));
-  CFG.speakers = (speakersR.data||[]).map(s=>({id:s.id,eventId:s.event_id,name:s.name||'',company:s.company||'',topic:s.topic||'',contact:s.contact||''}));
+  CFG.checklist = (checklistR.data||[]).map(c=>({id:c.id,orgId:c.org_id,eventId:c.event_id,item:c.item,done:!!c.done,dueDate:c.due_date||''}));
+  CFG.speakers = (speakersR.data||[]).map(s=>({id:s.id,orgId:s.org_id,eventId:s.event_id,name:s.name||'',company:s.company||'',topic:s.topic||'',contact:s.contact||''}));
+  CFG.orgUsers = (profilesR.data||[]).map(p=>({id:p.id,name:p.name||'',orgId:p.org_id}));
   CFG.costBuckets = (costBucketsR.data||[]).map(c=>({id:c.id,code:c.code,label:c.label}));
   CFG.campaigns = (campaignsR.data||[]).map(c=>({id:c.id,name:c.name,programmeId:c.programme_id||null}));
   CFG.programmes = (programmesR.data||[]).map(p=>({id:p.id,name:p.name}));
@@ -806,6 +836,27 @@ async function bootApp(){
   catch(e){
     console.error(e);
     if(e.noProfile){ showOnboardingGate(); return; }
+    if(typeof SAV!=='undefined' && SAV.mode && SAV.mode()!=='own' && !window._savRetriedOwn){
+      window._savRetriedOwn = true;
+      console.warn('Eventus boot failed while the Super Admin view was set to "'+SAV.mode()+'" -- resetting to "My organization" and retrying once.', e);
+      SAV.resetToOwn();
+      try{
+        await loadFromSupabase();
+        if(!(await checkModuleAccess())) return;
+        { const tnLinksEl = document.getElementById('tnLinks'); if(tnLinksEl) tnLinksEl.innerHTML = renderFilteredTnLinks(); }
+        hideAuthGate();
+        applyHashRoute();
+        render();
+        SAV.renderBar({ isSuperAdmin: CFG.isSuperAdmin, loadOrganizations: CFG.loadAllOrganizations,
+          usersForOrg: (orgId)=> (CFG.orgUsers||[]).filter(u=>u.orgId===orgId) });
+        subscribeRealtime();
+        toast('The cross-org view was stuck, so this reset back to "My organization." Re-select a specific org from the Super Admin bar if you still need it.');
+        return;
+      }catch(e2){
+        console.error('Retry after resetToOwn() also failed -- this is not the stuck-cross-org-view case.', e2);
+        e = e2;
+      }
+    }
     _skipNextSignOutReload = true;
     await sb.auth.signOut();
     showAuthGate(e.message || 'Could not load your data. Contact an admin.');
@@ -818,6 +869,11 @@ async function bootApp(){
   hideAuthGate();
   applyHashRoute();
   render();
+  SAV.renderBar({
+    isSuperAdmin: CFG.isSuperAdmin,
+    loadOrganizations: CFG.loadAllOrganizations,
+    usersForOrg: (orgId)=> (CFG.orgUsers||[]).filter(u=>u.orgId===orgId)
+  });
   subscribeRealtime();
 }
 

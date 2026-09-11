@@ -488,8 +488,16 @@ async function saveToSupabase(){
     })),
     upsertRows('audit_log', CFG.audit, a=>({ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null})),
     (async()=>{
+      /* 2026-09-10 (data-safety fix, latent gap flagged 2026-09-10 in the item 68
+         rollout notes): this used to stamp the caller's own _orgId unconditionally --
+         wrong the moment a Super Admin is editing a DIFFERENT org via the SAV toolbar,
+         since org_settings' unique key is org_id (an upsert with the wrong org_id
+         creates/overwrites the Super Admin's OWN org's settings instead of the org
+         actually being viewed). Same ambientOrgId pattern upsertRows()/deleteRow()
+         already use above. */
+      const _orgSettingsOrgId = (_savOrgFilter!==null ? _savOrgFilter : _orgId);
       const cn = CFG.campaignNaming||{};
-      const row = { org_id:_orgId, webhook_url:(CFG.integrations&&CFG.integrations.webhookUrl)||'',
+      const row = { org_id:_orgSettingsOrgId, webhook_url:(CFG.integrations&&CFG.integrations.webhookUrl)||'',
                     webhook_enabled:!!(CFG.integrations&&CFG.integrations.webhookEnabled),
                     fy_start_month: cn.fyStartMonth||1,
                     campaign_naming_pattern: cn.campaignNamingPattern||'{fy}{period}{pod}-{seq}_{descriptor}',
@@ -3710,7 +3718,21 @@ function render(){
   document.getElementById('side').innerHTML=renderSide();
   document.getElementById('tnLinks').innerHTML=renderFilteredTnLinks();
   document.getElementById('tnAcct').innerHTML=renderTnAcct();
-  document.getElementById('main').innerHTML=p.fn() + (UI.helpOpen?helpPanelHtml():'');
+  /* 2026-09-10 (live incident fix, applied fleet-wide after Ordo/Strategy's crash-loop
+     -- see running-log): a page-render crash here used to be a fully uncaught exception
+     with no fallback. Wrap it so a bug/data gap in ONE page shows a clear in-page message
+     instead of breaking navigation (or, worse, looping sign-out/sign-in if it happens
+     during boot). Sidebar/topnav above don't depend on page-specific data. */
+  let mainHtml;
+  try{
+    mainHtml = p.fn() + (UI.helpOpen?helpPanelHtml():'');
+  }catch(e){
+    console.error('Page render failed for "'+p.id+'"', e);
+    mainHtml = '<div class="card" style="padding:24px;max-width:640px;"><h3>This page couldn\'t load</h3>'+
+      '<p>'+esc(e && e.message || String(e))+'</p>'+
+      '<p class="sub">Page: '+esc(p.id)+'. Try another page from the sidebar, or contact your Super Admin if this keeps happening.</p></div>';
+  }
+  document.getElementById('main').innerHTML=mainHtml;
   document.getElementById('wizardLayer').innerHTML=campaignWizardPanel()+moveDialogPanel()+detailPanelHtml()+contactPickerHtml();
   saveLocal();
   scheduleSupabaseSave();

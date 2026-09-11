@@ -419,8 +419,13 @@ async function saveToSupabase(){
     })),
     upsertRows('audit_log', CFG.audit, a=>({ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null})),
     (async()=>{
+      /* 2026-09-10 (data-safety fix, same class as Ordo/Cursus's org_settings gap
+         flagged 2026-09-10 in the item 68 rollout notes): stamp the org actually
+         being viewed, not the caller's own org -- org_settings' unique key is
+         org_id, so the wrong id here overwrites/creates the wrong org's row. */
+      const _orgSettingsOrgId = (_savOrgFilter!==null ? _savOrgFilter : _orgId);
       const { error } = await sb.from('org_settings').upsert(
-        { org_id:_orgId, asset_tag_presets: CFG.assetTagPresets||[] }, {onConflict:'org_id'}
+        { org_id:_orgSettingsOrgId, asset_tag_presets: CFG.assetTagPresets||[] }, {onConflict:'org_id'}
       );
       if(error){ console.error('Save failed for org_settings.asset_tag_presets', error); }
     })()
@@ -1571,7 +1576,20 @@ function render(){
   document.getElementById('side').innerHTML=renderSide();
   document.getElementById('tnLinks').innerHTML=renderFilteredTnLinks();
   document.getElementById('tnAcct').innerHTML=renderTnAcct();
-  document.getElementById('main').innerHTML=p.fn() + (UI.assetDetailId?assetDetailHtml():'') + (UI.helpOpen?helpPanelHtml():'');
+  /* 2026-09-10 (live incident fix, applied fleet-wide after Ordo/Strategy's crash-loop
+     -- see running-log): wrap page-specific render so a bug/data gap in ONE page shows a
+     clear in-page message instead of breaking navigation (or looping sign-out during
+     boot). Sidebar/topnav above don't depend on page-specific data. */
+  let mainHtml;
+  try{
+    mainHtml = p.fn() + (UI.assetDetailId?assetDetailHtml():'') + (UI.helpOpen?helpPanelHtml():'');
+  }catch(e){
+    console.error('Page render failed for "'+p.id+'"', e);
+    mainHtml = '<div class="card" style="padding:24px;max-width:640px;"><h3>This page couldn\'t load</h3>'+
+      '<p>'+esc(e && e.message || String(e))+'</p>'+
+      '<p class="sub">Page: '+esc(p.id)+'. Try another page from the sidebar, or contact your Super Admin if this keeps happening.</p></div>';
+  }
+  document.getElementById('main').innerHTML=mainHtml;
   saveLocal();
   scheduleSupabaseSave();
 }

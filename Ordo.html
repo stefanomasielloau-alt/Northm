@@ -1080,6 +1080,15 @@ const HIST={};
    CFG, instead of an IIFE that ran immediately at script load. Weight lookups are keyed
    by name rather than the old hardcoded sample ids, since real ids are now UUIDs. */
 function buildHist(){
+  /* 2026-09-10 (live incident fix): this illustrative sample-history builder reads
+     exitGate().id on every iteration. If this org currently has zero active gates
+     (e.g. mid-repair after a data incident, or a brand-new org before Gates is
+     configured), chain() is empty and exitGate() returns undefined -- which used to
+     throw here, inside loadFromSupabase()'s try/catch in bootApp(), triggering a
+     sign-out + re-sign-in loop with no way to reach the app at all. Skip gracefully
+     instead -- HIST just stays empty, same as it would for any org with no history
+     yet, and render() (see its own 2026-09-10 guard) tells the user why. */
+  if(chain().length===0){ console.warn('buildHist: no active gates configured for this org -- skipping illustrative sample history.'); return; }
   const rw={ANZ:0.24,Japan:0.19,SEA:0.42,India:0.15};
   const aw={'SDR / BDR':0.22,'Web / Organic':0.19,'Events':0.13,'Social / Paid':0.16,'BDM Self-gen':0.11,'Syndication':0.08,'Webinar':0.07,'Partner Led':0.04};
   const gw={'Enterprise':0.24,'Mid-Market':0.46,'SMB':0.30};
@@ -5315,7 +5324,25 @@ function render(){
   document.getElementById('side').innerHTML=renderSide();
   document.getElementById('tnLinks').innerHTML=renderFilteredTnLinks();
   document.getElementById('tnAcct').innerHTML=renderTnAcct();
-  document.getElementById('main').innerHTML=p.fn() + (UI.helpOpen?helpPanelHtml():'');
+  /* 2026-09-10 (live incident fix): a page-render crash here used to be a fully
+     uncaught exception with no fallback -- e.g. Strategy's funnel math assumes at
+     least one active gate exists (entryGate()/exitGate() are called throughout most
+     pages), so an org with zero active gates hard-crashed whichever page it landed
+     on. Wrap the page-specific render so a bug/data gap in ONE page shows a clear
+     in-page message instead of breaking navigation entirely. Sidebar/topnav above
+     this line don't depend on gate data, so they still render normally, letting the
+     user navigate to Admin & config -> Gates to fix it themselves. */
+  let mainHtml;
+  try{
+    mainHtml = p.fn() + (UI.helpOpen?helpPanelHtml():'');
+  }catch(e){
+    console.error('Page render failed for "'+p.id+'"', e);
+    mainHtml = '<div class="card" style="padding:24px;max-width:640px;"><h3>This page couldn\'t load</h3>'+
+      '<p>'+esc(e && e.message || String(e))+'</p>'+
+      '<p>If this keeps happening on every page, it likely means this organization has no active funnel gates configured yet -- go to <b>Admin &amp; config → Gates</b> to add at least one, or contact your Super Admin.</p>'+
+      '<p class="sub">Page: '+esc(p.id)+'</p></div>';
+  }
+  document.getElementById('main').innerHTML=mainHtml;
   document.getElementById('layer').innerHTML=impactPanel()+overlayPanel()+pendingEditPanel()+askAlexPanel();
   renderCtx();
   saveLocal();

@@ -1315,16 +1315,26 @@ window.removeVenue=removeVenue;
    same shape as the CFG.assets load itself. */
 async function _saveAssetEventLink(assetId, eventId){
   if(!_orgId || !assetId) return;
+  /* 2026-09-10 (data-safety fix): the org_id filter here is a safety net, not the
+     primary key -- but a bare _orgId filter would silently match ZERO rows (and
+     look like a no-op success) while viewing/editing a DIFFERENT org via SAV,
+     since the asset actually belongs to the org being viewed. Use the same
+     ambient-org pattern as everywhere else. */
+  const _assetOrgId = (_savOrgFilter!==null ? _savOrgFilter : _orgId);
   try{
-    const { error } = await sb.from('assets').update({event_id: eventId||null}).eq('id', assetId).eq('org_id', _orgId);
+    const { error } = await sb.from('assets').update({event_id: eventId||null}).eq('id', assetId).eq('org_id', _assetOrgId);
     if(error) throw error;
   }catch(e){ console.error('Could not save asset-event link', e); toast('Linked here, but the database save failed -- see console.'); }
 }
 async function _createAssetRow(asset){
   if(!_orgId) return;
+  /* 2026-09-10 (data-safety fix, same class flagged 2026-09-10 in the item 68 rollout
+     notes -- this function predates SAV by a day, item 45 vs item 68): stamp the org
+     actually being viewed, not the caller's own org. */
+  const _assetOrgId = (_savOrgFilter!==null ? _savOrgFilter : _orgId);
   try{
     const { error } = await sb.from('assets').insert({
-      id: asset.id, org_id:_orgId, name:asset.name, category:asset.category||'', event_id:asset.eventId||null,
+      id: asset.id, org_id:_assetOrgId, name:asset.name, category:asset.category||'', event_id:asset.eventId||null,
       campaign_id:asset.campaignId||null, stock:asset.stock||0, cost_per:asset.costPer||0
     });
     if(error) throw error;
@@ -1332,6 +1342,7 @@ async function _createAssetRow(asset){
 }
 function attachAssetToEvent(eventId, assetId){
   if(isViewer()){ toast('Your role is view-only.'); return; }
+  if(CFG.isSuperAdmin && !SAV.canEdit()){ toast('Read-only cross-org view.'); return; } // item 68 (2026-09-10)
   if(!assetId) return;
   const a=byId(CFG.assets, assetId); if(!a) return;
   a.eventId=eventId;
@@ -1342,6 +1353,7 @@ function attachAssetToEvent(eventId, assetId){
 window.attachAssetToEvent=attachAssetToEvent;
 function detachAssetFromEvent(assetId){
   if(isViewer()){ toast('Your role is view-only.'); return; }
+  if(CFG.isSuperAdmin && !SAV.canEdit()){ toast('Read-only cross-org view.'); return; } // item 68 (2026-09-10)
   const a=byId(CFG.assets, assetId); if(!a) return;
   a.eventId=null;
   logAudit('detach asset', a.name); render();
@@ -1351,6 +1363,7 @@ function detachAssetFromEvent(assetId){
 window.detachAssetFromEvent=detachAssetFromEvent;
 function createAssetForEvent(eventId){
   if(isViewer()){ toast('Your role is view-only.'); return; }
+  if(CFG.isSuperAdmin && !SAV.canEdit()){ toast('Read-only cross-org view.'); return; } // item 68 (2026-09-10)
   const name=(prompt('New asset name:')||'').trim();
   if(!name) return;
   const e=byId(CFG.events, eventId);
@@ -1393,6 +1406,7 @@ async function _createActivityRow(task){
 }
 function attachActivityToEvent(eventId, taskId){
   if(isViewer()){ toast('Your role is view-only.'); return; }
+  if(CFG.isSuperAdmin && !SAV.canEdit()){ toast('Read-only cross-org view.'); return; } // item 68 (2026-09-10)
   if(!taskId) return;
   const t=byId(CFG.unlinkedActivities, taskId); if(!t) return;
   CFG.unlinkedActivities=CFG.unlinkedActivities.filter(x=>x.id!==taskId);
@@ -1404,6 +1418,7 @@ function attachActivityToEvent(eventId, taskId){
 window.attachActivityToEvent=attachActivityToEvent;
 function detachActivityFromEvent(taskId){
   if(isViewer()){ toast('Your role is view-only.'); return; }
+  if(CFG.isSuperAdmin && !SAV.canEdit()){ toast('Read-only cross-org view.'); return; } // item 68 (2026-09-10)
   const t=byId(CFG.linkedActivities, taskId); if(!t) return;
   CFG.linkedActivities=CFG.linkedActivities.filter(x=>x.id!==taskId);
   CFG.unlinkedActivities.push({id:t.id,name:t.name,campaignId:t.campaignId,status:t.status||''});
@@ -1414,6 +1429,7 @@ function detachActivityFromEvent(taskId){
 window.detachActivityFromEvent=detachActivityFromEvent;
 function createActivityForEvent(eventId){
   if(isViewer()){ toast('Your role is view-only.'); return; }
+  if(CFG.isSuperAdmin && !SAV.canEdit()){ toast('Read-only cross-org view.'); return; } // item 68 (2026-09-10)
   const e=byId(CFG.events, eventId);
   if(!e || !e.campaignId){ toast('Link this event to a campaign first (see "Linked campaign" above) -- an activity needs one.'); return; }
   const name=(prompt('New activity name:')||'').trim();
@@ -2087,7 +2103,20 @@ function render(){
   document.getElementById('side').innerHTML=renderSide();
   document.getElementById('tnLinks').innerHTML=renderFilteredTnLinks();
   document.getElementById('tnAcct').innerHTML=renderTnAcct();
-  document.getElementById('main').innerHTML=p.fn() + (UI.helpOpen?helpPanelHtml():'');
+  /* 2026-09-10 (live incident fix, applied fleet-wide after Ordo/Strategy's crash-loop
+     -- see running-log): wrap page-specific render so a bug/data gap in ONE page shows a
+     clear in-page message instead of breaking navigation (or looping sign-out during
+     boot). Sidebar/topnav above don't depend on page-specific data. */
+  let mainHtml;
+  try{
+    mainHtml = p.fn() + (UI.helpOpen?helpPanelHtml():'');
+  }catch(e){
+    console.error('Page render failed for "'+p.id+'"', e);
+    mainHtml = '<div class="card" style="padding:24px;max-width:640px;"><h3>This page couldn\'t load</h3>'+
+      '<p>'+esc(e && e.message || String(e))+'</p>'+
+      '<p class="sub">Page: '+esc(p.id)+'. Try another page from the sidebar, or contact your Super Admin if this keeps happening.</p></div>';
+  }
+  document.getElementById('main').innerHTML=mainHtml;
   saveLocal();
   scheduleSupabaseSave();
 }

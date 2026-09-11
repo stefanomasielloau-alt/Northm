@@ -146,7 +146,12 @@
          `loadOrganizations` (an async function returning the org list) instead of a
          pre-fetched `organizations` array, and it's only called the first time the
          Super Admin actually opens "Choose an organization...". */
-      const orgs = opts.organizations || this._loadedOrgs || [];
+      /* 2026-09-10 (live incident hardening): filter out any null/undefined/id-less
+         entries before mapping -- a malformed row anywhere upstream (a failed join, a
+         partially-loaded list) used to throw "Cannot read properties of undefined
+         (reading 'id')" right here and take out the whole toolbar (and, if this ran
+         during boot, the whole page) rather than just omitting the one bad row. */
+      const orgs = (opts.organizations || this._loadedOrgs || []).filter(o=>o && o.id!=null);
       const usersForOrg = opts.usersForOrg || function(){ return []; };
       const lockSel = opts.lockSelector || '#main';
 
@@ -164,7 +169,7 @@
       const orgOptions = orgs.map(o=>`<option value="${esc(o.id)}" ${ctx.orgId===o.id?'selected':''}>${esc(o.name)}</option>`).join('');
       let userOptions = '';
       if(ctx.mode==='org' || ctx.mode==='user'){
-        const us = (ctx.orgId ? usersForOrg(ctx.orgId) : []) || [];
+        const us = ((ctx.orgId ? usersForOrg(ctx.orgId) : []) || []).filter(u=>u && u.id!=null);
         userOptions = `<option value="">All users in this org</option>` + us.map(u=>`<option value="${esc(u.id)}" ${ctx.userId===u.id?'selected':''}>${esc(u.name||u.email||u.id)}</option>`).join('');
       }
 

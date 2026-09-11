@@ -2422,14 +2422,26 @@ function render(){
   document.getElementById('tnAcct').innerHTML=renderTnAcct();
   side.innerHTML=renderSide();
   side.style.display=UI.page==='editor'?'none':'';
-  if(UI.page==='editor'){
-    main.className='main tight'; main.innerHTML=pageEditor();
-  } else if(UI.page==='automations'){
-    main.className='main'; main.innerHTML=pageAutomations();
-  } else if(UI.page==='home'){
-    main.className='main'; main.innerHTML=pageHome();
-  } else {
-    main.className='main'; main.innerHTML=pageList();
+  /* 2026-09-10 (live incident fix, applied fleet-wide after Ordo/Strategy's crash-loop
+     -- see running-log): wrap page-specific render so a bug/data gap in ONE page shows a
+     clear in-page message instead of breaking navigation (or looping sign-out during
+     boot). Sidebar/topnav above don't depend on page-specific data. */
+  try{
+    if(UI.page==='editor'){
+      main.className='main tight'; main.innerHTML=pageEditor();
+    } else if(UI.page==='automations'){
+      main.className='main'; main.innerHTML=pageAutomations();
+    } else if(UI.page==='home'){
+      main.className='main'; main.innerHTML=pageHome();
+    } else {
+      main.className='main'; main.innerHTML=pageList();
+    }
+  }catch(e){
+    console.error('Page render failed for "'+UI.page+'"', e);
+    main.className='main';
+    main.innerHTML = '<div class="card" style="padding:24px;max-width:640px;"><h3>This page couldn\'t load</h3>'+
+      '<p>'+esc(e && e.message || String(e))+'</p>'+
+      '<p class="sub">Page: '+esc(UI.page)+'. Try another page from the sidebar, or contact your Super Admin if this keeps happening.</p></div>';
   }
   if(UI.helpOpen) main.innerHTML += helpPanelHtml();
   saveLocal();

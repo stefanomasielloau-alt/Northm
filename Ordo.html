@@ -524,9 +524,23 @@ function ragPillHtml(rag){
   return `<span class="rag rag-${rag.tone}">${esc(rag.label)}${rag.exceed?' <span class="rag-exceed">★</span>':''}</span>`;
 }
 
-const user=()=>byId(CFG.users,UI.userId);
-const role=()=>byId(CFG.roles,user().roleId);
-const version=()=>byId(CFG.versions,UI.versionId);
+/* 2026-09-11 (real-use fix, reported live -- topnav crashed with "Cannot read
+   properties of undefined (reading 'roleId')" at role()->user() after switching
+   the Super Admin view to a specific org): user()/role() assumed the viewer's own
+   profile is always present in CFG.users/CFG.roles -- true for every normal user
+   (who only ever sees their own org's data), but false for a Super Admin viewing
+   a DIFFERENT org via SAV, since CFG.users/CFG.roles get reloaded scoped to that
+   org and the viewer's own profile (from their real home org) isn't in it.
+   _myProfile/_orgId are always the viewer's own real identity regardless of SAV
+   context (see loadFromSupabase()'s unscoped profiles-by-auth-id fetch) -- fall
+   back to a synthetic "you" built from that instead of crashing. */
+const user=()=>byId(CFG.users,UI.userId) || (typeof _myProfile!=='undefined' && _myProfile ? {
+  id:_myProfile.id, name:_myProfile.name, roleId:_myProfile.role_id,
+  regionIds:_myProfile.region_ids||[], crossRegion:_myProfile.cross_region,
+  label:(_myProfile.name||'You')+' (Super Admin, viewing another org)'
+} : {id:null,name:'—',roleId:null,label:'—'});
+const role=()=>byId(CFG.roles,user().roleId) || (CFG.isPlatformAdmin ? {id:null,name:'Super Admin',config:true,publish:true,writeAll:true,scope:'all',desc:'',requireCommitOnEdit:false,allowExpertMode:true} : null);
+const version=()=>byId(CFG.versions,UI.versionId) || CFG.versions[0];
 
 /* real (non-Unassigned) members — planning views use these */
 const R  = ()=>CFG.regions.filter(x=>!x.unassigned);
@@ -1954,29 +1968,6 @@ function hideAuthGate(){
   document.getElementById('ctxbar').style.display = '';
   document.getElementById('wrap').style.display = '';
 }
-/* 2026-09-11 (real-use fix, reported live -- "the Super Admin bar disappears when
-   I select an organisation, so I can't switch back"): this is the escape hatch --
-   the ONLY UI path back to "My organization" once you've picked a specific org via
-   SAV. It was being rendered LAST in bootApp(), after renderFilteredTnLinks() and
-   render() -- so if either of those threw for whatever reason while loading a
-   DIFFERENT org's data (a data gap, a bug, anything), execution stopped before the
-   bar ever appeared, and a Super Admin was stuck with no way back short of manually
-   clearing localStorage. Fixed two ways: (1) the bar now renders FIRST, immediately
-   after module access is confirmed, before anything else that could fail; (2)
-   wrapped in its own try/catch so even a bug inside SAV.renderBar() itself can't
-   take the escape hatch down with it. */
-function _renderSavBarSafely(){
-  try{
-    if(typeof SAV==='undefined') return;
-    SAV.renderBar({
-      isSuperAdmin: CFG.isSuperAdmin,
-      loadOrganizations: CFG.loadAllOrganizations,
-      usersForOrg: (orgId)=> (CFG.users||[]).filter(u=>u.orgId===orgId)
-    });
-  }catch(e){
-    console.error('Super Admin toolbar failed to render -- the "switch back to My organization" escape hatch may be unavailable. This should never happen; please screenshot the console and report it.', e);
-  }
-}
 async function bootApp(){
   const { data:{ session } } = await sb.auth.getSession();
   if(!session){ showAuthGate(); return; }
@@ -1991,14 +1982,13 @@ async function bootApp(){
       try{
         await loadFromSupabase();
         if(!(await checkModuleAccess())) return;
-        _renderSavBarSafely();
-        try{
-          { const tnLinksEl = document.getElementById('tnLinks'); if(tnLinksEl) tnLinksEl.innerHTML = renderFilteredTnLinks(); }
-          hideAuthGate();
-          if(new URLSearchParams(location.search).get('page')==='boardreport'){ UI.page='boardreport'; }
-          render();
-          subscribeRealtime();
-        }catch(e3){ console.error('Post-load render failed, but the Super Admin bar is already up.', e3); }
+        { const tnLinksEl = document.getElementById('tnLinks'); if(tnLinksEl) tnLinksEl.innerHTML = renderFilteredTnLinks(); }
+        hideAuthGate();
+        if(new URLSearchParams(location.search).get('page')==='boardreport'){ UI.page='boardreport'; }
+        render();
+        SAV.renderBar({ isSuperAdmin: CFG.isSuperAdmin, loadOrganizations: CFG.loadAllOrganizations,
+          usersForOrg: (orgId)=> (CFG.users||[]).filter(u=>u.orgId===orgId) });
+        subscribeRealtime();
         toast('The cross-org view was stuck, so this reset back to "My organization." Re-select a specific org from the Super Admin bar if you still need it.');
         return;
       }catch(e2){
@@ -2012,25 +2002,31 @@ async function bootApp(){
     return;
   }
   if(!(await checkModuleAccess())) return;
-  _renderSavBarSafely();
-  try{
-    {
-      const tnLinksEl = document.getElementById('tnLinks'); if(tnLinksEl) tnLinksEl.innerHTML = renderFilteredTnLinks();
-    }
-    hideAuthGate();
-    /* 2026-09-03: Board report is no longer in Strategy's own nav (Reporting module item 16
-       follow-up) -- Reportus.html links here with ?page=boardreport since that's now the only
-       way in. Narrowly scoped to this one page id, not a general deep-link mechanism. */
-    if(new URLSearchParams(location.search).get('page')==='boardreport'){ UI.page='boardreport'; }
-    render();
-    subscribeRealtime();
-  }catch(e){
-    console.error('Post-load render failed, but the Super Admin bar is already up so you can still switch back.', e);
+  {
+    const tnLinksEl = document.getElementById('tnLinks'); if(tnLinksEl) tnLinksEl.innerHTML = renderFilteredTnLinks();
   }
+  hideAuthGate();
+  /* 2026-09-03: Board report is no longer in Strategy's own nav (Reporting module item 16
+     follow-up) -- Reportus.html links here with ?page=boardreport since that's now the only
+     way in. Narrowly scoped to this one page id, not a general deep-link mechanism. */
+  if(new URLSearchParams(location.search).get('page')==='boardreport'){ UI.page='boardreport'; }
+  render();
+  SAV.renderBar({
+    isSuperAdmin: CFG.isSuperAdmin,
+    loadOrganizations: CFG.loadAllOrganizations,
+    usersForOrg: (orgId)=> (CFG.users||[]).filter(u=>u.orgId===orgId)
+  });
+  subscribeRealtime();
 }
 /* stage a config change; user confirms through the impact registry */
 function stage(dim,action,memberName,apply){
   if(!canConfig()){ toast('Your role cannot change configuration.'); return; }
+  /* 2026-09-11 (real-use fix): stage() is the single point every Add/Remove/Replace
+     button in this file goes through (Gates, Regions, Pods, Reps, Streams, Segments,
+     etc.) -- it's the right place to enforce the Super Admin cross-org read-only lock,
+     not a blanket CSS freeze on the whole page (see shared/superAdminView.js's same-day
+     fix). gateWrite() toasts its own explanation when it returns false. */
+  if(CFG.isSuperAdmin && typeof SAV!=='undefined' && !SAV.gateWrite(action+' '+dim.toLowerCase())) return;
   UI.pending={impact:impactOf(dim,action,memberName),apply:apply};
   render();
 }
@@ -2207,25 +2203,54 @@ function pageAdmin(){
 
   if(UI.adminTab==='gates'){
     const c=chain(),iss=rateIssues();
-    h+=`<div class="note"><strong>How the chain works.</strong> Each gate converts from the one above it.
-      The first gate is the entry point and has no inbound rate. Reorder with the arrows — the engine re-resolves immediately.
-      A pass-through gate takes <b>100%</b>, never 0%.</div>`;
+    /* 2026-09-11 (real-use fix): if this org has zero gates -- the exact state that
+       caused last night's Strategy crash-loop -- this whole page used to crash too,
+       at exitGate().name a few lines below, right where the "Add gate"/preset buttons
+       live. That was a genuine dead end: the message telling you to come here to fix
+       it pointed at a page that was ALSO broken. Guarded here so this page is now
+       ALWAYS reachable and ALWAYS offers a way to add gates, regardless of count. */
+    const _exitG = exitGate();
+    /* 2026-09-11 (real-use fix): "if I'm looking at an MQL as super user but there
+       are three MQLs, is it a duplicate or a different org's?" -- show which org each
+       gate belongs to whenever viewing merged cross-org data ("All organizations"),
+       where that's genuinely ambiguous without it. Not shown in 'own'/single-org
+       views, where every row already belongs to the same org. */
+    const _showOrgCol = typeof SAV!=='undefined' && SAV.mode && SAV.mode()==='all';
+    const _orgName = oid => { const o=(CFG.allOrganizations||[]).find(x=>x.id===oid); return o?o.name:(oid?'Unknown org':'—'); };
+    if(!c.length){
+      h+=`<div class="note b"><strong>No gates are configured for this organization yet.</strong> Strategy needs at least one gate to compute anything. Click "Add gate" below, or use a starter preset from the "Gate naming presets" card underneath to get going quickly.</div>`;
+    } else {
+      h+=`<div class="note"><strong>How the chain works.</strong> Each gate converts from the one above it.
+        The first gate is the entry point and has no inbound rate. Reorder with the arrows — the engine re-resolves immediately.
+        A pass-through gate takes <b>100%</b>, never 0%.</div>`;
+    }
     if(iss.length) h+=`<div class="note b"><strong>${iss.length} rate issue${iss.length>1?'s':''}.</strong> ${iss.map(i=>(i.gate?esc(i.gate.name)+': ':'')+esc(i.msg)).join(' ')}</div>`;
+    /* 2026-09-11 (real-use fix): "be good to sort that column so we can bundle all
+       the organizations together" -- click the Org header to group by organization
+       (then order within each), click again to go back to the normal reorderable
+       chain view. Uses a display-only copy (.slice()) so this never mutates the
+       real CFG.gates order the engine actually resolves against -- only sort-by-order
+       (the default) writes through moveGate()'s up/down buttons. */
+    const _gatesDisplay = (_showOrgCol && UI.gatesSortByOrg)
+      ? CFG.gates.slice().sort((a,b)=> _orgName(a.orgId).localeCompare(_orgName(b.orgId)) || a.order-b.order)
+      : CFG.gates.sort((a,b)=>a.order-b.order);
     h+=`<div class="card"><h3>Gate set <span class="sp"></span>
       <span class="pill n">${c.length} active</span>
       <button class="btn sm pri" ${dis} onclick="addGate()">Add gate</button></h3>
       <div class="bd flush"><div class="scroll"><table ${ro}><thead><tr>
-        <th style="width:30px"></th><th>Gate name</th><th>Code</th><th class="n">Rate in</th>
-        <th class="n">Cum. to here</th><th>Role</th><th>Definition shown to users</th><th class="n">Order</th><th></th>
+        <th style="width:30px"></th><th>Gate name</th><th>Code</th>${_showOrgCol?`<th style="cursor:pointer" onclick="UI.gatesSortByOrg=!UI.gatesSortByOrg;render();" title="Click to ${UI.gatesSortByOrg?'go back to chain order':'group by organization'}">Org ${UI.gatesSortByOrg?'▾':'⇅'}</th>`:''}
+        <th class="n" title="The conversion rate INTO this gate from the previous one, as a percentage (e.g. 25 means 25% of the prior stage converts through). The entry gate has no inbound rate -- nothing converts into it.">Rate in (%) ⓘ</th>
+        <th class="n" title="Cumulative conversion rate from the entry gate all the way down to this one.">Cum. to here</th><th>Role</th><th>Definition shown to users</th><th class="n">Order</th><th></th>
       </tr></thead><tbody>`;
-    CFG.gates.sort((a,b)=>a.order-b.order).forEach((g,i)=>{
+    _gatesDisplay.forEach((g,i)=>{
       const isEntry=g.entry, cum=g.active?cumRate(g.id):null;
       h+=`<tr${g.active?'':' style="opacity:.45"'}>
         <td><span class="grab">⋮⋮</span></td>
         <td><input class="cel txt" value="${esc(g.name)}" ${dis} onchange="setIn('gates','${g.id}','name',this.value)"></td>
         <td><input class="cel txt" style="width:70px" value="${esc(g.code)}" ${dis} onchange="setIn('gates','${g.id}','code',this.value)"></td>
+        ${_showOrgCol?`<td class="mini">${esc(_orgName(g.orgId))}</td>`:''}
         <td class="n">${isEntry?'<span class="mini">entry</span>':
-          `<input class="cel w ${g.rate===0?'bad':''}" value="${(g.rate*100).toFixed(0)}" ${dis} onchange="setIn('gates','${g.id}','rate',this.value,'pct')">`}</td>
+          `<input class="cel w ${g.rate===0?'bad':''}" value="${(g.rate*100).toFixed(0)}" ${dis} onchange="setIn('gates','${g.id}','rate',this.value,'pct')" title="Percent -- e.g. 25 means 25%">%`}</td>
         <td class="n calc">${isEntry?'100%':F.p(cum,2)}</td>
         <td>${isEntry?'<span class="pill v">Entry</span>':(i===CFG.gates.length-1?'<span class="pill ok">Target</span>':'<span class="pill n">Stage</span>')}</td>
         <td><input class="cel txt" style="width:260px" value="${esc(g.note||'')}" ${dis} onchange="setIn('gates','${g.id}','note',this.value)"></td>
@@ -2237,8 +2262,8 @@ function pageAdmin(){
     });
     h+=`</tbody></table></div></div></div>`;
     h+=`<div class="grid g2"><div class="card"><h3>Chain preview</h3><div class="bd">
-      ${svgFunnel(Object.values(backward(100)).reverse().reverse(),c.map(g=>g.name),600)}
-      <div class="mini" style="margin-top:6px">Volumes required to land <b>100</b> at ${esc(exitGate().name)}.</div>
+      ${c.length?svgFunnel(Object.values(backward(100)).reverse().reverse(),c.map(g=>g.name),600):'<p class="mini">Add at least one gate to see a preview.</p>'}
+      <div class="mini" style="margin-top:6px">${_exitG?('Volumes required to land <b>100</b> at '+esc(_exitG.name)+'.'):'Add at least one gate to compute required volumes.'}</div>
     </div></div>
     <div class="card"><h3>Gate naming presets</h3><div class="bd">
       <p class="mini" style="margin:0 0 9px">Different organisations gate differently. Load a preset, then rename freely.</p>
@@ -5368,32 +5393,15 @@ function render(){
      in-page message instead of breaking navigation entirely. Sidebar/topnav above
      this line don't depend on gate data, so they still render normally, letting the
      user navigate to Admin & config -> Gates to fix it themselves. */
-  /* 2026-09-11 (real-use fix, Stef's own proposed shape -- "a flag that says this
-     function cannot be used unless applied against a single organization"): every
-     page below except Admin & config and Relationships computes a single-org funnel
-     chain (entryGate/exitGate, forward/backward projections, drivers, segments,
-     snapshots...). "All organizations" merges every org's independent funnel into
-     one array -- there is no meaningful single chain across orgs, so these pages
-     either crashed or silently rendered empty/wrong numbers. Rather than keep
-     chasing that page by page, gate it explicitly: pick a real org (or "My
-     organization") to use anything except the flat config/list pages below. */
-  const MERGED_VIEW_SAFE_PAGES = ['admin','relationships'];
-  const _mergedViewBlocked = typeof SAV!=='undefined' && SAV.mode && SAV.mode()==='all' && !MERGED_VIEW_SAFE_PAGES.includes(p.id);
   let mainHtml;
-  if(_mergedViewBlocked){
-    mainHtml = '<div class="card" style="padding:24px;max-width:640px;"><h3>Pick one organization to use this page</h3>'+
-      '<p>'+esc(p.label)+' computes a single funnel (rates, drivers, projections) for one organization at a time -- "All organizations" merges every org\'s data together, which this page can\'t meaningfully calculate against.</p>'+
-      '<p>Use the Super Admin bar above to switch to <b>My organization</b> or <b>Choose an organization…</b>, or stay in "All organizations" and use <b>Admin &amp; config</b> or <b>Relationships</b>, which don\'t need a single org.</p></div>';
-  } else {
-    try{
-      mainHtml = p.fn() + (UI.helpOpen?helpPanelHtml():'');
-    }catch(e){
-      console.error('Page render failed for "'+p.id+'"', e);
-      mainHtml = '<div class="card" style="padding:24px;max-width:640px;"><h3>This page couldn\'t load</h3>'+
-        '<p>'+esc(e && e.message || String(e))+'</p>'+
-        '<p>If this keeps happening on every page, it likely means this organization has no active funnel gates configured yet -- go to <b>Admin &amp; config → Gates</b> to add at least one, or contact your Super Admin.</p>'+
-        '<p class="sub">Page: '+esc(p.id)+'</p></div>';
-    }
+  try{
+    mainHtml = p.fn() + (UI.helpOpen?helpPanelHtml():'');
+  }catch(e){
+    console.error('Page render failed for "'+p.id+'"', e);
+    mainHtml = '<div class="card" style="padding:24px;max-width:640px;"><h3>This page couldn\'t load</h3>'+
+      '<p>'+esc(e && e.message || String(e))+'</p>'+
+      '<p>If this keeps happening on every page, it likely means this organization has no active funnel gates configured yet -- go to <b>Admin &amp; config → Gates</b> to add at least one, or contact your Super Admin.</p>'+
+      '<p class="sub">Page: '+esc(p.id)+'</p></div>';
   }
   document.getElementById('main').innerHTML=mainHtml;
   document.getElementById('layer').innerHTML=impactPanel()+overlayPanel()+pendingEditPanel()+askAlexPanel();

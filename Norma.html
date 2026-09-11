@@ -2760,20 +2760,22 @@ function pageIntegrations(){
           query param, or an <code>X-Trigger-Token</code> header). Not stored anywhere retrievable after you leave this page.</p></div>`:''}
     </div></div>`;
   h += outboundWebhooksPanelHtml();
-  h += `<div class="card"><h3>Ask Alex <span class="sp"></span>
+  h += `<div class="card"><h3>Ask Alec <span class="sp"></span>
       <span class="pill ${CFG.aiScreenInterpreterEnabled?'ok':'n'}">${CFG.aiScreenInterpreterEnabled?'On':'Off'}</span></h3>
     <div class="bd">
-      <p class="mini" style="margin:0 0 9px">Phase 1 (backlog item 22): an "Ask Alex" button on Strategy's Dashboard that
+      <p class="mini" style="margin:0 0 9px">Phase 1 (backlog item 22): an "Ask Alec" button on Strategy's Dashboard that
         sends a small summary of the numbers already on screen -- fiscal-year totals and counts, never individual
         campaigns, contacts or deal records -- to this org's chosen AI provider (the same Active LLM provider
         configured on the AI providers page) and shows back a plain-language explanation. Off by default, since this
         sends a summary of live org data to a third-party provider -- turning it on is an explicit choice, same as
         every other AI-touching feature in this suite.</p>
       <label><input type="checkbox" ${CFG.aiScreenInterpreterEnabled?'checked':''}
-        onchange="setPath('aiScreenInterpreterEnabled',this.checked)"> Enabled — show the Ask Alex button on Strategy's Dashboard</label>
+        onchange="setPath('aiScreenInterpreterEnabled',this.checked)"> Enabled — show the Ask Alec button on Strategy's Dashboard</label>
       <p class="mini" style="margin-top:10px">The prompt and exactly which fields get sent live in North's own repo
         (<code>skills/explain-strategy-dashboard.json</code>), not buried in this page's code -- edit that file to
-        change what Alex is told or shown.</p>
+        change what Alec is told or shown. (2026-09-11: renamed Alex -> Alec/"Smart Alec" in the UI/prompt only --
+        internal function/state names (askAlex(), UI.askAlexOpen, etc.) were deliberately left alone to avoid
+        touching every call site for a cosmetic rename.)</p>
     </div></div>`;
   return h;
 }

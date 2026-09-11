@@ -2652,8 +2652,11 @@ function pageAdmin(){
 /* ---------- admin mutations ---------- */
 function addGate(){
   const max=Math.max.apply(null,CFG.gates.map(g=>g.order));
+  /* 2026-09-11 (data-safety fix, same class as preset() above): capture the org
+     being edited at stage/click time, not save time. */
+  const _newGateOrgId = (typeof _savOrgFilter!=='undefined' && _savOrgFilter!==null) ? _savOrgFilter : _orgId;
   stage('Gates','add','a new gate',()=>{
-    CFG.gates.push({id:uid('g'),name:'New gate',code:'NEW',order:max-5,entry:false,rate:0.5,active:true,note:''});
+    CFG.gates.push({id:uid('g'),orgId:_newGateOrgId,name:'New gate',code:'NEW',order:max-5,entry:false,rate:0.5,active:true,note:''});
     CFG.gates.sort((a,b)=>a.order-b.order).forEach((g,i)=>{g.order=(i+1)*10;g.entry=(i===0);});
   });
 }
@@ -2684,13 +2687,22 @@ const PRESETS={
 };
 function preset(k){
   const p=PRESETS[k];
+  /* 2026-09-11 (data-safety fix -- found investigating a real incident: this exact
+     gap wiped Tac-Tik's live gates and left the replacement stranded under a
+     different org). The objects built below never set .orgId, so upsertRows()'s
+     SAV.stampOrgId() fallback used whatever the AMBIENT org was at SAVE time
+     (debounced, up to ~900ms+ after the click, and after any navigation/reload in
+     between) instead of the org actually being edited when the button was clicked.
+     Capture the org id NOW, at stage time, and stamp it explicitly onto every
+     gate object -- same fix as addGate() below. */
+  const _presetOrgId = (typeof _savOrgFilter!=='undefined' && _savOrgFilter!==null) ? _savOrgFilter : _orgId;
   stage('Gates','replace',p.length+'-gate preset',()=>{
     /* Reuse the existing gate id wherever the code matches, so stored history
        keeps resolving. Only genuinely new gates get a fresh id. */
     const prior={}; CFG.gates.forEach(g=>prior[g.code]=g);
     CFG.gates=p.map((r,i)=>{
       const keep=prior[r[1]];
-      return {id:keep?keep.id:uid('g'),name:r[0],code:r[1],order:(i+1)*10,
+      return {id:keep?keep.id:uid('g'),orgId:_presetOrgId,name:r[0],code:r[1],order:(i+1)*10,
               entry:i===0,rate:r[2],active:true,note:keep?keep.note:''};
     });
   });

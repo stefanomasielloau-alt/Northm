@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<!-- 2026-09-11: self-registers this tab's browsing-context name on load. Fixes a real gap Stef caught -- target="tool_<id>" links only reuse a tab the browser already knows by that name (one opened via window.open/target= from elsewhere); a tab that's the actual entry point (typed URL, bookmark, browser-restored) has no name yet, so even its OWN brand-mark link back to itself would open a duplicate instead of reloading in place. Assigning window.name here (only if unset, so a name the browser already gave this tab via target= is never clobbered) makes every module self-aware the same way, regardless of how the tab was opened. -->
+<script>window.name = window.name || 'tool_Ordo';</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Strategy — Marketing Planning &amp; Funnel Calculation</title>

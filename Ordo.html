@@ -3943,7 +3943,15 @@ async function askAlex(){
     if(!text) throw new Error('AI returned nothing usable.');
     UI.askAlexStatus='done'; UI.askAlexText=text;
   }catch(e){
-    UI.askAlexStatus='error'; UI.askAlexError=String((e&&e.message)||e);
+    // 2026-09-11: e (or e.message, if the backend's j.error was itself an
+    // object rather than a string -- see hub_local_api.py's ai_generate fix
+    // same night) could still be a non-string in some edge case; String() on
+    // a plain object silently produces "[object Object]" with zero
+    // diagnostic value, so fall back to JSON.stringify for anything that
+    // isn't already a usable string.
+    UI.askAlexStatus='error';
+    const raw = (e&&e.message)!=null ? e.message : e;
+    UI.askAlexError = typeof raw==='string' ? raw : (()=>{ try{ return JSON.stringify(raw); }catch(_e){ return String(raw); } })();
   }
   render();
 }

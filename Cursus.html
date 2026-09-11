@@ -1005,7 +1005,7 @@ function renderFilteredTnLinks(){
     const t = (m.desc||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
     return m.id===THIS_MODULE
       ? `<span class="tn-link on" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</span>`
-      : `<a class="tn-link" href="${m.id}.html" target="tool_North" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
+      : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
   }).join('') + (navVisible('Contact') ? '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">AH</span>AH</a>' : '');
 }
 async function checkModuleAccess(){
@@ -3335,7 +3335,7 @@ function pageEffectiveness(){
 }
 
 function pagePartners(){
-  let h=`<div style="padding:0 0 4px"><a href="Norma.html" target="tool_North" style="font-size:12px;color:var(--ink-2);text-decoration:none">&larr; Back to Configuration</a></div>`;
+  let h=`<div style="padding:0 0 4px"><a href="Norma.html" target="tool_Norma" style="font-size:12px;color:var(--ink-2);text-decoration:none">&larr; Back to Configuration</a></div>`;
   h+=`<div class="phead"><div><h1>Partners</h1>
     <p>Partners get the same shape of metrics a salesperson gets in this app elsewhere: a share of a parent entity's
       economics, rolled up into attributed numbers — based on each partner's per-campaign allocation (role, budget
@@ -3639,7 +3639,7 @@ function renderTnModuleLinks(){
     const t = (m.desc||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
     return m.id===THIS_MODULE
       ? `<span class="tn-link on" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</span>`
-      : `<a class="tn-link" href="${m.id}.html" target="tool_North" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
+      : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
   }).join('') + '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">AH</span>AH</a>';
 }
 function tnSearchResults(q){
@@ -3659,7 +3659,7 @@ function tnSearch(q){
 window.tnSearch=tnSearch;
 function tnPick(i){
   const m=_tnResultList[i]; if(!m) return;
-  window.open(m.id+'.html','tool_North');
+  window.open(m.id+'.html','tool_'+m.id);
   document.getElementById('tnResults').innerHTML='';
   document.getElementById('tnSearchInput').value='';
 }
@@ -3670,7 +3670,7 @@ window.tnPick=tnPick;
 // back to a bare (logged-out) open if getSession() fails for any reason.
 const CONTACT_URL = 'https://hub-backend-psi.vercel.app';
 async function openContact(){
-  const _tnWin = window.open('', 'tool_AH'); // opened synchronously so the click gesture still counts once the SSO token is ready (see fix note below). Dedicated name (not 'tool_North', shared by North's own inter-module links) so AH always reuses the same tab regardless of entry point -- see 2026-09-10 tab-reuse fix.
+  const _tnWin = window.open('', 'tool_AH'); // opened synchronously so the click gesture still counts once the SSO token is ready (see fix note below). Dedicated name of its own (2026-09-11: every module link now targets its own tool_<id> name too, instead of one shared tool_North that let clicking between modules silently overwrite whatever tab you were on -- AH keeps a separate name so it's never caught up in that) so AH always reuses the same tab regardless of entry point -- see 2026-09-10/11 tab-reuse fixes.
   // 2026-09-02: was a SILENT fall-through to a bare (logged-out) Contact
   // open whenever getSession() failed or returned no token -- looked
   // exactly like a normal login screen, no error, which is what made
@@ -3720,7 +3720,7 @@ async function openContact(){
   }catch(e){ toast('Could not start AH sign-in: '+(e&&e.message?e.message:'unknown error')); }
   // 2026-09-10 fix: window.open(url,...) used to run AFTER the 'await sb.auth.getSession()'
   // above -- by then the click is no longer a fresh user gesture, so some browsers
-  // silently block the popup or just reuse/leave a stale already-open 'tool_North'
+  // silently block the popup or just reuse/leave a stale already-open module tab
   // window sitting on whatever it last showed (e.g. a bare logged-out Hub page) --
   // which looks exactly like AH "asking to log in again" even though the SSO link
   // itself was built correctly. Opening a blank window synchronously (right when the

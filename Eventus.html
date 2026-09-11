@@ -829,6 +829,23 @@ function hideAuthGate(){
   document.getElementById('topnav').style.display = '';
   document.getElementById('wrap').style.display = '';
 }
+/* 2026-09-11 (real-use fix, reported live -- "the Super Admin bar disappears when
+   I select an organisation, so I can't switch back"): renders the escape-hatch
+   toolbar FIRST, before anything else that could fail, and wrapped in its own
+   try/catch. Same fix applied to every SAV-wired module this same night -- see
+   Ordo.html's copy of this comment for the full writeup. */
+function _renderSavBarSafely(){
+  try{
+    if(typeof SAV==='undefined') return;
+    SAV.renderBar({
+      isSuperAdmin: CFG.isSuperAdmin,
+      loadOrganizations: CFG.loadAllOrganizations,
+      usersForOrg: (orgId)=> (CFG.orgUsers||[]).filter(u=>u.orgId===orgId)
+    });
+  }catch(e){
+    console.error('Super Admin toolbar failed to render -- the "switch back to My organization" escape hatch may be unavailable. This should never happen; please screenshot the console and report it.', e);
+  }
+}
 async function bootApp(){
   const { data:{ session } } = await sb.auth.getSession();
   if(!session){ showAuthGate(); return; }
@@ -843,13 +860,14 @@ async function bootApp(){
       try{
         await loadFromSupabase();
         if(!(await checkModuleAccess())) return;
-        { const tnLinksEl = document.getElementById('tnLinks'); if(tnLinksEl) tnLinksEl.innerHTML = renderFilteredTnLinks(); }
-        hideAuthGate();
-        applyHashRoute();
-        render();
-        SAV.renderBar({ isSuperAdmin: CFG.isSuperAdmin, loadOrganizations: CFG.loadAllOrganizations,
-          usersForOrg: (orgId)=> (CFG.orgUsers||[]).filter(u=>u.orgId===orgId) });
-        subscribeRealtime();
+        _renderSavBarSafely();
+        try{
+          { const tnLinksEl = document.getElementById('tnLinks'); if(tnLinksEl) tnLinksEl.innerHTML = renderFilteredTnLinks(); }
+          hideAuthGate();
+          applyHashRoute();
+          render();
+          subscribeRealtime();
+        }catch(e3){ console.error('Post-load render failed, but the Super Admin bar is already up.', e3); }
         toast('The cross-org view was stuck, so this reset back to "My organization." Re-select a specific org from the Super Admin bar if you still need it.');
         return;
       }catch(e2){
@@ -863,18 +881,18 @@ async function bootApp(){
     return;
   }
   if(!(await checkModuleAccess())) return;
-  {
-    const tnLinksEl = document.getElementById('tnLinks'); if(tnLinksEl) tnLinksEl.innerHTML = renderFilteredTnLinks();
+  _renderSavBarSafely();
+  try{
+    {
+      const tnLinksEl = document.getElementById('tnLinks'); if(tnLinksEl) tnLinksEl.innerHTML = renderFilteredTnLinks();
+    }
+    hideAuthGate();
+    applyHashRoute();
+    render();
+    subscribeRealtime();
+  }catch(e){
+    console.error('Post-load render failed, but the Super Admin bar is already up so you can still switch back.', e);
   }
-  hideAuthGate();
-  applyHashRoute();
-  render();
-  SAV.renderBar({
-    isSuperAdmin: CFG.isSuperAdmin,
-    loadOrganizations: CFG.loadAllOrganizations,
-    usersForOrg: (orgId)=> (CFG.orgUsers||[]).filter(u=>u.orgId===orgId)
-  });
-  subscribeRealtime();
 }
 
 /* Deep link from Campaign Planning: Eventus.html#event=<id> opens straight into that event's

@@ -1954,6 +1954,29 @@ function hideAuthGate(){
   document.getElementById('ctxbar').style.display = '';
   document.getElementById('wrap').style.display = '';
 }
+/* 2026-09-11 (real-use fix, reported live -- "the Super Admin bar disappears when
+   I select an organisation, so I can't switch back"): this is the escape hatch --
+   the ONLY UI path back to "My organization" once you've picked a specific org via
+   SAV. It was being rendered LAST in bootApp(), after renderFilteredTnLinks() and
+   render() -- so if either of those threw for whatever reason while loading a
+   DIFFERENT org's data (a data gap, a bug, anything), execution stopped before the
+   bar ever appeared, and a Super Admin was stuck with no way back short of manually
+   clearing localStorage. Fixed two ways: (1) the bar now renders FIRST, immediately
+   after module access is confirmed, before anything else that could fail; (2)
+   wrapped in its own try/catch so even a bug inside SAV.renderBar() itself can't
+   take the escape hatch down with it. */
+function _renderSavBarSafely(){
+  try{
+    if(typeof SAV==='undefined') return;
+    SAV.renderBar({
+      isSuperAdmin: CFG.isSuperAdmin,
+      loadOrganizations: CFG.loadAllOrganizations,
+      usersForOrg: (orgId)=> (CFG.users||[]).filter(u=>u.orgId===orgId)
+    });
+  }catch(e){
+    console.error('Super Admin toolbar failed to render -- the "switch back to My organization" escape hatch may be unavailable. This should never happen; please screenshot the console and report it.', e);
+  }
+}
 async function bootApp(){
   const { data:{ session } } = await sb.auth.getSession();
   if(!session){ showAuthGate(); return; }
@@ -1968,13 +1991,14 @@ async function bootApp(){
       try{
         await loadFromSupabase();
         if(!(await checkModuleAccess())) return;
-        { const tnLinksEl = document.getElementById('tnLinks'); if(tnLinksEl) tnLinksEl.innerHTML = renderFilteredTnLinks(); }
-        hideAuthGate();
-        if(new URLSearchParams(location.search).get('page')==='boardreport'){ UI.page='boardreport'; }
-        render();
-        SAV.renderBar({ isSuperAdmin: CFG.isSuperAdmin, loadOrganizations: CFG.loadAllOrganizations,
-          usersForOrg: (orgId)=> (CFG.users||[]).filter(u=>u.orgId===orgId) });
-        subscribeRealtime();
+        _renderSavBarSafely();
+        try{
+          { const tnLinksEl = document.getElementById('tnLinks'); if(tnLinksEl) tnLinksEl.innerHTML = renderFilteredTnLinks(); }
+          hideAuthGate();
+          if(new URLSearchParams(location.search).get('page')==='boardreport'){ UI.page='boardreport'; }
+          render();
+          subscribeRealtime();
+        }catch(e3){ console.error('Post-load render failed, but the Super Admin bar is already up.', e3); }
         toast('The cross-org view was stuck, so this reset back to "My organization." Re-select a specific org from the Super Admin bar if you still need it.');
         return;
       }catch(e2){
@@ -1988,21 +2012,21 @@ async function bootApp(){
     return;
   }
   if(!(await checkModuleAccess())) return;
-  {
-    const tnLinksEl = document.getElementById('tnLinks'); if(tnLinksEl) tnLinksEl.innerHTML = renderFilteredTnLinks();
+  _renderSavBarSafely();
+  try{
+    {
+      const tnLinksEl = document.getElementById('tnLinks'); if(tnLinksEl) tnLinksEl.innerHTML = renderFilteredTnLinks();
+    }
+    hideAuthGate();
+    /* 2026-09-03: Board report is no longer in Strategy's own nav (Reporting module item 16
+       follow-up) -- Reportus.html links here with ?page=boardreport since that's now the only
+       way in. Narrowly scoped to this one page id, not a general deep-link mechanism. */
+    if(new URLSearchParams(location.search).get('page')==='boardreport'){ UI.page='boardreport'; }
+    render();
+    subscribeRealtime();
+  }catch(e){
+    console.error('Post-load render failed, but the Super Admin bar is already up so you can still switch back.', e);
   }
-  hideAuthGate();
-  /* 2026-09-03: Board report is no longer in Strategy's own nav (Reporting module item 16
-     follow-up) -- Reportus.html links here with ?page=boardreport since that's now the only
-     way in. Narrowly scoped to this one page id, not a general deep-link mechanism. */
-  if(new URLSearchParams(location.search).get('page')==='boardreport'){ UI.page='boardreport'; }
-  render();
-  SAV.renderBar({
-    isSuperAdmin: CFG.isSuperAdmin,
-    loadOrganizations: CFG.loadAllOrganizations,
-    usersForOrg: (orgId)=> (CFG.users||[]).filter(u=>u.orgId===orgId)
-  });
-  subscribeRealtime();
 }
 /* stage a config change; user confirms through the impact registry */
 function stage(dim,action,memberName,apply){

@@ -1059,6 +1059,27 @@ function isNetworkError(e){
   if(e.code || e.details) return false; // has a Postgrest/Supabase error shape -- not a network failure
   return e.name==='TypeError' || /fetch|network|Network/i.test((e.message||'')+'');
 }
+/* 2026-09-11 (real-use fix, reported live -- "the Super Admin bar disappears when
+   I select an organisation, so I can't switch back"): this is the only UI path back
+   to "My organization" once a specific org is picked via SAV. It used to render LAST,
+   after renderFilteredTnLinks()/render() -- so a failure in either of those, while
+   loading a DIFFERENT org's data, left a Super Admin stuck with no way back short of
+   clearing localStorage by hand. Now renders FIRST, right after module access is
+   confirmed, and wrapped in its own try/catch so a bug inside it can't take the
+   escape hatch down too. Same fix applied to Ordo.html and every other SAV-wired
+   module this same night. */
+function _renderSavBarSafely(){
+  try{
+    if(typeof SAV==='undefined') return;
+    SAV.renderBar({
+      isSuperAdmin: CFG.isSuperAdmin,
+      loadOrganizations: CFG.loadAllOrganizations,
+      usersForOrg: (orgId)=> (CFG.orgUsers||[]).filter(u=>u.orgId===orgId)
+    });
+  }catch(e){
+    console.error('Super Admin toolbar failed to render -- the "switch back to My organization" escape hatch may be unavailable. This should never happen; please screenshot the console and report it.', e);
+  }
+}
 async function bootApp(){
   const { data:{ session } } = await sb.auth.getSession();
   if(!session){ showAuthGate(); return; }
@@ -1069,6 +1090,7 @@ async function bootApp(){
     if(isNetworkError(e) && loadLocal()){
       /* Offline-only fallback: never overwrites a good server load, only fills in for one
          that couldn't happen at all -- see loadLocal()/saveLocal() above. */
+      _renderSavBarSafely();
       hideAuthGate();
       applyHashRoute();
       render();
@@ -1093,13 +1115,14 @@ async function bootApp(){
       try{
         await loadFromSupabase();
         if(!(await checkModuleAccess())) return;
-        { const tnLinksEl = document.getElementById('tnLinks'); if(tnLinksEl) tnLinksEl.innerHTML = renderFilteredTnLinks(); }
-        hideAuthGate();
-        applyHashRoute();
-        render();
-        SAV.renderBar({ isSuperAdmin: CFG.isSuperAdmin, loadOrganizations: CFG.loadAllOrganizations,
-          usersForOrg: (orgId)=> (CFG.orgUsers||[]).filter(u=>u.orgId===orgId) });
-        scheduleSupabaseSave();
+        _renderSavBarSafely();
+        try{
+          { const tnLinksEl = document.getElementById('tnLinks'); if(tnLinksEl) tnLinksEl.innerHTML = renderFilteredTnLinks(); }
+          hideAuthGate();
+          applyHashRoute();
+          render();
+          scheduleSupabaseSave();
+        }catch(e3){ console.error('Post-load render failed, but the Super Admin bar is already up.', e3); }
         toast('The cross-org view was stuck and slow, so this reset back to "My organization." Re-select a specific org from the Super Admin bar if you still need it.');
         return;
       }catch(e2){
@@ -1113,20 +1136,18 @@ async function bootApp(){
     return;
   }
   if(!(await checkModuleAccess())) return;
-  {
-    const tnLinksEl = document.getElementById('tnLinks'); if(tnLinksEl) tnLinksEl.innerHTML = renderFilteredTnLinks();
+  _renderSavBarSafely();
+  try{
+    {
+      const tnLinksEl = document.getElementById('tnLinks'); if(tnLinksEl) tnLinksEl.innerHTML = renderFilteredTnLinks();
+    }
+    hideAuthGate();
+    applyHashRoute();
+    render();
+    subscribeRealtime();
+  }catch(e){
+    console.error('Post-load render failed, but the Super Admin bar is already up so you can still switch back.', e);
   }
-  hideAuthGate();
-  applyHashRoute();
-  render();
-  /* item 68 (2026-09-10): Super Admin cross-org view bar -- no-ops entirely for anyone
-     who isn't CFG.isSuperAdmin, so this has zero effect for regular users. */
-  SAV.renderBar({
-    isSuperAdmin: CFG.isSuperAdmin,
-    loadOrganizations: CFG.loadAllOrganizations,
-    usersForOrg: (orgId)=> (CFG.orgUsers||[]).filter(u=>u.orgId===orgId)
-  });
-  subscribeRealtime();
 }
 
 /* ---------- CRUD ---------- */

@@ -176,18 +176,27 @@
       bar.style.cssText = 'position:sticky;top:0;z-index:99999;display:flex;flex-wrap:wrap;gap:8px;align-items:center;'+
         'padding:6px 12px;font:13px system-ui,sans-serif;box-shadow:0 1px 3px rgba(0,0,0,.3);'+
         (editing ? 'background:#7a1f1f;color:#fff;' : (crossOrg ? 'background:#8a6400;color:#fff;' : 'background:#1f2d3a;color:#cfe0ee;'));
+      /* 2026-09-11 (visibility fix): these <select>s inherit the bar's white text color
+         (see bar.style.cssText above) but never had their own background set -- a native
+         <select>'s closed-state background defaults to the OS/browser's own (usually white),
+         which combined with inherited white text made every option invisible ("all white,
+         can't see what I'm selecting", reported live). Explicit background+color fixes the
+         closed control; the open dropdown list itself is native browser chrome outside CSS's
+         reach in most browsers, but that one always renders with its own readable OS colors
+         regardless of this page's styles. */
+      const SEL_STYLE = 'background:#fff;color:#111;border-radius:4px;border:1px solid rgba(255,255,255,.5);padding:2px 4px;';
       bar.innerHTML =
         '<b>Super Admin view:</b>'+
-        '<select id="savModeSel">'+
+        `<select id="savModeSel" style="${SEL_STYLE}">`+
           `<option value="own" ${ctx.mode==='own'?'selected':''}>My organization</option>`+
           `<option value="all" ${ctx.mode==='all'?'selected':''}>All organizations</option>`+
           `<option value="org" ${(ctx.mode==='org'||ctx.mode==='user')?'selected':''}>Choose an organization…</option>`+
         '</select>'+
         `<span id="savOrgWrap" style="display:${(ctx.mode==='org'||ctx.mode==='user')?'inline':'none'}">`+
-          `<select id="savOrgSel"><option value="">Select org…</option>${orgOptions}</select>`+
+          `<select id="savOrgSel" style="${SEL_STYLE}"><option value="">Select org…</option>${orgOptions}</select>`+
         '</span>'+
         `<span id="savUserWrap" style="display:${(ctx.mode==='org'||ctx.mode==='user')&&ctx.orgId?'inline':'none'}">`+
-          `→ <select id="savUserSel">${userOptions}</select>`+
+          `→ <select id="savUserSel" style="${SEL_STYLE}">${userOptions}</select>`+
         '</span>'+
         ((crossOrg && ctx.mode!=='all') ? `<button id="savEditBtn" style="margin-left:auto;font-weight:700;cursor:pointer;padding:4px 10px;border-radius:4px;border:1px solid rgba(255,255,255,.5);background:transparent;color:inherit;">${editing?'✏️ Editing enabled — click to lock':'🔒 Read-only — click to enable editing'}</button>` : '') +
         (crossOrg ? `<span style="opacity:.9;${ctx.mode==='all'?'margin-left:auto;':''}">${ctx.mode==='all'?'Viewing every organization merged together — always read-only. Pick a specific organization to edit its data.':'Viewing as if you belonged to this organization.'}</span>` : '');
@@ -230,12 +239,20 @@
       const editBtn = document.getElementById('savEditBtn');
       if(editBtn) editBtn.onclick = function(){ SAV.setEditing(!ctx.editing); };
 
-      // Single point of control for "read-only": dim + freeze the module's own content
-      // area rather than trusting every scattered input/button to check canEdit() itself.
+      /* 2026-09-11 (real-use fix, reported live): this used to also set
+         pointerEvents='none' on the whole content area, which blocks EVERY click --
+         not just edits, but plain navigation, expanding a row, opening a tab, drilling
+         into an item to just look at it. That defeated the actual purpose of a
+         Super Admin's cross-org VIEW. The real write protection was never this CSS --
+         it's SAV.canEdit()/gateWrite(), checked inside upsertRows()/deleteRow() and
+         (as of today) inside stage() itself for every Add/Remove action -- so removing
+         the pointer-events freeze doesn't open up anything that wasn't already blocked
+         at the point of the actual database write. Kept the dimming as a visual "this
+         is read-only" cue, just not one that also disables clicking around. */
       const target = document.querySelector(lockSel);
       if(target){
-        if(crossOrg && !editing){ target.style.pointerEvents='none'; target.style.opacity='0.75'; target.setAttribute('aria-disabled','true'); }
-        else { target.style.pointerEvents=''; target.style.opacity=''; target.removeAttribute('aria-disabled'); }
+        if(crossOrg && !editing){ target.style.opacity='0.75'; target.setAttribute('aria-disabled','true'); }
+        else { target.style.opacity=''; target.removeAttribute('aria-disabled'); }
       }
     }
   };

@@ -3847,6 +3847,28 @@ const BOARD_REPORT_AI_PROMPT = "You are writing the \"what changed this period\"
    error, exactly like Cursus's document-ingest AI path. Reads UI._brCtx, set fresh by
    pageBoardReport() itself on every render while this page is open, so there's no duplicate
    KPI-computation logic to keep in sync here. */
+/* 2026-09-11: without this, /admin/ai-generate always fell back to Hub-Backend's
+   raw env-var default provider (Gemini, from the original setup) regardless of
+   which provider is marked Active on Norma's LLM providers page -- Stef caught
+   this when Config clearly said Anthropic/Claude but the error Ask Alec surfaced
+   was Gemini's own wording. Looked up fresh (not loaded into CFG at boot) to keep
+   this a small, self-contained fix rather than touching bootApp's data-loading.
+   Maps Norma's provider "kind" label to the lowercase key hub_local_api.py's
+   _call_llm() expects; Azure OpenAI/Other aren't supported by that function, so
+   those are left as a no-op (falls back to Hub-Backend's own default, same as
+   before this fix) rather than guessing. */
+const LLM_KIND_TO_PROVIDER = {'Anthropic':'anthropic','OpenAI':'openai','Google Gemini':'gemini'};
+async function activeLlmProviderOverride(){
+  try{
+    const ambientOrgId = (typeof _savOrgFilter!=='undefined' && _savOrgFilter!==null) ? _savOrgFilter : _orgId;
+    const { data, error } = await sb.from('llm_providers').select('kind,model').eq('org_id',ambientOrgId).eq('enabled',true).limit(1).maybeSingle();
+    if(error || !data) return {};
+    const provider = LLM_KIND_TO_PROVIDER[data.kind];
+    if(!provider) return {};
+    return { provider, model: data.model || undefined };
+  }catch(e){ return {}; }
+}
+
 async function generateBoardReportAiNarrative(){
   UI.brAi = { status:'loading', text:'', error:'' };
   render();
@@ -3854,9 +3876,10 @@ async function generateBoardReportAiNarrative(){
     const { data } = await sb.auth.getSession();
     const token = data && data.session && data.session.access_token;
     if(!token) throw new Error('Your own North session has expired -- sign in again.');
+    const { provider, model } = await activeLlmProviderOverride();
     const resp = await fetch(CONTACT_URL+'/admin/ai-generate', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ token, prompt:BOARD_REPORT_AI_PROMPT, context:UI._brCtx||'' })
+      body: JSON.stringify({ token, prompt:BOARD_REPORT_AI_PROMPT, context:UI._brCtx||'', provider, model })
     });
     const j = await resp.json().catch(()=>({}));
     if(resp.status===501){ UI.brAi={status:'unavailable',text:'',error:j.error||'AI provider not configured yet.'}; render(); return; }
@@ -3934,9 +3957,10 @@ async function askAlex(){
     const { data } = await sb.auth.getSession();
     const token = data && data.session && data.session.access_token;
     if(!token) throw new Error('Your own North session has expired -- sign in again.');
+    const { provider, model } = await activeLlmProviderOverride();
     const resp = await fetch(CONTACT_URL+'/admin/ai-generate', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ token, prompt:skill.instructions, context:JSON.stringify(filtered) })
+      body: JSON.stringify({ token, prompt:skill.instructions, context:JSON.stringify(filtered), provider, model })
     });
     const j = await resp.json().catch(()=>({}));
     if(resp.status===501){ UI.askAlexStatus='unavailable'; UI.askAlexError=j.error||'AI provider not configured yet.'; render(); return; }

@@ -336,6 +336,7 @@ function go(page){
   if(page==='hubfeedback' && !UI.hubFeedbackLoaded && !UI.hubFeedbackLoading) loadHubFeedback();
   if(page==='hubcompanies' && !UI.hubCompaniesLoaded && !UI.hubCompaniesLoading) loadHubCompanies();
   if(page==='integrations' && !UI.outboundWebhooksLoaded && !UI.outboundWebhooksLoading) loadOutboundWebhooks();
+  if(page==='agentregistry' && !UI.agentRegistryLoaded && !UI.agentRegistryLoading) loadAgentRegistry();
   render();
 }
 window.go=go;
@@ -2823,6 +2824,65 @@ function pageAgentActivity(){
   return h;
 }
 
+// 2026-09-14 (Agent Registry, "North is the master, sees everything hub or north;
+// hub only sees what's relevant to hub" -- Stef, live): the merged, cross-system view.
+// Deliberately NOT the same feature as pageAgentActivity() just above -- that's
+// Process Maps' log of Agent Brief dispatches; this is a catalog of what agents/
+// skills/scheduled tasks exist at all, wherever they live. Data lives entirely in
+// Hub-Backend's agent_registry table (per-org Postgres) -- there is no North-native
+// registry table yet, so today this always shows Hub/Queue-sourced rows only; a
+// future North-native entry (source_module:'north') would appear here the same way
+// without any change to this page. AH's own Settings > Library panel is unchanged --
+// it already only ever shows this org's own list, which is the "Hub only sees what's
+// relevant to Hub" half of Stef's instruction, already true before this page existed.
+// Read-only here on purpose for v1 -- editing (including Activate/Deactivate) stays on
+// AH's Library panel, which already has that UI; this page can grow its own edit
+// controls later if Stef wants them, rather than duplicating that logic day one.
+function pageAgentRegistry(){
+  let h=`<div class="phead"><div><h1>Agent Registry</h1>
+    <p>Every agent, skill, and scheduled task registered anywhere in North or Hub/Queue for this org — what it does, which AI runs it (if any), how often, and whether it's active. This is the master view across both systems. Not the same as <b>Agent activity</b> above (that's Process Maps' dispatch log) -- this is a catalog of what exists, not a run history of one specific feature. Editing happens from AH's Settings &rarr; Library panel for now; this page is read-only.</p></div></div>`;
+  if(UI.agentRegistryLoading){
+    h+=`<div class="card"><div class="bd">Loading…</div></div>`;
+    return h;
+  }
+  if(UI.agentRegistryError){
+    h+=`<div class="card"><div class="bd"><p class="mini" style="color:#b91c1c">${esc(UI.agentRegistryError)}</p>
+      <button class="btn sm pri" onclick="loadAgentRegistry()">Retry</button></div></div>`;
+    return h;
+  }
+  const items=UI.agentRegistry||[];
+  h+=`<div class="card"><h3>All registered entries <span class="sp"></span><span class="pill n">${items.length}</span>
+      <button class="btn sm" onclick="loadAgentRegistry()">Refresh</button></h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>Agent</th><th>Source</th><th>AI / model</th><th>Frequency</th><th>Approval</th><th>Active</th><th>Last run</th><th>.md</th>
+    </tr></thead><tbody>
+    ${!items.length?`<tr><td colspan="8" class="empty">Nothing registered yet — add an entry from AH's Settings &rarr; Library.</td></tr>`:items.map(r=>`<tr>
+      <td><b>${esc(r.name)}</b>${r.description?`<div class="mini">${esc(r.description)}</div>`:''}</td>
+      <td class="mini">${esc(r.source_module||'—')}</td>
+      <td class="mini">${esc(r.ai_model||'—')}</td>
+      <td class="mini">${esc(r.frequency||'—')}</td>
+      <td class="mini">${r.approval_mode==='automatic'?'Automatic':'Manual'}</td>
+      <td>${r.active?ragPillHtml({tone:'blue',label:'Active'}):ragPillHtml({tone:'grey',label:'Inactive'})}</td>
+      <td class="mini">${r.last_run_status?esc(r.last_run_status):'— never run'}</td>
+      <td>${r.md_link?`<a href="${esc(r.md_link)}" target="_blank" rel="noopener">view ↗</a>`:'—'}</td>
+    </tr>`).join('')}
+    </tbody></table></div></div></div>`;
+  return h;
+}
+async function loadAgentRegistry(){
+  UI.agentRegistryLoading=true; UI.agentRegistryError=''; render();
+  try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token){ UI.agentRegistryLoading=false; UI.agentRegistryError='Your own North session has expired -- sign in again.'; render(); return; }
+    const r = await fetch(CONTACT_URL+'/registry/list?token='+encodeURIComponent(token)+'&org='+encodeURIComponent(_hubOrgSlug));
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok){ UI.agentRegistryLoading=false; UI.agentRegistryError=j.error||'Could not load the registry.'; render(); return; }
+    UI.agentRegistry=j.items||[]; UI.agentRegistryLoaded=true; UI.agentRegistryLoading=false; render();
+  }catch(e){ UI.agentRegistryLoading=false; UI.agentRegistryError='Could not reach Hub: '+(e&&e.message?e.message:'unknown error'); render(); }
+}
+window.loadAgentRegistry=loadAgentRegistry;
+
 function pageSync(){
   let h=`<div class="phead"><div><h1>Export shared config</h1>
     <p>Downloads cost buckets, the tracking ID convention, LLM provider settings, and the outbound webhook target in
@@ -3832,14 +3892,15 @@ const PAGES=[
   {id:'llm',        ix:'6', label:'LLM providers',   fn:pageLLM},
   {id:'integrations',ix:'7',label:'Integrations',    fn:pageIntegrations},
   {id:'agentactivity',ix:'8',label:'Agent activity',  fn:pageAgentActivity},
-  {id:'sync',       ix:'9', label:'Export',          fn:pageSync},
-  {id:'feedback',   ix:'10',label:'Feedback',        fn:pageFeedback},
-  {id:'hubaccounts',ix:'11',label:'AH accounts',    fn:pageHubAccounts},
-  {id:'hubfeedback',ix:'12',label:'AH feedback',    fn:pageHubFeedback},
-  {id:'hubcompanies',ix:'13',label:'AH companies',  fn:pageHubCompanies},
-  {id:'licensing',  ix:'14',label:'Licensing',       fn:pageLicensing},
-  {id:'branding',   ix:'15',label:'Branding',        fn:pageBranding},
-  {id:'regionsadmin',ix:'16',label:'Regions & pods (all orgs)', fn:pageRegionsAdmin}
+  {id:'agentregistry',ix:'9',label:'Agent Registry',  fn:pageAgentRegistry},
+  {id:'sync',       ix:'10',label:'Export',          fn:pageSync},
+  {id:'feedback',   ix:'11',label:'Feedback',        fn:pageFeedback},
+  {id:'hubaccounts',ix:'12',label:'AH accounts',    fn:pageHubAccounts},
+  {id:'hubfeedback',ix:'13',label:'AH feedback',    fn:pageHubFeedback},
+  {id:'hubcompanies',ix:'14',label:'AH companies',  fn:pageHubCompanies},
+  {id:'licensing',  ix:'15',label:'Licensing',       fn:pageLicensing},
+  {id:'branding',   ix:'16',label:'Branding',        fn:pageBranding},
+  {id:'regionsadmin',ix:'17',label:'Regions & pods (all orgs)', fn:pageRegionsAdmin}
 ];
 
 function renderSide(){

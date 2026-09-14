@@ -200,7 +200,7 @@ tr.tot td{font-weight:800; border-top:2px solid var(--line);}
     <div id="tnResults"></div>
   </div>
   <button class="btn sm" id="tnHelpBtn" onclick="openHelpPanel()" title="Help &amp; FAQ" style="margin-right:8px">?</button>
-  <a class="btn sm" href="https://claude.ai/code/artifact/a65c7848-70ac-491b-8b77-70b05e0934d3" target="_blank" rel="noopener" title="North &amp; Hub Field Guide — full how-to, overviews and FAQ" style="margin-right:8px;text-decoration:none">📘</a>
+  <a class="btn sm" href="https://claude.ai/code/artifact/a65c7848-70ac-491b-8b77-70b05e0934d3" onclick="window.open(this.href,'northHubFieldGuide','width=980,height=900,noopener,noreferrer');return false;" title="North &amp; Hub Field Guide — full how-to, overviews and FAQ" style="margin-right:8px;text-decoration:none">📘</a>
   <div class="tn-acct" id="tnAcct"></div>
   <script>document.addEventListener('click',function(e){var r=document.getElementById('tnResults');if(r&&!e.target.closest('.tn-search'))r.innerHTML='';});</script>
 </div>
@@ -953,12 +953,23 @@ function eventVenueSummary(e){
 const RAG_THRESHOLDS = {
   amberAttendanceRatio: 0.5 // attended/registered below this once finished => amber
 };
-function ragForEvent(e){
+// 2026-09-14 round 16 fix (Stef live-testing, P1 #6): Home's Pipeline-snapshot
+// "Completed" tile was counting literal e.status==='Completed' only, while the
+// Events table right next to it (and this page's own mini Events list) shows
+// status via ragForEvent(), which also treats a past-dated event as Completed
+// even if nobody flipped its status field. Result: an event that already
+// happened shows "Completed" in the table but doesn't count toward the tile --
+// tile says 0, table shows 1. Pulled the past-date check out into a shared
+// helper so both agree on what "completed" means.
+function isEventCompleted(e){
   const today=new Date().toISOString().slice(0,10);
   const range=eventDateRange(e);
-  if(e.status==='Cancelled') return {tone:'red',label:'Cancelled'};
   const isPast = range.end ? range.end<today : (range.start ? range.start<today : false);
-  if(e.status==='Completed' || isPast){
+  return e.status==='Completed' || isPast;
+}
+function ragForEvent(e){
+  if(e.status==='Cancelled') return {tone:'red',label:'Cancelled'};
+  if(isEventCompleted(e)){
     const registered=e.registered||0, attended=e.attended||0;
     if(!registered) return {tone:'green',label:'Completed'};
     const rate=attended/registered;
@@ -1541,7 +1552,11 @@ function pageHome(){
   </div>`;
 
   const pipeStages=['Planned','Approved','Confirmed','Completed','Cancelled'];
-  const pipeCounts=pipeStages.map(s=>CFG.events.filter(e=>e.status===s).length);
+  // 2026-09-14 round 16: bucket by effective stage (see isEventCompleted above),
+  // not the raw status field, so an event past its date lands in Completed here
+  // the same way it does in the table -- one bucket per event, no double count.
+  const eventPipelineStage=e=>e.status==='Cancelled'?'Cancelled':(isEventCompleted(e)?'Completed':e.status);
+  const pipeCounts=pipeStages.map(s=>CFG.events.filter(e=>eventPipelineStage(e)===s).length);
   const pipeMax=Math.max(1,...pipeCounts);
   const pipeColor={Planned:'var(--ink-2)',Approved:'var(--warn,#b8860b)',Confirmed:'var(--warn,#b8860b)',Completed:'var(--ok,#1a7f4e)',Cancelled:'var(--bad,#b23)'};
   h+=`<div style="flex:1;min-width:260px">

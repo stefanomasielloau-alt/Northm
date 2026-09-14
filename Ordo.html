@@ -372,7 +372,7 @@ svg{display:block;max-width:100%}
     <div id="tnResults"></div>
   </div>
   <button class="btn sm" id="tnHelpBtn" onclick="openHelpPanel()" title="Help &amp; FAQ" style="margin-right:8px">?</button>
-  <a class="btn sm" href="https://claude.ai/code/artifact/a65c7848-70ac-491b-8b77-70b05e0934d3" target="_blank" rel="noopener" title="North &amp; Hub Field Guide — full how-to, overviews and FAQ" style="margin-right:8px;text-decoration:none">📘</a>
+  <a class="btn sm" href="https://claude.ai/code/artifact/a65c7848-70ac-491b-8b77-70b05e0934d3" onclick="window.open(this.href,'northHubFieldGuide','width=980,height=900,noopener,noreferrer');return false;" title="North &amp; Hub Field Guide — full how-to, overviews and FAQ" style="margin-right:8px;text-decoration:none">📘</a>
   <div class="tn-acct" id="tnAcct"></div>
   <script>document.addEventListener('click',function(e){var r=document.getElementById('tnResults');if(r&&!e.target.closest('.tn-search'))r.innerHTML='';});</script>
 </div>
@@ -5275,7 +5275,6 @@ const HELP_FAQ=[
   {q:'How do I set up a passkey?', a:'From your account menu, choose to set up a passkey \u2014 your browser or device (Windows Hello, Touch ID, a security key, etc.) will walk you through it.'},
   {q:'How do I invite a new teammate?', a:'Configuration \u2192 Invite a new teammate \u2192 choose their role \u2192 Generate invite code, then send them the code. They redeem it at signup by choosing "I have an invite code."'},
   {q:"Why can't I see a module, or can't edit something?", a:'Access is layered: your organization sets the ceiling (which modules exist for anyone there), your role sets Configure/Publish/Can edit, and you personally have a Modules toggle in the Users table. Ask an admin to check all three.'},
-  {q:"What's the difference between Simple and Expert mode?", a:'In Campaign Planning, Simple mode shows the core fields; Expert mode adds business case, sign-off, partner allocation and more \u2014 toggle it from Campaign Planning if your role allows it.'},
   {q:'What does Cross-region visibility mean?', a:'"Transparent" means you see every region in your organization. "Isolated" means you only see the regions specifically checked for you.'},
   {q:'What is Super Admin?', a:"Super Admin isn't a role in the Roles table \u2014 it's a separate flag on a login that gives full cross-organization visibility in Configuration, independent of any one organization's roles."},
   {q:'What does the Super Admin cross-org view bar do?', a:'If you\u2019re a Super Admin, a bar appears letting you view this module as your own organization, all organizations merged, or one specific organization (and optionally one user within it). Switching to \u2018All\u2019 or another organization always starts read-only \u2014 editing is a separate, conscious click every time the view changes, and \u2018All\u2019 (merged data) can never be edited since there\u2019s no single organization to attribute a change to.'}

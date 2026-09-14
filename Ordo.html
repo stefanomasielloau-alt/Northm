@@ -3858,7 +3858,26 @@ const BOARD_REPORT_AI_PROMPT = "You are writing the \"what changed this period\"
    those are left as a no-op (falls back to Hub-Backend's own default, same as
    before this fix) rather than guessing. */
 const LLM_KIND_TO_PROVIDER = {'Anthropic':'anthropic','OpenAI':'openai','Google Gemini':'gemini'};
-async function activeLlmProviderOverride(){
+// 2026-09-14 (Agent Registry round 8, Stef live: "assign an agent or skill to execute
+// specific tasks in North or Hub eg the Dashboard summary which is currently using
+// Gemini but we may want to switch it to another provider easily"): taskId is now
+// optional and, when passed, checked FIRST against that task's own Agent Registry entry
+// (Hub-Backend's GET /registry/task-provider -- ai_provider/ai_model columns added this
+// round) before falling back to the org-wide Active-provider lookup below, which is
+// exactly today's behavior and stays the fallback for every caller that doesn't pass a
+// taskId, or whose task has no provider explicitly assigned. token is the caller's own
+// already-fetched North JWT (askAlex()/generateBoardReportAiNarrative() both fetch it
+// right before this call anyway) -- reused here rather than fetching a second session.
+async function activeLlmProviderOverride(taskId, token){
+  if(taskId && token){
+    try{
+      const r = await fetch(CONTACT_URL+'/registry/task-provider?task_id='+encodeURIComponent(taskId)+'&token='+encodeURIComponent(token)+'&org='+encodeURIComponent(_hubOrgSlug));
+      if(r.ok){
+        const j = await r.json().catch(()=>({}));
+        if(j && j.ai_provider){ return { provider: j.ai_provider, model: j.ai_model || undefined }; }
+      }
+    }catch(e){ /* fall through to the org-wide default below */ }
+  }
   try{
     const ambientOrgId = (typeof _savOrgFilter!=='undefined' && _savOrgFilter!==null) ? _savOrgFilter : _orgId;
     const { data, error } = await sb.from('llm_providers').select('kind,model').eq('org_id',ambientOrgId).eq('enabled',true).limit(1).maybeSingle();
@@ -3876,7 +3895,7 @@ async function generateBoardReportAiNarrative(){
     const { data } = await sb.auth.getSession();
     const token = data && data.session && data.session.access_token;
     if(!token) throw new Error('Your own North session has expired -- sign in again.');
-    const { provider, model } = await activeLlmProviderOverride();
+    const { provider, model } = await activeLlmProviderOverride('reg_board_report_narrative_task', token);
     const resp = await fetch(CONTACT_URL+'/admin/ai-generate', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ token, prompt:BOARD_REPORT_AI_PROMPT, context:UI._brCtx||'', provider, model })
@@ -3957,7 +3976,7 @@ async function askAlex(){
     const { data } = await sb.auth.getSession();
     const token = data && data.session && data.session.access_token;
     if(!token) throw new Error('Your own North session has expired -- sign in again.');
-    const { provider, model } = await activeLlmProviderOverride();
+    const { provider, model } = await activeLlmProviderOverride('reg_dashboard_summary_task', token);
     const resp = await fetch(CONTACT_URL+'/admin/ai-generate', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ token, prompt:skill.instructions, context:JSON.stringify(filtered), provider, model })

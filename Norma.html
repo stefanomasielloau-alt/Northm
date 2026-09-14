@@ -2838,9 +2838,102 @@ function pageAgentActivity(){
 // Read-only here on purpose for v1 -- editing (including Activate/Deactivate) stays on
 // AH's Library panel, which already has that UI; this page can grow its own edit
 // controls later if Stef wants them, rather than duplicating that logic day one.
+// 2026-09-14 round 7 (Stef, live: "North is the master so should have full ability to
+// ADD or Assign"): full CRUD from here, not just the read-only view round 5 shipped as
+// a deliberate v1 scope-limit. Editor mirrors AH's Library editor field-for-field
+// (registry-editor in contact-seeker-hub.html) so the two don't drift into different
+// shapes; every write goes through the same /registry/* endpoints AH uses, just with
+// a North JWT + hub_org_slug instead of a Hub session cookie (see _registry_auth() in
+// hub_local_api.py). Form state lives in UI.agentRegistryForm rather than reading the
+// DOM at save time, matching this file's own render-on-every-change convention
+// (pageLLM's setIn() etc.) rather than introducing a different pattern just for this page.
+function _agentRegistryEmptyForm(){
+  return {id:null, name:'', description:'', kind:'agent', approval_mode:'manual',
+    ai_model:'', ai_provider:'', frequency:'', md_link:'', config:'', used_in:['north']};
+}
+function openAgentRegistryEditor(id){
+  const item = id ? (UI.agentRegistry||[]).find(x=>x.id===id) : null;
+  UI.agentRegistryForm = item ? {
+    id:item.id, name:item.name||'', description:item.description||'', kind:item.kind||'agent',
+    approval_mode:item.approval_mode||'manual', ai_model:item.ai_model||'', ai_provider:item.ai_provider||'', frequency:item.frequency||'',
+    md_link:item.md_link||'', config:JSON.stringify(item.config||{},null,2), used_in:(item.used_in||[]).slice()
+  } : _agentRegistryEmptyForm();
+  UI.agentRegistryEditorOpen = true;
+  UI.agentRegistryEditorMsg = '';
+  render();
+}
+window.openAgentRegistryEditor=openAgentRegistryEditor;
+function closeAgentRegistryEditor(){ UI.agentRegistryEditorOpen=false; render(); }
+window.closeAgentRegistryEditor=closeAgentRegistryEditor;
+function setAgentRegistryField(key,val){ if(!UI.agentRegistryForm)return; UI.agentRegistryForm[key]=val; render(); }
+window.setAgentRegistryField=setAgentRegistryField;
+function toggleAgentRegistryUsedIn(mod,checked){
+  if(!UI.agentRegistryForm)return;
+  var arr=(UI.agentRegistryForm.used_in||[]).slice();
+  if(checked){ if(arr.indexOf(mod)<0)arr.push(mod); } else { arr=arr.filter(m=>m!==mod); }
+  UI.agentRegistryForm.used_in=arr; render();
+}
+window.toggleAgentRegistryUsedIn=toggleAgentRegistryUsedIn;
+async function saveAgentRegistryEntry(){
+  const f=UI.agentRegistryForm; if(!f)return;
+  if(!(f.name||'').trim()){ UI.agentRegistryEditorMsg='Name is required.'; render(); return; }
+  if(!f.used_in||!f.used_in.length){ UI.agentRegistryEditorMsg='Check at least one "Used in" surface.'; render(); return; }
+  var config={};
+  if((f.config||'').trim()){
+    try{ config=JSON.parse(f.config); }
+    catch(e){ UI.agentRegistryEditorMsg='Config must be valid JSON (or left blank).'; render(); return; }
+  }
+  try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token){ UI.agentRegistryEditorMsg='Your own North session has expired -- sign in again.'; render(); return; }
+    const body={
+      name:f.name.trim(), description:(f.description||'').trim(), kind:f.kind,
+      approval_mode:f.approval_mode, ai_model:(f.ai_model||'').trim(), ai_provider:f.ai_provider||'', frequency:(f.frequency||'').trim(),
+      md_link:(f.md_link||'').trim(), used_in:f.used_in, config:config,
+      token: token, org: _hubOrgSlug
+    };
+    if(f.id)body.id=f.id;
+    const r = await fetch(CONTACT_URL+'/registry/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok||!j.ok){ UI.agentRegistryEditorMsg=j.error||'Could not save.'; render(); return; }
+    UI.agentRegistryEditorOpen=false;
+    toast('Saved.');
+    loadAgentRegistry();
+  }catch(e){ UI.agentRegistryEditorMsg='Could not reach Hub: '+(e&&e.message?e.message:'unknown error'); render(); }
+}
+window.saveAgentRegistryEntry=saveAgentRegistryEntry;
+async function deleteAgentRegistryEntry(id){
+  if(!confirm('Remove this registry entry? This does not affect anything it may already have produced.'))return;
+  try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
+    const r = await fetch(CONTACT_URL+'/registry/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:id, token:token, org:_hubOrgSlug})});
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok||!j.ok){ toast(j.error||'Could not delete.'); return; }
+    toast('Removed.');
+    loadAgentRegistry();
+  }catch(e){ toast('Could not reach Hub: '+(e&&e.message?e.message:'unknown error')); }
+}
+window.deleteAgentRegistryEntry=deleteAgentRegistryEntry;
+async function toggleAgentRegistryActive(id,currentlyActive){
+  try{
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token){ toast('Your own North session has expired -- sign in again.'); return; }
+    const path = currentlyActive ? '/registry/deactivate' : '/registry/activate';
+    const r = await fetch(CONTACT_URL+path, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:id, token:token, org:_hubOrgSlug})});
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok||!j.ok){ toast(j.error||'Could not update.'); return; }
+    loadAgentRegistry();
+  }catch(e){ toast('Could not reach Hub: '+(e&&e.message?e.message:'unknown error')); }
+}
+window.toggleAgentRegistryActive=toggleAgentRegistryActive;
+
 function pageAgentRegistry(){
   let h=`<div class="phead"><div><h1>Agent Registry</h1>
-    <p>Every agent, skill, and scheduled task registered anywhere in North or Hub/Queue for this org — what it does, which AI runs it (if any), how often, and whether it's active. This is the master view across both systems. Not the same as <b>Agent activity</b> above (that's Process Maps' dispatch log) -- this is a catalog of what exists, not a run history of one specific feature. Editing happens from AH's Settings &rarr; Library panel for now; this page is read-only.</p></div></div>`;
+    <p>Every agent, skill, and scheduled task registered anywhere in North or Hub/Queue for this org — what it does, which AI runs it (if any), how often, and whether it's active. This is the master view across both systems: add, edit, activate, or remove an entry from here, or from AH's Settings &rarr; Library -- both write to the same place. Not the same as <b>Agent activity</b> above (that's Process Maps' dispatch log) -- this is a catalog of what exists, not a run history of one specific feature.</p></div></div>`;
   if(UI.agentRegistryLoading){
     h+=`<div class="card"><div class="bd">Loading…</div></div>`;
     return h;
@@ -2859,21 +2952,70 @@ function pageAgentRegistry(){
     `<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:#F3EEE3;color:#8A6D3B;margin-right:3px;white-space:nowrap">${esc(usedInLabel(m))}</span>`
   ).join('');
   h+=`<div class="card"><h3>All registered entries <span class="sp"></span><span class="pill n">${items.length}</span>
-      <button class="btn sm" onclick="loadAgentRegistry()">Refresh</button></h3>
+      <button class="btn sm" onclick="loadAgentRegistry()">Refresh</button>
+      <button class="btn sm pri" onclick="openAgentRegistryEditor(null)">New entry</button></h3>
     <div class="bd flush"><div class="scroll cap"><table><thead><tr>
-      <th>Agent</th><th>Used in</th><th>AI / model</th><th>Frequency</th><th>Approval</th><th>Active</th><th>Last run</th><th>.md</th>
+      <th>Agent</th><th>Used in</th><th>AI / model</th><th>Frequency</th><th>Approval</th><th>Active</th><th>Last run</th><th>.md</th><th></th>
     </tr></thead><tbody>
-    ${!items.length?`<tr><td colspan="8" class="empty">Nothing registered yet — add an entry from AH's Settings &rarr; Library.</td></tr>`:items.map(r=>`<tr>
+    ${!items.length?`<tr><td colspan="9" class="empty">Nothing registered yet — use "New entry" above.</td></tr>`:items.map(r=>`<tr>
       <td><b>${esc(r.name)}</b>${r.description?`<div class="mini">${esc(r.description)}</div>`:''}</td>
       <td class="mini" style="white-space:nowrap">${usedInPillsHtml(r)}</td>
-      <td class="mini">${esc(r.ai_model||'—')}</td>
+      <td class="mini">${r.ai_provider?`<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;background:#EEF2FF;color:#3730A3;margin-right:4px">${esc(r.ai_provider)}</span>`:''}${esc(r.ai_model||(r.ai_provider?'':'—'))}</td>
       <td class="mini">${esc(r.frequency||'—')}</td>
       <td class="mini">${r.approval_mode==='automatic'?'Automatic':'Manual'}</td>
-      <td>${r.active?ragPillHtml({tone:'blue',label:'Active'}):ragPillHtml({tone:'grey',label:'Inactive'})}</td>
+      <td><a href="#" onclick="toggleAgentRegistryActive('${r.id}',${r.active?'true':'false'});return false;" title="${r.active?'Click to deactivate':'Click to activate'}">${r.active?ragPillHtml({tone:'blue',label:'Active'}):ragPillHtml({tone:'grey',label:'Inactive'})}</a></td>
       <td class="mini">${r.last_run_status?esc(r.last_run_status):'— never run'}</td>
       <td>${r.md_link?`<a href="${esc(r.md_link)}" target="_blank" rel="noopener">view ↗</a>`:'—'}</td>
+      <td class="mini" style="white-space:nowrap"><a href="#" onclick="openAgentRegistryEditor('${r.id}');return false;">Edit</a> &middot; <a href="#" onclick="deleteAgentRegistryEntry('${r.id}');return false;">Delete</a></td>
     </tr>`).join('')}
     </tbody></table></div></div></div>`;
+  if(UI.agentRegistryEditorOpen && UI.agentRegistryForm){
+    const f=UI.agentRegistryForm;
+    const uiChk=m=>f.used_in.indexOf(m)>=0?'checked':'';
+    h+=`<div class="card"><h3>${f.id?'Edit entry':'New entry'}</h3><div class="bd">
+      <div class="field"><label>Name</label><input class="cel txt" style="width:100%" value="${esc(f.name)}" oninput="setAgentRegistryField('name',this.value)" placeholder="e.g. Weekly Company Signals digest"></div>
+      <div class="field" style="margin-top:8px"><label>Description</label><textarea class="cel txt" style="width:100%" rows="2" oninput="setAgentRegistryField('description',this.value)" placeholder="What it does, in plain language">${esc(f.description)}</textarea></div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px">
+        <div class="field"><label>Kind</label>
+          <select class="cel txt" onchange="setAgentRegistryField('kind',this.value)">
+            ${['agent','automation_template','scheduled_task_template','scheduled_task','cron'].map(k=>`<option value="${k}" ${f.kind===k?'selected':''}>${k}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label>Approval mode</label>
+          <select class="cel txt" onchange="setAgentRegistryField('approval_mode',this.value)">
+            <option value="manual" ${f.approval_mode==='manual'?'selected':''}>Manual -- a person approves before it runs</option>
+            <option value="automatic" ${f.approval_mode==='automatic'?'selected':''}>Automatic -- runs unattended</option>
+          </select>
+        </div>
+      </div>
+      <div class="field" style="margin-top:8px"><label>Used in <span class="mini">(check every surface this actually affects)</span></label>
+        <div style="display:flex;gap:16px;margin-top:4px">
+          <label style="display:flex;align-items:center;gap:5px;font-weight:400"><input type="checkbox" ${uiChk('north')} onchange="toggleAgentRegistryUsedIn('north',this.checked)"> North</label>
+          <label style="display:flex;align-items:center;gap:5px;font-weight:400"><input type="checkbox" ${uiChk('hub')} onchange="toggleAgentRegistryUsedIn('hub',this.checked)"> AH (Hub)</label>
+          <label style="display:flex;align-items:center;gap:5px;font-weight:400"><input type="checkbox" ${uiChk('queue')} onchange="toggleAgentRegistryUsedIn('queue',this.checked)"> Queue</label>
+        </div>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px">
+        <div class="field" style="flex:1;min-width:200px"><label>AI / model <span class="mini">(free text, for display)</span></label><input class="cel txt" style="width:100%" value="${esc(f.ai_model)}" oninput="setAgentRegistryField('ai_model',this.value)" placeholder="e.g. Claude (Cowork scheduled task), or a specific model ID"></div>
+        <div class="field" style="flex:1;min-width:200px"><label>AI provider <span class="mini">(pins this task to it)</span></label>
+          <select class="cel txt" onchange="setAgentRegistryField('ai_provider',this.value)">
+            <option value="" ${!f.ai_provider?'selected':''}>— use org's Active provider —</option>
+            <option value="anthropic" ${f.ai_provider==='anthropic'?'selected':''}>Anthropic</option>
+            <option value="openai" ${f.ai_provider==='openai'?'selected':''}>OpenAI</option>
+            <option value="gemini" ${f.ai_provider==='gemini'?'selected':''}>Google Gemini</option>
+          </select>
+        </div>
+        <div class="field" style="flex:1;min-width:200px"><label>Frequency</label><input class="cel txt" style="width:100%" value="${esc(f.frequency)}" oninput="setAgentRegistryField('frequency',this.value)" placeholder="e.g. Daily · 03:00 UTC"></div>
+        <div class="field" style="flex:1;min-width:200px"><label>Link to .md file</label><input class="cel txt" style="width:100%" value="${esc(f.md_link)}" oninput="setAgentRegistryField('md_link',this.value)" placeholder="https://..."></div>
+      </div>
+      <div class="field" style="margin-top:8px"><label>Config (JSON, optional)</label><textarea class="cel txt" style="width:100%;font-family:monospace" rows="5" oninput="setAgentRegistryField('config',this.value)" placeholder='{"prompt":"...", "suggested_cron":"0 16 * * 1"}'>${esc(f.config)}</textarea></div>
+      ${UI.agentRegistryEditorMsg?`<p class="mini" style="color:#b91c1c;margin-top:6px">${esc(UI.agentRegistryEditorMsg)}</p>`:''}
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn sm pri" onclick="saveAgentRegistryEntry()">Save</button>
+        <button class="btn sm" onclick="closeAgentRegistryEditor()">Cancel</button>
+      </div>
+    </div></div>`;
+  }
   return h;
 }
 async function loadAgentRegistry(){

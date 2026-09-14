@@ -2851,14 +2851,21 @@ function pageAgentRegistry(){
     return h;
   }
   const items=UI.agentRegistry||[];
+  // 2026-09-14 round 6 (Stef: "indicate where the agent is used ... multiple places"):
+  // used_in replaces the single "Source" column -- an entry can be used_in more than
+  // one module (e.g. the Signals digest affects both AH and Queue).
+  const usedInLabel = m => m==='north'?'North':m==='hub'?'AH':m==='queue'?'Queue':m;
+  const usedInPillsHtml = r => (r.used_in&&r.used_in.length?r.used_in:['—']).map(m =>
+    `<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:#F3EEE3;color:#8A6D3B;margin-right:3px;white-space:nowrap">${esc(usedInLabel(m))}</span>`
+  ).join('');
   h+=`<div class="card"><h3>All registered entries <span class="sp"></span><span class="pill n">${items.length}</span>
       <button class="btn sm" onclick="loadAgentRegistry()">Refresh</button></h3>
     <div class="bd flush"><div class="scroll cap"><table><thead><tr>
-      <th>Agent</th><th>Source</th><th>AI / model</th><th>Frequency</th><th>Approval</th><th>Active</th><th>Last run</th><th>.md</th>
+      <th>Agent</th><th>Used in</th><th>AI / model</th><th>Frequency</th><th>Approval</th><th>Active</th><th>Last run</th><th>.md</th>
     </tr></thead><tbody>
     ${!items.length?`<tr><td colspan="8" class="empty">Nothing registered yet — add an entry from AH's Settings &rarr; Library.</td></tr>`:items.map(r=>`<tr>
       <td><b>${esc(r.name)}</b>${r.description?`<div class="mini">${esc(r.description)}</div>`:''}</td>
-      <td class="mini">${esc(r.source_module||'—')}</td>
+      <td class="mini" style="white-space:nowrap">${usedInPillsHtml(r)}</td>
       <td class="mini">${esc(r.ai_model||'—')}</td>
       <td class="mini">${esc(r.frequency||'—')}</td>
       <td class="mini">${r.approval_mode==='automatic'?'Automatic':'Manual'}</td>

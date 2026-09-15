@@ -190,6 +190,7 @@ body{font-family:var(--sans); background:var(--canvas); color:var(--ink); font-s
 <div id="layer"></div>
 <script src="shared/dateFormat.js"></script>
 <script src="shared/orgSwitcher.js"></script>
+<script src="shared/superAdminView.js"></script>
 <script>
 /* ============================================================================
    North — suite dashboard. Same Supabase auth pattern as every other tool in
@@ -254,18 +255,41 @@ async function loadFromSupabase(){
   CFG.isFullSuperAdmin = _paLevel === 'L0';
   CFG.isSuperAdmin = _paLevel === 'L0' || _paLevel === 'L1';
 
+  /* 2026-09-15 round 17 fix (Stef live-testing, P1 #4: "Scoring's numbers disagree with
+     Dashboard" -- "yes never disagree"): this dashboard never applied an org_id filter to
+     any of its cross-org-relevant reads, relying entirely on RLS to scope rows to the
+     caller's own org. That's fine for a regular user, but RLS deliberately lets a Super
+     Admin's queries see every organization's rows (so the SAV "view as another org"
+     feature works) -- and with no filter re-applied here, a Super Admin's own Dashboard
+     was silently pooling in every other org's deals/campaigns/tasks/events/programmes too.
+     Confirmed live: augur_deals came back with rows from a second, unrelated org mixed in
+     with Beta Testing's own 3 -- explaining exactly Stef's "1 deal here, 9 deals there"
+     report. Augur.html and Cursus.html already guard against this with an orgScoped()
+     helper reading shared/superAdminView.js's SAV context; wiring the same pattern in here
+     so this dashboard defaults to "my own organization" like every other module, and (for
+     a Super Admin who deliberately switches to a cross-org view) shows the same visible
+     warning bar Augur does, instead of silently disagreeing with it. */
+  SAV.init(_orgId);
+  let _savOrgFilter = _orgId;
+  if(CFG.isSuperAdmin) _savOrgFilter = SAV.effectiveOrgId();
+  function orgScoped(q, col){ return _savOrgFilter===null ? q : q.eq(col||'org_id', _savOrgFilter); }
+  CFG.loadAllOrganizations = async function(){
+    const { data } = await sb.from('organizations').select('id,name').order('name');
+    return data || [];
+  };
+
   const results = await Promise.all([
     sb.from('organizations').select('id,name,hub_org_slug,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,access_reportus,access_contact').eq('id', prof.org_id).maybeSingle(),
-    sb.from('programmes').select('id,name'),
-    sb.from('campaigns').select('id,name,budget,signoff_status,programme_id'),
-    sb.from('tasks').select('id,campaign_id,status'),
-    sb.from('augur_deals').select('id,value,stage'),
-    sb.from('crm_contacts').select('id'),
-    sb.from('crm_activities').select('id,occurred_at'),
-    sb.from('prospectus_leads').select('id,status'),
-    sb.from('eventus_events').select('id,budget,start_date,status'),
-    sb.from('assets').select('id,stock,low_stock_at'),
-    sb.from('schema_workflows').select('id'),
+    orgScoped(sb.from('programmes').select('id,name')),
+    orgScoped(sb.from('campaigns').select('id,name,budget,signoff_status,programme_id')),
+    orgScoped(sb.from('tasks').select('id,campaign_id,status')),
+    orgScoped(sb.from('augur_deals').select('id,value,stage')),
+    orgScoped(sb.from('crm_contacts').select('id')),
+    orgScoped(sb.from('crm_activities').select('id,occurred_at')),
+    orgScoped(sb.from('prospectus_leads').select('id,status')),
+    orgScoped(sb.from('eventus_events').select('id,budget,start_date,status')),
+    orgScoped(sb.from('assets').select('id,stock,low_stock_at')),
+    orgScoped(sb.from('schema_workflows').select('id')),
     sb.from('audit_log').select('ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(12)
   ]);
   const [orgR,progR,campR,taskR,dealR,contactR,activityR,leadR,eventR,assetR,wfR,auditR] = results;
@@ -506,6 +530,20 @@ async function bootApp(){
   hideAuthGate();
   render();
   subscribeRealtime();
+  _renderSavBarSafely();
+}
+
+/* 2026-09-15 round 17: same defensive wrapper Augur.html uses -- a malformed org/user row
+   anywhere upstream must never take out the whole dashboard just to show this bar. */
+function _renderSavBarSafely(){
+  try{
+    if(typeof SAV==='undefined') return;
+    SAV.renderBar({
+      isSuperAdmin: CFG.isSuperAdmin,
+      loadOrganizations: CFG.loadAllOrganizations,
+      lockSelector: '#wrap'
+    });
+  }catch(e){ console.warn('SAV bar failed to render', e); }
 }
 
 /* ---------- roll-up computations ----------

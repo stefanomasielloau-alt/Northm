@@ -387,22 +387,11 @@ async function loadFromSupabase(){
     sb.from('organizations').select('id,name,parent_org_id,hub_org_slug,created_at').order('created_at'),
     sb.from('profiles').select('id,name,role_id'),
     reportusCrossOrgSafe('campaigns', sb.from('campaigns').select('id,name,programme_id,activity_id,region_id,budget,budget_fx,committed,actual,signoff_status')),
-    /* item 70 (2026-09-17): same v5 pattern as campaigns/programmes/partners/
-       campaign_partner_allocations above -- these 5 were confirmed live to
-       still carry the ORIGINAL Super Admin RLS bypass (bare select blends
-       every org together with no error), the one gap the 2026-09-10 v3/v4/v5
-       round didn't reach. DEPLOY ORDER MATTERS: run
-       2026-09-17-item70-admin-cross-org-rpcs-v2.sql BEFORE pushing this file --
-       reportusCrossOrgSafe() calls these RPCs for any Super Admin regardless
-       of whether they exist yet, so pushing this first would 404 the RPC call
-       for every Super Admin viewing Reportus until the migration runs. Zero
-       change for anyone who isn't a Super Admin either way -- the ternary's
-       else branch is the exact original query, byte-for-byte. */
-    reportusCrossOrgSafe('augur_deals', sb.from('augur_deals').select('id,name,stage,value')),
-    reportusCrossOrgSafe('eventus_events', sb.from('eventus_events').select('id,name,status,start_date')),
-    reportusCrossOrgSafe('assets', sb.from('assets').select('id,name,stock,low_stock_at,campaign_id')),
-    reportusCrossOrgSafe('crm_activities', sb.from('crm_activities').select('id,occurred_at')),
-    reportusCrossOrgSafe('prospectus_leads', sb.from('prospectus_leads').select('id,status')),
+    sb.from('augur_deals').select('id,name,stage,value'),
+    sb.from('eventus_events').select('id,name,status,start_date'),
+    sb.from('assets').select('id,name,stock,low_stock_at,campaign_id'),
+    sb.from('crm_activities').select('id,occurred_at'),
+    sb.from('prospectus_leads').select('id,status'),
     sb.from('audit_log').select('ts,what,detail,who,role').eq('org_id',_orgId).order('ts',{ascending:false}).limit(300),
     /* item 47 (v2 drill-down graph): Programme/Activity/Route/Pod/Partner weren't
        previously loaded here -- Reportus only had Region + a narrower Campaigns

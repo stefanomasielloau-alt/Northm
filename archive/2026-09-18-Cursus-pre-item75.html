@@ -655,13 +655,7 @@ async function loadFromSupabase(){
        links an activity to an event and rolls up budget/pax/registered/attended for
        reporting (phase16, Planning drill-down + Events cross-link). */
     sb.from('eventus_events').select('id,name,type,status,campaign_id,budget,pax,registered,attended'),
-    /* 2026-09-18 (item 75, "Cursus pipeline-gap feature" -- approved spec): win_target and
-       bottom_up_leads are Strategy's real org-wide drivers (Ordo.html's Global drivers page,
-       stored here same as everything else on this row) -- read directly rather than guessed
-       at, for the campaign-detail banner below. ai_screen_interpreter_enabled is the existing
-       org-wide Ask Alec kill-switch (Configuration > Integrations) Ordo.html's askAlex()
-       already gates on -- reused as-is rather than inventing a second toggle. */
-    sb.from('org_settings').select('webhook_url,webhook_enabled,fy_start_month,campaign_naming_pattern,campaign_naming_seq_scope,campaign_naming_seq_counters,partner_type_presets,win_target,bottom_up_leads,ai_screen_interpreter_enabled').eq('org_id',_orgId).maybeSingle(),
+    sb.from('org_settings').select('webhook_url,webhook_enabled,fy_start_month,campaign_naming_pattern,campaign_naming_seq_scope,campaign_naming_seq_counters,partner_type_presets').eq('org_id',_orgId).maybeSingle(),
     _crossOrg ? adminCrossOrg('audit_log', {p_limit:200}) : orgScoped(sb.from('audit_log').select('ts,what,detail').order('ts',{ascending:false}).limit(200)),
     _crossOrg ? adminCrossOrg('partners') : orgScoped(sb.from('partners').select('id,name,type,contact_name,contact_email,contact_phone,notes,pod_id,acv_target,contact_terms,org_id')),
     _crossOrg ? adminCrossOrg('campaign_partner_allocations') : orgScoped(sb.from('campaign_partner_allocations').select('id,campaign_id,partner_id,role,budget_share_pct,lead_share_pct,org_id')),
@@ -726,11 +720,6 @@ async function loadFromSupabase(){
      down -- select('*') just omits the column silently if the migration hasn't run yet. */
   if(os.currency_config) CFG.currency = os.currency_config;
   CFG.integrations = { webhookUrl: os.webhook_url||'', webhookEnabled: !!os.webhook_enabled };
-  /* 2026-09-18 (item 75): real org-wide Strategy driver numbers, for the campaign-detail
-     banner -- see detailCampaignHtml() and askAlecCampaign() below. Zero if Strategy hasn't
-     set them yet (same fail-soft default Ordo.html itself uses for these two columns). */
-  CFG.strategyDrivers = { winTarget: os.win_target||0, bottomUpLeads: os.bottom_up_leads||0 };
-  CFG.aiScreenInterpreterEnabled = !!os.ai_screen_interpreter_enabled;
   CFG.campaignNaming = {
     fyStartMonth: os.fy_start_month||1,
     campaignNamingPattern: os.campaign_naming_pattern||'{fy}{period}{pod}-{seq}_{descriptor}',
@@ -2623,108 +2612,6 @@ document.addEventListener('mouseup',ev=>{
   logAudit('reschedule '+g.kind,(rec?rec.name:g.id)+' shifted '+dayDelta+' day'+(Math.abs(dayDelta)===1?'':'s'));
 });
 
-/* ---------- Ask Alec for one campaign (item 75, "Cursus pipeline-gap feature") ----------
-   Approved spec (claude/2026-09-14-signals-campperf-agent-audit.md, item 10): a page_scope
-   field on Agent Registry entries (Hub-Backend/Norma.html, done separately), a new skill,
-   an automatic banner in this detail panel showing real org-wide Strategy driver numbers
-   (win_target, bottom_up_leads -- CFG.strategyDrivers, loaded in bootApp above), and this
-   on-demand Ask Alec instance for qualitative reasoning -- deliberately NOT a fabricated
-   per-campaign pass/fail verdict, since Cursus campaigns have no stream/lead-volume field
-   to compute one from. Routed through the same Hub-Backend /admin/ai-generate pipe Ordo's
-   two Ask Alec-style tasks already use (askAlex(), generateBoardReportAiNarrative()), not
-   a new integration -- gated on the same org-wide CFG.aiScreenInterpreterEnabled toggle
-   (Configuration -> Integrations) rather than a second kill-switch. */
-
-/* taskId is checked first against that task's own Agent Registry entry (GET
-   /registry/task-provider) before falling back to CFG.aiProvider/CFG.aiModel, which Cursus
-   already loads at boot (see bootApp's 'Active AI provider' block) -- unlike Ordo.html,
-   which re-queries llm_providers on every call, Cursus already has the org-wide default
-   cached, so the fallback here is just those two fields, not a second network round-trip. */
-async function cursusLlmProviderOverride(taskId, token){
-  if(taskId && token){
-    try{
-      const r = await fetch(CONTACT_URL+'/registry/task-provider?task_id='+encodeURIComponent(taskId)+'&token='+encodeURIComponent(token)+'&org='+encodeURIComponent(_hubOrgSlug));
-      if(r.ok){
-        const j = await r.json().catch(()=>({}));
-        if(j && j.ai_provider){ return { provider: j.ai_provider, model: j.ai_model || undefined }; }
-      }
-    }catch(e){ /* fall through to the org-wide default below */ }
-  }
-  return { provider: CFG.aiProvider||undefined, model: CFG.aiModel||undefined };
-}
-
-/* pageContextForAI()-equivalent for one campaign: an aggregate SUMMARY (already-computed
-   numbers), never raw task/activity rows -- same reasoning as Ordo.html's own version.
-   askAlecCampaign() only ever sends the fields skills/explain-campaign-pipeline-gap.json's
-   max_context_fields whitelists, loaded fresh from skills/ (not hardcoded here). */
-function campaignContextForAI(c){
-  const tasks=TASK(c.id), events=eventsForActivities(tasks), evR=eventRollup(events);
-  const partnerAllocs=CFG.campaignPartnerAllocations.filter(a=>a.campaignId===c.id);
-  return {
-    module:'Cursus', page:'campaign_detail', campaignName:c.name,
-    signoffStatus:c.signoffStatus, budget:Math.round(c.budget||0),
-    committed:Math.round(tasksTotal(c.id,'committedCost')), actual:Math.round(tasksTotal(c.id,'actualCost')),
-    activityCount:tasks.length, linkedEvents:events.length,
-    eventAttendance: events.length ? { registered:evR.registered, attended:evR.attended } : null,
-    partnerCount:partnerAllocs.length,
-    orgStrategy:{ winTarget:CFG.strategyDrivers.winTarget, bottomUpLeads:CFG.strategyDrivers.bottomUpLeads }
-  };
-}
-window.campaignContextForAI=campaignContextForAI;
-
-async function askAlecCampaign(campaignId){
-  if(!CFG.aiScreenInterpreterEnabled){ toast('Ask Alec is off for this org -- enable it in Configuration -> Integrations.'); return; }
-  const c=byId(CFG.campaigns,campaignId); if(!c) return;
-  UI.askAlecCursus={campaignId, open:true, status:'loading', text:'', error:''}; render();
-  try{
-    const skillResp = await fetch('skills/explain-campaign-pipeline-gap.json');
-    if(!skillResp.ok) throw new Error('Could not load the Ask Alec skill definition (skills/explain-campaign-pipeline-gap.json).');
-    const skill = await skillResp.json();
-    const fullContext = campaignContextForAI(c);
-    const allow = new Set(skill.max_context_fields||[]);
-    const filtered = {};
-    Object.keys(fullContext).forEach(k=>{ if(allow.has(k)) filtered[k]=fullContext[k]; });
-
-    const { data } = await sb.auth.getSession();
-    const token = data && data.session && data.session.access_token;
-    if(!token) throw new Error('Your own North session has expired -- sign in again.');
-    const { provider, model } = await cursusLlmProviderOverride('reg_cursus_pipeline_gap_task', token);
-    const resp = await fetch(CONTACT_URL+'/admin/ai-generate', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ token, prompt:skill.instructions, context:JSON.stringify(filtered), provider, model })
-    });
-    const j = await resp.json().catch(()=>({}));
-    if(resp.status===501){ UI.askAlecCursus.status='unavailable'; UI.askAlecCursus.error=j.error||'AI provider not configured yet.'; render(); return; }
-    if(!resp.ok || !j.ok) throw new Error(j.error||('AI request failed ('+resp.status+')'));
-    const text=(j.raw||'').trim();
-    if(!text) throw new Error('AI returned nothing usable.');
-    UI.askAlecCursus.status='done'; UI.askAlecCursus.text=text;
-  }catch(e){
-    UI.askAlecCursus.status='error';
-    const raw = (e&&e.message)!=null ? e.message : e;
-    UI.askAlecCursus.error = typeof raw==='string' ? raw : (()=>{ try{ return JSON.stringify(raw); }catch(_e){ return String(raw); } })();
-  }
-  render();
-}
-window.askAlecCampaign=askAlecCampaign;
-function closeAskAlecCursus(){ if(UI.askAlecCursus) UI.askAlecCursus.open=false; render(); }
-window.closeAskAlecCursus=closeAskAlecCursus;
-
-function askAlecCursusPanel(){
-  if(!UI.askAlecCursus || !UI.askAlecCursus.open) return '';
-  const s=UI.askAlecCursus;
-  return `<div class="mask"><div class="modal" style="width:min(560px,100%)">
-    <h3>✨ Ask Alec</h3>
-    <div class="bd">
-      ${s.status==='loading'?'<div class="empty">Reading this campaign…</div>':''}
-      ${s.status==='done'?`<div style="font-size:13px;line-height:1.6;color:var(--ink-2);white-space:pre-wrap">${esc(s.text)}</div>`:''}
-      ${s.status==='unavailable'?`<div class="note w">${esc(s.error)}</div>`:''}
-      ${s.status==='error'?`<div class="note b">Could not get an explanation: ${esc(s.error)}<br><button class="btn sm" style="margin-top:8px" onclick="askAlecCampaign('${s.campaignId}')">Try again</button></div>`:''}
-    </div>
-    <div class="ft"><button class="btn" onclick="closeAskAlecCursus()">Close</button></div>
-  </div></div>`;
-}
-
 /* ---------- detail / edit panel (Programme read-only summary, Campaign + Activity full edit) ---------- */
 function openDetail(kind,id){ UI.detail={kind,id}; render(); }
 window.openDetail=openDetail;
@@ -2810,10 +2697,6 @@ function detailCampaignHtml(id){
         <div class="kpi"><div class="k">Committed</div><div class="kpi-v">${F.mk(tasksTotal(c.id,'committedCost'))}</div></div>
         <div class="kpi"><div class="k">Actual</div><div class="kpi-v">${F.mk(tasksTotal(c.id,'actualCost'))}</div></div>
         ${events.length?`<div class="kpi hl"><div class="k">Linked events</div><div class="kpi-v">${events.length}</div><div class="sub">${evR.attended}/${evR.registered} attended · ${F.mk(evR.budget)} budget</div></div>`:''}
-      </div>
-      <div class="row" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg-2)">
-        <div class="mini"><b>Org-wide Strategy targets</b> <span style="color:var(--ink-3)">(from Strategy, not specific to this campaign)</span> — win target <b>${F.n(CFG.strategyDrivers.winTarget,0)}</b> · bottom-up leads <b>${F.n(CFG.strategyDrivers.bottomUpLeads,0)}</b></div>
-        ${CFG.aiScreenInterpreterEnabled?`<button class="btn sm" onclick="askAlecCampaign('${c.id}')" title="AI reasoning about this campaign in the context of the org's Strategy targets -- summary numbers only, never raw records">✨ Ask Alec</button>`:''}
       </div>
       <label class="lbl" style="margin-top:8px">Notes</label>
       <textarea class="in" rows="3" onchange="setIn('campaigns','${c.id}','notes',this.value)">${esc(c.notes||'')}</textarea>
@@ -3874,7 +3757,7 @@ function render(){
       '<p class="sub">Page: '+esc(p.id)+'. Try another page from the sidebar, or contact your Super Admin if this keeps happening.</p></div>';
   }
   document.getElementById('main').innerHTML=mainHtml;
-  document.getElementById('wizardLayer').innerHTML=campaignWizardPanel()+moveDialogPanel()+detailPanelHtml()+contactPickerHtml()+askAlecCursusPanel();
+  document.getElementById('wizardLayer').innerHTML=campaignWizardPanel()+moveDialogPanel()+detailPanelHtml()+contactPickerHtml();
   saveLocal();
   scheduleSupabaseSave();
 }

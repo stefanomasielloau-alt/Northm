@@ -2879,17 +2879,14 @@ function _availableAiProviderKeys(){
 }
 function _agentRegistryEmptyForm(){
   return {id:null, name:'', description:'', kind:'agent', approval_mode:'manual',
-    ai_model:'', ai_provider:'', frequency:'', md_link:'', config:'', used_in:['north'], page_scope:''};
+    ai_model:'', ai_provider:'', frequency:'', md_link:'', config:'', used_in:['north']};
 }
 function openAgentRegistryEditor(id){
   const item = id ? (UI.agentRegistry||[]).find(x=>x.id===id) : null;
   UI.agentRegistryForm = item ? {
     id:item.id, name:item.name||'', description:item.description||'', kind:item.kind||'agent',
     approval_mode:item.approval_mode||'manual', ai_model:item.ai_model||'', ai_provider:item.ai_provider||'', frequency:item.frequency||'',
-    md_link:item.md_link||'', config:JSON.stringify(item.config||{},null,2), used_in:(item.used_in||[]).slice(),
-    // 2026-09-18 (item 75): freeform page/panel slug within used_in's module(s) -- e.g.
-    // 'campaign_detail', 'dashboard' -- purely descriptive, blank is fine.
-    page_scope:item.page_scope||''
+    md_link:item.md_link||'', config:JSON.stringify(item.config||{},null,2), used_in:(item.used_in||[]).slice()
   } : _agentRegistryEmptyForm();
   UI.agentRegistryEditorOpen = true;
   UI.agentRegistryEditorMsg = '';
@@ -2924,7 +2921,6 @@ async function saveAgentRegistryEntry(){
       name:f.name.trim(), description:(f.description||'').trim(), kind:f.kind,
       approval_mode:f.approval_mode, ai_model:(f.ai_model||'').trim(), ai_provider:f.ai_provider||'', frequency:(f.frequency||'').trim(),
       md_link:(f.md_link||'').trim(), used_in:f.used_in, config:config,
-      page_scope:(f.page_scope||'').trim(),
       token: token, org: _hubOrgSlug
     };
     if(f.id)body.id=f.id;
@@ -2993,7 +2989,7 @@ function pageAgentRegistry(){
     </tr></thead><tbody>
     ${!items.length?`<tr><td colspan="9" class="empty">Nothing registered yet — use "New entry" above.</td></tr>`:items.map(r=>`<tr>
       <td><b>${esc(r.name)}</b>${r.description?`<div class="mini">${esc(r.description)}</div>`:''}</td>
-      <td class="mini" style="white-space:nowrap">${usedInPillsHtml(r)}${r.page_scope?`<span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;background:#EEE;color:#666;margin-left:2px" title="Page/panel scope">${esc(r.page_scope)}</span>`:''}</td>
+      <td class="mini" style="white-space:nowrap">${usedInPillsHtml(r)}</td>
       <td class="mini">${r.ai_provider?`<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;background:#EEF2FF;color:#3730A3;margin-right:4px">${esc(AI_PROVIDER_LABELS[r.ai_provider]||r.ai_provider)}</span>`:''}${esc(r.ai_model||(r.ai_provider?'':'—'))}</td>
       <td class="mini">${esc(r.frequency||'—')}</td>
       <td class="mini">${r.approval_mode==='automatic'?'Automatic':'Manual'}</td>
@@ -3041,7 +3037,6 @@ function pageAgentRegistry(){
         </div>
         <div class="field" style="flex:1;min-width:200px"><label>Frequency</label><input class="cel txt" style="width:100%" value="${esc(f.frequency)}" oninput="setAgentRegistryField('frequency',this.value)" placeholder="e.g. Daily · 03:00 UTC"></div>
         <div class="field" style="flex:1;min-width:200px"><label>Link to .md file</label><input class="cel txt" style="width:100%" value="${esc(f.md_link)}" oninput="setAgentRegistryField('md_link',this.value)" placeholder="https://..."></div>
-        <div class="field" style="flex:1;min-width:200px"><label>Page/panel scope <span class="mini">(optional, narrower than "Used in")</span></label><input class="cel txt" style="width:100%" value="${esc(f.page_scope)}" oninput="setAgentRegistryField('page_scope',this.value)" placeholder="e.g. campaign_detail, dashboard"></div>
       </div>
       <div class="field" style="margin-top:8px"><label>Config (JSON, optional)</label><textarea class="cel txt" style="width:100%;font-family:monospace" rows="5" oninput="setAgentRegistryField('config',this.value)" placeholder='{"prompt":"...", "suggested_cron":"0 16 * * 1"}'>${esc(f.config)}</textarea></div>
       ${UI.agentRegistryEditorMsg?`<p class="mini" style="color:#b91c1c;margin-top:6px">${esc(UI.agentRegistryEditorMsg)}</p>`:''}

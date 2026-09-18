@@ -181,6 +181,46 @@ td.lb{font-weight:600;}
 })();
 </script>
 <!-- ── End loading overlay ─────────────────────────────────────────────── -->
+<!-- 2026-09-18: North & Hub Field Guide, now a slide-in panel instead of a popup window
+     (Stef: "is it possible for it to slide in from the right hand side similar to ... contact
+     slide in in the ... Account Intelligence Hub"). Mirrors AH's own .side-panel/.sp-overlay
+     mechanism in contact-seeker-hub.html (fixed panel off-screen at right, transitions to
+     right:0 behind a dimmed backdrop) -- distinct fg- class names here so nothing collides
+     with any panel system already in this file. Guide is now a real file in this repo
+     (field-guide.html), not a claude.ai artifact link -- same-origin, so it can be iframed
+     safely (a cross-site artifact URL could not be). Iframe src is set lazily on first open,
+     not on page load, so the guide's own weight never affects this page's own boot time. -->
+<style>
+  .fg-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9990}
+  .fg-overlay.open{display:block}
+  .fg-panel{position:fixed;top:0;right:-720px;width:680px;max-width:96vw;height:100vh;background:#fff;box-shadow:-4px 0 24px rgba(0,0,0,.18);z-index:9991;display:flex;flex-direction:column;transition:right .28s cubic-bezier(.4,0,.2,1);overflow:hidden}
+  .fg-panel.open{right:0}
+  .fg-panel .fg-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #e5e5e5;flex:0 0 auto;font-family:inherit}
+  .fg-panel .fg-head b{font-size:14px}
+  .fg-panel .fg-close{border:none;background:none;cursor:pointer;font-size:22px;color:#999;line-height:1;padding:0 4px}
+  .fg-panel iframe{flex:1 1 auto;border:none;width:100%}
+</style>
+<div class="fg-overlay" id="fgOverlay" onclick="closeFieldGuide()"></div>
+<div class="fg-panel" id="fgPanel">
+  <div class="fg-head"><b>📘 North &amp; Hub Field Guide</b><button class="fg-close" onclick="closeFieldGuide()" aria-label="Close">&times;</button></div>
+  <iframe id="fgFrame" src="" title="North &amp; Hub Field Guide"></iframe>
+</div>
+<script>
+function openFieldGuide(){
+  var f=document.getElementById('fgFrame');
+  if(f && !f.getAttribute('src')) f.setAttribute('src','field-guide.html');
+  var p=document.getElementById('fgPanel'), o=document.getElementById('fgOverlay');
+  if(p) p.classList.add('open');
+  if(o) o.classList.add('open');
+}
+window.openFieldGuide=openFieldGuide;
+function closeFieldGuide(){
+  var p=document.getElementById('fgPanel'), o=document.getElementById('fgOverlay');
+  if(p) p.classList.remove('open');
+  if(o) o.classList.remove('open');
+}
+window.closeFieldGuide=closeFieldGuide;
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="shared/moduleFooter.js"></script>
 <script src="shared/dateFormat.js"></script>
@@ -195,7 +235,7 @@ td.lb{font-weight:600;}
     <div id="tnResults"></div>
   </div>
   <button class="btn sm" id="tnHelpBtn" onclick="openHelpPanel()" title="Help &amp; FAQ" style="margin-right:8px">?</button>
-  <a class="btn sm" href="https://claude.ai/code/artifact/a65c7848-70ac-491b-8b77-70b05e0934d3" onclick="window.open(this.href,'northHubFieldGuide','width=980,height=900,noopener,noreferrer');return false;" title="North &amp; Hub Field Guide — full how-to, overviews and FAQ" style="margin-right:8px;text-decoration:none">📘</a>
+  <a class="btn sm" href="#" onclick="openFieldGuide();return false;" title="North &amp; Hub Field Guide — full how-to, overviews and FAQ" style="margin-right:8px;text-decoration:none">📘</a>
   <div class="tn-acct" id="tnAcct"></div>
   <script>document.addEventListener('click',function(e){var r=document.getElementById('tnResults');if(r&&!e.target.closest('.tn-search'))r.innerHTML='';});</script>
 </div>

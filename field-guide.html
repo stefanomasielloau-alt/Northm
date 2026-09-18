@@ -1,0 +1,722 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>North & Hub Field Guide</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+  :root{
+    --bg:#f6f7fa; --surface:#ffffff; --surface-alt:#eef1f6;
+    --ink:#161b26; --ink-soft:#5b6472; --ink-faint:#8b93a3;
+    --border:#dfe3ea; --border-soft:#eceff3;
+    --accent:#1f4e8c; --accent-ink:#123262; --accent-soft:#e8eefa;
+    --warn:#9a5b12; --warn-bg:#fbf1e2; --warn-border:#eccf9b;
+    --ok:#1f7a4d; --ok-bg:#e9f6ef;
+    --code-bg:#eef1f6;
+    --shadow: 0 1px 2px rgba(20,30,50,.04), 0 8px 24px rgba(20,30,50,.05);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0f131c; --surface:#151b28; --surface-alt:#1a2130;
+      --ink:#e7ebf2; --ink-soft:#a7b0bf; --ink-faint:#717c8e;
+      --border:#2a3344; --border-soft:#232b3a;
+      --accent:#7ea6e6; --accent-ink:#cfe0fb; --accent-soft:#1c2c47;
+      --warn:#e0ab5c; --warn-bg:#332510; --warn-border:#54401f;
+      --ok:#6fc496; --ok-bg:#122a1f;
+      --code-bg:#1a2130;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f131c; --surface:#151b28; --surface-alt:#1a2130;
+    --ink:#e7ebf2; --ink-soft:#a7b0bf; --ink-faint:#717c8e;
+    --border:#2a3344; --border-soft:#232b3a;
+    --accent:#7ea6e6; --accent-ink:#cfe0fb; --accent-soft:#1c2c47;
+    --warn:#e0ab5c; --warn-bg:#332510; --warn-border:#54401f;
+    --ok:#6fc496; --ok-bg:#122a1f;
+    --code-bg:#1a2130;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'IBM Plex Sans', system-ui, sans-serif;
+    font-size:15.5px; line-height:1.6;
+    padding-inline:16px;
+  }
+  h1,h2,h3,h4{font-family:'Fraunces', Georgia, serif; text-wrap:balance; color:var(--ink); font-weight:600}
+  code, .mono{font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:.92em}
+  a{color:var(--accent)}
+  a:focus-visible, button:focus-visible, summary:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+  .shell{max-width:1180px; margin:0 auto; display:grid; grid-template-columns:250px minmax(0,1fr); gap:40px; padding-block:32px 80px}
+  @media (max-width:860px){ .shell{grid-template-columns:1fr} }
+
+  /* ---- Masthead ---- */
+  .masthead{grid-column:1/-1; border-bottom:1px solid var(--border); padding-block-end:26px; margin-block-end:6px}
+  .eyebrow{font-family:'IBM Plex Mono',monospace; font-size:11.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); font-weight:500}
+  .masthead h1{font-size:clamp(30px,4vw,42px); margin:6px 0 10px; letter-spacing:-.01em}
+  .masthead p.lede{max-width:62ch; color:var(--ink-soft); font-size:16.5px; margin:0 0 18px}
+  .meta-strip{display:flex; flex-wrap:wrap; gap:10px}
+  .meta-pill{
+    display:flex; align-items:center; gap:7px; background:var(--surface); border:1px solid var(--border);
+    border-radius:8px; padding:8px 13px; font-size:12.5px; color:var(--ink-soft); box-shadow:var(--shadow);
+  }
+  .meta-pill b{color:var(--ink); font-weight:600; font-family:'IBM Plex Mono',monospace}
+
+  /* ---- Sidebar / TOC ---- */
+  .toc{position:sticky; top:20px; align-self:start; display:flex; flex-direction:column; gap:18px; max-height:calc(100vh - 40px); overflow-y:auto; padding-block:4px}
+  @media (max-width:860px){
+    .toc{position:static; flex-direction:row; overflow-x:auto; overflow-y:visible; max-height:none;
+      gap:8px; padding-block-end:6px; margin-block-end:8px; border-bottom:1px solid var(--border)}
+    .toc-group{flex:0 0 auto}
+    .toc-group .toc-title{display:none}
+    .toc-group ul{display:flex; gap:6px}
+    .toc-group li a{white-space:nowrap; padding:7px 11px; border-radius:999px; background:var(--surface-alt)}
+  }
+  .toc-group .toc-title{font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-faint); margin:0 0 8px}
+  .toc-group ul{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:1px}
+  .toc-group li a{display:block; padding:6px 9px; border-radius:6px; color:var(--ink-soft); text-decoration:none; font-size:13.5px}
+  .toc-group li a:hover{background:var(--surface-alt); color:var(--ink)}
+  .toc-group li a .tag{color:var(--ink-faint); font-family:'IBM Plex Mono',monospace; font-size:11px}
+
+  /* ---- Main content ---- */
+  main{min-width:0}
+  .part-intro{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:22px 24px; margin-block-end:28px; box-shadow:var(--shadow)}
+  .part-intro h2{margin-top:0}
+  .part-intro p{color:var(--ink-soft); margin-block-end:0; max-width:70ch}
+
+  section.module{padding-block:34px; border-bottom:1px solid var(--border-soft)}
+  section.module:first-of-type{padding-block-start:6px}
+  .module-head{display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-block-end:6px}
+  .module-head h3{margin:0; font-size:23px}
+  .module-code{font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-faint); background:var(--surface-alt); border-radius:6px; padding:2px 8px}
+  .module-what{color:var(--ink-soft); max-width:66ch; margin:8px 0 22px}
+
+  h4.sub{font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--accent); margin:26px 0 12px; font-weight:600}
+
+  ol.howto{margin:0; padding-left:1.3em; display:flex; flex-direction:column; gap:10px; max-width:68ch}
+  ol.howto li{padding-left:4px}
+  ol.howto b{color:var(--ink)}
+
+  .faq{display:flex; flex-direction:column; gap:8px; max-width:70ch}
+  details.qa{background:var(--surface); border:1px solid var(--border); border-radius:9px; padding:2px 16px}
+  details.qa[open]{border-color:var(--accent)}
+  details.qa summary{cursor:pointer; padding:12px 0; font-weight:500; list-style:none; display:flex; justify-content:space-between; gap:12px; align-items:center}
+  details.qa summary::-webkit-details-marker{display:none}
+  details.qa summary::after{content:'+'; font-family:'IBM Plex Mono',monospace; color:var(--ink-faint); font-size:16px; flex:0 0 auto}
+  details.qa[open] summary::after{content:'–'}
+  details.qa .a{color:var(--ink-soft); padding-block:0 14px; max-width:64ch}
+
+  .callout{border-radius:9px; padding:14px 16px; margin-block:16px; max-width:68ch; display:flex; gap:10px; font-size:14px}
+  .callout .icon{flex:0 0 auto; line-height:1.4}
+  .callout.warn{background:var(--warn-bg); border:1px solid var(--warn-border); color:var(--warn)}
+  .callout.warn b{color:var(--warn)}
+  .callout p{margin:0; color:inherit}
+  .callout.ok{background:var(--ok-bg); border:1px solid var(--ok); color:var(--ok)}
+
+  table.issues{width:100%; border-collapse:collapse; margin-block:14px; font-size:13.5px}
+  table.issues th{text-align:left; font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); border-bottom:1px solid var(--border); padding:8px 10px 8px 0}
+  table.issues td{border-bottom:1px solid var(--border-soft); padding:11px 10px 11px 0; color:var(--ink-soft); vertical-align:top}
+  table.issues td.sev{white-space:nowrap}
+  .sev-pill{font-family:'IBM Plex Mono',monospace; font-size:10.5px; padding:2px 8px; border-radius:5px; font-weight:500}
+  .sev-high{background:var(--warn-bg); color:var(--warn)}
+  .sev-med{background:var(--surface-alt); color:var(--ink-soft)}
+  .wrap-table{overflow-x:auto}
+
+  .foot{margin-block-start:50px; padding-block-start:22px; border-top:1px solid var(--border); color:var(--ink-faint); font-size:13px; max-width:70ch}
+  .foot a{color:var(--ink-soft)}
+
+  /* ---- Search ---- */
+  .search-wrap{position:relative; max-width:420px; margin-block-start:18px}
+  .search-wrap input{
+    width:100%; font:inherit; font-size:14.5px; padding:11px 40px 11px 38px; border-radius:9px;
+    border:1px solid var(--border); background:var(--surface); color:var(--ink); box-shadow:var(--shadow);
+  }
+  .search-wrap input:focus{outline:2px solid var(--accent); outline-offset:1px}
+  .search-wrap .sicon{position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--ink-faint); pointer-events:none}
+  #gsearch-count{font-size:12px; color:var(--ink-faint); margin-block-start:6px; min-height:16px}
+  .no-results{color:var(--ink-soft); padding:28px 0; font-size:14.5px}
+
+  /* ---- Worked examples ---- */
+  .example{background:var(--accent-soft); border:1px solid var(--accent); border-radius:10px; padding:18px 20px; margin-block:20px; max-width:68ch}
+  .example .ex-eyebrow{font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--accent); font-weight:600; margin:0 0 10px; display:flex; align-items:center; gap:7px}
+  .example h5{margin:0 0 10px; font-size:16px; color:var(--accent-ink)}
+  .example ol{margin:0; padding-left:1.2em; display:flex; flex-direction:column; gap:8px; color:var(--ink)}
+  .example p{margin:0 0 10px; color:var(--ink)}
+  .example .result{margin-top:12px; padding-top:12px; border-top:1px solid var(--accent); font-size:13.5px; color:var(--ink-soft)}
+  .example .result b{color:var(--ink)}
+</style>
+
+<div class="shell">
+  <div class="masthead">
+    <div class="eyebrow" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-border);border-radius:5px;padding:2px 9px;letter-spacing:.1em">BETA</span>
+      <span>Reference · updated 18 September 2026</span>
+    </div>
+    <h1>North &amp; Hub Field Guide</h1>
+    <p class="lede">Everything a real user needs to find their way around North's nine planning modules and the Account Intelligence Hub (AH) &amp; Account Queue (AQ) — what each screen is for, how to actually do the common things, and the answers behind the in-app "?" Help button.</p>
+    <p style="color:var(--ink-soft); max-width:62ch; font-size:13.5px; margin:0 0 18px">Both North/Hub and this guide are in <b>beta</b> — things are still settling. See <a href="#known-issues">Known issues</a> below for what's already found, and use the <b>💬</b> button anywhere in the app to report anything new (see <a href="#getting-help">Getting help</a>).</p>
+    <div class="meta-strip">
+      <div class="meta-pill">🧭 <b>9</b>&nbsp;North modules</div>
+      <div class="meta-pill">🗂 <b>AH</b>&nbsp;+ <b>AQ</b> covered</div>
+      <div class="meta-pill">🏷️ North <b>V0.2708.4</b></div>
+      <div class="meta-pill">✅ Verified against the live app &amp; source, 14 Sep</div>
+      <div class="meta-pill">⚠️ <b>7</b>&nbsp;known live issues logged below</div>
+    </div>
+    <div class="search-wrap">
+      <span class="sicon">🔎</span>
+      <input id="gsearch" type="search" placeholder="Search the guide — try “invite code”, “low stock”, “Dashboard summary”…" autocomplete="off">
+      <div id="gsearch-count" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <nav class="toc" aria-label="Table of contents">
+    <div class="toc-group">
+      <p class="toc-title">Start here</p>
+      <ul>
+        <li><a href="#north-overview">North — overview</a></li>
+      </ul>
+    </div>
+    <div class="toc-group">
+      <p class="toc-title">Part 1 — North</p>
+      <ul>
+        <li><a href="#ordo">Strategy <span class="tag">Ordo</span></a></li>
+        <li><a href="#cursus">Campaign Planning <span class="tag">Cursus</span></a></li>
+        <li><a href="#eventus">Events <span class="tag">Eventus</span></a></li>
+        <li><a href="#custodia">Assets <span class="tag">Custodia</span></a></li>
+        <li><a href="#prospectus">Targets <span class="tag">Prospectus</span></a></li>
+        <li><a href="#augur">Scoring <span class="tag">Augur</span></a></li>
+        <li><a href="#schema">Process Maps <span class="tag">Schema</span></a></li>
+        <li><a href="#norma">Configuration <span class="tag">Norma</span></a></li>
+        <li><a href="#reportus">Reporting <span class="tag">Reportus</span></a></li>
+      </ul>
+    </div>
+    <div class="toc-group">
+      <p class="toc-title">Part 2 — Hub</p>
+      <ul>
+        <li><a href="#hub-overview">AH &amp; AQ — overview</a></li>
+        <li><a href="#ah">Account Intelligence Hub</a></li>
+        <li><a href="#aq">Account Queue</a></li>
+      </ul>
+    </div>
+    <div class="toc-group">
+      <p class="toc-title">Reference</p>
+      <ul>
+        <li><a href="#known-issues">Known issues</a></li>
+        <li><a href="#getting-help">Getting help</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+
+    <section id="north-overview" class="part-intro">
+      <h2>North — overview</h2>
+      <p>North is nine separate tools ("modules"), each its own page, sharing one sign-in and one database. Which modules you can see and edit is controlled by three layers: your <b>organization</b> sets the ceiling (which modules exist at all), your <b>role</b> sets Configure/Publish/Can-edit, and you personally have a per-user <b>Modules toggle</b>. Every module shares the same top nav, the same small <span class="mono">?</span> Help button, and the same red 💬 feedback button, so once you know one, the others feel familiar.</p>
+    </section>
+
+    <section class="module" id="ordo">
+      <div class="module-head"><h3>Strategy</h3></div>
+      <p class="module-what">Funnel planning, forecasting and the budget drivers every other module's numbers roll up from. Pages run roughly in workflow order: Drivers &amp; rates → Planning engine → Geography &amp; pods → Segment &amp; audience → Activity plan → Campaign &amp; cost, then Actuals &amp; history → Insight → Snapshots.</p>
+
+      <h4 class="sub">How to</h4>
+      <ol class="howto">
+        <li><b>Set your drivers and rates first.</b> Confirm the conversion rates, costs and assumptions your forecast runs on — everything downstream reads these.</li>
+        <li><b>Build the plan</b> through Planning engine, Geography &amp; pods and Segment &amp; audience.</li>
+        <li><b>Lay out activity and cost</b> in Activity plan and Campaign &amp; cost.</li>
+        <li><b>Track actuals</b> in Actuals &amp; history so Insight can compare plan vs. actual.</li>
+        <li><b>Snapshot the plan</b> before a big revision, or to compare quarter over quarter.</li>
+        <li><b>Use the quick calculator</b> from the home screen for a fast what-if without touching the full plan.</li>
+      </ol>
+      <p style="color:var(--ink-soft); max-width:68ch">The old Board report still exists at a direct link for continuity, but board-level reporting now lives in <a href="#reportus">Reporting</a>.</p>
+
+      <div class="example">
+        <p class="ex-eyebrow">🧭 Worked example — clearing a blocking validation</p>
+        <h5>"Why won't my funnel numbers add up?"</h5>
+        <p>Strategy's home screen shows a live validations count next to your name (e.g. <i>"7 blocking validations need your attention"</i>) — Ordo will not let downstream Campaign &amp; cost numbers be trusted until these clear. Here's a real one, straight from this org's own list:</p>
+        <ol>
+          <li><b>Read the validation line.</b> "Blocking — Segment mix totals 200%, not 100%." That's telling you Segment &amp; audience's split across segments (e.g. Enterprise / Mid-market / SMB) sums to double what it should.</li>
+          <li><b>Open Segment &amp; audience</b> from the Plan section of the nav.</li>
+          <li><b>Find the segment whose percentages don't sum to 100.</b> A 200% total usually means a segment got entered twice, or a percentage was typed as "50" in two rows that should have summed with others to 100 total, not 100 each.</li>
+          <li><b>Correct the split</b> so the segment's percentages sum to exactly 100%, then save.</li>
+          <li><b>Recheck the home screen.</b> The blocking count drops by one, and that segment's line disappears from the Validations list.</li>
+        </ol>
+        <p class="result">A similar pattern applies to the pod-share validations you'll also see here (e.g. <i>"Japan pod shares total 20%"</i>, <i>"ANZ pod shares total 70%"</i>) — those live on Geography &amp; pods instead, but the fix is the same shape: find the region, make its pod shares sum to 100%, save.</p>
+      </div>
+
+      <div class="callout warn"><span class="icon">⚠️</span><p><b>Known:</b> Strategy's "Recent activity" panel currently shows the same entries repeated several times over — see <a href="#known-issues">Known issues</a>. The underlying numbers (gates, validations, campaigns) are not affected.</p></div>
+
+      <h4 class="sub">FAQ</h4>
+      <div class="faq">
+        <details class="qa"><summary>How do I reset my password?</summary><p class="a">An admin can trigger a reset from Configuration → Roles &amp; users → Reset password, or use "Forgot password?" at login. The email comes from Supabase directly, not from North.</p></details>
+        <details class="qa"><summary>How do I set up a passkey?</summary><p class="a">From your account menu, choose to set up a passkey — your browser or device (Windows Hello, Touch ID, a security key) walks you through it.</p></details>
+        <details class="qa"><summary>Why can't I see a module, or can't edit something?</summary><p class="a">Access is layered: organization → role → your personal Modules toggle. Ask an admin to check all three.</p></details>
+        <details class="qa"><summary>What is Super Admin?</summary><p class="a">Not a role in the Roles table — a separate flag on a login that gives full cross-organization visibility in Configuration, independent of any one organization's roles.</p></details>
+      </div>
+    </section>
+
+    <section class="module" id="cursus">
+      <div class="module-head"><h3>Campaign Planning</h3></div>
+      <p class="module-what">Individual campaigns and their execution detail — budgets, dates, partners, templates, and how a campaign actually performed. This is where a campaign is born before it's pushed through to Strategy's funnel.</p>
+
+      <h4 class="sub">How to</h4>
+      <ol class="howto">
+        <li><b>Start a new campaign.</b> Click New campaign and pick one of four ways in: <i>Fill the form</i> (go straight to the full form), <i>Answer a few questions</i> (one field at a time), <i>Upload a document</i> (drop a brief — AI pulls what it can, or falls back to a basic prefill if no AI provider is configured), or <i>Speak / dictate</i> (works best in Chrome or Edge). All four land you in the normal form to review before anything's created.</li>
+        <li><b>Choose Simple or Expert mode.</b> Simple shows the core fields; Expert adds business case, sign-off and partner allocation. Simple-mode users only see Home and Planning in the side nav.</li>
+        <li><b>Track effectiveness</b> once a campaign has run.</li>
+        <li><b>Manage partners and templates</b> so recurring structures don't get rebuilt from scratch each time.</li>
+        <li><b>Push to Strategy.</b> New campaigns start local to Cursus — use Sync to push them through to Ordo when ready (a toast confirms it).</li>
+      </ol>
+
+      <div class="example">
+        <p class="ex-eyebrow">🧭 Worked example — standing up "FY27 Enterprise Field Series"</p>
+        <h5>Taking a $180k field-marketing campaign from idea to sign-off queue</h5>
+        <p>This is a real campaign sitting in this org's list today — Draft status, $180k budget. Here's the path it would have taken:</p>
+        <ol>
+          <li><b>New campaign → Fill the form</b> (or Upload a document, if there's already a brief to hand — AI pulls the name, dates and budget out for you to check).</li>
+          <li><b>Name it</b> "FY27 Enterprise Field Series" and set the <b>budget to $180,000</b>.</li>
+          <li><b>Pick Simple mode</b> if this is a quick standard field campaign, or <b>switch to Expert</b> if it needs a business case and formal sign-off routing — a Field programme at this size usually wants Expert, for the sign-off trail alone.</li>
+          <li><b>Save as Draft</b> while the details are still being worked out — it won't show up as "awaiting sign-off" until it's actually submitted.</li>
+          <li><b>When ready, submit for sign-off.</b> Status moves to Submitted, and it now counts toward Strategy's "awaiting sign-off" tile.</li>
+          <li><b>Sync it to Strategy</b> once approved, so its budget rolls into the funnel's Campaign &amp; cost numbers.</li>
+        </ol>
+        <p class="result">Compare against <b>"RLS TEST CAMPAIGN"</b> in the same list — Approved, $1 budget — a deliberately tiny fixture used for permissions testing, not a real campaign. If you ever see a $1 or $0 "campaign" in a real list, that's usually exactly this: a test row, not a mistake.</p>
+      </div>
+
+      <h4 class="sub">FAQ</h4>
+      <div class="faq">
+        <details class="qa"><summary>What are the different ways to start a new campaign?</summary><p class="a">Fill the form, Answer a few questions, Upload a document, or Speak / dictate — all four land you in the same form to review before anything is created.</p></details>
+        <details class="qa"><summary>Why can't I use Speak / dictate?</summary><p class="a">It uses your browser's own speech recognition, which works best in Chrome or Edge — Safari's support is inconsistent. Upload a document or Fill the form work everywhere.</p></details>
+        <details class="qa"><summary>Is AI document/dictation reading always available?</summary><p class="a">If your organization hasn't configured an AI provider yet (Configuration → LLM providers), upload and dictation still work — they fall back to a basic prefill (name, first two dates, a dollar amount) instead of full extraction.</p></details>
+        <details class="qa"><summary>What's the difference between Simple and Expert mode?</summary><p class="a">Simple mode shows the core fields; Expert mode adds business case, sign-off, partner allocation and more — toggle it if your role allows.</p></details>
+      </div>
+    </section>
+
+    <section class="module" id="eventus">
+      <div class="module-head"><h3>Events</h3></div>
+      <p class="module-what">Event planning and logistics, rolling individual events up into programme-level views.</p>
+      <h4 class="sub">How to</h4>
+      <ol class="howto">
+        <li><b>Log a new event</b> from the Events list, then fill in its logistics in the event's own detail view.</li>
+        <li><b>Check programme roll-ups</b> to see totals across every event in a programme, rather than one at a time.</li>
+        <li><b>Shared config</b> (regions, cost buckets) reflects Configuration's settings — it isn't edited here.</li>
+      </ol>
+
+      <div class="example">
+        <p class="ex-eyebrow">🧭 Worked example — closing out an event</p>
+        <h5>Marking "TEst event" Completed</h5>
+        <p>A real event in this org: two-day run (28→29 July), $280k budget, now marked Completed. The general path for wrapping any event up:</p>
+        <ol>
+          <li><b>Open the event</b> from the Events list once its dates have passed.</li>
+          <li><b>Log final logistics</b> in its detail view — actual attendance, final spend against the $280k budget, any outstanding vendor items.</li>
+          <li><b>Set status to Completed.</b> This is what should move it out of "upcoming" and into your historical record.</li>
+          <li><b>Check the programme roll-up</b> if this event belongs to a programme, so the programme-level totals pick up its final numbers.</li>
+        </ol>
+        <p class="result">⚠️ Right now the home dashboard's Pipeline-snapshot "Completed" tile shows 0 even with an event like this correctly marked Completed in the table — that's the known display bug above, not something wrong with how you closed the event out. The event's own record is fine; the summary tile just isn't counting it yet.</p>
+      </div>
+      <div class="callout warn"><span class="icon">⚠️</span><p><b>Known:</b> the Pipeline snapshot tile's Completed count doesn't currently match the events table below it — see <a href="#known-issues">Known issues</a> before reading the tile as the source of truth.</p></div>
+    </section>
+
+    <section class="module" id="custodia">
+      <div class="module-head"><h3>Assets</h3></div>
+      <p class="module-what">The asset register — creative, collateral and merchandise tracked through their lifecycle, with a stock-transactions ledger underneath.</p>
+      <h4 class="sub">How to</h4>
+      <ol class="howto">
+        <li><b>Browse or add assets.</b> Each has a detail view for notes, expiry/publish dates, sign-off and a file link.</li>
+        <li><b>Log transactions</b> to track usage, reuse or handoffs.</li>
+        <li><b>Review effectiveness</b> to see how an asset actually performed.</li>
+        <li><b>Check reference tracking</b> for where an asset is referenced elsewhere in North.</li>
+      </ol>
+
+      <div class="example">
+        <p class="ex-eyebrow">🧭 Worked example — restocking a low-stock item</p>
+        <h5>"Honey Jar branded gift sets" just hit 8 units</h5>
+        <p>A real asset in this org, tagged Merchandise, currently sitting at 8 units with a $23 cost per unit — exactly the kind of thing the Low-stock tile is meant to catch.</p>
+        <ol>
+          <li><b>Open the asset</b> from the Assets list — its detail view shows notes, expiry/publish dates, sign-off status and a file link (e.g. a spec sheet or supplier quote).</li>
+          <li><b>Log a transaction</b> for the restock — record the quantity received and, if relevant, which campaign or event drew the stock down in the first place.</li>
+          <li><b>Tag it</b> if it isn't already — this org's preset list includes Merchandise, Giveaway, Signage, Booth, AV equipment, Printed collateral, Badge/lanyard and a few others; pick from the presets rather than typing a new free-text tag where one already fits.</li>
+          <li><b>Set (or check) the low-stock threshold</b> on the asset so it keeps surfacing here at the right point in future, not too early or too late.</li>
+        </ol>
+        <p class="result">Note: the Low-stock tile on the home dashboard is currently affected by the duplicate-entries bug below — "Honey Jar branded gift sets" may show up twice in that list even though there's only one real record. The Assets table itself (and the transaction log) is not affected.</p>
+      </div>
+      <div class="callout warn"><span class="icon">⚠️</span><p><b>Known:</b> the "Low stock" list on the home dashboard currently shows each item twice — see <a href="#known-issues">Known issues</a>.</p></div>
+    </section>
+
+    <section class="module" id="prospectus">
+      <div class="module-head"><h3>Targets</h3></div>
+      <p class="module-what">ICP (ideal customer profile) filtering and opportunity-level reporting.</p>
+      <h4 class="sub">How to</h4>
+      <ol class="howto">
+        <li><b>Set your filters</b> — this defines the ICP criteria you're targeting (industry, what you sell, ideal client description, deal value, market/country today).</li>
+        <li><b>Review the target list</b> of accounts/prospects matching your current filters.</li>
+        <li><b>Run reports</b> for opportunity-level detail off the target list.</li>
+        <li><b>Compare</b> multiple filter sets or target lists side by side.</li>
+      </ol>
+
+      <div class="example">
+        <p class="ex-eyebrow">🧭 Worked example — defining an ICP filter</p>
+        <h5>Building a filter for a new vertical</h5>
+        <ol>
+          <li><b>Open Filters</b> and start a new one.</li>
+          <li><b>Fill in the firmographic fields available today:</b> industry (e.g. "Fintech"), what you sell (e.g. "Payments infrastructure"), an ideal-client description in plain language, an average deal value, and market/country (e.g. "AU/NZ").</li>
+          <li><b>Save it</b> — it immediately populates the Target list with whatever accounts/prospects match.</li>
+          <li><b>Run a report</b> off that list to see opportunity-level detail, or open Compare to weigh it against a second filter set (say, a different vertical) side by side.</li>
+        </ol>
+        <p class="result">Note: company size, seniority and job-title filters aren't in the current field set — if you need to narrow by those, do it downstream in Scoring or when pulling the list into Hub's own Network filters, which do support them today.</p>
+      </div>
+    </section>
+
+    <section class="module" id="augur">
+      <div class="module-head"><h3>Scoring</h3></div>
+      <p class="module-what">A deliberately transparent deal-scoring calculator — weighted factors and a Hot/Warm/Cold threshold system, not a predictive model. Nothing here is "divined": every score traces back to a rule you can see.</p>
+      <h4 class="sub">How to</h4>
+      <ol class="howto">
+        <li><b>Review deals</b> on the working pipeline view.</li>
+        <li><b>Check or tune the scoring model</b> — this is where the weighted rules behind every score live.</li>
+        <li><b>Look at Forecast</b> for a scoring-driven view of what's likely to close.</li>
+        <li><b>Browse Contacts</b> for the people tied to your deals.</li>
+      </ol>
+
+      <div class="example">
+        <p class="ex-eyebrow">🧭 Worked example — reading a deal's score</p>
+        <h5>Why a deal sits in a given tier</h5>
+        <p>Every deal here is scored by summing a set of weighted factors your org has defined — nothing is inferred or predicted. To understand why a specific deal (say, one sitting in "Prospecting" with tier "—") hasn't been tiered yet:</p>
+        <ol>
+          <li><b>Open the deal</b> from the Deals list.</li>
+          <li><b>Check the Scoring model</b> to see which factors feed the total — a deal with no tier yet usually just hasn't had its factor inputs filled in (deal size, engagement level, fit criteria — whatever your org's model weighs).</li>
+          <li><b>Fill in the missing inputs</b> on the deal itself; the score and tier (Hot/Warm/Cold) recompute immediately.</li>
+          <li><b>Check Forecast</b> to see how that tier feeds into the likely-to-close view.</li>
+        </ol>
+        <p class="result">Because every factor and threshold is visible in the Scoring model, you can always trace a Hot/Warm/Cold label back to the exact numbers that produced it — that transparency is a deliberate design choice, not a limitation.</p>
+      </div>
+      <div class="callout warn"><span class="icon">⚠️</span><p><b>Known:</b> Scoring's own deal count currently disagrees with what the Dashboard and Reporting say about it — see <a href="#known-issues">Known issues</a>.</p></div>
+    </section>
+
+    <section class="module" id="schema">
+      <div class="module-head"><h3>Process Maps</h3></div>
+      <p class="module-what">Process maps and workflow automation — diagrams plus rules that fire alerts when real conditions in North's data are met.</p>
+      <h4 class="sub">How to</h4>
+      <ol class="howto">
+        <li><b>Browse or build a diagram</b> from the Diagrams list, opening one into the editor to draw or edit it.</li>
+        <li><b>Set up automations</b> — rules that trigger on real events (campaign ready-to-execute, off-target, task overdue, deal stage, event status, asset low-stock) and fire an email/chat alert to a person or "the manager" of whoever owns the matched record.</li>
+        <li><b>Start from a template</b> where one's offered, rather than building an automation from scratch.</li>
+      </ol>
+      <p style="color:var(--ink-soft); max-width:68ch">Automations are evaluated client-side while someone has this page open (checked on load and every 5 minutes) — there's no background server firing them the instant a condition becomes true.</p>
+
+      <div class="example">
+        <p class="ex-eyebrow">🧭 Worked example — alert the manager when a campaign goes off target</p>
+        <h5>Building "campaign_off_target" → notify the manager</h5>
+        <ol>
+          <li><b>Go to Automations</b> and start a new rule (or copy the template, if one's offered).</li>
+          <li><b>Pick the trigger type "campaign off target"</b> — this mirrors Strategy/Campaign Planning's own "At risk" RAG check (committed or actual cost meaningfully over plan).</li>
+          <li><b>Set the threshold</b> if you want a different tolerance than the org default — e.g. 100% (fire only once it's fully over budget) vs. a tighter 90% early-warning.</li>
+          <li><b>Set the target to "the manager."</b> This resolves per matched campaign, not per rule — Schema walks Campaign owner → their business unit → that unit's manager, so two campaigns with different owners correctly notify two different people.</li>
+          <li><b>Choose the alert channel</b> — email or chat.</li>
+          <li><b>Save, then leave this tab open occasionally</b> (or reopen it every so often) — remember automations only evaluate while someone has this page open, on load and every 5 minutes, since there's no background job firing them.</li>
+        </ol>
+        <p class="result">The moment a campaign crosses the threshold you set, its owner's manager gets a one-time alert (deduped, so it won't refire for the same breach) — no code change needed to add a rule like this for a different campaign or a different threshold.</p>
+      </div>
+      <div class="callout warn"><span class="icon">⚠️</span><p><b>Known:</b> this was the slowest North module to load in testing (~10s before it settled) — not broken, just worth expecting a short wait.</p></div>
+    </section>
+
+    <section class="module" id="norma">
+      <div class="module-head"><h3>Configuration</h3></div>
+      <p class="module-what">Shared configuration — the admin-facing module every other module pulls its settings from. Most pages are read-only unless your role has Configure access.</p>
+
+      <h4 class="sub">How to — the basics</h4>
+      <ol class="howto">
+        <li><b>Manage roles &amp; users.</b> This is also where you generate an invite code: pick a role, click Generate invite code, send it to your teammate — they redeem it at signup. An admin can trigger a password reset from here too.</li>
+        <li><b>Set cost buckets, tracking IDs and campaign naming</b> — the shared taxonomies every module's campaigns/activities draw from.</li>
+        <li><b>Set currency</b> for how money displays and calculates across every module.</li>
+        <li><b>Set up integrations</b> and check Agent activity for automated/agent-driven activity history.</li>
+        <li><b>Review Feedback</b> — issues reported from the 💬 button anywhere in North land here with name, page and timestamp captured automatically.</li>
+      </ol>
+
+      <div class="example">
+        <p class="ex-eyebrow">🧭 Worked example — bringing on a new teammate</p>
+        <h5>Inviting someone as a Manager</h5>
+        <ol>
+          <li><b>Go to Roles &amp; users</b> and click <b>Generate invite code</b>.</li>
+          <li><b>Pick the role</b> — e.g. "Manager" — before generating. The code is tied to that role; you can't change it after redemption without re-assigning the role manually.</li>
+          <li><b>Copy the generated code</b> (an 8-character code, e.g. <span class="mono">DA132163</span>) and send it to your new teammate however you'd normally reach them — email, Slack, whatever's easiest. North doesn't email it for you.</li>
+          <li><b>They redeem it</b> at North's sign-up screen, choosing "I have an invite code," entering the code plus their own name and password.</li>
+          <li><b>Check Roles &amp; users afterward</b> — the invite table shows who redeemed each code, so you can confirm it landed with the right person.</li>
+        </ol>
+        <p class="result">If you can see their row afterward but the fields look greyed out with a 🔒, that just means their role sits at or above your own tier — you can view but not edit them unless you're Super Admin or it's your own row. That's the access model working as designed, not a bug.</p>
+      </div>
+
+      <h4 class="sub">How to — LLM providers</h4>
+      <ol class="howto">
+        <li><b>Add a provider</b> on the LLM providers page — Anthropic, OpenAI or Gemini. Configuring one unlocks the richer AI extraction (document upload, dictation, Hub's content-generation buttons) for every signed-in user in your organization, not just admins.</li>
+        <li><b>Set the Access type</b> on each provider: <span class="mono">api</span> (North/Hub can call it programmatically — this is the only kind that actually powers AI features), <span class="mono">desktop</span> (a desktop app install someone uses manually) or <span class="mono">web</span> (a browser-based tool someone uses manually). Only <span class="mono">api</span>-type providers show up as assignable options elsewhere — recording a desktop or web tool here is just inventory, not something North can call.</li>
+        <li><b>Mark one provider Active</b> (the checkbox) to set the organization-wide default every AI feature falls back to when a task has no provider of its own assigned.</li>
+      </ol>
+
+      <h4 class="sub">How to — Agent Registry</h4>
+      <p style="color:var(--ink-soft); max-width:68ch; margin-top:-4px">A catalog of every agent, skill and scheduled task registered anywhere in North or Hub/Queue for your organization — what it does, which AI runs it (if any), how often, and whether it's active. <b>North is the master</b> for this catalog: add, edit, activate or remove an entry from here, or from AH's Settings → Library — both write to the same place, but anything shared with North can only be changed from here.</p>
+      <ol class="howto">
+        <li><b>Add or edit an entry</b> from Configuration → Agent Registry (full add/edit/delete access). Give it a name, kind, and mark <b>Used in</b> — one entry can be used in North, Hub, and/or Queue at once, so check every surface it actually affects.</li>
+        <li><b>Assign an AI provider to a specific task</b> (rather than following the org-wide default) by editing that entry's AI provider field — for example, to move "Dashboard summary (Ask Alec)" off Gemini onto Anthropic: open the entry, pick the provider from the dropdown, save. It takes effect on the very next use, no code change.</li>
+        <li><b>Understand the AH side.</b> AH's Settings → Library only shows entries used in Hub or Queue — an entry used exclusively in North never appears there. An entry shared with North shows in AH as read-only (🔒 Edit in North) — Hub users can see it but changes have to come from here.</li>
+      </ol>
+
+      <div class="example">
+        <p class="ex-eyebrow">🧭 Worked example — moving "Dashboard summary" off Gemini</p>
+        <h5>Switching one AI feature to a different provider, step by step</h5>
+        <p>This is a real, previously-answered question from this org — here's the exact path:</p>
+        <ol>
+          <li><b>Configure the provider first, if it isn't already.</b> Go to Configuration → LLM providers → add a row for the provider you want (say, Anthropic). Set its <b>Access type to API</b> — anything else won't show up as an assignable option in the next step.</li>
+          <li><b>Open the Agent Registry</b> — either here in Configuration, or AH's Settings → Library works identically since both write to the same catalog.</li>
+          <li><b>Find and edit "Dashboard summary (Ask Alec)."</b></li>
+          <li><b>Open the AI provider dropdown</b> — it now lists every <span class="mono">api</span>-type provider your org has configured. Pick Anthropic.</li>
+          <li><b>Save.</b> No code change, no deploy — it takes effect the very next time anyone clicks Ask Alec for a dashboard summary.</li>
+        </ol>
+        <p class="result">To change the <i>org-wide default</i> instead of just this one task, go back to LLM providers and tick <b>Active</b> on the provider row you want as the fallback — leave a task's own AI provider field blank to have it follow whatever's marked Active, rather than pinning it to one provider permanently.</p>
+      </div>
+
+      <h4 class="sub">FAQ</h4>
+      <div class="faq">
+        <details class="qa"><summary>How do I invite a new teammate?</summary><p class="a">Configuration → Roles &amp; users → Generate invite code, after picking their role. They redeem it at signup by choosing "I have an invite code."</p></details>
+        <details class="qa"><summary>What does Cross-region visibility mean?</summary><p class="a">"Transparent" means you see every region in your organization. "Isolated" means you only see the regions specifically checked for you.</p></details>
+        <details class="qa"><summary>What does the Super Admin cross-org view bar do?</summary><p class="a">Lets a Super Admin temporarily view another organization's data across the modules it's wired into, without switching accounts.</p></details>
+        <details class="qa"><summary>How do I get to AH or AQ from North?</summary><p class="a">Click the AH tile on North's home dashboard ("Open →") — it carries your session across automatically. Going to AH by typing its URL directly does not carry a session across; always go by way of North's own link.</p></details>
+        <details class="qa"><summary>I'm in Hub — how do Contact records and campaigns relate to North?</summary><p class="a">Hub and North share one pool of contact/outreach data per Hub login. A contact sourced in Hub becomes a real Hub contact immediately; outreach/campaign activity in Hub is a separate thing from North's own Campaign Planning (Cursus) campaigns, even though both use the word "campaign."</p></details>
+        <details class="qa"><summary>Can an Admin move or copy a Hub user's data to another account?</summary><p class="a">Hub's Settings → Users → Reassign data supports Move (takes data off the source account) and, for accounts with the Duplicate capability, Copy (leaves the source untouched).</p></details>
+        <details class="qa"><summary>Why can't I edit an Agent Registry entry from AH's Library?</summary><p class="a">Because it's also used in North — North is the master for anything shared with it, so AH shows it read-only with a link back here. Entries used only in Hub or Queue stay fully editable from AH.</p></details>
+      </div>
+    </section>
+
+    <section class="module" id="reportus">
+      <div class="module-head"><h3>Reporting</h3></div>
+      <p class="module-what">Cross-module dashboards, an org-wide overview, and board-facing reports — including the Board report, which moved here from Strategy.</p>
+      <h4 class="sub">How to</h4>
+      <ol class="howto">
+        <li><b>Check Dashboards</b> for the day-to-day cross-module view.</li>
+        <li><b>Check Organization</b> for an org-wide overview.</li>
+        <li><b>Build or view Reports</b>, including the board-level report.</li>
+      </ol>
+
+      <div class="example">
+        <p class="ex-eyebrow">🧭 Worked example — reading this week's Dashboard</p>
+        <h5>What a real snapshot from this org actually says</h5>
+        <p>Pulled live today: $13.0M campaign budget, 6 campaigns awaiting sign-off, $156k open pipeline across 9 deals, 3 upcoming events, 8 low-stock assets, 1 touchpoint logged in the last 7 days. How to read the deals-by-stage breakdown specifically:</p>
+        <ol>
+          <li><b>Start with the table</b>, not the chart, for exact counts — today's table read Closed Won 4, Qualification 4, Proposal 2, Negotiation 2, Closed Lost 2, Prospecting 1.</li>
+          <li><b>Use "vs" to compare</b> a period or a specific campaign against another, if you're checking one campaign's contribution to the whole.</li>
+          <li><b>Cross-check anything that looks off</b> (like a stat tile) against the module it actually comes from — e.g. Scoring's own Deals page — before treating this dashboard's number as final, especially while the known issues below are open.</li>
+        </ol>
+      </div>
+      <div class="callout warn"><span class="icon">⚠️</span><p><b>Known:</b> the Deals-by-stage chart's on-chart figures didn't line up with its own table underneath in testing — worth a visual check rather than treating either as gospel until confirmed. See <a href="#known-issues">Known issues</a>.</p></div>
+    </section>
+
+    <section id="hub-overview" class="part-intro">
+      <h2>AH &amp; AQ — overview</h2>
+      <p><b>Account Intelligence Hub (AH)</b> is the contact-seeker and outreach workspace — companies, contacts, signals, outreach, campaigns and reporting. <b>Account Queue (AQ)</b> is a separate, focused page for working through LinkedIn connection requests one profile at a time. Both share one login and one pool of contact/outreach data; the top nav (🗂 AH · 🔍 AQ · 🧭 North · ❓ Help) switches between all three without signing in again. North holds no identifiable people by design — contact records live only in Hub.</p>
+    </section>
+
+    <section class="module" id="ah">
+      <div class="module-head"><h3>Account Intelligence Hub</h3></div>
+      <p class="module-what">Reached from North's home dashboard (the AH tile) or a direct AH link once already signed in. The sidebar covers Dashboard, Network, Outreach, Campaigns, Signals, Reporting and Searches, plus Cloud Sync and Settings under Account.</p>
+
+      <h4 class="sub">How to — find, add and enrich contacts</h4>
+      <ol class="howto">
+        <li><b>Search.</b> Network → Find &amp; Enrich, or the 🔎 Searches chip, runs a LinkedIn people search in the background (~10–15 min) — de-duplicated against your existing contacts. Check back via Searches.</li>
+        <li><b>Add a contact manually</b> from Network → + Add contact — name is the only required field; everything else (company, title, warmth, LinkedIn URL/connection degree, source, pipeline stage, tags) is optional at creation.</li>
+        <li><b>Filter the contact list</b> by stage, connection degree, campaign, reply status, queue status, DNC/Not Found flags, warmth, source or follow-up status — Network's filter bar covers all of these at once.</li>
+        <li><b>Enrich a contact or company</b> via configured providers (Google CSE, PDL, Apollo, Lusha, FindyMail, BetterContact, Hunter.io, ZoomInfo) — add each provider's API key under Settings first; Hub prompts you if a key a feature needs is missing.</li>
+      </ol>
+
+      <div class="example">
+        <p class="ex-eyebrow">🧭 Worked example — a real follow-up, start to finish</p>
+        <h5>Working "Mark Brixton @ Quantaco" off the Needs-attention list</h5>
+        <p>A real contact sitting in this org's "⚠️ Needs attention — no contact in 7+ days" list today, with a follow-up due 2026-09-21:</p>
+        <ol>
+          <li><b>Open Network → All Contacts</b> and search "Mark Brixton," or click straight through from the Dashboard's Needs-attention card.</li>
+          <li><b>Check the contact panel's Signals tab</b> for Quantaco first — anything logged there (a funding round, a new hire) gives you a real reason to reach out, rather than a cold "just checking in."</li>
+          <li><b>Log the outreach</b> once you've reached out — pick a channel (LinkedIn/Email/Both) and status (Contacted is the right starting point).</li>
+          <li><b>Set the next follow-up</b> using the +7/+14/+30-day shortcuts, or clear it if the thread's now closed.</li>
+          <li><b>Add a note</b> in the Notes field — it auto-saves on blur, so there's no separate Save button to remember.</li>
+        </ol>
+      </div>
+
+      <h4 class="sub">How to — campaigns</h4>
+      <ol class="howto">
+        <li><b>Create a campaign</b> from Campaigns → Create a campaign: name, Segment (AU / APAC / Offshore-APAC), start date, daily volume, Status (Planning/Running/Paused/Completed/Archived), per-tier contact targets (Tier 1 C-suite/MD/VP/GP, Tier 2 Director/Partner/RVP, Tier 3 Sr Mgr/Head of/NED), and free-text targeting notes/ICP.</li>
+        <li><b>Leave a new campaign on Planning</b> until you're ready — Running is what allows sourcing/sending against it.</li>
+        <li><b>Track performance</b> per campaign (connection rate, reply rate) from the Campaigns list or the Dashboard's Campaign performance panel.</li>
+      </ol>
+
+      <div class="example">
+        <p class="ex-eyebrow">🧭 Worked example — exactly what was done to build a safe test campaign</p>
+        <h5>Creating "ZZ-TEST-1409-DO-NOT-USE"</h5>
+        <p>This isn't hypothetical — it's the real campaign created in this org during today's UAT pass, as a sandbox to test against without touching live data:</p>
+        <ol>
+          <li><b>Campaigns → Create a campaign.</b></li>
+          <li><b>Campaign name:</b> <span class="mono">ZZ-TEST-1409-DO-NOT-USE</span> — the <span class="mono">ZZ-</span> prefix sorts it to the bottom of any alphabetical list, and the name itself tells the next person not to source or send against it.</li>
+          <li><b>Segment:</b> left on the default, AU.</li>
+          <li><b>Status:</b> <b>Planning</b> — deliberately, since Planning campaigns can't be sourced or sent against, so a test campaign never accidentally goes live.</li>
+          <li><b>Daily volume, dates, tier targets:</b> left blank — none of them were needed for what this campaign was for.</li>
+          <li><b>Targeting notes / ICP:</b> a plain-language note explaining who made it, when, and why — "Created by the '1409 - Testing' live UAT skill (2026-09-14) as a safe sandbox campaign. Do not source/send against this — delete once testing is done."</li>
+          <li><b>Save.</b> It immediately appeared in the Campaigns list and in Reporting's campaign picker, exactly like any real campaign would.</li>
+        </ol>
+        <p class="result">This pattern — a clearly-prefixed name, Planning status, and a note explaining its purpose — is the safe way to create any throwaway/test record in AH without it being mistaken for real pipeline.</p>
+      </div>
+
+      <h4 class="sub">How to — outreach, signals &amp; reporting</h4>
+      <ol class="howto">
+        <li><b>Log outreach</b> against a contact from their detail view — status values include Contacted, Connection Pending, Replied and Meeting.</li>
+        <li><b>Log a Company Signal</b> (Hiring, New to Role, Funding, New Win, Expansion, Engaged on LI, New hire, Other) from a company's own Signals tab — the Signals dashboard then rolls these up: total, new this week, companies with any signal, and companies "gone quiet" 30+ days.</li>
+        <li><b>Build a report</b> on Reporting — pick a period basis (outreach activity or contact added), a range, granularity, and optionally a campaign to compare against another.</li>
+      </ol>
+
+      <h4 class="sub">How to — settings &amp; administration</h4>
+      <ol class="howto">
+        <li><b>Add enrichment provider API keys</b> under Settings — each provider has its own key field.</li>
+        <li><b>Manage your Agent Registry entries</b> under Settings → Library — see <a href="#norma">Configuration</a> for the North-is-master rule that governs what's editable here.</li>
+        <li><b>Reassign a user's data</b> via Settings → Users → Reassign data (Move, or Copy if the account holds the Duplicate capability).</li>
+        <li><b>Back up to the cloud</b> via Cloud Sync — contacts, outreach, templates, companies and campaigns to a SQLite store via a local proxy; the status badge shows connected/offline. Also gated to org admins, and pulls campaigns in from North.</li>
+      </ol>
+
+      <div class="callout warn"><span class="icon">⚠️</span><p><b>Known:</b> AH is the slowest surface in the whole platform to first load (15–20s from clicking through North's AH tile) — see <a href="#known-issues">Known issues</a>. It does load correctly; it just takes a moment.</p></div>
+
+      <h4 class="sub">FAQ</h4>
+      <div class="faq">
+        <details class="qa"><summary>Are AH and North the same data?</summary><p class="a">They share the same underlying pool of contacts/outreach per your Hub login, but they're separate tools. A contact sourced in AH becomes a real contact right away; outreach/campaign activity in AH isn't the same thing as a North Campaign Planning campaign, even though both use the word "campaign."</p></details>
+        <details class="qa"><summary>What are the user roles in AH?</summary><p class="a">A separate five-tier ladder from North's roles: user &lt; planner &lt; manager &lt; admin &lt; super_user, per organization — AH has no "all organizations" concept the way North's Super Admin flag does.</p></details>
+        <details class="qa"><summary>Where do I get help inside AH?</summary><p class="a">The ❓ Help link opens North's Configuration Help panel in a new tab, with real AH-specific questions included (like this one) — AH doesn't have a separate in-app panel of its own.</p></details>
+        <details class="qa"><summary>Do I need an API key to use AH?</summary><p class="a">Not to use AH itself — but a specific enrichment feature (Google CSE, PDL, Apollo, Lusha, FindyMail, BetterContact, Hunter.io, ZoomInfo) needs its own key added under Settings first. AH tells you which key is missing when you hit a feature that needs one.</p></details>
+        <details class="qa"><summary>Why did "Sync now" used to time out, and is it fixed?</summary><p class="a">With several campaigns, sync used to run one at a time sequentially and could exceed the timeout. It now runs campaigns in parallel — fixed.</p></details>
+      </div>
+    </section>
+
+    <section class="module" id="aq">
+      <div class="module-head"><h3>Account Queue</h3></div>
+      <p class="module-what">A focused, one-profile-at-a-time tool for LinkedIn connection requests. Its own description says it plainly: "Prep mode — open profiles, review, then click Connect yourself. Never send in bulk." Contacts are grouped into weeks and, inside each week, day-batches.</p>
+
+      <h4 class="sub">How to</h4>
+      <ol class="howto">
+        <li><b>Open a week and a day-batch.</b> A completed batch shows a ✅ "batch complete" state.</li>
+        <li><b>Work the queue card by card.</b> Connect is always manual — AQ opens the profile for you to review and you click Connect yourself on LinkedIn; AQ then logs it in AH as "Connection Pending" automatically. Skip → moves past a contact without an outcome; Next → marks the card done.</li>
+        <li><b>Use the Connection Note tab</b> for a draft message (300-character limit, matching LinkedIn's own cap).</li>
+        <li><b>Archive a finished week</b> with 🗄, and restore one with ↩ if you need it back.</li>
+      </ol>
+
+      <div class="example">
+        <p class="ex-eyebrow">🧭 Worked example — working a real batch</p>
+        <h5>Wave 1 · Mktg, 46/50 done</h5>
+        <p>A real, in-progress wave from this org — its Tuesday day-tab had 15 contacts, of which 13 were marked done and 2 skipped, leaving a "✅ batch complete" state on that day. Contacts in the queue included Leandro Perez (SVP &amp; CMO, Salesforce), Renee Amor (CMO, Nuix) and Jeremy Cooper (VP Marketing, Databricks). The flow for a fresh card in a batch like this:</p>
+        <ol>
+          <li><b>Open the day-tab</b> (e.g. "tue (15)") to load its stack of cards.</li>
+          <li><b>Review the profile</b> AQ opens for you — check title, company and any note already attached before deciding.</li>
+          <li><b>Decide: Connect, Skip, or Next.</b> If you're going to connect, add a short note on the Connection Note tab first (300 characters, same as LinkedIn's own limit) — then go to LinkedIn yourself and click Connect there. AQ never does this step for you.</li>
+          <li><b>Come back and mark the card done</b> (or Skip → if you're passing on this one for now) — AQ logs a manual Connect as "Connection Pending" in AH automatically once you confirm it.</li>
+          <li><b>Move to the next card</b> until the day-tab shows "✅ batch complete."</li>
+        </ol>
+      </div>
+
+      <h4 class="sub">How to — Warm-Up</h4>
+      <ol class="howto">
+        <li><b>Manual Warm-Up</b> is you actively working through the queue right now.</li>
+        <li><b>Auto Warm-Up</b> automates the low-risk part only — viewing and following, never connecting. Open its Settings, pick active days (Mon–Fri) and which day-tabs feed the eligible pool, then Start. It runs unattended on a scheduled task (Sydney time) — the tab doesn't need to stay open.</li>
+        <li>Each Auto Warm-Up run independently picks Look or Follow (not a fixed alternating pattern); a "Looked" contact gets revisited 1–3 days later to Follow. <b>It never sends a Connect request</b> — that stays with you.</li>
+        <li><b>Stop Auto Warm-Up</b> any time from the same settings panel; its recent actions are logged there.</li>
+      </ol>
+
+      <div class="callout warn"><span class="icon">⚠️</span><p><b>Known:</b> two different "this week" send counters on the same page currently disagree with each other — see <a href="#known-issues">Known issues</a>. The 60/week safety cap itself is a soft pacing guide either way, not a hard block.</p></div>
+
+      <h4 class="sub">FAQ</h4>
+      <div class="faq">
+        <details class="qa"><summary>Does AQ ever send a connection request automatically?</summary><p class="a">No. Connect is always a manual, one-at-a-time action. Auto Warm-Up automates viewing and following only.</p></details>
+        <details class="qa"><summary>What's the difference between a "week" and a "batch"?</summary><p class="a">A week is the larger grouping (roughly a week's worth of contacts); a batch is a day-tab inside it. You work through one batch at a time as a stack of cards.</p></details>
+        <details class="qa"><summary>What does 1st/2nd/3rd degree mean, and does it stick?</summary><p class="a">How connected you already are to that person on LinkedIn. Marking a degree syncs to the server immediately and should persist across devices/reloads — if one you set ever reverts, that's worth reporting via 💬, it shouldn't happen.</p></details>
+      </div>
+    </section>
+
+    <section id="known-issues">
+      <div class="part-intro" style="border-color:var(--warn-border)">
+        <h2 style="margin-top:0">Known issues, as of 14 Sep 2026</h2>
+        <p>Found during two live testing passes against the production app (signed in as a real user, not just a code review). Listed here on purpose, next to the how-to steps they affect, so a live quirk never gets mistaken for something you did wrong.</p>
+        <p><b>This is a living issues log, not a one-time snapshot.</b> North/Hub is beta software — this table gets updated as issues are found and fixed. It's not the only record: every 💬 report you file lands on Configuration → Feedback and gets triaged from there, whether or not it's made it into this table yet. If something feels off and it isn't listed below, report it via 💬 rather than assuming it's already known.</p>
+        <div class="wrap-table">
+        <table class="issues">
+          <tr><th>Where</th><th>What you'll see</th><th>Confidence</th></tr>
+          <tr><td>Most North modules</td><td>"Recent activity" and Assets' "Low stock" widgets show the same entries repeated 2–8×. Likely one shared rendering bug, not a separate one per module.</td><td class="sev"><span class="sev-pill sev-high">High</span></td></tr>
+          <tr><td>Configuration → Agent Registry</td><td>Page can get stuck on "Loading…" with a 401 in the console. May already be explained by a pending code deploy — worth a retry after that lands.</td><td class="sev"><span class="sev-pill sev-high">High</span></td></tr>
+          <tr><td>Scoring (Augur)</td><td>Its own deal count/value disagrees with what the Dashboard and Reporting say about Scoring (corroborated on two separate pages).</td><td class="sev"><span class="sev-pill sev-med">Medium</span></td></tr>
+          <tr><td>Events (Eventus)</td><td>Pipeline snapshot's "Completed" tile doesn't match the events table's own status column.</td><td class="sev"><span class="sev-pill sev-med">Medium</span></td></tr>
+          <tr><td>AQ (Account Queue)</td><td>Two "this week" send counters on the same page show different numbers.</td><td class="sev"><span class="sev-pill sev-med">Medium</span></td></tr>
+          <tr><td>AH &amp; AQ, most pages</td><td>A recurring, unattributed pair of background errors (401/404) fires on nearly every page load. The app keeps working around them — nothing has failed to render because of this so far.</td><td class="sev"><span class="sev-pill sev-med">Medium</span></td></tr>
+          <tr><td>Reporting (Reportus)</td><td>The Deals-by-stage chart's on-chart numbers didn't match its own table underneath — may just be how the numbers were read off the chart rather than a real bug.</td><td class="sev"><span class="sev-pill sev-med">Medium</span></td></tr>
+        </table>
+        </div>
+        <div class="callout ok" style="margin-top:4px"><span class="icon">✅</span><p>Not a bug: going to AH or AQ by typing the URL directly (rather than clicking through from North) will hang on "Loading…" indefinitely — the session handoff only travels with North's own link. Always navigate there from North.</p></div>
+      </div>
+    </section>
+
+    <section id="getting-help" class="part-intro">
+      <h2>Getting help</h2>
+      <ul style="color:var(--ink-soft); padding-left:1.2em; display:flex; flex-direction:column; gap:8px; max-width:68ch">
+        <li><b>Inside any North module:</b> click the small <span class="mono">?</span> button in the top-right of the nav bar. It opens that module's own Help &amp; FAQ panel — always the current source of truth if this guide and the app ever disagree.</li>
+        <li><b>Inside AH or AQ:</b> click <b>❓ Help</b> in the sidebar — it opens Configuration's Help panel in a new tab.</li>
+        <li><b>To report a bug or problem:</b> the red <b>💬</b> button in the bottom-right corner of any North, AH or AQ page. It logs your name, page and time automatically — you just describe what happened. Reports land on Configuration → Feedback.</li>
+        <li><b>For access, roles, or who can edit what:</b> that's set in Configuration → Roles &amp; users. If you're not sure why you can or can't do something, that's the first place to check.</li>
+      </ul>
+      <div class="foot">
+        Beta guide for beta software (North V0.2708.4) — supersedes the 3 September, 10 September and 14 September versions. Written from the live app and source as of 14 September 2026 — if a step here stops matching what's on screen, trust the app's own Help panel and flag the mismatch via 💬 so this guide can be refreshed.
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<p id="no-results-msg" class="no-results shell" hidden style="display:block; max-width:1180px; margin:0 auto; padding-inline:16px">No sections match that search — try a shorter or different word.</p>
+
+<script>
+(function(){
+  var input = document.getElementById('gsearch');
+  var count = document.getElementById('gsearch-count');
+  var noResults = document.getElementById('no-results-msg');
+  var sections = Array.prototype.slice.call(document.querySelectorAll('main > section'));
+
+  function norm(s){ return (s || '').toLowerCase(); }
+
+  function run(){
+    var q = norm(input.value.trim());
+    if(!q){
+      sections.forEach(function(sec){
+        sec.hidden = false;
+        sec.querySelectorAll('details.qa').forEach(function(d){ d.hidden = false; });
+      });
+      count.textContent = '';
+      noResults.hidden = true;
+      return;
+    }
+    var visibleSections = 0;
+    sections.forEach(function(sec){
+      var faqItems = sec.querySelectorAll('details.qa');
+      var faqMatchCount = 0;
+      faqItems.forEach(function(d){
+        var has = norm(d.textContent).indexOf(q) !== -1;
+        d.hidden = !has;
+        if(has){ faqMatchCount++; d.open = true; }
+      });
+      var wholeHas = norm(sec.textContent).indexOf(q) !== -1;
+      sec.hidden = !wholeHas;
+      if(wholeHas) visibleSections++;
+    });
+    count.textContent = visibleSections ? (visibleSections + ' section' + (visibleSections === 1 ? '' : 's') + ' match') : '';
+    noResults.hidden = visibleSections !== 0;
+  }
+
+  input.addEventListener('input', run);
+  document.addEventListener('keydown', function(e){
+    if(e.key === '/' && document.activeElement !== input){
+      e.preventDefault();
+      input.focus();
+    }
+  });
+})();
+</script>
+
+</body></html>

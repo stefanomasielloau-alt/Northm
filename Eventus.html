@@ -299,7 +299,7 @@ const UI = { page:'home', helpOpen:false, eventId:null, rollupLevel:'programme',
   eventsFilter:'', eventsSortBy:null, eventsSortDir:'asc', eventsUpcomingOnly:false, eventsView:'table' };
 
 function logAudit(what,detail){
-  CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
+  CFG.audit.unshift({id:uid(),ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
   if(CFG.audit.length>150)CFG.audit.pop();
 }
 function toast(msg){
@@ -442,7 +442,7 @@ async function saveToSupabase(){
     upsertRows('eventus_speakers', CFG.speakers, s=>({
       id:s.id,event_id:s.eventId,name:s.name||'',company:s.company||'',topic:s.topic||'',contact:s.contact||''
     })),
-    upsertRows('audit_log', CFG.audit, a=>({ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null}))
+    upsertRows('audit_log', CFG.audit, a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null}))
   ]);
 }
 
@@ -577,7 +577,7 @@ async function loadFromSupabase(){
      "attach existing" dropdown below. Same tasksR query as linkedActivities just above,
      just the other half of the same filter -- no extra query. */
   CFG.unlinkedActivities = (tasksR.data||[]).filter(t=>!t.event_id).map(t=>({id:t.id,name:t.name,campaignId:t.campaign_id,status:t.status||'',dueDate:t.due_date||'',owner:t.owner||''}));
-  CFG.audit = (auditR.data||[]).map(a=>({ts:a.ts,what:a.what,detail:a.detail}));
+  CFG.audit = (auditR.data||[]).map(a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail}));
   CFG.roles = (rolesR.data||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name,config:r.config,publish:r.publish,writeAll:r.write_all,scope:r.scope,desc:r.description||''}));
   /* trackingConfig (Configuration's old generic {mod}-{type}-{seq} scheme) is now DB-backed via
      org_settings.tracking_config (read earlier in this function, defensively) — only fall
@@ -625,7 +625,7 @@ function subscribeRealtime(){
       const targeted = Array.isArray(row.target_user_ids) && row.target_user_ids.length>0;
       const forMe = !targeted || (_myProfile && row.target_user_ids.includes(_myProfile.id));
       if(forMe) toast((row.what||'Update')+(row.detail?' — '+row.detail:''));
-      if(CFG.audit){ CFG.audit.unshift({ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
+      if(CFG.audit){ CFG.audit.unshift({id:row.id,ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
       render();
     })
     .subscribe();

@@ -1282,7 +1282,7 @@ function impactOf(dim,action,memberName){
    MUTATION + AUDIT + PENDING-CHANGE FLOW
    ============================================================================ */
 function logAudit(what,detail){
-  CFG.audit.unshift({id:uid(),ts:new Date().toISOString().slice(0,16).replace('T',' '),who:user().name,role:roleName(),what:what,detail:detail});
+  CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),who:user().name,role:roleName(),what:what,detail:detail});
   if(CFG.audit.length>200)CFG.audit.pop();
 }
 function toast(msg){
@@ -1396,7 +1396,7 @@ async function saveToSupabase(){
     })(),
     upsertRows('campaign_pod_allocations', CFG.campaignPodAllocations, a=>({id:a.id,campaign_id:a.campaignId,pod_id:a.podId,share_pct:a.sharePct||0})),
     upsertRows('snapshots', CFG.snapshots, s=>({id:s.id,name:s.name,created_by:s.createdBy,created_at:s.timestamp,data:s.data})),
-    upsertRows('audit_log', CFG.audit, a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail,who:a.who,role:a.role,user_id:_myProfile?_myProfile.id:null})),
+    upsertRows('audit_log', CFG.audit, a=>({ts:a.ts,what:a.what,detail:a.detail,who:a.who,role:a.role,user_id:_myProfile?_myProfile.id:null})),
     /* campaigns is a shared table Campaign Planning also writes to — upsert only, same as everything
        else above, so no special handling needed beyond the field mapping. */
     upsertRows('campaigns', CFG.campaigns, c=>({
@@ -1708,7 +1708,7 @@ async function loadFromSupabase(){
   ];
 
   CFG.meta = { normaSyncedAt:null, normaConfigVersion:null };
-  CFG.audit = (auditR.data||[]).map(a=>({id:a.id,ts:a.ts,who:a.who,role:a.role,what:a.what,detail:a.detail}));
+  CFG.audit = (auditR.data||[]).map(a=>({ts:a.ts,who:a.who,role:a.role,what:a.what,detail:a.detail}));
   CFG.snapshots = (snapshotsR.data||[]).map(s=>({id:s.id,orgId:s.org_id,name:s.name,createdBy:s.created_by,timestamp:s.created_at,data:s.data}));
 
   /* the top-bar Role/Version/Region/Activity defaults pointed at hardcoded sample ids —
@@ -1759,7 +1759,7 @@ function subscribeRealtime(){
       const targeted = Array.isArray(row.target_user_ids) && row.target_user_ids.length>0;
       const forMe = !targeted || (_myProfile && row.target_user_ids.includes(_myProfile.id));
       if(forMe) toast((row.what||'Update')+(row.detail?' — '+row.detail:''));
-      if(CFG.audit){ CFG.audit.unshift({id:row.id,ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
+      if(CFG.audit){ CFG.audit.unshift({ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
       render();
     })
     .subscribe();

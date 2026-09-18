@@ -316,7 +316,7 @@ const CFG = {
 const UI = { page:'home', helpOpen:false, orgEdit:null, showArchivedInvites:false, addMembOrgId:'', usersOrgFilter:'', usersRegionFilter:'', usersTeamFilter:'', rolesSortKey:'org', rolesSortDir:'asc', usersSortKey:'org', usersSortDir:'asc', alertsFilter:{role:'',unit:'',q:''}, buFilter:{role:'',q:''}, hubUsers:[], hubUsersLoaded:false, hubUsersLoading:false, hubUsersError:'', hubFeedback:[], hubFeedbackLoaded:false, hubFeedbackLoading:false, hubFeedbackError:'', outboundWebhooks:[], outboundWebhooksLoaded:false, outboundWebhooksLoading:false, outboundWebhooksError:'', lastCreatedWebhookSecret:null, hubCompanies:[], hubCompaniesLoaded:false, hubCompaniesLoading:false, hubCompaniesError:'', hubCompanyDetailId:null, hubCompanyDetail:null, hubCompanyDetailLoading:false, hubCompanyDetailError:'' };
 
 function logAudit(what,detail){
-  CFG.audit.unshift({id:uid(),ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
+  CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
   if(CFG.audit.length>100)CFG.audit.pop();
 }
 /* 2026-08-27: bumped from 2200ms -- several toasts here are the ONLY feedback for an
@@ -424,7 +424,7 @@ async function saveToSupabase(){
   await Promise.all([
     upsertRows('cost_buckets', CFG.costBuckets, c=>({id:c.id,code:c.code,label:c.label,dept:c.dept||'Marketing',ext_code:c.extCode||''})),
     upsertRows('llm_providers', CFG.llmProviders, p=>({id:p.id,name:p.name,kind:p.kind,endpoint:p.endpoint||'',key_label:p.keyLabel||'',model:p.model||'',enabled:!!p.enabled,access_type:p.accessType||'api'})),
-    upsertRows('audit_log', CFG.audit, a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null})),
+    upsertRows('audit_log', CFG.audit, a=>({ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null})),
     upsertRows('teams', CFG.teams, t=>({id:t.id,name:t.name||'',member_ids:t.memberIds||[],unit_ids:t.unitIds||[]})),
     (async()=>{
       const row = {
@@ -629,7 +629,7 @@ async function loadFromSupabase(){
     seqScope: os.campaign_naming_seq_scope||'pod',
     seqCounters: os.campaign_naming_seq_counters||{}
   };
-  CFG.audit = (auditR.data||[]).map(a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail}));
+  CFG.audit = (auditR.data||[]).map(a=>({ts:a.ts,what:a.what,detail:a.detail}));
   CFG.agentDispatches = (agentDispR.data||[]).map(d=>({
     id:d.id,automationId:d.automation_id,brief:d.brief||'',destinationId:d.destination_id,
     destinationName:d.destination_name||'',status:d.status||'pending',resultDetail:d.result_detail||'',
@@ -1622,7 +1622,7 @@ function subscribeRealtime(){
       const targeted = Array.isArray(row.target_user_ids) && row.target_user_ids.length>0;
       const forMe = !targeted || (_myProfile && row.target_user_ids.includes(_myProfile.id));
       if(forMe) toast((row.what||'Update')+(row.detail?' — '+row.detail:''));
-      if(CFG.audit){ CFG.audit.unshift({id:row.id,ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
+      if(CFG.audit){ CFG.audit.unshift({ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
       render();
     })
     .subscribe();

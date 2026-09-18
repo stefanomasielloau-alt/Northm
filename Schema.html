@@ -297,7 +297,7 @@ let _automationsIntervalId=null; /* best-effort client-side scheduler for the Au
 const UNDO_LIMIT=25;
 
 function logAudit(what,detail,targetUserIds){
-  CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail,targetUserIds:targetUserIds||null});
+  CFG.audit.unshift({id:uid(),ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail,targetUserIds:targetUserIds||null});
   if(CFG.audit.length>150)CFG.audit.pop();
 }
 function toast(msg){
@@ -384,7 +384,7 @@ async function saveToSupabase(){
       mode:a.mode||'automatic',schedule_time:a.scheduleTime||null,
       action_chat_dest_id:a.actionChatDestId||null
     })),
-    upsertRows('audit_log', CFG.audit, a=>({ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null,target_user_ids:a.targetUserIds||null})),
+    upsertRows('audit_log', CFG.audit, a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null,target_user_ids:a.targetUserIds||null})),
     upsertRows('agent_destinations', CFG.agentDestinations, d=>({
       id:d.id,name:d.name||'',type:d.type||'webhook',target:d.target||'',is_org_default:!!d.isOrgDefault
     })),
@@ -530,7 +530,7 @@ async function loadFromSupabase(){
   CFG.evalEvents = (eventsR.data||[]).map(e=>({id:e.id,name:e.name,status:e.status||''}));
   CFG.evalAssets = (assetsR.data||[]).map(a=>({id:a.id,name:a.name,stock:a.stock,lowStockAt:a.low_stock_at}));
   CFG.evalExternalEvents = CFG.evalExternalEvents || [];
-  CFG.audit = (auditR.data||[]).map(a=>({ts:a.ts,what:a.what,detail:a.detail}));
+  CFG.audit = (auditR.data||[]).map(a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail}));
   CFG.agentDestinations = (agentDestR.data||[]).map(d=>({
     id:d.id,orgId:d.org_id,name:d.name||'',type:d.type||'webhook',target:d.target||'',isOrgDefault:!!d.is_org_default
   }));
@@ -583,7 +583,7 @@ function subscribeRealtime(){
       const targeted = Array.isArray(row.target_user_ids) && row.target_user_ids.length>0;
       const forMe = !targeted || (_myProfile && row.target_user_ids.includes(_myProfile.id));
       if(forMe) toast((row.what||'Update')+(row.detail?' — '+row.detail:''));
-      if(CFG.audit){ CFG.audit.unshift({ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
+      if(CFG.audit){ CFG.audit.unshift({id:row.id,ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
       render();
     })
     .subscribe();

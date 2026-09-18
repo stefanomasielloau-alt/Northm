@@ -354,7 +354,7 @@ const TASK = cid => CFG.tasks.filter(t=>t.campaignId===cid);
 const tasksTotal = (cid,field) => sum(TASK(cid).map(t=>t[field]||0));
 
 function logAudit(what,detail){
-  CFG.audit.unshift({id:uid(),ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
+  CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
   if(CFG.audit.length>100)CFG.audit.pop();
 }
 function toast(msg){
@@ -489,7 +489,7 @@ async function saveToSupabase(){
     upsertRows('templates', CFG.templates, t=>({
       id:t.id,name:t.name,type:t.type,default_cost_bucket_id:t.defaultCostBucketId,notes:t.notes||''
     })),
-    upsertRows('audit_log', CFG.audit, a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null})),
+    upsertRows('audit_log', CFG.audit, a=>({ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null})),
     (async()=>{
       /* 2026-09-10 (data-safety fix, latent gap flagged 2026-09-10 in the item 68
          rollout notes): this used to stamp the caller's own _orgId unconditionally --
@@ -737,7 +737,7 @@ async function loadFromSupabase(){
     campaignNamingSeqScope: os.campaign_naming_seq_scope||'pod',
     campaignNamingSeqCounters: os.campaign_naming_seq_counters||{}
   };
-  CFG.audit = (auditR.data||[]).map(a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail}));
+  CFG.audit = (auditR.data||[]).map(a=>({ts:a.ts,what:a.what,detail:a.detail}));
   /* 2026-09-08 (item 41): editable preset list for the Partner 'type' dropdown -- starts
      empty (fail-soft if the migration hasn't run), grows as anyone picks '+ Add new type'. */
   CFG.partnerTypePresets = os.partner_type_presets || [];
@@ -857,7 +857,7 @@ function subscribeRealtime(){
       const targeted = Array.isArray(row.target_user_ids) && row.target_user_ids.length>0;
       const forMe = !targeted || (_myProfile && row.target_user_ids.includes(_myProfile.id));
       if(forMe) toast((row.what||'Update')+(row.detail?' — '+row.detail:''));
-      if(CFG.audit){ CFG.audit.unshift({id:row.id,ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
+      if(CFG.audit){ CFG.audit.unshift({ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
       render();
     })
     .subscribe();

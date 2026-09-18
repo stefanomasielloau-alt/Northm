@@ -305,7 +305,7 @@ const CFG = {};
 const UI = { page:'home', helpOpen:false, reportId:null, compareA:null, compareB:null, leadsFilter:'', leadsSortBy:null, leadsSortDir:1, icpIngest:{open:false,status:'idle',note:''} };
 
 function logAudit(what,detail){
-  CFG.audit.unshift({ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
+  CFG.audit.unshift({id:uid(),ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
   if(CFG.audit.length>150)CFG.audit.pop();
 }
 function toast(msg){
@@ -457,7 +457,7 @@ async function saveToSupabase(){
       id:l.id,filter_id:l.filterId||null,company:l.company,domain:l.domain||'',
       contact_name:l.contactName||'',status:l.status||'New',notes:l.notes||''
     })),
-    upsertRows('audit_log', CFG.audit, a=>({ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null})),
+    upsertRows('audit_log', CFG.audit, a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null})),
     /* item 46 -- no-ops safely (upsertRows already catches its own errors) until
        2026-09-06-item46-prospectus-references-migration.sql has been run. */
     upsertRows('prospectus_references', CFG.references, r=>({
@@ -600,7 +600,7 @@ async function loadFromSupabase(){
     id:p.id,name:p.name,kind:p.kind,endpoint:p.endpoint||'',keyLabel:p.key_label||'',
     enabled:!!p.enabled,priority:p.priority||0,notes:p.notes||''
   }));
-  CFG.audit = (auditR.data||[]).map(a=>({ts:a.ts,what:a.what,detail:a.detail}));
+  CFG.audit = (auditR.data||[]).map(a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail}));
   CFG.roles = (rolesR.data||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name,config:r.config,publish:r.publish,writeAll:r.write_all,scope:r.scope,desc:r.description||''}));
   /* trackingConfig (Configuration's old generic {mod}-{type}-{seq} scheme) is now DB-backed via
      org_settings.tracking_config (read earlier in this function, defensively) — only fall
@@ -655,7 +655,7 @@ function subscribeRealtime(){
       const targeted = Array.isArray(row.target_user_ids) && row.target_user_ids.length>0;
       const forMe = !targeted || (_myProfile && row.target_user_ids.includes(_myProfile.id));
       if(forMe) toast((row.what||'Update')+(row.detail?' — '+row.detail:''));
-      if(CFG.audit){ CFG.audit.unshift({ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
+      if(CFG.audit){ CFG.audit.unshift({id:row.id,ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
       render();
     })
     .subscribe();

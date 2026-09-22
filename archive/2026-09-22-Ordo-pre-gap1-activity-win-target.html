@@ -1405,7 +1405,7 @@ async function saveToSupabase(){
     upsertRows('reps', CFG.reps, r=>({id:r.id,name:r.name,pod_id:r.podId,share:r.share||0})),
     upsertRows('streams', CFG.streams, s=>({id:s.id,name:s.name,mix:s.mix||0,mkt_contrib:s.mktContrib||0,unassigned:!!s.unassigned})),
     upsertRows('routes', CFG.routes, r=>({id:r.id,name:r.name})),
-    upsertRows('activities', CFG.activities, a=>({id:a.id,name:a.name,route_id:a.routeId,cost_per:a.costPer||0,cap_month:a.capMonth||0,active:!!a.active,unassigned:!!a.unassigned,pre_chain:a.preChain||[],win_target:a.winTarget==null?null:a.winTarget})),
+    upsertRows('activities', CFG.activities, a=>({id:a.id,name:a.name,route_id:a.routeId,cost_per:a.costPer||0,cap_month:a.capMonth||0,active:!!a.active,unassigned:!!a.unassigned,pre_chain:a.preChain||[]})),
     upsertRows('segments', CFG.segments, s=>({id:s.id,name:s.name,tier:s.tier,addressable:s.addressable||0,engaged:s.engaged||0,mix:s.mix||0,rate_mult:s.rateMult==null?1:s.rateMult,deal_mult:s.dealMult==null?1:s.dealMult,unassigned:!!s.unassigned})),
     upsertRows('cost_buckets', CFG.costBuckets, c=>({id:c.id,code:c.code,label:c.label,dept:c.dept||'Marketing',ext_code:c.extCode||''})),
     upsertRows('programmes', CFG.programmes, p=>({id:p.id,name:p.name,owner:p.owner||'',focus:p.focus||'',status:p.status||'Active',tracking_ref:p.trackingRef||null,cloned_from_id:p.clonedFromId||null,notes:p.notes||''})),
@@ -1547,7 +1547,7 @@ async function loadFromSupabase(){
     orgScoped(sb.from('gates').select('id,org_id,name,code,order,entry,rate,active,note').order('order')),
     orgScoped(sb.from('streams').select('id,org_id,name,mix,mkt_contrib,unassigned')),
     orgScoped(sb.from('routes').select('id,org_id,name')),
-    orgScoped(sb.from('activities').select('id,org_id,name,route_id,cost_per,cap_month,active,unassigned,pre_chain,win_target')),
+    orgScoped(sb.from('activities').select('id,org_id,name,route_id,cost_per,cap_month,active,unassigned,pre_chain')),
     orgScoped(sb.from('segments').select('id,org_id,name,tier,addressable,engaged,mix,rate_mult,deal_mult,unassigned')),
     orgScoped(sb.from('cost_buckets').select('id,org_id,code,label,dept,ext_code')),
     orgScoped(sb.from('programmes').select('id,org_id,name,owner,focus,status,tracking_ref,cloned_from_id,notes')),
@@ -1657,7 +1657,7 @@ async function loadFromSupabase(){
   CFG.reps = (repsR.data||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name,podId:r.pod_id,share:r.share}));
   CFG.streams = (streamsR.data||[]).map(s=>({id:s.id,orgId:s.org_id,name:s.name,mix:s.mix,mktContrib:s.mkt_contrib,unassigned:s.unassigned}));
   CFG.routes = (routesR.data||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name}));
-  CFG.activities = (activitiesR.data||[]).map(a=>({id:a.id,orgId:a.org_id,name:a.name,routeId:a.route_id,costPer:a.cost_per,capMonth:a.cap_month,active:a.active,unassigned:a.unassigned,preChain:a.pre_chain||[],winTarget:a.win_target==null?null:a.win_target}));
+  CFG.activities = (activitiesR.data||[]).map(a=>({id:a.id,orgId:a.org_id,name:a.name,routeId:a.route_id,costPer:a.cost_per,capMonth:a.cap_month,active:a.active,unassigned:a.unassigned,preChain:a.pre_chain||[]}));
   CFG.segments = (segmentsR.data||[]).map(s=>({id:s.id,orgId:s.org_id,name:s.name,tier:s.tier,addressable:s.addressable,engaged:s.engaged,mix:s.mix,rateMult:s.rate_mult,dealMult:s.deal_mult,unassigned:s.unassigned}));
   CFG.costBuckets = (costBucketsR.data||[]).map(c=>({id:c.id,orgId:c.org_id,code:c.code,label:c.label,dept:c.dept,extCode:c.ext_code||''}));
   CFG.programmes = (programmesR.data||[]).map(p=>({id:p.id,orgId:p.org_id,name:p.name,owner:p.owner,focus:p.focus,status:p.status,trackingRef:p.tracking_ref||null,clonedFromId:p.cloned_from_id||null,notes:p.notes||''}));
@@ -2825,12 +2825,9 @@ function normStreams(){ const t=streamMixTotal(); if(!t)return;
   stage('Streams','normalise','mix to 100%',()=>{ S().forEach(s=>s.mix=s.mix/t); });}
 function addActivity(){ stage('Activities','add','a new activity',()=>{
   const defRoute=(CFG.routes.find(r=>r.name==='Inbound')||CFG.routes[0]||{}).id;
-  CFG.activities.splice(CFG.activities.length-1,0,{id:uid('a'),name:'New activity',routeId:defRoute,costPer:0,capMonth:0,active:true,preChain:[],winTarget:null}); });}
+  CFG.activities.splice(CFG.activities.length-1,0,{id:uid('a'),name:'New activity',routeId:defRoute,costPer:0,capMonth:0,active:true,preChain:[]}); });}
 function toggleActivity(id){ const a=act(id);
   stage('Activities',a.active?'retire':'restore',a.name,()=>{ a.active=!a.active; });}
-function resetWinTarget(id){ const a=act(id); if(!a) return;
-  const old=a.winTarget; a.winTarget=null;
-  logAudit('edit','activities/'+(a.name||id)+'.winTarget: '+old+' → auto (even split)'); render(); }
 
 /* ---------- per-activity pre-Lead chain (optional) -----------------------------------------
    Each activity type can define its own channel-specific stages before the universal Lead gate
@@ -3403,28 +3400,26 @@ function pageActivity(){
   if(calcBlocked()) return blockedPanel('Activity plan');
   const c=chain(),d=CFG.drivers,m=verMult()*segBlend(),acts=A();
   if(!acts.find(a=>a.id===UI.activityId)) UI.activityId=acts[0].id;
+  const winShare={}; const base=1/acts.length;
+  acts.forEach((a,i)=>winShare[a.id]=base);
   let h=`<div class="phead"><div><h1>Activity plan</h1>
     <p>Wins by activity, and the volume each one has to generate. Rates differ by activity — a web lead is not an event lead.</p></div></div>`;
   h+=`<div class="note"><strong>Read this the way the spreadsheet intended.</strong> Enter the wins you want from each activity.
     Everything to the left is what that requires. Route grouping (inbound / outbound / partner) is restored here —
     it existed in the spreadsheet and was lost in the Anaplan rebuild.</div>`;
   const totWins=d.winTarget;
-  const base=acts.length?1/acts.length:0;
-  const winOf=a=>a.winTarget==null?totWins*base:a.winTarget;
   let tacc={}; c.forEach(g=>tacc[g.id]=0); let tcost=0;
   const rows=[];
   CFG.routes.forEach(rt=>{
     const ra=acts.filter(a=>a.routeId===rt.id); if(!ra.length)return;
     rows.push({group:rt.name});
     ra.forEach(a=>{
-      const auto=a.winTarget==null, wins=winOf(a), v=backward(wins,m);
+      const wins=totWins*winShare[a.id], v=backward(wins,m);
       const cost=v[entryGate().id]*a.costPer;
       c.forEach(g=>tacc[g.id]+=v[g.id]); tcost+=cost;
-      rows.push({a:a,wins:wins,v:v,cost:cost,auto:auto});
+      rows.push({a:a,wins:wins,v:v,cost:cost});
     });
   });
-  const plannedWins=sum(rows.filter(r=>r.a).map(r=>r.wins));
-  const winGap=plannedWins-totWins;
   h+=`<div class="kpis">
     <div class="kpi hl"><div class="k">Wins planned</div><div class="kpi-v">${F.n(totWins)}</div><div class="sub">across ${acts.length} activities</div></div>
     ${c.slice(0,3).map(g=>`<div class="kpi"><div class="k">${esc(g.name)} required</div><div class="kpi-v">${F.n(tacc[g.id])}</div><div class="sub">total</div></div>`).join('')}
@@ -3432,9 +3427,7 @@ function pageActivity(){
     <div class="kpi"><div class="k">Cost per win</div><div class="kpi-v">${F.mk(totWins?tcost/totWins:0)}</div><div class="sub">blended</div></div>
   </div>`;
   h+=`<div class="card"><h3>Activity funnel <span class="sp"></span>
-    ${Math.abs(winGap)<0.5
-      ? '<span class="pill ok">Wins tie to target</span>'
-      : '<span class="pill warn">Gap of '+F.n(Math.abs(winGap),0)+(winGap>0?' over target':' under target')+'</span>'}</h3>
+    <span class="pill n">even split shown — planner edits wins per activity</span></h3>
     <div class="bd flush"><div class="scroll"><table><thead><tr>
       <th>Activity</th><th class="n">Wins</th>${gTh()}<th class="n">Cost/lead</th><th class="n">Cost</th>
       <th class="n">Cost/win</th><th class="n">Capacity</th><th>Fit</th></tr></thead><tbody>`;
@@ -3444,8 +3437,7 @@ function pageActivity(){
     const fit=cap?need/cap:null;
     const st=!cap?'n':fit>1?'bad':fit>0.85?'warn':'ok';
     h+=`<tr><td class="lb">${esc(r.a.name)}</td>
-      <td class="n"><input class="cel w" value="${r.wins.toFixed(1)}" ${readOnly()?'disabled':''} onchange="setIn('activities','${r.a.id}','winTarget',this.value,'num')">
-        ${r.auto||readOnly()?'':'<div class="mini" style="text-align:right;margin-top:2px"><a href="#" onclick="resetWinTarget(\'${r.a.id}\');return false;">reset to auto</a></div>'}</td>
+      <td class="n"><input class="cel w" value="${r.wins.toFixed(1)}" disabled></td>
       ${gTd(r.v)}
       <td class="n calc">${r.a.costPer?F.m(r.a.costPer):'—'}</td>
       <td class="n calc">${r.cost?F.mk(r.cost):'—'}</td>
@@ -3459,7 +3451,7 @@ function pageActivity(){
   h+=`</tbody></table></div></div></div>`;
   h+=`<div class="grid g2">
     <div class="card"><h3>Entry volume by activity</h3><div class="bd">
-      ${svgBars(acts.map(a=>({k:a.name.split(' ')[0],v:backward(winOf(a),m)[entryGate().id]})),{h:200})}</div></div>
+      ${svgBars(acts.map(a=>({k:a.name.split(' ')[0],v:backward(totWins*winShare[a.id],m)[entryGate().id]})),{h:200})}</div></div>
     <div class="card"><h3>Cost per win by activity</h3><div class="bd">
       ${svgBars(acts.filter(a=>a.costPer).map(a=>({k:a.name.split(' ')[0],v:a.costPer/cumRate(exitGate().id,m)})),{h:200,money:true})}
       <div class="mini" style="margin-top:6px">Cost per ${esc(entryGate().name)} ÷ end-to-end conversion. Activities with no cost tracked are excluded.</div></div></div></div>`;
@@ -3647,8 +3639,7 @@ function pageCampaign(){
     <th>Activity</th><th>Route</th><th class="n">Monthly capacity</th><th class="n">Monthly need at plan</th>
     <th class="n">Utilisation</th><th>Status</th><th>Constraint</th></tr></thead><tbody>
     ${A().map(a=>{
-      const wins=a.winTarget==null?CFG.drivers.winTarget/A().length:a.winTarget;
-      const need=backward(wins,m)[entryGate().id]/12;
+      const need=backward(CFG.drivers.winTarget/A().length,m)[entryGate().id]/12;
       const u=a.capMonth?need/a.capMonth:null;
       const st=!a.capMonth?'n':u>1?'bad':u>0.85?'warn':'ok';
       return `<tr><td class="lb">${esc(a.name)}</td><td>${esc(route(a.routeId)?route(a.routeId).name:'—')}</td>

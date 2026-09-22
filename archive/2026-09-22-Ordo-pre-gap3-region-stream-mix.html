@@ -1134,52 +1134,6 @@ function setRegionGateRate(regionId,gateId,val){
 window.setRegionGateRate=setRegionGateRate;
 function resetRegionGateRate(regionId,gateId){ setRegionGateRate(regionId,gateId,''); }
 window.resetRegionGateRate=resetRegionGateRate;
-
-/* ---------- per-region stream-mix overrides (Gap 3, 2026-09-22) -------------------------------
-   Same shape and philosophy as region_gate_rates just above -- global stream mix stays exactly
-   where it is (CFG.streams / Admin & config > Streams). This table only holds the streams a
-   specific region has explicitly overridden; no row = that region follows the global mix for
-   that stream, so every existing region is unaffected on ship day. Unlike gate rates, stream
-   mix is a distribution (meant to total 100%), so effectiveRegionStreams() always returns every
-   stream for a region -- override where one exists, global otherwise -- rather than a sparse
-   list, and the UI shows a reconciliation-style total (informational, not a hard block, same
-   call made for win_target in Gap 1 and consistent with how this region's own rate overrides
-   already behave -- report the gap, don't force it closed). */
-const regionStreamMixFor=(regionId,streamId)=>{
-  const r=CFG.regionStreams.find(x=>x.regionId===regionId&&x.streamId===streamId);
-  return r?r.mix:null;
-};
-const regionStreamsHaveOverrides=regionId=>CFG.regionStreams.some(x=>x.regionId===regionId);
-const effectiveRegionStreams=regionId=>S().map(s=>{
-  const ov=regionStreamMixFor(regionId,s.id);
-  return {stream:s, mix:ov!=null?ov:s.mix, override:ov!=null};
-});
-const regionStreamMixTotal=regionId=>sum(effectiveRegionStreams(regionId).map(x=>x.mix));
-function setRegionStreamMix(regionId,streamId,val){
-  if(!canWriteRegion(regionId)){ toast('Your role cannot edit stream mix for this region.'); return; }
-  const existing=CFG.regionStreams.find(x=>x.regionId===regionId&&x.streamId===streamId);
-  const s=byId(CFG.streams,streamId);
-  if(val===''||val==null){
-    if(!existing)return;
-    CFG.regionStreams=CFG.regionStreams.filter(x=>x.id!==existing.id);
-    logAudit('edit','region_streams/'+(s?s.name:streamId)+' @ '+regionId+': reset to global');
-    render();
-    deleteRow('region_streams',existing.id);
-    return;
-  }
-  let v=parseFloat(String(val).replace(/[%\s]/g,'')); if(isNaN(v))return; v=v/100;
-  if(existing){
-    const old=existing.mix; existing.mix=v;
-    logAudit('edit','region_streams/'+(s?s.name:streamId)+' @ '+regionId+': '+F.p(old)+' → '+F.p(v));
-  } else {
-    CFG.regionStreams.push({id:uid('rs'),regionId:regionId,streamId:streamId,mix:v});
-    logAudit('add','region_streams/'+(s?s.name:streamId)+' @ '+regionId+': '+F.p(v)+' (region override)');
-  }
-  render();
-}
-window.setRegionStreamMix=setRegionStreamMix;
-function resetRegionStreamMix(regionId,streamId){ setRegionStreamMix(regionId,streamId,''); }
-window.resetRegionStreamMix=resetRegionStreamMix;
 const repShareTotal=pid=>sum(REP(pid).map(x=>x.share));
 
 function verMult(){
@@ -1521,7 +1475,6 @@ async function saveToSupabase(){
     })(),
     upsertRows('campaign_pod_allocations', CFG.campaignPodAllocations, a=>({id:a.id,campaign_id:a.campaignId,pod_id:a.podId,share_pct:a.sharePct||0})),
     upsertRows('region_gate_rates', CFG.regionGateRates, r=>({id:r.id,region_id:r.regionId,gate_id:r.gateId,rate:r.rate})),
-    upsertRows('region_streams', CFG.regionStreams, r=>({id:r.id,region_id:r.regionId,stream_id:r.streamId,mix:r.mix})),
     upsertRows('snapshots', CFG.snapshots, s=>({id:s.id,name:s.name,created_by:s.createdBy,created_at:s.timestamp,data:s.data})),
     upsertRows('audit_log', CFG.audit, a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail,who:a.who,role:a.role,user_id:_myProfile?_myProfile.id:null})),
     /* campaigns is a shared table Campaign Planning also writes to — upsert only, same as everything
@@ -1649,9 +1602,6 @@ async function loadFromSupabase(){
        break for the whole org over an optional, additive feature. Missing/erroring simply
        means "no region has overridden anything yet", which is also the correct default. */
     orgScoped(sb.from('region_gate_rates').select('id,org_id,region_id,gate_id,rate')),
-    /* region_streams (Gap 3, 2026-09-22): same brand-new-table situation as region_gate_rates
-       above -- also excluded from the blanket error-throw loop a few lines down. */
-    orgScoped(sb.from('region_streams').select('id,org_id,region_id,stream_id,mix')),
     sb.from('campaign_rollups').select('campaign_id,rollup_committed,rollup_actual'),
     orgScoped(sb.from('profiles').select('id,org_id,name,role_id,region_ids,cross_region')),
     (_savOrgFilter===null ? sb.from('org_settings').select('*').eq('org_id',_orgId).maybeSingle() : sb.from('org_settings').select('*').eq('org_id',_savOrgFilter).maybeSingle()),
@@ -1659,8 +1609,8 @@ async function loadFromSupabase(){
     (_crossOrgAudit ? sb.rpc('admin_cross_org_audit_log', {p_org_id:_savOrgFilter, p_limit:200}) : sb.from('audit_log').select('ts,what,detail,who,role').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200))
   ]);
   const [rolesR,regionsR,podsR,repsR,gatesR,streamsR,routesR,activitiesR,segmentsR,costBucketsR,
-         programmesR,versionsR,campaignsR,podAllocsR,regionGateRatesR,regionStreamsR,rollupsR,profilesR,orgSettingsR,snapshotsR,auditR] = results;
-  for(const r of results){ if(r===regionGateRatesR||r===regionStreamsR) continue; if(r.error) throw r.error; }
+         programmesR,versionsR,campaignsR,podAllocsR,regionGateRatesR,rollupsR,profilesR,orgSettingsR,snapshotsR,auditR] = results;
+  for(const r of results){ if(r===regionGateRatesR) continue; if(r.error) throw r.error; }
 
   /* org_units/org_unit_access (phase8) and regions.org_unit_id (phase14) are
      optional, additive schema pieces -- an org that hasn't run those
@@ -1774,7 +1724,6 @@ async function loadFromSupabase(){
   }));
   CFG.campaignPodAllocations = (podAllocsR.data||[]).map(a=>({id:a.id,orgId:a.org_id,campaignId:a.campaign_id,podId:a.pod_id,sharePct:a.share_pct}));
   CFG.regionGateRates = (regionGateRatesR.error ? [] : (regionGateRatesR.data||[])).map(r=>({id:r.id,orgId:r.org_id,regionId:r.region_id,gateId:r.gate_id,rate:r.rate}));
-  CFG.regionStreams = (regionStreamsR.error ? [] : (regionStreamsR.data||[])).map(r=>({id:r.id,orgId:r.org_id,regionId:r.region_id,streamId:r.stream_id,mix:r.mix}));
   CFG.roles = (rolesR.data||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name,config:r.config,publish:r.publish,writeAll:r.write_all,scope:r.scope,desc:r.description||'',requireCommitOnEdit:r.require_commit_on_edit,allowExpertMode:r.allow_expert_mode}));
   CFG.users = (profilesR.data||[]).map(p=>({
     id:p.id,orgId:p.org_id,name:p.name,roleId:p.role_id,regionIds:p.region_ids||[],crossRegion:p.cross_region,
@@ -3359,31 +3308,6 @@ function pageGeo(){
     <td class="n">${F.n(totAcv/deal,0)}</td>${gTd(acc)}<td class="n">${F.mk(accPot)}</td>
     <td class="n">${F.sp(totAcv?(accPot-totAcv)/totAcv:0,1)}</td><td></td></tr>`;
   h+=`</tbody></table></div></div></div>`;
-
-  h+=`<div class="card"><h3>Region × stream funnel</h3><div class="bd"><div class="mini">Each region's demand potential,
-    split by stream using that region's own stream mix where it has one, the global mix otherwise — crossed with every gate,
-    not just the entry gate. Edit a region's own stream mix below, under its Pod breakdown.</div></div>
-    <div class="bd flush"><div class="scroll"><table><thead><tr><th>Region / stream</th><th class="n">Mix</th>
-      <th class="n">Wins</th>${gTh()}<th class="n">ACV</th></tr></thead><tbody>
-    ${(()=>{
-      const rows=[];
-      vis.forEach(r=>{
-        rows.push({group:r.name+(regionStreamsHaveOverrides(r.id)?' — own stream mix':'')});
-        const wins=r.acvTarget/deal;
-        effectiveRegionStreams(r.id).forEach(x=>{
-          const v=backward(wins*x.mix,m,r.id);
-          rows.push({stream:x.stream,mix:x.mix,override:x.override,v:v,acv:wins*x.mix*deal});
-        });
-      });
-      return rows.map(row=>{
-        if(row.group) return `<tr class="gp"><td colspan="${c.length+4}">${esc(row.group)}</td></tr>`;
-        return `<tr><td class="lb">${esc(row.stream.name)}${row.override?' <span class="pill n">override</span>':''}</td>
-          <td class="n">${F.p(row.mix,0)}</td><td class="n calc">${F.n(row.v[exitGate().id],1)}</td>${gTd(row.v)}
-          <td class="n calc">${F.mk(row.acv)}</td></tr>`;
-      }).join('');
-    })()}
-    </tbody></table></div></div></div>`;
-
   h+=`<div class="grid g2">
     <div class="card"><h3>Wins needed by region</h3><div class="bd">
       ${svgBars(vis.map(r=>({k:r.name,v:r.acvTarget/deal,k2:F.n(r.aeHeads)+' AE'})),{h:200})}</div></div>
@@ -3426,24 +3350,6 @@ function pageGeo(){
             onchange="setRegionGateRate('${rSel.id}','${g.id}',this.value)"></td>
           <td class="n" style="color:${ov==null?'inherit':delta>0?'var(--ok)':delta<0?'var(--bad)':'inherit'}">${ov!=null?F.sp(delta,0):'—'}</td>
           <td>${ov!=null&&canWriteRegion(rSel.id)&&!readOnly()?`<a href="#" class="mini" onclick="resetRegionGateRate('${rSel.id}','${g.id}');return false;">reset to global</a>`:''}</td></tr>`;
-      }).join('')}
-      </tbody></table></div></div>`;
-
-    h+=`<div class="card"><h3>Stream mix override — ${esc(rSel.name)} <span class="sp"></span>
-      <span class="pill ${Math.abs(regionStreamMixTotal(rSel.id)-1)<0.0001?'ok':'warn'}">${esc(rSel.name)} mix totals ${F.p(regionStreamMixTotal(rSel.id),0)}</span></h3>
-      <div class="bd"><div class="mini">Blank = this region follows the global stream mix below (Admin &rsaquo; Streams). Type a number to override
-        just that stream for ${esc(rSel.name)} — feeds the Region × stream funnel above (pod and rep breakdowns stay by geography, not by
-        stream). Unlike the global mix, a region total off 100% is shown here, not blocked — useful mid-edit, worth fixing before you rely on the numbers.</div></div>
-      <div class="bd flush"><table><thead><tr><th>Stream</th><th class="n">Global mix</th>
-        <th class="n">${esc(rSel.name)} mix</th><th></th></tr></thead><tbody>
-      ${S().map(s=>{
-        const ov=regionStreamMixFor(rSel.id,s.id);
-        return `<tr><td class="lb">${esc(s.name)}</td>
-          <td class="n calc">${F.p(s.mix,0)}</td>
-          <td class="n"><input class="cel w" placeholder="${F.p(s.mix,0)}" value="${ov!=null?(ov*100).toFixed(0):''}"
-            ${canWriteRegion(rSel.id)&&!readOnly()?'':'disabled'}
-            onchange="setRegionStreamMix('${rSel.id}','${s.id}',this.value)"></td>
-          <td>${ov!=null&&canWriteRegion(rSel.id)&&!readOnly()?`<a href="#" class="mini" onclick="resetRegionStreamMix('${rSel.id}','${s.id}');return false;">reset to global</a>`:''}</td></tr>`;
       }).join('')}
       </tbody></table></div></div>`;
 

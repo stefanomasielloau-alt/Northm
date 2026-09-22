@@ -693,14 +693,6 @@ function rateIssues(){
   if(c.length<2) out.push({gate:null,msg:'A funnel needs at least two gates.'});
   c.forEach((g,i)=>{
     if(i===0)return;
-    /* 2026-09-22: entry-flagged gates never take a rate -- rateOf() already treats
-       any g.entry gate as an automatic 100% pass-through wherever it sits in the
-       chain, and the UI deliberately hides the rate input for entry gates (there's
-       no field to fill in). This check used to only exempt the chain's first
-       element (i===0), so a second entry-flagged gate elsewhere in the chain --
-       which the calc engine already handles correctly -- got wrongly flagged
-       "No rate set." with no way to fix it via the UI. Match rateOf()'s own rule. */
-    if(g.entry)return;
     if(g.rate===0)   out.push({gate:g,msg:'Rate is 0%. Backward planning cannot divide by zero. Enter 100% for a pass-through gate.'});
     if(g.rate==null) out.push({gate:g,msg:'No rate set.'});
     if(g.rate>1)     out.push({gate:g,msg:'Rate is above 100%.'});

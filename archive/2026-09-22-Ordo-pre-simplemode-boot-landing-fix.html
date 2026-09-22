@@ -1822,18 +1822,7 @@ async function loadFromSupabase(){
   const savedOrdoMode = (function(){ try{ return localStorage.getItem('ordo_mode'); }catch(e){ return null; } })();
   UI.mode = (savedOrdoMode==='simple' || savedOrdoMode==='expert') ? savedOrdoMode : 'simple';
   if(!CFG.canExpertMode) UI.mode = 'simple';
-  /* 2026-09-22 (live UAT fix, same day): UI.page is hardcoded to 'home' in the UI object
-     literal above, unconditionally, before this boot code ever runs -- nothing else sets it
-     earlier (the ?page=boardreport deep link, the only other thing that touches UI.page before
-     first render, runs AFTER this and is unaffected). Since 'home' is itself a member of
-     SIMPLE_PAGES, the old check here (`!SIMPLE_PAGES.includes(UI.page)`) was always false at
-     boot, so a genuinely fresh session -- the entire point of "Simple mode is the default
-     landing experience" -- silently landed on Home instead of the new wizard. Unlike setMode()'s
-     own similarly-shaped check further down (correct there: it's reacting to a live mid-session
-     toggle, where staying on a still-valid Simple page is the right call), boot has no
-     "already navigated elsewhere" case to preserve -- UI.page is always exactly 'home' at this
-     exact line, every time -- so this one is unconditional instead. */
-  if(UI.mode==='simple') UI.page = 'simple';
+  if(UI.mode==='simple' && !SIMPLE_PAGES.includes(UI.page)) UI.page = 'simple';
   UI.simpleStep = (function(){ try{ const v=parseInt(localStorage.getItem('ordo_simple_step'),10); return (v>=0&&v<=4)?v:0; }catch(e){ return 0; } })();
   UI.sidebarHidden = (function(){ try{ return localStorage.getItem('ordo_sidebar_hidden')==='1'; }catch(e){ return false; } })();
 

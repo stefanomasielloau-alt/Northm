@@ -39,6 +39,17 @@
         validations: { label: 'Validations', hint: 'Blocking and advisory validation messages', fn: function () { return window.homeWidgetValidations(); } },
         recent: { label: 'Recent activity', hint: 'Latest entries from the audit log', fn: function () { return window.homeWidgetRecentActivity(); } }
       }
+    },
+    drivers: {
+      defaults: { box1: 'kpis', box2: 'global', box3: 'ratelibrary', box4: 'segmentmult', box5: 'streamcontrib' },
+      boxSizes: { box1: 12, box2: 4, box3: 8, box4: 6, box5: 6 }, // first-ever default only; drag/resize overrides after that
+      widgets: {
+        kpis: { label: 'KPI summary', hint: 'Win target, revenue, deal size, implied wins, end-to-end rate', fn: function () { return window.driversWidgetKpis(); } },
+        global: { label: 'Global drivers', hint: 'Editable base assumptions (deal size, revenue, win target, entry volume)', fn: function () { return window.driversWidgetGlobal(); } },
+        ratelibrary: { label: 'Rate library', hint: 'Published vs observed rate per gate, with evidence and adopt-observed action', fn: function () { return window.driversWidgetRateLibrary(); } },
+        segmentmult: { label: 'Segment rate multipliers', hint: 'Rate multiplier and mix by segment', fn: function () { return window.driversWidgetSegmentMultipliers(); } },
+        streamcontrib: { label: 'Stream marketing contribution', hint: 'Marketing-attributed wins by stream', fn: function () { return window.driversWidgetStreamContribution(); } }
+      }
     }
   };
 
@@ -274,7 +285,8 @@
   // markup added to Ordo.html) -- this list is also what drives whether the
   // shared Edit layout / Reset layout buttons in the ctxbar show at all.
   var PAGE_GRID_CONTAINERS = {
-    home: 'ordo-grid-home'
+    home: 'ordo-grid-home',
+    drivers: 'ordo-grid-drivers'
   };
 
   window.northGridAfterRender = function (pageId) {

@@ -3188,15 +3188,9 @@ const gTd = (o,d)=>chain().map(g=>`<td class="n calc">${F.n(o[g.id],d||0)}</td>`
 /* ============================================================================
    MODULE 1 — DRIVERS & RATE LIBRARY
    ============================================================================ */
-function pageDrivers(){
-  if(calcBlocked()) return blockedPanel('Drivers & rate library');
-  const d=CFG.drivers,c=chain(),ro=readOnly()?'disabled':'';
-  const obs=observedRates({fy:null});
-  let h=`<div class="phead"><div><h1>Drivers &amp; rate library</h1>
-    <p>Global assumptions, and the published rate for every gate with the evidence behind it.</p></div>
-    <div class="sp"></div>${readOnly()?'<span class="pill warn">Read only — '+esc(version().name)+'</span>':''}</div>`;
-  h+=vBanner();
-  h+=`<div class="kpis">
+function driversWidgetKpis(){
+  const d=CFG.drivers;
+  return `<div class="kpis">
     <div class="kpi hl"><div class="k">Win target</div><div class="kpi-v">${F.n(d.winTarget)}</div><div class="sub">${esc(exitGate().name)} · ${esc(UI.fy)}</div></div>
     <div class="kpi"><div class="k">Projected revenue</div><div class="kpi-v">${F.mk(d.projectedRevenue)}</div><div class="sub">per year</div></div>
     <div class="kpi"><div class="k">Avg deal (base)</div><div class="kpi-v">${F.mk(d.avgDealSize)}</div><div class="sub">before segment blend</div></div>
@@ -3204,8 +3198,10 @@ function pageDrivers(){
     <div class="kpi"><div class="k">Implied wins</div><div class="kpi-v">${F.n(d.projectedRevenue/blendedDeal(),0)}</div><div class="sub">revenue ÷ blended deal</div></div>
     <div class="kpi"><div class="k">End-to-end rate</div><div class="kpi-v">${F.p(cumRate(exitGate().id),2)}</div><div class="sub">${esc(entryGate().name)} → ${esc(exitGate().name)}</div></div>
   </div>`;
-  h+=`<div class="grid g-1-2">
-    <div class="card"><h3>Global drivers</h3><div class="bd">
+}
+function driversWidgetGlobal(){
+  const d=CFG.drivers,ro=readOnly()?'disabled':'';
+  return `<div class="card"><h3>Global drivers</h3><div class="bd">
       <div class="f"><label>Average deal size</label>
         <input class="in v" value="${d.avgDealSize}" ${ro} onchange="SET('drivers.avgDealSize',this.value,{type:'money'})">
         <span class="hint">Base. Segment deal multipliers apply on top.</span></div>
@@ -3222,8 +3218,12 @@ function pageDrivers(){
         ${Math.abs(d.projectedRevenue/blendedDeal()-d.winTarget)<5
           ? '<span class="pill ok">Ties</span>'
           : '<span class="pill warn">Gap of '+F.n(Math.abs(d.projectedRevenue/blendedDeal()-d.winTarget),0)+'</span>'}</div>
-    </div></div>
-    <div class="card"><h3>Rate library <span class="sp"></span>
+    </div></div>`;
+}
+function driversWidgetRateLibrary(){
+  const c=chain(),ro=readOnly()?'disabled':'';
+  const obs=observedRates({fy:null});
+  let h=`<div class="card"><h3>Rate library <span class="sp"></span>
       <button class="btn sm" ${ro} onclick="adoptObserved()">Adopt observed rates</button></h3>
       <div class="bd flush"><table><thead><tr><th>Gate</th><th class="n">Published rate</th>
         <th class="n">Observed in history</th><th>Evidence</th><th class="n">Delta</th><th class="n">Cumulative</th></tr></thead><tbody>`;
@@ -3241,17 +3241,53 @@ function pageDrivers(){
   });
   h+=`</tbody></table></div>
     <div class="bd"><div class="mini"><b>Evidence bands.</b> A rate backed by 8 observations is shown differently from one
-      backed by 4,000. Adopting observed rates overwrites the published rate and logs the change.</div></div></div></div>`;
-  h+=`<div class="grid g2">
-    <div class="card"><h3>Segment rate multipliers</h3><div class="bd">
+      backed by 4,000. Adopting observed rates overwrites the published rate and logs the change.</div></div></div>`;
+  return h;
+}
+function driversWidgetSegmentMultipliers(){
+  return `<div class="card"><h3>Segment rate multipliers</h3><div class="bd">
       ${svgBars(G().map(s=>({k:s.name,v:s.rateMult,k2:F.p(s.mix,0)+' of mix'})),{h:180,dec:2})}
       <div class="mini" style="margin-top:6px">Blended multiplier <b>${segBlend().toFixed(3)}</b> — applied to every published rate.</div>
-    </div></div>
-    <div class="card"><h3>Stream marketing contribution</h3><div class="bd">
+    </div></div>`;
+}
+function driversWidgetStreamContribution(){
+  return `<div class="card"><h3>Stream marketing contribution</h3><div class="bd">
       ${svgBars(S().map(s=>({k:s.name,v:CFG.drivers.winTarget*s.mix*s.mktContrib,k2:F.p(s.mktContrib,0)})),{h:180,dec:1})}
       <div class="mini" style="margin-top:6px">Marketing-attributed wins by stream. Total
         <b>${F.n(sum(S().map(s=>CFG.drivers.winTarget*s.mix*s.mktContrib)),1)}</b>.</div>
-    </div></div></div>`;
+    </div></div>`;
+}
+window.driversWidgetKpis=driversWidgetKpis;
+window.driversWidgetGlobal=driversWidgetGlobal;
+window.driversWidgetRateLibrary=driversWidgetRateLibrary;
+window.driversWidgetSegmentMultipliers=driversWidgetSegmentMultipliers;
+window.driversWidgetStreamContribution=driversWidgetStreamContribution;
+function pageDrivers(){
+  if(calcBlocked()) return blockedPanel('Drivers & rate library');
+  let h=`<div class="phead"><div><h1>Drivers &amp; rate library</h1>
+    <p>Global assumptions, and the published rate for every gate with the evidence behind it.</p></div>
+    <div class="sp"></div>${readOnly()?'<span class="pill warn">Read only — '+esc(version().name)+'</span>':''}</div>`;
+  h+=vBanner();
+
+  const driversBoxSizes={box1:12,box2:4,box3:8,box4:6,box5:6};
+  const driversWidgetFns={
+    kpis:driversWidgetKpis,
+    global:driversWidgetGlobal,
+    ratelibrary:driversWidgetRateLibrary,
+    segmentmult:driversWidgetSegmentMultipliers,
+    streamcontrib:driversWidgetStreamContribution
+  };
+  const assigned=(window.northGetWidgetAssignments?window.northGetWidgetAssignments('drivers'):{box1:'kpis',box2:'global',box3:'ratelibrary',box4:'segmentmult',box5:'streamcontrib'});
+
+  h+=`<div class="grid-stack" id="ordo-grid-drivers">`;
+  ['box1','box2','box3','box4','box5'].forEach(boxId=>{
+    const widgetId=assigned[boxId]||boxId;
+    const fn=driversWidgetFns[widgetId]||(()=>'<div class="card"><div class="bd">Unknown widget.</div></div>');
+    h+=`<div class="grid-stack-item" gs-w="${driversBoxSizes[boxId]}" gs-id="${boxId}">
+      <div class="grid-stack-item-content">${fn()}</div>
+    </div>`;
+  });
+  h+=`</div>`;
   return h;
 }
 function adoptObserved(){

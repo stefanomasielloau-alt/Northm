@@ -226,6 +226,21 @@
         regions: { label: 'Regions at a glance', hint: 'Per-region ACV target vs demand potential table', fn: function () { return window.dashboardWidgetRegions(); } },
         drift: { label: 'Plan drift vs baseline snapshot', hint: 'Target and budget drift since a named snapshot', fn: function () { return window.dashboardWidgetDrift(); } }
       }
+    },
+    // Quick calculator: mostly interactive inputs, but the top-down and
+    // bottom-up assumption/result pairs render as single boxes (each pair
+    // was already one `grid g2` unit in the original layout, sharing state
+    // between its two halves) rather than splitting further.
+    calculator: {
+      defaults: { box1: 'topdown', box2: 'bottomup', box3: 'bystream', box4: 'scenarios', box5: 'reference' },
+      boxSizes: { box1: 12, box2: 12, box3: 12, box4: 12, box5: 12 },
+      widgets: {
+        topdown: { label: 'Top-down: assumptions & result', hint: 'Target wins, deal size, rate and cost/lead -> leads needed, cost, ROI', fn: function () { return window.calcWidgetTopDown(); } },
+        bottomup: { label: 'Bottom-up: from volume', hint: 'Given expected entry volume, wins/cost/revenue run forward instead of backward', fn: function () { return window.calcWidgetBottomUp(); } },
+        bystream: { label: 'By stream', hint: 'Top-down/bottom-up split across configured streams by mix share', fn: function () { return window.calcWidgetByStream(); } },
+        scenarios: { label: 'Scenarios', hint: 'Save, load and remove named calculator scenarios', fn: function () { return window.calcWidgetScenarios(); } },
+        reference: { label: 'Reference — real gate chain', hint: 'Blended assumption vs the detailed engine\'s actual per-gate rates', fn: function () { return window.calcWidgetReference(); } }
+      }
     }
   };
 
@@ -478,7 +493,8 @@
     insight_scen: 'ordo-grid-insight-scen',
     insight_ready: 'ordo-grid-insight-ready',
     campaign: 'ordo-grid-campaign',
-    dashboard: 'ordo-grid-dashboard'
+    dashboard: 'ordo-grid-dashboard',
+    calculator: 'ordo-grid-calculator'
   };
 
   // A page whose grid identity is finer than its top-level pageId (e.g. a

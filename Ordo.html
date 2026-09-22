@@ -5815,7 +5815,7 @@ function pageDashboard(){
 /* ============================================================================
    MODULE — QUICK CALCULATOR (push to planner)
    ============================================================================ */
-function pageCalculator(){
+function calcWidgetTopDown(){
   if(!UI.calc) UI.calc=calcDefaults();
   const k=UI.calc, m=verMult()*segBlend();
   const leadsNeeded = k.rate>0 ? k.targetWins/k.rate : null;
@@ -5823,20 +5823,7 @@ function pageCalculator(){
   const revenue = k.targetWins*k.avgDeal;
   const costPerWin = (k.targetWins&&totalCost!=null) ? totalCost/k.targetWins : null;
   const roi = totalCost ? revenue/totalCost : null;
-  const detailed = backward(k.targetWins||0, m);
-
-  const entryVolume = k.entryVolume||0;
-  const winsExpected = entryVolume*k.rate;
-  const buCost = entryVolume*k.costPerLead;
-  const buRevenue = winsExpected*k.avgDeal;
-  const buCostPerWin = winsExpected ? buCost/winsExpected : null;
-  const buRoi = buCost ? buRevenue/buCost : null;
-
-  let h=`<div class="phead"><div><h1>Quick calculator</h1>
-    <p>A handful of numbers for fast what-if thinking, kept separate from the live plan until you push it across.</p></div>
-    <div class="sp"></div><button class="btn sm" onclick="calcReset()">Reset to current plan</button></div>`;
-
-  h+=`<div class="grid g2">
+  return `<div class="grid g2">
     <div class="card"><h3>Assumptions</h3><div class="bd">
       <div class="f"><label>Target ${esc(exitGate().name)}</label>
         <input class="in v" value="${k.targetWins}" onchange="calcSet('targetWins',this.value)"></div>
@@ -5864,8 +5851,17 @@ function pageCalculator(){
         also drops a draft campaign into Campaign &amp; cost with this budget and conversion assumption, ready to refine.</div>
     </div></div>
   </div>`;
-
-  h+=`<div class="grid g2">
+}
+function calcWidgetBottomUp(){
+  if(!UI.calc) UI.calc=calcDefaults();
+  const k=UI.calc;
+  const entryVolume = k.entryVolume||0;
+  const winsExpected = entryVolume*k.rate;
+  const buCost = entryVolume*k.costPerLead;
+  const buRevenue = winsExpected*k.avgDeal;
+  const buCostPerWin = winsExpected ? buCost/winsExpected : null;
+  const buRoi = buCost ? buRevenue/buCost : null;
+  return `<div class="grid g2">
     <div class="card"><h3>Bottom-up: from volume</h3><div class="bd">
       <div class="f"><label>${esc(entryGate().name)} you expect</label>
         <input class="in v" value="${entryVolume}" onchange="calcSet('entryVolume',this.value)"></div>
@@ -5883,33 +5879,37 @@ function pageCalculator(){
       <button class="btn" onclick="calcSet('targetWins',${Math.round(winsExpected)||0})">Use ${F.n(winsExpected)} as my top-down target &uarr;</button>
     </div></div>
   </div>`;
-
+}
+function calcWidgetByStream(){
+  if(!UI.calc) UI.calc=calcDefaults();
+  const k=UI.calc;
+  const winsExpected = (k.entryVolume||0)*k.rate;
   const streamRows=calcStreamBreakdown(k);
-  if(streamRows.length){
-    const tdTotal=sum(streamRows.map(r=>r.tdWins)), buTotal=sum(streamRows.map(r=>r.buWins));
-    h+=`<div class="card"><h3>By stream <span class="sp"></span><span class="pill n">split by each stream's configured mix</span></h3>
-      <div class="bd"><div class="mini" style="margin-bottom:10px">Same target, rate and cost-per-lead as above, divided across your configured
-        streams (Admin &amp; config &rarr; Streams) by their mix share — matching a top-down/bottom-up-by-source view like Stef's
-        original funnel calculator. Streams don't have their own conversion rates in North yet, so each one runs the same blended rate.</div>
-      <div class="scroll cap"><table><thead><tr><th>Stream</th><th class="n">Mix share</th>
-        <th class="n">Top-down: wins</th><th class="n">Top-down: ${esc(entryGate().name)} needed</th>
-        <th class="n">Bottom-up: ${esc(entryGate().name)}</th><th class="n">Bottom-up: wins expected</th></tr></thead><tbody>
-        ${streamRows.map(r=>`<tr><td class="lb">${esc(r.name)}</td><td class="n calc">${F.p(r.share,1)}</td>
-          <td class="n calc">${F.n(r.tdWins)}</td><td class="n calc">${r.tdLeads!=null?F.n(r.tdLeads):'—'}</td>
-          <td class="n calc">${F.n(r.buEntry)}</td><td class="n calc">${F.n(r.buWins)}</td></tr>`).join('')}
-        <tr style="font-weight:600;border-top:2px solid var(--line)"><td class="lb">Total by stream</td><td class="n">${F.p(1,1)}</td>
-          <td class="n calc">${F.n(tdTotal)}</td><td class="n calc">—</td><td class="n calc">—</td><td class="n calc">${F.n(buTotal)}</td></tr>
-        <tr><td class="lb">Target</td><td class="n">—</td><td class="n calc">${F.n(k.targetWins||0)}</td><td class="n calc">—</td>
-          <td class="n calc">—</td><td class="n calc">${F.n(winsExpected)}</td></tr>
-        <tr><td class="lb">Variance</td><td class="n">—</td><td class="n calc" style="color:${tdTotal-(k.targetWins||0)===0?'inherit':'var(--warn)'}">${F.sp(tdTotal-(k.targetWins||0),0)}</td>
-          <td class="n calc">—</td><td class="n calc">—</td><td class="n calc" style="color:${buTotal-winsExpected===0?'inherit':'var(--warn)'}">${F.sp(buTotal-winsExpected,0)}</td></tr>
-      </tbody></table></div></div></div>`;
-  } else {
-    h+=`<div class="card"><h3>By stream</h3><div class="bd"><div class="empty">No streams configured yet — add some in Admin &amp; config &rarr; Streams to see a top-down/bottom-up split by source.</div></div></div>`;
+  if(!streamRows.length){
+    return `<div class="card"><h3>By stream</h3><div class="bd"><div class="empty">No streams configured yet — add some in Admin &amp; config &rarr; Streams to see a top-down/bottom-up split by source.</div></div></div>`;
   }
-
+  const tdTotal=sum(streamRows.map(r=>r.tdWins)), buTotal=sum(streamRows.map(r=>r.buWins));
+  return `<div class="card"><h3>By stream <span class="sp"></span><span class="pill n">split by each stream's configured mix</span></h3>
+    <div class="bd"><div class="mini" style="margin-bottom:10px">Same target, rate and cost-per-lead as above, divided across your configured
+      streams (Admin &amp; config &rarr; Streams) by their mix share — matching a top-down/bottom-up-by-source view like Stef's
+      original funnel calculator. Streams don't have their own conversion rates in North yet, so each one runs the same blended rate.</div>
+    <div class="scroll cap"><table><thead><tr><th>Stream</th><th class="n">Mix share</th>
+      <th class="n">Top-down: wins</th><th class="n">Top-down: ${esc(entryGate().name)} needed</th>
+      <th class="n">Bottom-up: ${esc(entryGate().name)}</th><th class="n">Bottom-up: wins expected</th></tr></thead><tbody>
+      ${streamRows.map(r=>`<tr><td class="lb">${esc(r.name)}</td><td class="n calc">${F.p(r.share,1)}</td>
+        <td class="n calc">${F.n(r.tdWins)}</td><td class="n calc">${r.tdLeads!=null?F.n(r.tdLeads):'—'}</td>
+        <td class="n calc">${F.n(r.buEntry)}</td><td class="n calc">${F.n(r.buWins)}</td></tr>`).join('')}
+      <tr style="font-weight:600;border-top:2px solid var(--line)"><td class="lb">Total by stream</td><td class="n">${F.p(1,1)}</td>
+        <td class="n calc">${F.n(tdTotal)}</td><td class="n calc">—</td><td class="n calc">—</td><td class="n calc">${F.n(buTotal)}</td></tr>
+      <tr><td class="lb">Target</td><td class="n">—</td><td class="n calc">${F.n(k.targetWins||0)}</td><td class="n calc">—</td>
+        <td class="n calc">—</td><td class="n calc">${F.n(winsExpected)}</td></tr>
+      <tr><td class="lb">Variance</td><td class="n">—</td><td class="n calc" style="color:${tdTotal-(k.targetWins||0)===0?'inherit':'var(--warn)'}">${F.sp(tdTotal-(k.targetWins||0),0)}</td>
+        <td class="n calc">—</td><td class="n calc">—</td><td class="n calc" style="color:${buTotal-winsExpected===0?'inherit':'var(--warn)'}">${F.sp(buTotal-winsExpected,0)}</td></tr>
+    </tbody></table></div></div></div>`;
+}
+function calcWidgetScenarios(){
   const sortedScenarios=CFG.calcScenarios.slice().sort((a,b)=>b.timestamp.localeCompare(a.timestamp));
-  h+=`<div class="card"><h3>Scenarios <span class="sp"></span><span class="pill n">${CFG.calcScenarios.length} saved</span></h3>
+  return `<div class="card"><h3>Scenarios <span class="sp"></span><span class="pill n">${CFG.calcScenarios.length} saved</span></h3>
     <div class="bd">
       <div class="row">
         <input class="in" id="calcScenName" placeholder="e.g. FY27 stretch case" style="max-width:300px"
@@ -5930,8 +5930,13 @@ function pageCalculator(){
           <button class="btn sm dgr" onclick="removeCalcScenario('${sc.id}')">Remove</button></td></tr>`).join('')}
       </tbody></table></div></div>`:''}
   </div>`;
-
-  h+=`<div class="card"><h3>Reference — the real gate chain for this target</h3>
+}
+function calcWidgetReference(){
+  if(!UI.calc) UI.calc=calcDefaults();
+  const k=UI.calc, m=verMult()*segBlend();
+  const leadsNeeded = k.rate>0 ? k.targetWins/k.rate : null;
+  const detailed = backward(k.targetWins||0, m);
+  return `<div class="card"><h3>Reference — the real gate chain for this target</h3>
     <div class="bd flush"><table><thead><tr><th>Gate</th><th class="n">Your blended assumption</th><th class="n">Live plan's actual gates</th><th class="n">Difference</th></tr></thead><tbody>
     ${chain().map(g=>{
       const simple = g.id===exitGate().id ? k.targetWins : g.id===entryGate().id ? leadsNeeded : null;
@@ -5946,6 +5951,32 @@ function pageCalculator(){
     <div class="bd"><div class="mini">The calculator only knows entry and exit — it can't see the gates in between.
       This shows what the detailed engine's real per-gate rates actually need for the same target, so you can tell
       whether the blended-rate assumption above is optimistic before you push it.</div></div></div>`;
+}
+window.calcWidgetTopDown=calcWidgetTopDown;
+window.calcWidgetBottomUp=calcWidgetBottomUp;
+window.calcWidgetByStream=calcWidgetByStream;
+window.calcWidgetScenarios=calcWidgetScenarios;
+window.calcWidgetReference=calcWidgetReference;
+function pageCalculator(){
+  if(!UI.calc) UI.calc=calcDefaults();
+
+  let h=`<div class="phead"><div><h1>Quick calculator</h1>
+    <p>A handful of numbers for fast what-if thinking, kept separate from the live plan until you push it across.</p></div>
+    <div class="sp"></div><button class="btn sm" onclick="calcReset()">Reset to current plan</button></div>`;
+
+  const calculatorBoxSizes={box1:12,box2:12,box3:12,box4:12,box5:12};
+  const calculatorWidgetFns={topdown:calcWidgetTopDown,bottomup:calcWidgetBottomUp,bystream:calcWidgetByStream,scenarios:calcWidgetScenarios,reference:calcWidgetReference};
+  const assigned=(window.northGetWidgetAssignments?window.northGetWidgetAssignments('calculator'):{box1:'topdown',box2:'bottomup',box3:'bystream',box4:'scenarios',box5:'reference'});
+
+  h+=`<div class="grid-stack" id="ordo-grid-calculator">`;
+  ['box1','box2','box3','box4','box5'].forEach(boxId=>{
+    const widgetId=assigned[boxId]||boxId;
+    const fn=calculatorWidgetFns[widgetId]||(()=>'<div class="card"><div class="bd">Unknown widget.</div></div>');
+    h+=`<div class="grid-stack-item" gs-w="${calculatorBoxSizes[boxId]}" gs-id="${boxId}">
+      <div class="grid-stack-item-content">${fn()}</div>
+    </div>`;
+  });
+  h+=`</div>`;
   return h;
 }
 

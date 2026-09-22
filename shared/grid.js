@@ -212,6 +212,20 @@
         portfolio: { label: 'Portfolio business case', hint: 'Roll-up of every campaign business case in scope', fn: function () { return window.campaignWidgetPortfolio(); } },
         capacity: { label: 'Capacity check', hint: 'Monthly capacity vs plan need by activity, with utilisation and status', fn: function () { return window.campaignWidgetCapacity(); } }
       }
+    },
+    // Dashboard: all 5 boxes always render (no conditional omission, unlike
+    // Geography & pods / Campaign & cost) -- the drift card handles its own
+    // empty state internally when no snapshot exists yet.
+    dashboard: {
+      defaults: { box1: 'kpis', box2: 'funnel', box3: 'costbucketchart', box4: 'regions', box5: 'drift' },
+      boxSizes: { box1: 12, box2: 6, box3: 6, box4: 12, box5: 12 },
+      widgets: {
+        kpis: { label: 'KPI summary', hint: 'Exit gate plan vs actual, budgeted, committed, actual spend, ACV vs demand potential', fn: function () { return window.dashboardWidgetKpis(); } },
+        funnel: { label: 'Funnel — plan vs actual', hint: 'Gate-by-gate plan vs actual table with variance and status', fn: function () { return window.dashboardWidgetFunnel(); } },
+        costbucketchart: { label: 'Spend by cost bucket', hint: 'Bar chart of spend by cost bucket', fn: function () { return window.dashboardWidgetCostBucketChart(); } },
+        regions: { label: 'Regions at a glance', hint: 'Per-region ACV target vs demand potential table', fn: function () { return window.dashboardWidgetRegions(); } },
+        drift: { label: 'Plan drift vs baseline snapshot', hint: 'Target and budget drift since a named snapshot', fn: function () { return window.dashboardWidgetDrift(); } }
+      }
     }
   };
 
@@ -463,7 +477,8 @@
     insight_lift: 'ordo-grid-insight-lift',
     insight_scen: 'ordo-grid-insight-scen',
     insight_ready: 'ordo-grid-insight-ready',
-    campaign: 'ordo-grid-campaign'
+    campaign: 'ordo-grid-campaign',
+    dashboard: 'ordo-grid-dashboard'
   };
 
   // A page whose grid identity is finer than its top-level pageId (e.g. a

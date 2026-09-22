@@ -5425,26 +5425,9 @@ function pageBoardReport(){
   return h;
 }
 
-function pageSnapshots(){
-  if(calcBlocked()) return blockedPanel('Snapshots');
-  const c=chain(),vis=visibleRegions().map(r=>r.id),m=verMult()*segBlend();
-  const current=backward(CFG.drivers.winTarget,m);
-  const actualAcc=histSlice({fy:UI.fy,regionIds:vis}).acc;
+function snapshotsWidgetSave(){
   const ro=readOnly()?'disabled':'';
-  const sorted=CFG.snapshots.slice().sort((a,b)=>b.timestamp.localeCompare(a.timestamp));
-  const compareSet=sorted.slice(0,3);
-  const snapVols=compareSet.map(s=>({s:s,vol:snapshotGateVolumes(s)}));
-  const gateMismatch=compareSet.some(s=>{
-    const sids=(s.data.gates||[]).map(g=>g.id).sort().join(',');
-    const cids=CFG.gates.map(g=>g.id).sort().join(',');
-    return sids!==cids;
-  });
-
-  let h=`<div class="phead"><div><h1>Snapshots</h1>
-    <p>Save a named, timestamped copy of the whole plan. Revert to one, or compare it side by side against the
-      current plan and actuals — the last three saved snapshots are shown below.</p></div></div>`;
-
-  h+=`<div class="card"><h3>Save a snapshot</h3><div class="bd">
+  return `<div class="card"><h3>Save a snapshot</h3><div class="bd">
     <div class="row">
       <input class="in" id="snapName" placeholder="e.g. FY27 board-approved plan" style="max-width:340px" ${ro}
         onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('snapBtn').click();}">
@@ -5455,8 +5438,11 @@ function pageSnapshots(){
     <div class="mini" style="margin-top:6px">Captures every module as it stands right now — drivers, gates, geography,
       segments, activities, campaigns, cost and cost buckets. Reverting swaps all of it back in one step.</div>
   </div></div>`;
-
-  h+=`<div class="card"><h3>Saved snapshots <span class="sp"></span>
+}
+function snapshotsWidgetSaved(){
+  const ro=readOnly()?'disabled':'';
+  const sorted=CFG.snapshots.slice().sort((a,b)=>b.timestamp.localeCompare(a.timestamp));
+  return `<div class="card"><h3>Saved snapshots <span class="sp"></span>
     <span class="pill n">${CFG.snapshots.length} saved</span></h3>
     <div class="bd flush"><div class="scroll cap"><table><thead><tr>
       <th>Name</th><th>Created by</th><th>Timestamp</th><th></th></tr></thead><tbody>
@@ -5468,8 +5454,20 @@ function pageSnapshots(){
           <button class="btn sm dgr" ${ro} onclick="removeSnapshot('${s.id}')">Remove</button></td></tr>`).join('')
         :`<tr><td colspan="4" class="empty">No snapshots yet — save one above.</td></tr>`}
     </tbody></table></div></div></div>`;
-
-  h+=`<div class="card"><h3>Compare — current plan vs snapshots vs actual</h3>`;
+}
+function snapshotsWidgetCompare(){
+  const c=chain(),vis=visibleRegions().map(r=>r.id),m=verMult()*segBlend();
+  const current=backward(CFG.drivers.winTarget,m);
+  const actualAcc=histSlice({fy:UI.fy,regionIds:vis}).acc;
+  const sorted=CFG.snapshots.slice().sort((a,b)=>b.timestamp.localeCompare(a.timestamp));
+  const compareSet=sorted.slice(0,3);
+  const snapVols=compareSet.map(s=>({s:s,vol:snapshotGateVolumes(s)}));
+  const gateMismatch=compareSet.some(s=>{
+    const sids=(s.data.gates||[]).map(g=>g.id).sort().join(',');
+    const cids=CFG.gates.map(g=>g.id).sort().join(',');
+    return sids!==cids;
+  });
+  let h=`<div class="card"><h3>Compare — current plan vs snapshots vs actual</h3>`;
   if(gateMismatch) h+=`<div class="note w"><strong>The gate set has changed since one of these snapshots was saved.</strong>
     Cells that can't be matched to today's gates show <b>—</b> rather than a silent zero.</div>`;
   if(!compareSet.length) h+=`<div class="bd"><div class="empty">Save at least one snapshot above to see a comparison.</div></div>`;
@@ -5479,9 +5477,36 @@ function pageSnapshots(){
       ${c.map(g=>`<tr><td class="lb">${esc(g.name)}</td><td class="n calc">${F.n(current[g.id])}</td>
         ${snapVols.map(x=>`<td class="n calc">${F.n(x.vol?x.vol[g.id]:null)}</td>`).join('')}
         <td class="n calc">${F.n(actualAcc[g.id])}</td></tr>`).join('')}
-    </tbody></table></div></div></div>`;
+    </tbody></table></div></div>`;
+  h+=`</div>`;
   return h;
 }
+window.snapshotsWidgetSave=snapshotsWidgetSave;
+window.snapshotsWidgetSaved=snapshotsWidgetSaved;
+window.snapshotsWidgetCompare=snapshotsWidgetCompare;
+function pageSnapshots(){
+  if(calcBlocked()) return blockedPanel('Snapshots');
+
+  let h=`<div class="phead"><div><h1>Snapshots</h1>
+    <p>Save a named, timestamped copy of the whole plan. Revert to one, or compare it side by side against the
+      current plan and actuals — the last three saved snapshots are shown below.</p></div></div>`;
+
+  const snapshotsBoxSizes={box1:12,box2:12,box3:12};
+  const snapshotsWidgetFns={save:snapshotsWidgetSave,saved:snapshotsWidgetSaved,compare:snapshotsWidgetCompare};
+  const assigned=(window.northGetWidgetAssignments?window.northGetWidgetAssignments('snapshots'):{box1:'save',box2:'saved',box3:'compare'});
+
+  h+=`<div class="grid-stack" id="ordo-grid-snapshots">`;
+  ['box1','box2','box3'].forEach(boxId=>{
+    const widgetId=assigned[boxId]||boxId;
+    const fn=snapshotsWidgetFns[widgetId]||(()=>'<div class="card"><div class="bd">Unknown widget.</div></div>');
+    h+=`<div class="grid-stack-item" gs-w="${snapshotsBoxSizes[boxId]}" gs-id="${boxId}">
+      <div class="grid-stack-item-content">${fn()}</div>
+    </div>`;
+  });
+  h+=`</div>`;
+  return h;
+}
+
 
 
 /* ============================================================================
@@ -6290,22 +6315,11 @@ window.relResetView=relResetView;
 function relResetLayout(){ _relPos={}; render(); toast('Layout reset.'); }
 window.relResetLayout=relResetLayout;
 
-function pageRelationships(){
+function relationshipsWidgetGraph(){
   const g=computeRelGraph();
   relLayoutSeed(g.nodes);
   relRunForces(g.nodes,g.edges);
-
-  let h=`<div class="phead"><div><h1>Relationships</h1>
-    <p>How campaigns connect to their owner (Campaign Planning's Programme owner field) and business unit (via Region → Org unit). ${g.broken?'<b>'+g.broken+'</b> campaign'+(g.broken===1?'':'s')+' missing an owner or business unit':'Every visible campaign has both.'}</p></div>
-    <div class="sp"></div>
-    <button class="btn sm" onclick="relResetLayout()">Reset layout</button></div>`;
-
-  if(!g.total){
-    h+=`<div class="card"><div class="empty">No campaigns in scope yet, so there's nothing to graph.</div></div>`;
-    return h;
-  }
-
-  h+=`<div class="card"><div class="bd" style="padding:12px 14px">
+  return `<div class="card"><div class="bd" style="padding:12px 14px">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
       <select class="in" style="width:auto" onchange="UI.relFilterOwner=this.value;render()">
         <option value="">All owners</option>
@@ -6330,6 +6344,38 @@ function pageRelationships(){
     </div>
     <div class="mini" style="margin-top:6px">Drag a node to pin it in place; click a node to highlight its connections, click again to clear. Layout resets on reload -- nothing here is saved to the plan.</div>
   </div></div>`;
+}
+window.relationshipsWidgetGraph=relationshipsWidgetGraph;
+function pageRelationships(){
+  const gCheck=computeRelGraph();
+
+  let h=`<div class="phead"><div><h1>Relationships</h1>
+    <p>How campaigns connect to their owner (Campaign Planning's Programme owner field) and business unit (via Region → Org unit). ${gCheck.broken?'<b>'+gCheck.broken+'</b> campaign'+(gCheck.broken===1?'':'s')+' missing an owner or business unit':'Every visible campaign has both.'}</p></div>
+    <div class="sp"></div>
+    <button class="btn sm" onclick="relResetLayout()">Reset layout</button></div>`;
+
+  if(!gCheck.total){
+    h+=`<div class="card"><div class="empty">No campaigns in scope yet, so there's nothing to graph.</div></div>`;
+    return h;
+  }
+
+  /* Only one meaningful box on this page -- the graph is a single interactive
+     pan/zoom/drag canvas, not a set of independent lenses on the same data
+     (unlike every analysis page done so far), so there's nothing coherent to
+     offer a widget picker for. Wrapped in the grid-stack purely for structural
+     consistency with the rest of the app; see the "awkward fits" note in the
+     rollout log for the reasoning. */
+  const assigned=(window.northGetWidgetAssignments?window.northGetWidgetAssignments('relationships'):{box1:'graph'});
+  const relationshipsWidgetFns={graph:relationshipsWidgetGraph};
+  h+=`<div class="grid-stack" id="ordo-grid-relationships">`;
+  {
+    const widgetId=assigned.box1||'graph';
+    const fn=relationshipsWidgetFns[widgetId]||relationshipsWidgetFns.graph;
+    h+=`<div class="grid-stack-item" gs-w="12" gs-id="box1">
+      <div class="grid-stack-item-content">${fn()}</div>
+    </div>`;
+  }
+  h+=`</div>`;
   return h;
 }
 window.pageRelationships=pageRelationships;

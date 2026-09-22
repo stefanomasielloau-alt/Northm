@@ -344,6 +344,25 @@
       widgets: {
         log: { label: 'Audit log', hint: 'This session\'s driver and dimension change log', fn: function () { return window.adminAuditWidgetLog(); } }
       }
+    },
+    snapshots: {
+      defaults: { box1: 'save', box2: 'saved', box3: 'compare' },
+      boxSizes: { box1: 12, box2: 12, box3: 12 },
+      widgets: {
+        save: { label: 'Save a snapshot', hint: 'Name and save the current whole plan as a snapshot', fn: function () { return window.snapshotsWidgetSave(); } },
+        saved: { label: 'Saved snapshots', hint: 'Saved snapshot list -- revert, overlay, or remove', fn: function () { return window.snapshotsWidgetSaved(); } },
+        compare: { label: 'Compare vs snapshots & actual', hint: 'Gate-by-gate current plan vs up to 3 recent snapshots vs actual', fn: function () { return window.snapshotsWidgetCompare(); } }
+      }
+    },
+    // Relationships: a single interactive pan/zoom/drag canvas, not a set of
+    // independent lenses -- one box, no real widget picker, wrapped purely
+    // for structural consistency with the rest of the app.
+    relationships: {
+      defaults: { box1: 'graph' },
+      boxSizes: { box1: 12 },
+      widgets: {
+        graph: { label: 'Relationship graph', hint: 'Campaign -> owner / business-unit node graph, drag to pin, click to focus', fn: function () { return window.relationshipsWidgetGraph(); } }
+      }
     }
   };
 
@@ -609,7 +628,9 @@
     admin_ver: 'ordo-grid-admin-ver',
     admin_users: 'ordo-grid-admin-users',
     admin_feeds: 'ordo-grid-admin-feeds',
-    admin_audit: 'ordo-grid-admin-audit'
+    admin_audit: 'ordo-grid-admin-audit',
+    snapshots: 'ordo-grid-snapshots',
+    relationships: 'ordo-grid-relationships'
   };
 
   // A page whose grid identity is finer than its top-level pageId (e.g. a

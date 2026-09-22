@@ -1,0 +1,47 @@
+{
+  "captured_at": "2026-09-22T (live capture before stream/segment dedup)",
+  "purpose": "Full snapshot of Tac-Tik's duplicated streams and segments before deduplication (Finding 1 from the validations-banner review), taken via CFG in the live North app immediately before deletion.",
+  "org_id": "6373bb04-fc25-4a72-b43b-ccd8bb110cda",
+  "org_name": "Tac-Tik",
+  "background": "Unlike the earlier region/gate duplicates, these pairs are TRUE clones -- every field (mix, mktContrib, rateMult, dealMult, addressable, engaged) is identical between the two rows in each pair. This is pure duplicate seed data, not two meaningfully different configurations.",
+  "rule_applied": "Keep whichever copy of each pair is actually referenced by live data (checked every array in CFG for a field pointing at either id -- campaigns, feeds, regionStreams, campaignPodAllocations, versions, calcScenarios, snapshots, all checked, 0 hits outside campaigns.segmentId). When neither copy is referenced (true for all 5 stream pairs, and for the Unassigned segment pair), keep the first/lower-order copy for consistency, matching the convention used in the gate cleanup.",
+  "streams_all_10_before": [
+    {"id":"b60c64b2-468d-485f-8881-db583e0792b6","name":"Net New","mix":0.45,"mktContrib":0.3,"unassigned":false,"decision":"KEEP - first copy, unreferenced either way"},
+    {"id":"25eace40-cd5c-411f-bba3-2dbbbbe9f905","name":"Net New","mix":0.45,"mktContrib":0.3,"unassigned":false,"decision":"REMOVE - duplicate, unreferenced"},
+    {"id":"58f32975-bee2-45d0-b046-8364c1ccc760","name":"Expand","mix":0.25,"mktContrib":0.05,"unassigned":false,"decision":"KEEP - first copy, unreferenced either way"},
+    {"id":"7b2dde1b-9a0e-4572-bf38-cfaa0214346f","name":"Expand","mix":0.25,"mktContrib":0.05,"unassigned":false,"decision":"REMOVE - duplicate, unreferenced"},
+    {"id":"a7bdeb6e-5d9d-427e-b013-f99c17eca9f3","name":"Channel","mix":0.22,"mktContrib":0.21,"unassigned":false,"decision":"KEEP - first copy, unreferenced either way"},
+    {"id":"ec114174-481e-4054-84e7-ab78b1a1b8cc","name":"Channel","mix":0.22,"mktContrib":0.21,"unassigned":false,"decision":"REMOVE - duplicate, unreferenced"},
+    {"id":"0d4dc851-9354-4094-8dc7-7aab08b5eb45","name":"MKT Expand","mix":0.08,"mktContrib":0.6,"unassigned":false,"decision":"KEEP - first copy, unreferenced either way"},
+    {"id":"f4d17038-e2df-456b-80fc-587356648030","name":"MKT Expand","mix":0.08,"mktContrib":0.6,"unassigned":false,"decision":"REMOVE - duplicate, unreferenced"},
+    {"id":"1f3aa9b4-e070-44a8-a280-c3b223805fba","name":"Unassigned","mix":0,"mktContrib":0,"unassigned":true,"decision":"KEEP - first copy, system row"},
+    {"id":"46706415-809b-4a2e-a6c7-edb92f6bdb04","name":"Unassigned","mix":0,"mktContrib":0,"unassigned":true,"decision":"REMOVE - duplicate system row"}
+  ],
+  "segments_all_8_before": [
+    {"id":"c17646fa-54a7-4b4c-89c9-e61aa5e3bd51","name":"Enterprise","tier":"Tier 1","mix":0.24,"decision":"REMOVE - unreferenced copy; the other Enterprise row is the one 2 live campaigns use"},
+    {"id":"3bdf0428-70a6-4d67-8848-b8fb43d93f71","name":"Enterprise","tier":"Tier 1","mix":0.24,"decision":"KEEP - referenced by campaigns 'Japan Key Account ABM', 'Collateral', 'Quick calc — 10 Aug', 'FY27 Enterprise Field Series', 'Compliance Campaign' (5 campaigns)"},
+    {"id":"865a39fa-d030-4dde-96fc-f76a49271899","name":"Mid-Market","tier":"Tier 2","mix":0.46,"decision":"REMOVE - unreferenced copy; the other Mid-Market row is the one 4 live campaigns use"},
+    {"id":"14623424-024a-42f1-9f3c-d92f404538ed","name":"Mid-Market","tier":"Tier 2","mix":0.46,"decision":"KEEP - referenced by campaigns 'Partner Co-Sell Q3', 'SDR Outbound Wave 3', 'SEA Webinar Track', 'Planning Benchmark Report' (4 campaigns)"},
+    {"id":"ad047496-5e39-4d87-a37b-fa4930f31860","name":"SMB","tier":"Tier 3","mix":0.3,"decision":"REMOVE - unreferenced copy; the other SMB row is the one 1 live campaign uses"},
+    {"id":"264a6cb1-f538-4662-a8dc-2ae81d6707a8","name":"SMB","tier":"Tier 3","mix":0.3,"decision":"KEEP - referenced by campaign 'India Growth Push' (1 campaign)"},
+    {"id":"b18c3dbd-d53c-4a7e-bbc7-12016f3eb844","name":"Unassigned","tier":"—","mix":0,"decision":"KEEP - first copy, system row, unreferenced either way"},
+    {"id":"82d9306e-756d-421d-be99-53d1050bfe88","name":"Unassigned","tier":"—","mix":0,"decision":"REMOVE - duplicate system row"}
+  ],
+  "dependency_check": "Scanned every array-valued key in CFG (gates, regions, orgUnits, pods, reps, streams, routes, activities, segments, costBuckets, programmes, versions, campaigns, campaignPodAllocations, regionGateRates, regionStreams, roles, users, drivers, calcScenarios, feeds, snapshots, boardReportSnapshots) for any field referencing any of the 18 duplicate ids. Only hit: campaigns.segmentId, 10 of 12 campaigns, all pointing at the 3 segment ids being kept (none at the ones being removed). No campaign, feed, or any other row references any of the 5 duplicate stream ids or the 2 duplicate Unassigned-segment ids.",
+  "ids_to_remove": {
+    "streams": [
+      "25eace40-cd5c-411f-bba3-2dbbbbe9f905",
+      "7b2dde1b-9a0e-4572-bf38-cfaa0214346f",
+      "ec114174-481e-4054-84e7-ab78b1a1b8cc",
+      "f4d17038-e2df-456b-80fc-587356648030",
+      "46706415-809b-4a2e-a6c7-edb92f6bdb04"
+    ],
+    "segments": [
+      "c17646fa-54a7-4b4c-89c9-e61aa5e3bd51",
+      "865a39fa-d030-4dde-96fc-f76a49271899",
+      "ad047496-5e39-4d87-a37b-fa4930f31860",
+      "82d9306e-756d-421d-be99-53d1050bfe88"
+    ]
+  },
+  "no_reassignment_needed": "Because every referenced campaign already points at the copy being kept, this is a pure delete of orphaned duplicate rows -- no campaign.segmentId updates are needed, unlike the region cleanup which required a cascade."
+}

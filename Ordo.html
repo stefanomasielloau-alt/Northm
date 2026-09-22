@@ -481,6 +481,9 @@ window.closeFieldGuide=closeFieldGuide;
   <div class="ctx"><span class="lbl">Version</span><select id="cVer"></select></div>
   <div class="ctx"><span class="lbl">FY</span><select id="cFy"></select></div>
   <div class="ctx"><span class="lbl">Grain</span><select id="cGrain"></select></div>
+  <div class="sp" style="flex:1"></div>
+  <button class="btn sm" id="grid-edit-toggle" type="button" style="display:none">⠿ Edit layout</button>
+  <button class="btn sm" id="grid-reset" type="button" style="display:none">Reset layout</button>
 </div>
 <div class="wrap" id="wrap">
   <nav class="side" id="side"></nav>
@@ -5118,8 +5121,6 @@ function pageHome(){
   let h=`<div class="phead"><div><h1>${greeting}, ${esc(name)}</h1>
     <p>${today} · ${esc(role()?role().name:'')} on ${esc(UI.fy)} · ${bad?`<b>${bad}</b> blocking validation${bad===1?'':'s'} need your attention`:'All validations pass'}</p></div>
     <div class="sp"></div>
-    <button class="btn" id="grid-edit-toggle-home" type="button">⠿ Edit layout</button>
-    <button class="btn" id="grid-reset-home" type="button">Reset layout</button>
     <button class="btn pri" onclick="go('dashboard')">Open dashboard</button></div>`;
 
   const homeBoxSizes={box1:12,box2:12,box3:6,box4:6};

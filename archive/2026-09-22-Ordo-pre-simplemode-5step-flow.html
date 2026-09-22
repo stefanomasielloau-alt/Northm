@@ -85,19 +85,6 @@ button{cursor:pointer}
 }
 .navi.on .ix{color:var(--nav)}
 .navi .lk{font-size:9px;color:var(--ink-3);margin-left:auto;letter-spacing:.04em}
-/* Simple-mode sidebar (2026-09-22): Expert-only pages stay listed (so nobody wonders
-   where they went) but are greyed out and inert rather than filtered out entirely --
-   Stef's call, better than either hiding them or leaving them fully live. */
-.navi.off{color:var(--ink-3);cursor:default;opacity:.55}
-.navi.off:hover{background:none}
-.navi.off .ix{color:var(--ink-3)}
-.simplesteps{padding:2px 14px 10px}
-.simplestep{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12.5px;color:var(--ink-2);text-decoration:none}
-.simplestep .n{width:18px;height:18px;border-radius:50%;background:var(--canvas-2);color:var(--ink-3);font-size:10px;font-weight:800;
-  display:flex;align-items:center;justify-content:center;flex:none}
-.simplestep.on{color:var(--ink);font-weight:700}
-.simplestep.on .n{background:var(--nav);color:#fff}
-.simplestep.done .n{background:var(--ok);color:#fff}
 /* Expert mode toggle (item 29, 2026-09-08) -- lifted verbatim from Cursus.html's
    existing pilot so the control looks and behaves identically in both modules. */
 .modetoggle{display:inline-block;width:36px;height:20px;border-radius:20px;background:var(--line);position:relative;cursor:pointer;flex:none;transition:background .15s;}
@@ -532,12 +519,7 @@ const UI = {
   regionId:'r_anz',activityId:'a_sdr',pending:null,overlay:null,repPodId:null,
   dashRegionId:null,dashPodId:null,bizCampaignId:null,pendingEdit:null,
   relFilterOwner:'',relFilterBiz:'',relFocusId:null,relZoom:1,relPanX:0,relPanY:0,
-  askAlexOpen:false,askAlexStatus:'',askAlexText:'',askAlexError:'',
-  /* Simple-mode 5-step flow (2026-09-22): simpleStep is 0-4 (Landing, Drivers, Projections,
-     Regional & gaps, Activity leads). sidebarHidden collapses the sidebar down to just the
-     mode toggle + step list, for the pure wizard look Stef also wanted available. Both persist
-     to localStorage the same way ordo_mode already does, restored in bootApp() below. */
-  simpleStep:0, sidebarHidden:false
+  askAlexOpen:false,askAlexStatus:'',askAlexText:'',askAlexError:''
 };
 
 /* lookups */
@@ -1802,29 +1784,20 @@ async function loadFromSupabase(){
   /* Expert mode (backlog item 29, 2026-09-08): Strategy's own simple/expert
      split. Investigated Cursus's existing pilot first rather than
      inventing a new pattern -- allow_expert_mode already exists on roles
-     (added for Cursus) and needs no new column here. Every actual
+     (added for Cursus) and needs no new column here. Simple = Home +
+     Dashboard only (the read-only "see my numbers" view); every actual
      planning/configuration page (Quick calculator, Admin & config,
      Drivers & rates, Planning engine, Geography & pods, Segment &
      audience, Activity plan, Campaign & cost, Actuals & history, Insight,
      Snapshots, Relationships) requires Expert mode -- Strategy's
      complexity lives almost entirely in those pages, unlike Cursus where
-     a single Planning page just swaps to a shorter form.
-     2026-09-22: Simple mode is now the default landing experience for every role
-     (Stef's call, North V2) -- it used to default to 'expert' with Simple as an
-     opt-in restricted view (Home + Dashboard only). Simple's own content is now
-     the 5-step guided flow (pageSimpleFlow, page id 'simple') rather than just
-     those two read-only pages; Home and Dashboard stay reachable from Simple mode
-     too (SIMPLE_PAGES below), they're just no longer *all* Simple mode offers. The
-     Simple/Expert toggle itself is unchanged -- still on every role, never gated,
-     same as before; only which mode a fresh session starts in has changed. */
+     a single Planning page just swaps to a shorter form. */
   const myRole = (CFG.roles||[]).find(r=>r.id===_myProfile.role_id);
   CFG.canExpertMode = myRole ? !!myRole.allowExpertMode : true;
   const savedOrdoMode = (function(){ try{ return localStorage.getItem('ordo_mode'); }catch(e){ return null; } })();
-  UI.mode = (savedOrdoMode==='simple' || savedOrdoMode==='expert') ? savedOrdoMode : 'simple';
+  UI.mode = (savedOrdoMode==='simple' || savedOrdoMode==='expert') ? savedOrdoMode : 'expert';
   if(!CFG.canExpertMode) UI.mode = 'simple';
-  if(UI.mode==='simple' && !SIMPLE_PAGES.includes(UI.page)) UI.page = 'simple';
-  UI.simpleStep = (function(){ try{ const v=parseInt(localStorage.getItem('ordo_simple_step'),10); return (v>=0&&v<=4)?v:0; }catch(e){ return 0; } })();
-  UI.sidebarHidden = (function(){ try{ return localStorage.getItem('ordo_sidebar_hidden')==='1'; }catch(e){ return false; } })();
+  if(UI.mode==='simple' && !SIMPLE_PAGES.includes(UI.page)) UI.page = 'home';
 
   const os = orgSettingsR.data || {};
   /* tracking_config: DB-backed now (org_settings.tracking_config, added 2026-08-19) instead of
@@ -4816,182 +4789,6 @@ function pageSnapshots(){
 /* ============================================================================
    MODULE — DASHBOARD (landing page)
    ============================================================================ */
-/* ============================================================================
-   SIMPLE MODE -- 5-STEP WIZARD (2026-09-22)
-   Thin views over the same CFG data and calc functions Expert mode uses
-   directly -- no separate state, no separate calc path. Landing and
-   Projections are pure read views; Driver assumptions edits CFG.drivers /
-   CFG.streams through the same SET()/setIn() calls Expert mode's own pages
-   use (same permission gates too -- readOnly() for drivers, canConfig() for
-   stream mix, nothing loosened just because it's reachable from here); and
-   Activity leads reuses pageActivity() outright, since Gaps 1 and 2 already
-   made it fully functional on its own -- no point rebuilding it. Regional &
-   gaps is deliberately read-only here -- region-level rate/stream overrides
-   stay in Expert mode's Geography & pods, per the explicit scope call made
-   when this flow was designed with Stef.
-   ============================================================================ */
-function pageSimpleFlow(){
-  if(calcBlocked()) return blockedPanel('Simple flow');
-  const steps=[pageSimpleLanding,pageSimpleDrivers,pageSimpleProjections,pageSimpleRegional,pageSimpleActivities];
-  const fn=steps[UI.simpleStep]||steps[0];
-  let h=fn();
-  h+=simpleFlowNavHtml();
-  return h;
-}
-function simpleFlowNavHtml(){
-  const isFirst=UI.simpleStep===0, isLast=UI.simpleStep===4;
-  return `<div class="row" style="justify-content:space-between;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
-    <button class="btn" ${isFirst?'disabled':''} onclick="goSimpleStep(${UI.simpleStep-1})">&larr; Previous</button>
-    <span class="mini">Step ${UI.simpleStep+1} of 5 -- ${esc(SIMPLE_STEP_LABELS[UI.simpleStep])}</span>
-    ${isLast
-      ? (CFG.canExpertMode ? `<button class="btn pri" onclick="setMode('expert')">Open full Expert view &rarr;</button>` : '<span></span>')
-      : `<button class="btn pri" onclick="goSimpleStep(${UI.simpleStep+1})">Next &rarr;</button>`}
-  </div>`;
-}
-
-/* Step 1 -- Landing: the same top-down funnel Expert mode's Planning engine shows,
-   just surfaced first so a new user sees the whole shape of the plan before touching
-   any input. */
-function pageSimpleLanding(){
-  const c=chain(), d=CFG.drivers, m=verMult()*segBlend();
-  const top=backward(d.winTarget,m);
-  const v=validations(), bad=v.filter(x=>x.s==='bad').length;
-  let h=`<div class="phead"><div><h1>Your plan at a glance</h1>
-    <p>This walks through the same numbers as Expert mode, one step at a time. Nothing here is separate data --
-    every figure ties back to the same drivers, rates and regions Expert mode edits directly.</p></div></div>`;
-  h+=`<div class="kpis">
-    <div class="kpi hl"><div class="k">${esc(exitGate().name)} target</div><div class="kpi-v">${F.n(d.winTarget)}</div><div class="sub">${esc(UI.fy)}</div></div>
-    <div class="kpi"><div class="k">Projected revenue</div><div class="kpi-v">${F.mk(d.projectedRevenue)}</div><div class="sub">per year</div></div>
-    <div class="kpi"><div class="k">Regions</div><div class="kpi-v">${R().length}</div><div class="sub">${P().length} pods</div></div>
-    <div class="kpi ${bad?'hl':''}"><div class="k">Validations</div><div class="kpi-v">${bad||0}</div><div class="sub">${bad?'blocking':'all pass'}</div></div>
-  </div>`;
-  h+=`<div class="card"><h3>Funnel required to land ${F.n(d.winTarget)} ${esc(exitGate().name)}</h3>
-    <div class="bd">${svgFunnel(c.map(g=>top[g.id]),c.map(g=>g.name),640)}</div></div>`;
-  h+=`<div class="note">Use <b>Next</b> below (or the numbered steps in the sidebar) to walk through your assumptions,
-    then your projections, then the regional breakdown and activity leads that make it happen.</div>`;
-  return h;
-}
-
-/* Step 2 -- Driver assumptions: pageDrivers()'s Global drivers card, plus Stream mix
-   pulled up from Admin & config (same fields, same setIn() calls, same canConfig() gate --
-   just surfaced here so a Simple-mode user doesn't have to find Admin to set it). */
-function pageSimpleDrivers(){
-  const d=CFG.drivers, ro=readOnly()?'disabled':'', dis=canConfig()?'':'disabled';
-  const t=streamMixTotal(), ok=Math.abs(t-1)<0.0001;
-  let h=`<div class="phead"><div><h1>Driver assumptions</h1>
-    <p>The handful of numbers everything else in your plan is calculated from. Change one and every later step
-    recalculates.</p></div></div>`;
-  h+=`<div class="card"><h3>Global drivers</h3><div class="bd">
-    <div class="f"><label>Average deal size</label>
-      <input class="in v" value="${d.avgDealSize}" ${ro} onchange="SET('drivers.avgDealSize',this.value,{type:'money'})"></div>
-    <div class="f"><label>Projected sales revenue per year</label>
-      <input class="in v" value="${d.projectedRevenue}" ${ro} onchange="SET('drivers.projectedRevenue',this.value,{type:'money'})"></div>
-    <div class="f"><label>${esc(exitGate().name)} target for the year</label>
-      <input class="in v" value="${d.winTarget}" ${ro} onchange="SET('drivers.winTarget',this.value,{type:'num'})">
-      <span class="hint">The number the whole model plans backwards from.</span></div>
-    <div class="f"><label>Bottom-up entry volume (${esc(entryGate().name)})</label>
-      <input class="in v" value="${d.bottomUpLeads}" ${ro} onchange="SET('drivers.bottomUpLeads',this.value,{type:'num'})"></div>
-  </div></div>`;
-  h+=`<div class="card"><h3>Stream mix <span class="sp"></span>
-    <span class="pill ${ok?'ok':'bad'}">Totals ${F.p(t,0)}</span>
-    ${!ok?`<button class="btn sm" ${dis} onclick="normStreams()">Normalise to 100%</button>`:''}</h3>
-    <div class="bd"><div class="mini">How your ${F.n(d.winTarget)} target splits across marketing streams -- the same
-      list as Admin &rsaquo; Configuration &rsaquo; Streams. Change it here or there, it's the same number.</div></div>
-    <div class="bd flush"><table><thead><tr><th>Stream</th><th class="n">Mix</th><th></th>
-      <th class="n">Wins @ target</th></tr></thead><tbody>
-    ${S().map(s=>`<tr><td class="lb">${esc(s.name)}</td>
-      <td class="n"><input class="cel w" value="${(s.mix*100).toFixed(0)}" ${dis} onchange="setIn('streams','${s.id}','mix',this.value,'pct')"></td>
-      <td><div class="bar" style="width:110px"><i style="width:${clamp(s.mix*100,0,100)}%"></i></div></td>
-      <td class="n calc">${F.n(d.winTarget*s.mix,1)}</td></tr>`).join('')}
-    <tr class="tot"><td>Total</td><td class="n"><span class="pill ${ok?'ok':'bad'}">${F.p(t,0)}</span></td><td></td>
-      <td class="n">${F.n(d.winTarget*t,1)}</td></tr>
-    </tbody></table></div>
-    ${!canConfig()?'<div class="bd"><div class="mini" style="color:var(--ink-2)">Stream names, marketing contribution and adding/removing streams stay in Admin & config -- only mix is editable here.</div></div>':''}
-  </div>`;
-  return h;
-}
-
-/* Step 3 -- Projections: pagePlan()'s Top-down/Bottom-up tabs, trimmed to just those two --
-   Compare-by-stream and Time-phasing stay Expert-only, per the agreed scope. UI.simpleProjTab
-   is local, ephemeral toggle state (not persisted) -- doesn't need boot-sequence wiring like
-   UI.simpleStep does, since landing back on Top-down after a reload is the right default. */
-function pageSimpleProjections(){
-  const c=chain(), d=CFG.drivers, m=verMult()*segBlend();
-  const top=backward(d.winTarget,m), bot=forward(d.bottomUpLeads,m);
-  if(!UI.simpleProjTab) UI.simpleProjTab='top';
-  let h=`<div class="phead"><div><h1>Projections</h1>
-    <p>Top-down works up from your ${esc(exitGate().name)} target. Bottom-up works down from your ${esc(entryGate().name)}
-    volume. Both should land close together.</p></div></div>`;
-  h+=`<div class="tabs">
-    <button class="tab ${UI.simpleProjTab==='top'?'on':''}" onclick="UI.simpleProjTab='top';render()">Top-down</button>
-    <button class="tab ${UI.simpleProjTab==='bot'?'on':''}" onclick="UI.simpleProjTab='bot';render()">Bottom-up</button></div>`;
-  if(UI.simpleProjTab==='top'){
-    h+=`<div class="kpis">${c.map((g,i)=>`<div class="kpi ${i===c.length-1?'hl':''}">
-      <div class="k">${esc(g.name)}</div><div class="kpi-v">${F.n(top[g.id])}</div>
-      <div class="sub">${i===0?'entry':F.p(rateOf(g,m),1)+' in'}</div></div>`).join('')}</div>`;
-    h+=`<div class="card"><h3>Funnel required to land ${F.n(d.winTarget)} ${esc(exitGate().name)}</h3>
-      <div class="bd">${svgFunnel(c.map(g=>top[g.id]),c.map(g=>g.name),640)}</div></div>`;
-  } else {
-    h+=`<div class="kpis">${c.map((g,i)=>`<div class="kpi ${i===c.length-1?'hl':''}">
-      <div class="k">${esc(g.name)}</div><div class="kpi-v">${F.n(bot[g.id],i===c.length-1?1:0)}</div>
-      <div class="sub">${i===0?'entered':F.p(rateOf(g,m),1)+' in'}</div></div>`).join('')}</div>`;
-    h+=`<div class="card"><h3>What your ${F.n(d.bottomUpLeads)} ${esc(entryGate().name)} delivers</h3>
-      <div class="bd">${svgFunnel(c.map(g=>bot[g.id]),c.map(g=>g.name),640)}</div></div>`;
-  }
-  const gapWin=bot[exitGate().id]-d.winTarget, gapPct=d.winTarget?gapWin/d.winTarget:0;
-  h+=`<div class="note ${Math.abs(gapPct)<0.05?'g':'b'}"><strong>${Math.abs(gapPct)<0.05?'These tie out.':"These don't tie out yet."}</strong>
-    Bottom-up delivers ${F.n(bot[exitGate().id],1)} ${esc(exitGate().name)} against a ${F.n(d.winTarget)} top-down target --
-    a gap of ${F.n(Math.abs(gapWin),1)} (${F.sp(gapPct,1)}). ${Math.abs(gapPct)<0.05?'Within the 5% tolerance.':"Full detail, by gate and by stream, is in Expert mode's Planning engine &rsaquo; Reconciliation tab."}</div>`;
-  return h;
-}
-
-/* Step 4 -- Regional & gaps: pageGeo()'s top summary and gap-analysis table only --
-   region-level, read-only. Pod/rep breakdowns and the rate/stream override cards stay
-   Expert-only (Geography & pods), per the explicit scope call: Simple mode shows where
-   the gaps are, Expert mode is where you go to fix them at a region level. */
-function pageSimpleRegional(){
-  const d=CFG.drivers, m=verMult()*segBlend(), vis=visibleRegions(), deal=blendedDeal();
-  let h=`<div class="phead"><div><h1>Regional &amp; gaps</h1>
-    <p>How your target breaks down by region, and where the biggest gaps between ACV target and demand potential sit.
-    This view is read-only -- region-level rate and stream overrides live in Expert mode's Geography &amp; pods.</p></div></div>`;
-  const totAe=sum(vis.map(r=>r.aeHeads)), totAcv=sum(vis.map(r=>r.acvTarget));
-  h+=`<div class="kpis">
-    <div class="kpi hl"><div class="k">ACV target</div><div class="kpi-v">${F.mk(totAcv)}</div><div class="sub">${vis.length} regions</div></div>
-    <div class="kpi"><div class="k">AE headcount</div><div class="kpi-v">${F.n(totAe)}</div><div class="sub">across scope</div></div>
-    <div class="kpi"><div class="k">Wins needed</div><div class="kpi-v">${F.n(totAcv/deal,0)}</div><div class="sub">at ${F.mk(deal)} blended</div></div>
-  </div>`;
-  h+=`<div class="card"><h3>Gap analysis by region</h3><div class="bd flush"><div class="scroll"><table><thead><tr>
-    <th>Region</th><th class="n">AE</th><th class="n">ACV target</th><th class="n">Wins needed</th>
-    <th class="n">Demand potential</th><th class="n">Variance</th><th>Status</th></tr></thead><tbody>`;
-  let accPot=0, accAcv=0;
-  vis.forEach(r=>{
-    const wins=r.acvTarget/deal, v=backward(wins,m,r.id);
-    const pot=v[exitGate().id]*deal, varr=r.acvTarget?(pot-r.acvTarget)/r.acvTarget:0;
-    accPot+=pot; accAcv+=r.acvTarget;
-    const st=varr<-0.1?'bad':varr<0?'warn':'ok';
-    h+=`<tr><td class="lb">${esc(r.name)}${regionHasOverrides(r.id)?' <span class="pill n" title="This region has its own gate rates, set in Expert mode">own rates</span>':''}</td>
-      <td class="n">${r.aeHeads}</td><td class="n calc">${F.mk(r.acvTarget)}</td><td class="n calc">${F.n(wins,0)}</td>
-      <td class="n calc">${F.mk(pot)}</td>
-      <td class="n" style="color:${varr<0?'var(--bad)':'var(--ok)'}">${F.sp(varr,1)}</td>
-      <td><span class="pill ${st}">${st==='ok'?'Achievable':st==='warn'?'Tight':'Short'}</span></td></tr>`;
-  });
-  h+=`<tr class="tot"><td>Total</td><td class="n">${F.n(totAe)}</td><td class="n">${F.mk(accAcv)}</td>
-    <td class="n">${F.n(accAcv/deal,0)}</td><td class="n">${F.mk(accPot)}</td>
-    <td class="n">${F.sp(accAcv?(accPot-accAcv)/accAcv:0,1)}</td><td></td></tr>`;
-  h+=`</tbody></table></div></div></div>`;
-  h+=`<div class="card"><h3>Wins needed by region</h3><div class="bd">
-    ${svgBars(vis.map(r=>({k:r.name,v:r.acvTarget/deal,k2:F.n(r.aeHeads)+' AE'})),{h:200})}</div></div>`;
-  return h;
-}
-
-/* Step 5 -- Activity leads: reuses pageActivity() outright. Nothing to trim -- Gaps 1
-   and 2 (per-activity win targets, region-level rate overrides feeding its funnel math)
-   already made this page directly useful on its own, and it was already read-only-safe
-   for whatever role is looking at it. */
-function pageSimpleActivities(){
-  return pageActivity();
-}
-
 function pageHome(){
   const hr=new Date().getHours();
   const greeting=hr<12?'Good morning':hr<18?'Good afternoon':'Good evening';
@@ -5553,11 +5350,6 @@ window.pageRelationships=pageRelationships;
    ROUTER + SHELL
    ============================================================================ */
 const PAGES=[
-  /* 2026-09-22: Simple flow entry -- hidden from Expert's own page list (Expert never
-     sees it as a nav row; it's rendered via the step wizard in the sidebar instead), but
-     registered here so go('simple') / URL routing / audit logging all work the same way
-     every other page already does. */
-  {id:'simple',  ix:'▶',label:'Simple flow',   fn:pageSimpleFlow,grp:'Overview',hidden:true},
   {id:'home',    ix:'⌂',label:'Home',         fn:pageHome,     grp:'Overview'},
   {id:'dashboard',ix:'◆',label:'Dashboard',    fn:pageDashboard,grp:'Overview'},
   {id:'calculator',ix:'¤',label:'Quick calculator',fn:pageCalculator,grp:'Overview'},
@@ -5580,36 +5372,15 @@ const PAGES=[
   {id:'boardreport',ix:'\u25a6',label:'Board report',fn:pageBoardReport,grp:'Measure',hidden:true}
 ];
 
-const SIMPLE_PAGES = ['simple','home','dashboard'];
-const SIMPLE_STEP_LABELS = ['Landing','Driver assumptions','Projections','Regional & gaps','Activity leads'];
+const SIMPLE_PAGES = ['home','dashboard'];
 function setMode(mode){
   if(mode==='expert' && !CFG.canExpertMode){ toast('Your role is limited to Simple mode \u2014 ask an admin in Configuration to change it.'); return; }
   UI.mode = mode;
   try{ localStorage.setItem('ordo_mode', mode); }catch(e){}
-  if(mode==='simple' && !SIMPLE_PAGES.includes(UI.page)) UI.page='simple';
+  if(mode==='simple' && !SIMPLE_PAGES.includes(UI.page)) UI.page='home';
   render();
 }
 window.setMode=setMode;
-/* 2026-09-22: Simple mode's 5-step wizard (Landing -> Driver assumptions -> Projections ->
-   Regional & gaps -> Activity leads). goSimpleStep() is the only way the step advances -- it
-   clamps to the valid 0-4 range, persists so a reload lands back on the same step, and always
-   routes through page 'simple' (pageSimpleFlow() reads UI.simpleStep to decide what to render). */
-function goSimpleStep(step){
-  UI.simpleStep = clamp(step, 0, 4);
-  try{ localStorage.setItem('ordo_simple_step', String(UI.simpleStep)); }catch(e){}
-  UI.page = 'simple';
-  window.scrollTo(0,0); render();
-}
-window.goSimpleStep=goSimpleStep;
-/* Sidebar collapse toggle for Simple mode (Stef's call: keep the sidebar, grey out what's
-   Expert-only rather than hide it, but let people collapse it entirely for the extra width).
-   Expert mode doesn't use this -- the control only ever renders in Simple mode's sidebar header. */
-function toggleSidebar(){
-  UI.sidebarHidden = !UI.sidebarHidden;
-  try{ localStorage.setItem('ordo_sidebar_hidden', UI.sidebarHidden?'1':'0'); }catch(e){}
-  render();
-}
-window.toggleSidebar=toggleSidebar;
 function go(page,tab){
   /* Governance (2026-09-03, Reporting module item 16): the Board report has no
      "Generate" button -- it renders fresh from live data every time someone opens
@@ -5657,20 +5428,6 @@ function renderSide(){
      list. Give it its own small, distinct sidebar instead of Strategy's, so it reads as
      its own destination. */
   if(UI.page==='boardreport') return renderBoardReportSide();
-  /* 2026-09-22: Simple mode sidebar redesign. Earlier this just filtered PAGES down to
-     SIMPLE_PAGES -- but per Stef's call, Simple mode should keep the full sidebar visible
-     (so people always know Expert-only tools exist) and grey those out instead of hiding
-     them, plus offer a numbered 5-step wizard list and an optional full collapse. Expert
-     mode's own sidebar is completely untouched below -- this block only changes what
-     Simple mode shows. */
-  if(UI.mode==='simple' && UI.sidebarHidden){
-    return `<div style="padding:10px 10px 0">
-        <button class="btn sm" style="width:100%" onclick="toggleSidebar()" title="Show the full sidebar">Show sidebar</button>
-      </div>
-      <div style="padding:12px 14px">
-        <span class="modetoggle ${CFG.canExpertMode?'':'lock'}" title="${CFG.canExpertMode?'Switch to Expert mode':'Your role cannot use Expert mode'}" onclick="setMode('expert')"><i></i></span>
-      </div>`;
-  }
   let h='',grp=null;
   h+=`<div style="padding:6px 14px 10px">
     <div class="row" style="justify-content:space-between;align-items:center">
@@ -5680,22 +5437,10 @@ function renderSide(){
     </div>
     ${!CFG.canExpertMode?'<div class="mini" style="color:var(--ink-2);margin-top:3px">Locked to Simple by your role</div>':''}
   </div>`;
-  if(UI.mode==='simple'){
-    h+=`<h4>Simple flow <span class="sp"></span><a href="#" class="mini" style="font-weight:400" onclick="toggleSidebar();return false" title="Hide this sidebar">hide</a></h4>
-      <div class="simplesteps">
-        ${SIMPLE_STEP_LABELS.map((lbl,i)=>`<a href="#" class="simplestep ${UI.simpleStep===i?'on':(UI.simpleStep>i?'done':'')}" onclick="goSimpleStep(${i});return false">
-          <span class="n">${UI.simpleStep>i?'✓':(i+1)}</span><span>${lbl}</span></a>`).join('')}
-      </div>`;
-  }
-  PAGES.filter(p=>!p.hidden).forEach(p=>{
+  const visiblePages = UI.mode==='simple' ? PAGES.filter(p=>SIMPLE_PAGES.includes(p.id)) : PAGES;
+  visiblePages.filter(p=>!p.hidden).forEach(p=>{
     if(p.grp!==grp){ grp=p.grp; h+=`<h4>${grp}</h4>`; }
     const locked = p.id==='admin'&&!canConfig();
-    const off = UI.mode==='simple' && !SIMPLE_PAGES.includes(p.id);
-    if(off){
-      h+=`<a class="navi off" href="#" onclick="return false" title="Only available in Expert mode">
-        <span class="ix">${p.ix}</span><span>${p.label}</span><span class="lk">Expert only</span></a>`;
-      return;
-    }
     h+=`<a class="navi ${UI.page===p.id?'on':''}" href="#" onclick="go('${p.id}');return false">
       <span class="ix">${p.ix}</span><span>${p.label}</span>${locked?'<span class="lk">read only</span>':''}</a>`;
   });
@@ -5737,7 +5482,7 @@ const MODULES=[
 const THIS_MODULE='Ordo';
 const HELP_FAQ=[
   {q:'How do I reset my password?', a:'An admin can trigger a reset from Configuration \u2192 Roles & users \u2192 Reset password, or use "Forgot password" at login. The email comes from Supabase directly, not from North.'},
-  {q:"What's the difference between Simple and Expert mode?", a:'Simple mode walks you through a 5-step flow \u2014 Landing, Driver assumptions, Projections, Regional & gaps, Activity leads \u2014 to get a full plan drafted fast, with the rest of the sidebar shown greyed out (or hidden, if you prefer). Expert mode unlocks every planning/configuration page individually (Drivers & rates, Planning engine, Geography & pods, Segment & audience, Activity plan, Campaign & cost, Actuals & history, Insight, Snapshots, Relationships) plus the Quick calculator. Toggle it from the sidebar if your role allows it.'},
+  {q:"What's the difference between Simple and Expert mode?", a:'Simple mode shows just Home and Dashboard \u2014 a read-only view of your numbers. Expert mode unlocks everything else: the Quick calculator and every planning/configuration page (Drivers & rates, Planning engine, Geography & pods, Segment & audience, Activity plan, Campaign & cost, Actuals & history, Insight, Snapshots, Relationships). Toggle it from the sidebar if your role allows it.'},
   {q:'How do I set up a passkey?', a:'From your account menu, choose to set up a passkey \u2014 your browser or device (Windows Hello, Touch ID, a security key, etc.) will walk you through it.'},
   {q:'How do I invite a new teammate?', a:'Configuration \u2192 Invite a new teammate \u2192 choose their role \u2192 Generate invite code, then send them the code. They redeem it at signup by choosing "I have an invite code."'},
   {q:"Why can't I see a module, or can't edit something?", a:'Access is layered: your organization sets the ceiling (which modules exist for anyone there), your role sets Configure/Publish/Can edit, and you personally have a Modules toggle in the Users table. Ask an admin to check all three.'},

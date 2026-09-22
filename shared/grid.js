@@ -152,8 +152,14 @@
       try { localStorage.setItem(gridStorageKey(pageId), JSON.stringify(grid.save(false))); } catch (e) {}
     });
 
-    var toggleBtn = document.getElementById('grid-edit-toggle-' + pageId);
-    var resetBtn = document.getElementById('grid-reset-' + pageId);
+    // Shared, single instance of these two controls lives in the ctxbar (the
+    // grey Role/Version/FY/Grain bar), not per-page markup -- moved there
+    // 2026-09-23 per Stef's request so they sit inline with those selectors
+    // instead of inside each page's own header. window.northGridAfterRender
+    // below shows/hides them depending on whether the CURRENT page has a
+    // grid wired up at all.
+    var toggleBtn = document.getElementById('grid-edit-toggle');
+    var resetBtn = document.getElementById('grid-reset');
     var editing = false;
     function setEditing(on) {
       editing = on;
@@ -263,8 +269,22 @@
     });
   }
 
+  // pageId -> its <div class="grid-stack"> container id. A page appears here
+  // only once it's actually been wired up (its own widget functions + grid
+  // markup added to Ordo.html) -- this list is also what drives whether the
+  // shared Edit layout / Reset layout buttons in the ctxbar show at all.
+  var PAGE_GRID_CONTAINERS = {
+    home: 'ordo-grid-home'
+  };
+
   window.northGridAfterRender = function (pageId) {
-    if (pageId === 'home') initGrid('home', 'ordo-grid-home');
+    var toggleBtn = document.getElementById('grid-edit-toggle');
+    var resetBtn = document.getElementById('grid-reset');
+    var containerId = PAGE_GRID_CONTAINERS[pageId];
+    var show = !!containerId;
+    if (toggleBtn) toggleBtn.style.display = show ? '' : 'none';
+    if (resetBtn) resetBtn.style.display = show ? '' : 'none';
+    if (containerId) initGrid(pageId, containerId);
   };
   window.northGetWidgetAssignments = getWidgetAssignments;
 })();

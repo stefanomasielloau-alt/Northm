@@ -4039,27 +4039,17 @@ function pageActivity(){
 /* ============================================================================
    MODULE 6 — CAMPAIGN, COST & CAPACITY
    ============================================================================ */
-function pageCampaign(){
-  if(calcBlocked()) return blockedPanel('Campaign, cost & capacity');
+function campaignWidgetKpis(){
   const vis=visibleRegions().map(r=>r.id);
   const camps=CFG.campaigns.filter(c=>vis.includes(c.regionId)||c.regionId===unassignedRegionId());
   const budget=sum(camps.map(c=>campaignBudgetMain(c)));
-  const m=verMult()*segBlend();
-  /* concurrency: how many campaigns overlap each month */
-  const months=MONTHS.slice(-6).concat([]);
   const fut=[]; for(let i=0;i<12;i++){ const dt=new Date(2026,6+i,1);
     fut.push({key:dt.toISOString().slice(0,7),label:dt.toLocaleDateString('en-AU',{month:'short',year:'2-digit'})}); }
   const conc=fut.map(f=>camps.filter(c=>c.start&&c.end&&c.start.slice(0,7)<=f.key&&c.end.slice(0,7)>=f.key).length);
   const spend=fut.map(f=>sum(camps.filter(c=>c.start&&c.end&&c.start.slice(0,7)<=f.key&&c.end.slice(0,7)>=f.key)
     .map(c=>{const a=(new Date(c.end)-new Date(c.start))/86400000/30.4; return a>0?campaignBudgetMain(c)/a:campaignBudgetMain(c);})));
-  let h=`<div class="phead"><div><h1>Campaign, cost &amp; capacity</h1>
-    <p>What is running when, what it costs, and whether the plan fits the capacity you have. Activity-level detail —
-      suppliers, POs, day-to-day status — is entered in Campaign Planning; this page shows the top-line roll-up.</p></div>
-    <div class="sp"></div>
-    <a class="btn" href="Cursus.html" target="tool_Cursus">Open Campaign Planning — all campaigns</a>
-    <button class="btn" onclick="go('admin','camps')">Manage campaigns</button></div>`;
   const committed=sum(camps.map(campaignCommitted)), actualSpend=sum(camps.map(campaignActualSpend));
-  h+=`<div class="kpis">
+  return `<div class="kpis">
     <div class="kpi hl"><div class="k">Budgeted</div><div class="kpi-v">${F.mk(budget)}</div><div class="sub">${camps.length} campaigns in scope</div></div>
     <div class="kpi"><div class="k">Committed</div><div class="kpi-v">${F.mk(committed)}</div><div class="sub">${F.p(budget?committed/budget:0,0)} of budgeted</div></div>
     <div class="kpi"><div class="k">Actual spend</div><div class="kpi-v">${F.mk(actualSpend)}</div>
@@ -4068,7 +4058,16 @@ function pageCampaign(){
     <div class="kpi"><div class="k">Peak monthly spend</div><div class="kpi-v">${F.mk(Math.max.apply(null,spend.concat([0])))}</div><div class="sub">straight-lined</div></div>
     <div class="kpi"><div class="k">Cost per win</div><div class="kpi-v">${F.mk(CFG.drivers.winTarget?budget/CFG.drivers.winTarget:0)}</div><div class="sub">budget ÷ target</div></div>
   </div>`;
-  h+=`<div class="card"><h3>Campaign calendar — next 12 months</h3><div class="bd">
+}
+function campaignWidgetCalendar(){
+  const vis=visibleRegions().map(r=>r.id);
+  const camps=CFG.campaigns.filter(c=>vis.includes(c.regionId)||c.regionId===unassignedRegionId());
+  const fut=[]; for(let i=0;i<12;i++){ const dt=new Date(2026,6+i,1);
+    fut.push({key:dt.toISOString().slice(0,7),label:dt.toLocaleDateString('en-AU',{month:'short',year:'2-digit'})}); }
+  const conc=fut.map(f=>camps.filter(c=>c.start&&c.end&&c.start.slice(0,7)<=f.key&&c.end.slice(0,7)>=f.key).length);
+  const spend=fut.map(f=>sum(camps.filter(c=>c.start&&c.end&&c.start.slice(0,7)<=f.key&&c.end.slice(0,7)>=f.key)
+    .map(c=>{const a=(new Date(c.end)-new Date(c.start))/86400000/30.4; return a>0?campaignBudgetMain(c)/a:campaignBudgetMain(c);})));
+  return `<div class="card"><h3>Campaign calendar — next 12 months</h3><div class="bd">
     ${svgLines(fut.map(f=>f.label),[{k:'Campaigns live',v:conc}],{h:170})}
     <div class="lgd"><span><i style="background:${SER[0]}"></i>Campaigns running concurrently</span></div>
     <div class="dv"></div>
@@ -4076,7 +4075,14 @@ function pageCampaign(){
     <div class="mini" style="margin-top:4px">Spend straight-lined across each campaign's duration. Peak concurrency is the
       input to overlap analysis in module 8 — you cannot attribute lift without knowing what else was running.</div>
   </div></div>`;
-  h+=`<div class="card"><h3>Campaigns in scope <span class="sp"></span>
+}
+function campaignWidgetTable(){
+  const vis=visibleRegions().map(r=>r.id);
+  const camps=CFG.campaigns.filter(c=>vis.includes(c.regionId)||c.regionId===unassignedRegionId());
+  const budget=sum(camps.map(c=>campaignBudgetMain(c)));
+  const m=verMult()*segBlend();
+  const committed=sum(camps.map(campaignCommitted)), actualSpend=sum(camps.map(campaignActualSpend));
+  let h=`<div class="card"><h3>Campaigns in scope <span class="sp"></span>
     <span class="mini">Conv. % shown is per-campaign — manual, industry benchmark, or this org's history (Section 6.1)</span></h3>
     <div class="bd flush"><div class="scroll cap"><table><thead><tr>
     <th>Campaign</th><th>Status</th><th>Activity</th><th>Bucket</th><th>Segment</th><th>Region</th><th>Window</th>
@@ -4110,17 +4116,26 @@ function pageCampaign(){
       <td class="n">${F.mk(budget)}</td><td class="n">${F.mk(committed)}</td><td class="n">${F.mk(actualSpend)}</td>
       <td class="n">${F.mk(actualSpend-budget)}</td><td class="n"></td><td class="n"></td><td class="n"></td><td></td><td></td></tr>
     </tbody></table></div></div></div>`;
-  h+=`<div class="card"><h3>Spend by cost bucket</h3><div class="bd">
+  return h;
+}
+function campaignWidgetCostBucketChart(){
+  const vis=visibleRegions().map(r=>r.id);
+  const camps=CFG.campaigns.filter(c=>vis.includes(c.regionId)||c.regionId===unassignedRegionId());
+  return `<div class="card"><h3>Spend by cost bucket</h3><div class="bd">
     ${svgBars(CFG.costBuckets.map(b=>({k:b.code,v:sum(camps.filter(cm=>cm.costBucketId===b.id).map(cm=>campaignActualSpend(cm)||campaignCommitted(cm)))})).filter(r=>r.v>0),{h:200,money:true})}
     <div class="mini" style="margin-top:6px">Actual where posted, otherwise committed — pulled from a Campaign Planning roll-up import where one exists, otherwise the campaign's own fields. Buckets with no spend in scope are hidden.</div>
   </div></div>`;
-  {
-    const bizSel=byId(camps,UI.bizCampaignId)||camps[0];
-    if(bizSel){
-      UI.bizCampaignId=bizSel.id;
-      const a=act(bizSel.activityId), leads=(a&&a.costPer)?campaignBudgetMain(bizSel)/a.costPer:0;
-      const rate=campExitRate(bizSel,m), proj=backward(leads*rate,m);
-      h+=`<div class="card"><h3>Business case <span class="sp"></span>
+}
+function campaignWidgetBusinessCase(){
+  const vis=visibleRegions().map(r=>r.id);
+  const camps=CFG.campaigns.filter(c=>vis.includes(c.regionId)||c.regionId===unassignedRegionId());
+  const m=verMult()*segBlend();
+  const bizSel=byId(camps,UI.bizCampaignId)||camps[0];
+  if(!bizSel) return '<div class="card"><div class="bd"><div class="empty">No campaigns in scope.</div></div></div>';
+  UI.bizCampaignId=bizSel.id;
+  const a=act(bizSel.activityId), leads=(a&&a.costPer)?campaignBudgetMain(bizSel)/a.costPer:0;
+  const rate=campExitRate(bizSel,m), proj=backward(leads*rate,m);
+  return `<div class="card"><h3>Business case <span class="sp"></span>
         <select class="in" style="width:auto" onchange="UI.bizCampaignId=this.value;render()">
           ${camps.map(cm=>`<option value="${cm.id}" ${cm.id===bizSel.id?'selected':''}>${esc(cm.name)}</option>`).join('')}</select></h3>
         <div class="bd">
@@ -4136,11 +4151,18 @@ function pageCampaign(){
             at ${a&&a.costPer?F.m(a.costPer):'—'}/lead &rarr; ${F.n(proj[exitGate().id],1)} projected ${esc(exitGate().name)}, using this
             campaign's own conversion rate (set above in Campaigns in scope, or in Admin &gt; Campaigns).</div>
         </div></div>`;
-      {
-        const preStages=activityPreChain(bizSel.activityId);
-        if(preStages.length){
-          const preVols=preChainVolumes(bizSel.activityId,leads);
-          h+=`<div class="card"><h3>Pre-${esc(entryGate().name)} chain <span class="sp"></span>
+}
+function campaignWidgetPreChain(){
+  const vis=visibleRegions().map(r=>r.id);
+  const camps=CFG.campaigns.filter(c=>vis.includes(c.regionId)||c.regionId===unassignedRegionId());
+  const bizSel=byId(camps,UI.bizCampaignId)||camps[0];
+  if(!bizSel) return '<div class="card"><div class="bd"><div class="empty">No campaigns in scope.</div></div></div>';
+  const a=act(bizSel.activityId);
+  const leads=(a&&a.costPer)?campaignBudgetMain(bizSel)/a.costPer:0;
+  const preStages=activityPreChain(bizSel.activityId);
+  if(!preStages.length) return '<div class="card"><div class="bd"><div class="empty">No pre-entry chain for this activity.</div></div></div>';
+  const preVols=preChainVolumes(bizSel.activityId,leads);
+  return `<div class="card"><h3>Pre-${esc(entryGate().name)} chain <span class="sp"></span>
               <span class="mini">${esc(a.name)} — channel-specific, feeds into ${esc(entryGate().name)} above</span></h3>
             <div class="bd">
               <div class="scroll"><table><thead><tr>${preStages.map(s=>`<th class="n">${esc(s.name)}</th>`).join('')}
@@ -4151,13 +4173,18 @@ function pageCampaign(){
                 ${esc(a.name)}'s own stage rates (Admin &gt; Activities). A rate of 0% on any stage stops the chain there rather than
                 showing a false number.</div>
             </div></div>`;
-        }
-      }
-      {
-        const allocs=podAllocationsFor(bizSel.id);
-        const shareTotal=campaignPodShareTotal(bizSel.id);
-        const shareOk=Math.abs(shareTotal-1)<0.0001;
-        h+=`<div class="card"><h3>Pod allocation <span class="sp"></span>
+}
+function campaignWidgetPodAllocation(){
+  const vis=visibleRegions().map(r=>r.id);
+  const camps=CFG.campaigns.filter(c=>vis.includes(c.regionId)||c.regionId===unassignedRegionId());
+  const bizSel=byId(camps,UI.bizCampaignId)||camps[0];
+  if(!bizSel) return '<div class="card"><div class="bd"><div class="empty">No campaigns in scope.</div></div></div>';
+  const a=act(bizSel.activityId);
+  const leads=(a&&a.costPer)?campaignBudgetMain(bizSel)/a.costPer:0;
+  const allocs=podAllocationsFor(bizSel.id);
+  const shareTotal=campaignPodShareTotal(bizSel.id);
+  const shareOk=Math.abs(shareTotal-1)<0.0001;
+  return `<div class="card"><h3>Pod allocation <span class="sp"></span>
             <span class="mini">same campaign as Business case above — ${esc(bizSel.name)}</span></h3>
           <div class="bd">
             <p class="mini">Optional: split this campaign's budget and implied ${esc(entryGate().name).toLowerCase()} across specific
@@ -4180,25 +4207,26 @@ function pageCampaign(){
               Shares total ${F.p(shareTotal,0)}${shareOk?'':' — doesn\'t add to 100%, so the budget/leads split above won\'t account for the whole campaign'}.</div>`}
             <button class="btn sm pri" style="margin-top:8px" onclick="addPodAllocation('${bizSel.id}')">Add pod</button>
           </div></div>`;
-      }
-    }
-  }
-  {
-    const rows=camps.map(cm=>{
-      const a=act(cm.activityId);
-      const leads=(a&&a.costPer)?campaignBudgetMain(cm)/a.costPer:0;
-      const rate=campExitRate(cm,m);
-      const proj=backward(leads*rate,m);
-      return {cm,leads,rate,proj};
-    });
-    const totalBudget=sum(rows.map(r=>campaignBudgetMain(r.cm)));
-    const totalLeads=sum(rows.map(r=>r.leads));
-    const gateIds=chain().map(g=>g.id);
-    const summedProj={};
-    gateIds.forEach(gid=>{ summedProj[gid]=sum(rows.map(r=>r.proj[gid]||0)); });
-    const totalProj=summedProj[exitGate().id]||0;
-    const blendedRate=totalLeads?totalProj/totalLeads:0;
-    h+=`<div class="card"><h3>Portfolio business case <span class="sp"></span>
+}
+function campaignWidgetPortfolio(){
+  const vis=visibleRegions().map(r=>r.id);
+  const camps=CFG.campaigns.filter(c=>vis.includes(c.regionId)||c.regionId===unassignedRegionId());
+  const m=verMult()*segBlend();
+  const rows=camps.map(cm=>{
+    const a=act(cm.activityId);
+    const leads=(a&&a.costPer)?campaignBudgetMain(cm)/a.costPer:0;
+    const rate=campExitRate(cm,m);
+    const proj=backward(leads*rate,m);
+    return {cm,leads,rate,proj};
+  });
+  const totalBudget=sum(rows.map(r=>campaignBudgetMain(r.cm)));
+  const totalLeads=sum(rows.map(r=>r.leads));
+  const gateIds=chain().map(g=>g.id);
+  const summedProj={};
+  gateIds.forEach(gid=>{ summedProj[gid]=sum(rows.map(r=>r.proj[gid]||0)); });
+  const totalProj=summedProj[exitGate().id]||0;
+  const blendedRate=totalLeads?totalProj/totalLeads:0;
+  return `<div class="card"><h3>Portfolio business case <span class="sp"></span>
       <span class="mini">${camps.length} campaign${camps.length===1?'':'s'} in scope</span></h3>
       <div class="bd">
       ${!camps.length?`<div class="empty">No campaigns in scope.</div>`:`
@@ -4212,8 +4240,10 @@ function pageCampaign(){
       <div class="mini" style="margin-top:6px">Each campaign's own business case above (budget &rarr; leads &rarr; projected wins, using its own
         conversion rate) summed across every campaign in scope — a leadership-level roll-up of the same maths, not a separate model.</div>`}
       </div></div>`;
-  }
-  h+=`<div class="card"><h3>Capacity check</h3><div class="bd flush"><table><thead><tr>
+}
+function campaignWidgetCapacity(){
+  const m=verMult()*segBlend();
+  let h=`<div class="card"><h3>Capacity check</h3><div class="bd flush"><table><thead><tr>
     <th>Activity</th><th>Route</th><th class="n">Monthly capacity</th><th class="n">Monthly need at plan</th>
     <th class="n">Utilisation</th><th>Status</th><th>Constraint</th></tr></thead><tbody>
     ${A().map(a=>{
@@ -4230,6 +4260,60 @@ function pageCampaign(){
     </tbody></table></div>
     <div class="bd"><div class="mini"><b>This is the gap the spreadsheet never closed.</b> It would happily require 17,900 leads
       without asking whether anyone could process them. Capacity is what turns a volume requirement into an achievable plan.</div></div></div>`;
+  return h;
+}
+window.campaignWidgetKpis=campaignWidgetKpis;
+window.campaignWidgetCalendar=campaignWidgetCalendar;
+window.campaignWidgetTable=campaignWidgetTable;
+window.campaignWidgetCostBucketChart=campaignWidgetCostBucketChart;
+window.campaignWidgetBusinessCase=campaignWidgetBusinessCase;
+window.campaignWidgetPreChain=campaignWidgetPreChain;
+window.campaignWidgetPodAllocation=campaignWidgetPodAllocation;
+window.campaignWidgetPortfolio=campaignWidgetPortfolio;
+window.campaignWidgetCapacity=campaignWidgetCapacity;
+function pageCampaign(){
+  if(calcBlocked()) return blockedPanel('Campaign, cost & capacity');
+  let h=`<div class="phead"><div><h1>Campaign, cost &amp; capacity</h1>
+    <p>What is running when, what it costs, and whether the plan fits the capacity you have. Activity-level detail —
+      suppliers, POs, day-to-day status — is entered in Campaign Planning; this page shows the top-line roll-up.</p></div>
+    <div class="sp"></div>
+    <a class="btn" href="Cursus.html" target="tool_Cursus">Open Campaign Planning — all campaigns</a>
+    <button class="btn" onclick="go('admin','camps')">Manage campaigns</button></div>`;
+
+  const vis=visibleRegions().map(r=>r.id);
+  const camps=CFG.campaigns.filter(c=>vis.includes(c.regionId)||c.regionId===unassignedRegionId());
+  const bizSel=byId(camps,UI.bizCampaignId)||camps[0];
+  const preStages=bizSel?activityPreChain(bizSel.activityId):[];
+
+  const campaignBoxOrder=['box1','box2','box3','box4']
+    .concat(bizSel?['box5']:[])
+    .concat((bizSel&&preStages.length)?['box6']:[])
+    .concat(bizSel?['box7']:[])
+    .concat(['box8','box9']);
+  const campaignBoxSizes={box1:12,box2:12,box3:12,box4:12,box5:12,box6:12,box7:12,box8:12,box9:12};
+  const campaignWidgetFns={
+    kpis:campaignWidgetKpis,
+    calendar:campaignWidgetCalendar,
+    table:campaignWidgetTable,
+    costbucketchart:campaignWidgetCostBucketChart,
+    businesscase:campaignWidgetBusinessCase,
+    prechain:campaignWidgetPreChain,
+    podallocation:campaignWidgetPodAllocation,
+    portfolio:campaignWidgetPortfolio,
+    capacity:campaignWidgetCapacity
+  };
+  const campaignDefaults={box1:'kpis',box2:'calendar',box3:'table',box4:'costbucketchart',box5:'businesscase',box6:'prechain',box7:'podallocation',box8:'portfolio',box9:'capacity'};
+  const assigned=(window.northGetWidgetAssignments?window.northGetWidgetAssignments('campaign'):campaignDefaults);
+
+  h+=`<div class="grid-stack" id="ordo-grid-campaign">`;
+  campaignBoxOrder.forEach(boxId=>{
+    const widgetId=assigned[boxId]||campaignDefaults[boxId];
+    const fn=campaignWidgetFns[widgetId]||(()=>'<div class="card"><div class="bd">Unknown widget.</div></div>');
+    h+=`<div class="grid-stack-item" gs-w="${campaignBoxSizes[boxId]}" gs-id="${boxId}">
+      <div class="grid-stack-item-content">${fn()}</div>
+    </div>`;
+  });
+  h+=`</div>`;
   return h;
 }
 

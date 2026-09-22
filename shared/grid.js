@@ -128,6 +128,17 @@
         entrychart: { label: 'Entry volume by activity', hint: 'Bar chart of entry-gate volume per activity', fn: function () { return window.activityWidgetEntryChart(); } },
         costchart: { label: 'Cost per win by activity', hint: 'Bar chart of cost per win, activities with tracked cost only', fn: function () { return window.activityWidgetCostChart(); } }
       }
+    },
+    segment: {
+      defaults: { box1: 'kpis', box2: 'derivedplan', box3: 'entrychart', box4: 'acvchart', box5: 'observedrate' },
+      boxSizes: { box1: 12, box2: 12, box3: 6, box4: 6, box5: 12 },
+      widgets: {
+        kpis: { label: 'KPI summary', hint: 'Blended rate multiplier, deal size, addressable/engaged accounts, mix total', fn: function () { return window.segmentWidgetKpis(); } },
+        derivedplan: { label: 'Derived plan by segment', hint: 'Wins, gate volumes, deal size and ACV per segment', fn: function () { return window.segmentWidgetDerivedPlan(); } },
+        entrychart: { label: 'Entry volume required by segment', hint: 'Bar chart of entry-gate volume per segment', fn: function () { return window.segmentWidgetEntryChart(); } },
+        acvchart: { label: 'ACV contribution by segment', hint: 'Waterfall of ACV contribution per segment', fn: function () { return window.segmentWidgetAcvChart(); } },
+        observedrate: { label: 'Observed rate by segment', hint: 'Historical observed rate per gate, by segment, with evidence', fn: function () { return window.segmentWidgetObservedRate(); } }
+      }
     }
   };
 
@@ -371,7 +382,8 @@
     plan_rec: 'ordo-grid-plan-rec',
     plan_phase: 'ordo-grid-plan-phase',
     geo: 'ordo-grid-geo',
-    activity: 'ordo-grid-activity'
+    activity: 'ordo-grid-activity',
+    segment: 'ordo-grid-segment'
   };
 
   // A page whose grid identity is finer than its top-level pageId (e.g. a

@@ -139,6 +139,17 @@
         acvchart: { label: 'ACV contribution by segment', hint: 'Waterfall of ACV contribution per segment', fn: function () { return window.segmentWidgetAcvChart(); } },
         observedrate: { label: 'Observed rate by segment', hint: 'Historical observed rate per gate, by segment, with evidence', fn: function () { return window.segmentWidgetObservedRate(); } }
       }
+    },
+    actuals: {
+      defaults: { box1: 'kpis', box2: 'planvsactual', box3: 'trendchart', box4: 'regionchart', box5: 'monthlydetail' },
+      boxSizes: { box1: 12, box2: 12, box3: 6, box4: 6, box5: 12 },
+      widgets: {
+        kpis: { label: 'KPI summary', hint: 'Actual vs plan per gate, plus actual cost', fn: function () { return window.actualsWidgetKpis(); } },
+        planvsactual: { label: 'Plan vs actual', hint: 'By-gate plan/actual/variance table with status', fn: function () { return window.actualsWidgetPlanVsActual(); } },
+        trendchart: { label: 'Multi-year trend', hint: 'Line chart of actual vs plan across FY25-FY27', fn: function () { return window.actualsWidgetTrendChart(); } },
+        regionchart: { label: 'Actual by region', hint: 'Bar chart of actual wins by region', fn: function () { return window.actualsWidgetRegionChart(); } },
+        monthlydetail: { label: 'Monthly detail', hint: 'Month-by-month gate volumes, cost and ACV for the selected FY', fn: function () { return window.actualsWidgetMonthlyDetail(); } }
+      }
     }
   };
 
@@ -383,7 +394,8 @@
     plan_phase: 'ordo-grid-plan-phase',
     geo: 'ordo-grid-geo',
     activity: 'ordo-grid-activity',
-    segment: 'ordo-grid-segment'
+    segment: 'ordo-grid-segment',
+    actuals: 'ordo-grid-actuals'
   };
 
   // A page whose grid identity is finer than its top-level pageId (e.g. a

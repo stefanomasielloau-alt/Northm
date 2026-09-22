@@ -1674,16 +1674,7 @@ async function loadFromSupabase(){
     orgScoped(sb.from('profiles').select('id,org_id,name,role_id,region_ids,cross_region')),
     (_savOrgFilter===null ? sb.from('org_settings').select('*').eq('org_id',_orgId).maybeSingle() : sb.from('org_settings').select('*').eq('org_id',_savOrgFilter).maybeSingle()),
     orgScoped(sb.from('snapshots').select('id,org_id,name,created_by,created_at,data').order('created_at',{ascending:false})),
-    /* 2026-09-22 (live UAT fix, same day): the regular (non-cross-org) branch's select never
-       fetched 'id' -- every other table's own select in this same Promise.all includes it, this
-       was the one outlier. Loaded rows landed in CFG.audit with id:undefined, and since render()
-       schedules a full saveToSupabase() on every navigation (not just edits), the very next
-       upsertRows('audit_log', CFG.audit, ...) sent id:null for all 200 loaded rows, every time,
-       tripping audit_log's NOT NULL constraint on id and toasting "Could not save audit_log" for
-       every North user on ordinary page navigation. The cross-org RPC branch (admin_cross_org_
-       audit_log) was already fine -- confirmed its definition does `SELECT * FROM audit_log`, so
-       it already returns id; only this direct-select branch needed the fix. */
-    (_crossOrgAudit ? sb.rpc('admin_cross_org_audit_log', {p_org_id:_savOrgFilter, p_limit:200}) : sb.from('audit_log').select('id,ts,what,detail,who,role').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200))
+    (_crossOrgAudit ? sb.rpc('admin_cross_org_audit_log', {p_org_id:_savOrgFilter, p_limit:200}) : sb.from('audit_log').select('ts,what,detail,who,role').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200))
   ]);
   const [rolesR,regionsR,podsR,repsR,gatesR,streamsR,routesR,activitiesR,segmentsR,costBucketsR,
          programmesR,versionsR,campaignsR,podAllocsR,regionGateRatesR,regionStreamsR,rollupsR,profilesR,orgSettingsR,snapshotsR,auditR] = results;

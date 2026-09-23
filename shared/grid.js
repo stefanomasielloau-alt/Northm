@@ -397,7 +397,20 @@
     var gridEl = document.getElementById(containerId);
     if (!gridEl || typeof GridStack === 'undefined') return;
 
-    var items = Array.prototype.slice.call(gridEl.querySelectorAll('.grid-stack-item'));
+    /* 2026-09-23 (Stef's real-use request: "finish the hide/unhide tiles"): a box
+       assigned the sentinel widget id '__hidden__' (set by the Hide button below)
+       is removed from the DOM entirely before GridStack ever sees it -- simplest
+       possible way to make a box disappear without touching every page's own
+       render loop (there are 20+ of them across Ordo.html). Ordo.html's own render
+       still emits an "Unknown widget" placeholder for a hidden box (it doesn't
+       know about the sentinel), but that markup never becomes visible -- it's
+       stripped right here, before layout runs. */
+    var hiddenNow = getWidgetAssignments(pageId);
+    var items = Array.prototype.slice.call(gridEl.querySelectorAll('.grid-stack-item')).filter(function (item) {
+      var boxId = item.getAttribute('gs-id');
+      if (hiddenNow[boxId] === '__hidden__') { item.remove(); return false; }
+      return true;
+    });
     items.forEach(function (item) {
       var c = item.querySelector('.grid-stack-item-content');
       if (c && !c.querySelector('.gs-inner')) {
@@ -406,7 +419,8 @@
         var h = document.createElement('div');
         h.className = 'gs-item-handle';
         h.innerHTML = '<span>⠿⠿ drag to move · drag corner to resize</span>' +
-          '<button type="button" class="gs-swap-btn" data-gs-swap="' + item.getAttribute('gs-id') + '">⇄ Swap widget</button>';
+          '<button type="button" class="gs-swap-btn" data-gs-swap="' + item.getAttribute('gs-id') + '">⇄ Swap widget</button>' +
+          '<button type="button" class="gs-hide-btn" data-gs-hide="' + item.getAttribute('gs-id') + '" title="Hide this tile — bring it back later from + Add / unhide tile">✕ Hide</button>';
         wrap.appendChild(h);
         while (c.firstChild) wrap.appendChild(c.firstChild);
         c.appendChild(wrap);
@@ -443,35 +457,53 @@
           }
           return Math.min(h, 400);
         }
+        /* 2026-09-23 (Stef's real-use report: "Reset ALL layouts still doesn't
+           work" / "two widgets stuck on/in each other" on Planning engine, and a
+           floating box overlapping the table on Activity plan): this loop used to
+           ASSUME every pair of consecutive sub-12-width boxes was an even 6/6
+           split -- it hardcoded the second box's x to 6 regardless of the first
+           box's actual width. Any page with an unequal pair (drivers' box2/box3
+           is 4/8, so was plan_bot's) placed the second box at x=6 with w=8,
+           running it to column 14 -- 2 columns past the 12-column grid, visually
+           overlapping/overflowing into whatever the next row held. This is also
+           exactly the code path Reset ALL layouts forces (clearing the saved
+           layout makes every page fall back to this fresh-placement logic), which
+           is why resetting didn't fix it -- it re-triggered the same bug.
+           Replaced with a real row-packer: walk items left to right, add each to
+           the current row while its width still fits within the 12 columns used
+           so far, start a new row once it wouldn't fit (or immediately for a
+           w>=12 item, which always gets its own row) -- placing each item at the
+           actual x its own width and its row-mates' widths add up to, not a
+           hardcoded 0/6 split. Handles 2, 3 or more boxes per row correctly, not
+           just even pairs. */
         var els = items;
         var cursorUnits = 0;
         var i = 0;
         while (i < els.length) {
-          var el = els[i];
-          var w = parseInt(el.getAttribute('gs-w'), 10) || 12;
-          var inner = el.querySelector('.gs-inner');
-          var innerH = inner ? inner.getBoundingClientRect().height : 0;
-          if (w >= 12) {
-            grid.update(el, { x: 0, y: cursorUnits, w: w, h: initialGuess(innerH) });
-            var h = fitHeight(el, innerH);
-            cursorUnits += h;
-            i += 1;
-          } else {
-            var next = els[i + 1];
-            var nextInner = next ? next.querySelector('.gs-inner') : null;
-            var nextInnerH = nextInner ? nextInner.getBoundingClientRect().height : innerH;
-            var rowY = cursorUnits;
-            grid.update(el, { x: 0, y: rowY, w: w, h: initialGuess(innerH) });
-            var h1 = fitHeight(el, innerH);
-            if (next) {
-              grid.update(next, { x: 6, y: rowY, w: w, h: initialGuess(nextInnerH) });
-              var h2 = fitHeight(next, nextInnerH);
-              cursorUnits += Math.max(h1, h2);
-            } else {
-              cursorUnits += h1;
+          var rowItems = [];
+          var usedW = 0;
+          while (i < els.length) {
+            var wCandidate = parseInt(els[i].getAttribute('gs-w'), 10) || 12;
+            if (wCandidate >= 12) {
+              if (rowItems.length === 0) { rowItems.push(els[i]); i += 1; }
+              break;
             }
-            i += next ? 2 : 1;
+            if (usedW + wCandidate > 12) break;
+            rowItems.push(els[i]); usedW += wCandidate; i += 1;
           }
+          var rowY = cursorUnits;
+          var x = 0;
+          var rowH = 0;
+          rowItems.forEach(function (el) {
+            var w = parseInt(el.getAttribute('gs-w'), 10) || 12;
+            var inner = el.querySelector('.gs-inner');
+            var innerH = inner ? inner.getBoundingClientRect().height : 0;
+            grid.update(el, { x: x, y: rowY, w: w, h: initialGuess(innerH) });
+            var h = fitHeight(el, innerH);
+            rowH = Math.max(rowH, h);
+            x += w;
+          });
+          cursorUnits += rowH;
         }
         settled = true;
       });
@@ -491,6 +523,14 @@
     var toggleBtn = document.getElementById('grid-edit-toggle');
     var resetBtn = document.getElementById('grid-reset');
     var editing = false;
+    function refreshAddBtn() {
+      var lib = WIDGET_LIBRARIES[pageId];
+      var assigned = getWidgetAssignments(pageId);
+      var hiddenCount = lib ? Object.keys(lib.defaults).filter(function (b) { return assigned[b] === '__hidden__'; }).length : 0;
+      addBtn.disabled = hiddenCount === 0;
+      addBtn.textContent = hiddenCount ? ('+ Add / unhide tile (' + hiddenCount + ' hidden)') : '+ Add / unhide tile';
+      addBtn.title = hiddenCount ? '' : 'Nothing hidden on this page right now';
+    }
     function setEditing(on) {
       editing = on;
       gridEl.classList.toggle('grid-edit-mode', on);
@@ -500,7 +540,31 @@
         toggleBtn.textContent = on ? '✓ Done editing' : '⠿ Edit layout';
         toggleBtn.classList.toggle('active', on);
       }
+      addBtn.style.display = on ? '' : 'none';
+      if (on) refreshAddBtn();
     }
+    // "+ Add / unhide tile" -- 2026-09-23 (Stef: "finish the hide/unhide tiles",
+    // confirmed direction: "in edit mode it should be seen as an option to add or
+    // unhide"). One button per grid, only visible while editing, inserted right
+    // after the grid container itself. Lists every box on THIS page currently set
+    // to the '__hidden__' sentinel and restores whichever one is picked back to
+    // its default widget. There's no way to add a genuinely NEW box beyond a
+    // page's fixed box1..boxN slots without a bigger structural change (every
+    // page's box count/sizes are hardcoded in its own render function in
+    // Ordo.html) -- so "add" here means "bring back a hidden slot," not "create
+    // an arbitrary extra tile." Button is disabled with an explanatory title when
+    // nothing on the page is currently hidden.
+    var addBtn = document.getElementById(containerId + '-addtile');
+    if (!addBtn) {
+      addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.id = containerId + '-addtile';
+      addBtn.className = 'btn sm gs-addtile-btn';
+      gridEl.insertAdjacentElement('afterend', addBtn);
+    }
+    addBtn.style.display = 'none';
+    addBtn.onclick = function () { openUnhidePicker(pageId); };
+
     if (toggleBtn) toggleBtn.onclick = function () { setEditing(!editing); };
     if (resetBtn) resetBtn.onclick = function () {
       try {
@@ -519,6 +583,13 @@
       btn.onclick = function (e) {
         e.stopPropagation();
         openSwapPicker(pageId, btn.getAttribute('data-gs-swap'));
+      };
+    });
+    gridEl.querySelectorAll('.gs-hide-btn').forEach(function (btn) {
+      btn.onclick = function (e) {
+        e.stopPropagation();
+        setWidgetAssignment(pageId, btn.getAttribute('data-gs-hide'), '__hidden__');
+        if (typeof window.render === 'function') { window.render(); }
       };
     });
   }
@@ -567,6 +638,51 @@
         setWidgetAssignment(pageId, boxId, wid);
         applyWidgetSwap(pageId, boxId, wid);
         closeSwapPicker();
+      };
+    });
+  }
+
+  // ---- Unhide / add-tile picker -------------------------------------------
+  // Reuses the swap picker's overlay/panel/list/row markup and CSS for visual
+  // consistency -- same modal shape, different content and action.
+  function closeUnhidePicker() {
+    var m = document.getElementById('gs-unhide-modal');
+    if (m) m.remove();
+  }
+
+  function openUnhidePicker(pageId) {
+    closeUnhidePicker();
+    var lib = WIDGET_LIBRARIES[pageId];
+    if (!lib) return;
+    var assigned = getWidgetAssignments(pageId);
+    var hiddenBoxIds = Object.keys(lib.defaults).filter(function (b) { return assigned[b] === '__hidden__'; });
+
+    var overlay = document.createElement('div');
+    overlay.id = 'gs-unhide-modal';
+    overlay.className = 'gs-swap-overlay';
+    overlay.onclick = function (e) { if (e.target === overlay) closeUnhidePicker(); };
+
+    var rows = hiddenBoxIds.map(function (boxId) {
+      var defaultWidgetId = lib.defaults[boxId];
+      var w = lib.widgets[defaultWidgetId] || { label: defaultWidgetId, hint: '' };
+      return '<button type="button" class="gs-swap-row" data-gs-unhide="' + boxId + '">' +
+        '<span class="gs-swap-row-label">' + w.label + '</span>' +
+        '<span class="gs-swap-row-hint">' + w.hint + '</span></button>';
+    }).join('') || '<div class="gs-swap-row gs-swap-disabled">Nothing hidden on this page right now.</div>';
+
+    overlay.innerHTML =
+      '<div class="gs-swap-panel">' +
+      '<div class="gs-swap-head">Add / unhide a tile<button type="button" class="gs-swap-close" aria-label="Close">✕</button></div>' +
+      '<div class="gs-swap-list">' + rows + '</div></div>';
+
+    document.body.appendChild(overlay);
+    overlay.querySelector('.gs-swap-close').onclick = closeUnhidePicker;
+    overlay.querySelectorAll('.gs-swap-row[data-gs-unhide]').forEach(function (row) {
+      row.onclick = function () {
+        var boxId = row.getAttribute('data-gs-unhide');
+        setWidgetAssignment(pageId, boxId, lib.defaults[boxId]);
+        closeUnhidePicker();
+        if (typeof window.render === 'function') { window.render(); }
       };
     });
   }

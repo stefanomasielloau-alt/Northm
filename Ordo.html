@@ -3215,9 +3215,18 @@ function moveGate(id,dir){
   const s=CFG.gates.slice().sort((a,b)=>a.order-b.order);
   const i=s.findIndex(x=>x.id===id),j=i+dir;
   if(j<0||j>=s.length)return;
-  stage('Gates','reorder',s[i].name+' ↔ '+s[j].name,()=>{
-    const t=s[i].order; s[i].order=s[j].order; s[j].order=t;
-    CFG.gates.sort((a,b)=>a.order-b.order).forEach((x,k)=>{x.entry=(k===0);if(x.entry)x.rate=null;else if(x.rate==null)x.rate=1;});
+  stage('Gates','reorder',s[i].name+' \u2194 '+s[j].name,()=>{
+    /* 2026-09-23 real-use fix: the old code swapped the two gates' raw .order VALUES.
+       That's a no-op whenever two adjacent gates share the same .order (a real, existing
+       condition in production data -- multiple un-renumbered seed loads left several gate
+       pairs tied at the same order value) -- stage()/commitPending() still fire and the UI
+       says "committed", but nothing visibly reorders. Fixed the same way addGate()/removeGate()
+       already avoid this: move the item's actual ARRAY POSITION, then renumber every gate by
+       its resulting sorted position (10,20,30,...) so order values are always unique -- this
+       also self-heals any pre-existing ties across the whole chain the first time any gate
+       is moved, not just the pair being swapped. */
+    const [item]=s.splice(i,1); s.splice(j,0,item);
+    s.forEach((x,k)=>{x.order=(k+1)*10;x.entry=(k===0);if(x.entry)x.rate=null;else if(x.rate==null)x.rate=1;});
   });
 }
 /* 2026-09-23 (Stef's real-use request): drag-and-drop on the gate table's ⋮⋮ handle,

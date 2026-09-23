@@ -247,6 +247,9 @@ input.cel:disabled{background:var(--canvas);color:var(--ink-3);cursor:not-allowe
 svg{display:block;max-width:100%}
 .sw{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:-1px}
 .grab{cursor:grab;color:var(--ink-3);user-select:none;font-size:13px}
+.grab[draggable="true"]:active{cursor:grabbing}
+tr.gate-dragging{opacity:.4}
+tr.gate-drag-over td{box-shadow:inset 0 2px 0 var(--input)}
 .tag{
   font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
   padding:1px 5px;border-radius:3px;background:var(--canvas-2);color:var(--ink-3)
@@ -2492,8 +2495,8 @@ function pageAdmin(){
       </tr></thead><tbody>`;
     _gatesDisplay.forEach((g,i)=>{
       const isEntry=g.entry, cum=g.active?cumRate(g.id):null;
-      h+=`<tr${g.active?'':' style="opacity:.45"'}>
-        <td><span class="grab">⋮⋮</span></td>
+      h+=`<tr${g.active?'':' style="opacity:.45"'} ondragover="gateDragOver(event,this)" ondragleave="gateDragLeave(event,this)" ondrop="gateDrop(event,'${g.id}')">
+        <td><span class="grab" draggable="true" title="Drag to reorder" ondragstart="gateDragStart(event,'${g.id}',this)" ondragend="gateDragEnd(event,this)">⋮⋮</span></td>
         <td><input class="cel txt" value="${esc(g.name)}" ${dis} onchange="setIn('gates','${g.id}','name',this.value)"></td>
         <td><input class="cel txt" style="width:70px" value="${esc(g.code)}" ${dis} onchange="setIn('gates','${g.id}','code',this.value)"></td>
         ${_showOrgCol?`<td class="mini">${esc(_orgName(g.orgId))}</td>`:''}
@@ -2559,7 +2562,8 @@ function pageAdmin(){
         <th>Pod name</th><th>Region</th><th class="n">Share of region</th><th>Allocation</th><th></th></tr></thead><tbody>`;
     CFG.regions.forEach(r=>{
       const pods=CFG.pods.filter(p=>p.regionId===r.id); if(!pods.length)return;
-      h+=`<tr class="gp"><td colspan="5">${esc(r.name)}</td></tr>`;
+      const gRegT=podShareTotal(r.id),gRegOk=Math.abs(gRegT-1)<0.0001;
+      h+=`<tr class="gp"><td colspan="5">${esc(r.name)} <span class="pill ${gRegOk?'ok':'bad'}">${F.p(gRegT,0)}</span></td></tr>`;
       pods.forEach(p=>{
         h+=`<tr${p.unassigned?' style="opacity:.6"':''}>
           <td><input class="cel txt" style="width:190px" value="${esc(p.name)}" ${dis} onchange="setIn('pods','${p.id}','name',this.value)"></td>
@@ -2578,7 +2582,9 @@ function pageAdmin(){
         <th>Rep name</th><th>Pod</th><th class="n">Share of pod</th><th>Allocation</th><th></th></tr></thead><tbody>`;
     CFG.pods.filter(p=>!p.unassigned).forEach(p=>{
       const reps=REP(p.id);
-      h+=`<tr class="gp"><td colspan="5">${esc(p.name)} <button class="btn sm" style="margin-left:8px" ${dis} onclick="addRep('${p.id}')">Add rep</button></td></tr>`;
+      const gRepT=repShareTotal(p.id),gRepOk=Math.abs(gRepT-1)<0.0001;
+      const gRepBadge=reps.length?` <span class="pill ${gRepOk?'ok':'bad'}">${F.p(gRepT,0)}</span>`:'';
+      h+=`<tr class="gp"><td colspan="5">${esc(p.name)}${gRepBadge} <button class="btn sm" style="margin-left:8px" ${dis} onclick="addRep('${p.id}')">Add rep</button></td></tr>`;
       if(!reps.length){ h+=`<tr><td colspan="5" class="mini" style="padding-left:14px">No reps added — pod total is planned as one block.</td></tr>`; return; }
       reps.forEach(x=>{
         h+=`<tr><td><input class="cel txt" style="width:190px" value="${esc(x.name)}" ${dis} onchange="setIn('reps','${x.id}','name',this.value)"></td>
@@ -2974,6 +2980,49 @@ function moveGate(id,dir){
     const t=s[i].order; s[i].order=s[j].order; s[j].order=t;
     CFG.gates.sort((a,b)=>a.order-b.order).forEach((x,k)=>{x.entry=(k===0);if(x.entry)x.rate=null;else if(x.rate==null)x.rate=1;});
   });
+}
+/* 2026-09-23 (Stef's real-use request): drag-and-drop on the gate table's ⋮⋮ handle,
+   additive to the existing ↑/↓ buttons above -- those keep working exactly as before.
+   Reuses moveGate() itself rather than reimplementing the reorder/rate-re-resolve
+   logic: a drop is resolved to a single adjacent step (same as one arrow click) in
+   the direction of the drop, using chain order (a.order), not the on-screen row
+   index -- so this is correct even when the table is grouped by organization
+   (UI.gatesSortByOrg). moveGate() only STAGES one swap per call and each stage()
+   requires its own explicit confirm via the existing impact panel (see stage() /
+   commitPending()) -- it does not apply immediately -- so a drop more than one
+   position away deliberately resolves to one step per drop rather than silently
+   auto-chaining/auto-confirming multiple swaps behind the scenes. Drag repeatedly
+   (same as clicking an arrow repeatedly) to move further. */
+let _gateDragId=null;
+function gateDragStart(ev,id,el){
+  _gateDragId=id;
+  try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain',id); }catch(e){}
+  const row=el&&el.closest('tr'); if(row) row.classList.add('gate-dragging');
+}
+function gateDragEnd(ev,el){
+  const row=el&&el.closest('tr'); if(row) row.classList.remove('gate-dragging');
+  document.querySelectorAll('tr.gate-drag-over').forEach(r=>r.classList.remove('gate-drag-over'));
+  _gateDragId=null;
+}
+function gateDragOver(ev,el){
+  if(!_gateDragId)return;
+  ev.preventDefault();
+  try{ ev.dataTransfer.dropEffect='move'; }catch(e){}
+  if(el) el.classList.add('gate-drag-over');
+}
+function gateDragLeave(ev,el){
+  if(el) el.classList.remove('gate-drag-over');
+}
+function gateDrop(ev,targetId){
+  ev.preventDefault();
+  document.querySelectorAll('tr.gate-drag-over').forEach(r=>r.classList.remove('gate-drag-over'));
+  document.querySelectorAll('tr.gate-dragging').forEach(r=>r.classList.remove('gate-dragging'));
+  const srcId=_gateDragId; _gateDragId=null;
+  if(!srcId||srcId===targetId)return;
+  const s=CFG.gates.slice().sort((a,b)=>a.order-b.order);
+  const si=s.findIndex(x=>x.id===srcId), ti=s.findIndex(x=>x.id===targetId);
+  if(si<0||ti<0)return;
+  moveGate(srcId, ti>si?1:-1);
 }
 const PRESETS={
   anaplan:[['Lead','LEAD',null],['MQL','MQL',1],['SQL','SQL',0.23],['SQO','SQO',0.34],['Win','WIN',0.15]],

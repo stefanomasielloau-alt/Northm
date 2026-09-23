@@ -104,7 +104,7 @@ button{cursor:pointer}
    on the 4 built simple-flow steps only (Landing/Drivers/Projections/Regional) -- Step 5
    (Activity leads) reuses Expert mode's own pageActivity() wholesale and was never part
    of the mockup's 4-inner-page stepper treatment either. */
-.simplestepper-h{display:flex;align-items:flex-start;gap:0;margin:2px 0 18px;padding:0 2px}
+.simplestepper-h{display:flex;align-items:flex-start;gap:0;margin:2px 0 18px;padding:0 2px;max-width:640px}
 .simplestepper-h .hstep{display:flex;align-items:center;flex:1;text-decoration:none;color:inherit}
 .simplestepper-h .hstep:last-child{flex:0 0 auto}
 .simplestepper-h .hstep .n{width:24px;height:24px;border-radius:50%;background:var(--canvas-2);color:var(--ink-3);
@@ -3592,11 +3592,61 @@ function driversWidgetStreamContribution(){
         <b>${F.n(sum(S().map(s=>CFG.drivers.winTarget*s.mix*s.mktContrib)),1)}</b>.</div>
     </div></div>`;
 }
+/* 2026-09-23 (Stef's real-use request, after comparing the live page against the
+   North V2 reference mockups: "Add missing Drivers etc"): these 3 widgets exist
+   in the reference mockup's Drivers & rate library page but never made it into
+   the live widget library. All 3 are read-only, computed live from existing CFG
+   data -- no new data model was added. Region contribution and pod share here
+   match the SAME stopgap scope the mockup itself uses (its own subtitle admits
+   "modeled from ACV target share -- no FY-phased driver configured yet", and its
+   pod table is a static equal-vs-allocated comparison, not an editable toggle) --
+   see 2026-09-22-ordo-strategy-audit-vs-screenshots.md gaps #4/#5 for why a fully
+   FY-phased / toggleable version would be materially more work than this. */
+function driversWidgetStreamSegmentCheck(){
+  const st=streamMixTotal(), sg=segMixTotal();
+  const stOk=Math.abs(st-1)<0.0001, sgOk=Math.abs(sg-1)<0.0001;
+  return `<div class="card"><h3>Stream mix &amp; segment mix</h3><div class="bd">
+      <div class="row" style="gap:14px;align-items:center"><div style="width:90px" class="mini">Streams</div>
+        <div class="bar" style="width:160px"><i style="width:${clamp(st*100,0,100)}%"></i></div>
+        <span class="pill ${stOk?'ok':'bad'}">${F.p(st,0)}</span></div>
+      <div class="row" style="gap:14px;align-items:center;margin-top:8px"><div style="width:90px" class="mini">Segments</div>
+        <div class="bar" style="width:160px"><i style="width:${clamp(sg*100,0,100)}%"></i></div>
+        <span class="pill ${sgOk?'ok':'bad'}">${F.p(sg,0)}</span></div>
+      <div class="mini" style="margin-top:10px">${stOk&&sgOk?'Both totals check out — nothing blocking publish.':'One or both totals don\'t sum to 100% yet — fix under Admin & config before publishing.'}</div>
+    </div></div>`;
+}
+function driversWidgetRegionContribution(){
+  const vis=R(), tot=sum(vis.map(r=>r.acvTarget))||1;
+  return `<div class="card"><h3>Region contribution (net new) <span class="sp"></span>
+      <span class="mini" style="font-weight:400">modeled from ACV target share — no FY-phased driver configured yet</span></h3>
+      <div class="bd">${svgBars(vis.map(r=>({k:r.name,v:r.acvTarget/tot,k2:F.p(r.acvTarget/tot,1)})),{h:160,dec:1})}</div></div>`;
+}
+function driversWidgetPodShareDrivers(){
+  const vis=R();
+  let rows='';
+  vis.forEach(r=>{
+    const pods=P(r.id); if(!pods.length) return;
+    const eq=1/pods.length;
+    rows+=`<tr class="grp"><td colspan="3">${esc(r.name)}</td></tr>`;
+    pods.forEach(p=>{
+      rows+=`<tr><td class="lb">${esc(p.name)}</td><td class="n mini">${F.p(eq,1)}</td>
+        <td class="n"><div class="bar" style="width:90px;display:inline-block;vertical-align:middle"><i style="width:${clamp(p.share*100,0,100)}%"></i></div>
+        <span class="mini" style="margin-left:6px">${F.p(p.share,0)}</span></td></tr>`;
+    });
+  });
+  return `<div class="card"><h3>Pod marketing % share drivers <span class="sp"></span>
+      <span class="mini" style="font-weight:400">equal split vs. allocated</span></h3>
+      <div class="bd flush"><table><thead><tr><th>Pod</th><th class="n">Equal</th><th class="n">Allocated</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="3" class="mini">No pods configured yet.</td></tr>'}</tbody></table></div></div>`;
+}
 window.driversWidgetKpis=driversWidgetKpis;
 window.driversWidgetGlobal=driversWidgetGlobal;
 window.driversWidgetRateLibrary=driversWidgetRateLibrary;
 window.driversWidgetSegmentMultipliers=driversWidgetSegmentMultipliers;
 window.driversWidgetStreamContribution=driversWidgetStreamContribution;
+window.driversWidgetStreamSegmentCheck=driversWidgetStreamSegmentCheck;
+window.driversWidgetRegionContribution=driversWidgetRegionContribution;
+window.driversWidgetPodShareDrivers=driversWidgetPodShareDrivers;
 function pageDrivers(){
   if(calcBlocked()) return blockedPanel('Drivers & rate library');
   let h=`<div class="phead"><div><h1>Drivers &amp; rate library</h1>
@@ -3604,18 +3654,21 @@ function pageDrivers(){
     <div class="sp"></div>${readOnly()?'<span class="pill warn">Read only — '+esc(version().name)+'</span>':''}</div>`;
   h+=vBanner();
 
-  const driversBoxSizes={box1:12,box2:4,box3:8,box4:6,box5:6};
+  const driversBoxSizes={box1:12,box2:4,box3:8,box4:6,box5:6,box6:6,box7:6,box8:6};
   const driversWidgetFns={
     kpis:driversWidgetKpis,
     global:driversWidgetGlobal,
     ratelibrary:driversWidgetRateLibrary,
     segmentmult:driversWidgetSegmentMultipliers,
+    streamsegcheck:driversWidgetStreamSegmentCheck,
+    regioncontrib:driversWidgetRegionContribution,
+    podsharedrivers:driversWidgetPodShareDrivers,
     streamcontrib:driversWidgetStreamContribution
   };
-  const assigned=(window.northGetWidgetAssignments?window.northGetWidgetAssignments('drivers'):{box1:'kpis',box2:'global',box3:'ratelibrary',box4:'segmentmult',box5:'streamcontrib'});
+  const assigned=(window.northGetWidgetAssignments?window.northGetWidgetAssignments('drivers'):{box1:'kpis',box2:'global',box3:'ratelibrary',box4:'segmentmult',box5:'streamcontrib',box6:'streamsegcheck',box7:'regioncontrib',box8:'podsharedrivers'});
 
   h+=`<div class="grid-stack" id="ordo-grid-drivers">`;
-  ['box1','box2','box3','box4','box5'].forEach(boxId=>{
+  ['box1','box2','box3','box4','box5','box6','box7','box8'].forEach(boxId=>{
     const widgetId=assigned[boxId]||boxId;
     const fn=driversWidgetFns[widgetId]||(()=>'<div class="card"><div class="bd">Unknown widget.</div></div>');
     h+=`<div class="grid-stack-item" gs-w="${driversBoxSizes[boxId]}" gs-id="${boxId}">

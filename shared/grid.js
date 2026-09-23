@@ -41,14 +41,20 @@
       }
     },
     drivers: {
-      defaults: { box1: 'kpis', box2: 'global', box3: 'ratelibrary', box4: 'segmentmult', box5: 'streamcontrib' },
-      boxSizes: { box1: 12, box2: 4, box3: 8, box4: 6, box5: 6 }, // first-ever default only; drag/resize overrides after that
+      defaults: { box1: 'kpis', box2: 'global', box3: 'ratelibrary', box4: 'segmentmult', box5: 'streamcontrib', box6: 'streamsegcheck', box7: 'regioncontrib', box8: 'podsharedrivers' },
+      boxSizes: { box1: 12, box2: 4, box3: 8, box4: 6, box5: 6, box6: 6, box7: 6, box8: 6 }, // first-ever default only; drag/resize overrides after that
       widgets: {
         kpis: { label: 'KPI summary', hint: 'Win target, revenue, deal size, implied wins, end-to-end rate', fn: function () { return window.driversWidgetKpis(); } },
         global: { label: 'Global drivers', hint: 'Editable base assumptions (deal size, revenue, win target, entry volume)', fn: function () { return window.driversWidgetGlobal(); } },
         ratelibrary: { label: 'Rate library', hint: 'Published vs observed rate per gate, with evidence and adopt-observed action', fn: function () { return window.driversWidgetRateLibrary(); } },
         segmentmult: { label: 'Segment rate multipliers', hint: 'Rate multiplier and mix by segment', fn: function () { return window.driversWidgetSegmentMultipliers(); } },
-        streamcontrib: { label: 'Stream marketing contribution', hint: 'Marketing-attributed wins by stream', fn: function () { return window.driversWidgetStreamContribution(); } }
+        streamcontrib: { label: 'Stream marketing contribution', hint: 'Marketing-attributed wins by stream', fn: function () { return window.driversWidgetStreamContribution(); } },
+        // 2026-09-23: 3 widgets recovered from the North V2 reference mockup that
+        // never made it into the live library -- see the matching comment above
+        // driversWidgetStreamSegmentCheck() in Ordo.html for scope notes.
+        streamsegcheck: { label: 'Stream & segment mix check', hint: 'Sanity-check that stream mix and segment mix both total 100%', fn: function () { return window.driversWidgetStreamSegmentCheck(); } },
+        regioncontrib: { label: 'Region contribution (net new)', hint: 'Region share of ACV target, modeled — no FY-phased driver configured yet', fn: function () { return window.driversWidgetRegionContribution(); } },
+        podsharedrivers: { label: 'Pod marketing % share drivers', hint: 'Equal-split vs. each pod\'s allocated share, by region', fn: function () { return window.driversWidgetPodShareDrivers(); } }
       }
     },
     // Planning engine is tab-based (UI.planTab): each tab gets its OWN grid,
@@ -503,22 +509,11 @@
       } catch (e) {}
       initGrid(pageId, containerId); // re-run in place, no need for a full app render
     };
-    // 2026-09-23 (Stef's real-use request): a single control that clears every
-    // page's saved layout at once, not just the current page's -- avoids having
-    // to click "Reset layout" once per page/tab after experimenting broadly.
-    // Prefix-matches localStorage rather than enumerating PAGE_GRID_CONTAINERS,
-    // so it stays correct automatically as pages are added.
-    var resetAllBtn = document.getElementById('grid-reset-all');
-    if (resetAllBtn) resetAllBtn.onclick = function () {
-      try {
-        Object.keys(localStorage).forEach(function (k) {
-          if (k.indexOf('northm_ordo_grid_') === 0 || k.indexOf('northm_ordo_widgets_') === 0) {
-            localStorage.removeItem(k);
-          }
-        });
-      } catch (e) {}
-      initGrid(pageId, containerId); // re-run the current page in place immediately
-    };
+    // "Reset ALL layouts" (#grid-reset-all) is bound once, globally, at the bottom
+    // of this file -- not here. It used to be rebound on every initGrid() call,
+    // which meant it only ever worked on whichever grid page render() last ran on,
+    // and silently had no listener at all on a page with no grid. See that binding
+    // for the full story.
 
     gridEl.querySelectorAll('.gs-swap-btn').forEach(function (btn) {
       btn.onclick = function (e) {
@@ -666,4 +661,31 @@
     if (containerId) initGrid(effectiveId, containerId);
   };
   window.northGetWidgetAssignments = getWidgetAssignments;
+
+  /* 2026-09-23 (Stef's real-use report: "Reset ALL layouts did nothing"): the
+     previous resetAllBtn.onclick was wired up INSIDE initGrid(), so it only ever
+     got attached on a page/tab whose grid container successfully initialized --
+     on any page with no registered grid for the currently-active effectiveId
+     (e.g. mid-navigation, or a page whose subId never resolves), the button sat
+     there with no listener at all and a click genuinely did nothing. This control
+     is global by definition (it clears every page's saved layout, not just the
+     current one), so it's bound exactly once here, at script-load time, against
+     the static ctxbar markup that's already in the page before any render() runs
+     -- never inside a per-page/per-render code path. After clearing storage it
+     calls the app's own render() (if present) so whatever page is currently on
+     screen redraws and re-runs its own grid-init hook against the now-clean data,
+     picking up default positions immediately instead of needing a manual reload. */
+  var globalResetAllBtn = document.getElementById('grid-reset-all');
+  if (globalResetAllBtn) {
+    globalResetAllBtn.onclick = function () {
+      try {
+        Object.keys(localStorage).forEach(function (k) {
+          if (k.indexOf('northm_ordo_grid_') === 0 || k.indexOf('northm_ordo_widgets_') === 0) {
+            localStorage.removeItem(k);
+          }
+        });
+      } catch (e) {}
+      if (typeof window.render === 'function') { window.render(); }
+    };
+  }
 })();

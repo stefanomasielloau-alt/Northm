@@ -524,6 +524,7 @@
     var resetBtn = document.getElementById('grid-reset');
     var editing = false;
     function refreshAddBtn() {
+      if (!addBtn) return;
       var lib = WIDGET_LIBRARIES[pageId];
       var assigned = getWidgetAssignments(pageId);
       var hiddenCount = lib ? Object.keys(lib.defaults).filter(function (b) { return assigned[b] === '__hidden__'; }).length : 0;
@@ -540,30 +541,41 @@
         toggleBtn.textContent = on ? '✓ Done editing' : '⠿ Edit layout';
         toggleBtn.classList.toggle('active', on);
       }
-      addBtn.style.display = on ? '' : 'none';
+      if (addBtn) addBtn.style.display = on ? '' : 'none';
       if (on) refreshAddBtn();
     }
     // "+ Add / unhide tile" -- 2026-09-23 (Stef: "finish the hide/unhide tiles",
     // confirmed direction: "in edit mode it should be seen as an option to add or
-    // unhide"). One button per grid, only visible while editing, inserted right
-    // after the grid container itself. Lists every box on THIS page currently set
-    // to the '__hidden__' sentinel and restores whichever one is picked back to
-    // its default widget. There's no way to add a genuinely NEW box beyond a
-    // page's fixed box1..boxN slots without a bigger structural change (every
-    // page's box count/sizes are hardcoded in its own render function in
-    // Ordo.html) -- so "add" here means "bring back a hidden slot," not "create
-    // an arbitrary extra tile." Button is disabled with an explanatory title when
-    // nothing on the page is currently hidden.
-    var addBtn = document.getElementById(containerId + '-addtile');
-    if (!addBtn) {
-      addBtn = document.createElement('button');
-      addBtn.type = 'button';
-      addBtn.id = containerId + '-addtile';
-      addBtn.className = 'btn sm gs-addtile-btn';
-      gridEl.insertAdjacentElement('afterend', addBtn);
+    // unhide"; then: "move it to next to the layout buttons"). Shared, single
+    // instance in the ctxbar (#grid-addtile), same as Edit layout/Reset layout --
+    // not created per-page anymore. Lists every box on THIS page currently set to
+    // the '__hidden__' sentinel and restores whichever one is picked back to its
+    // default widget. There's no way to add a genuinely NEW box beyond a page's
+    // fixed box1..boxN slots without a bigger structural change (every page's box
+    // count/sizes are hardcoded in its own render function in Ordo.html) -- so
+    // "add" here means "bring back a hidden slot," not "create an arbitrary extra
+    // tile." Button is disabled with an explanatory title when nothing on the
+    // page is currently hidden.
+    var addBtn = document.getElementById('grid-addtile');
+    if (addBtn) addBtn.onclick = function () { openUnhidePicker(pageId); };
+
+    /* 2026-09-23 (Stef: "doesn't allow me to add or unhide"): the actual bug --
+       Hide and Unhide both go through a full window.render(), which rebuilds
+       this whole grid from scratch and starts a fresh, non-editing initGrid()
+       call every time. That silently kicked the page OUT of edit mode on every
+       single hide/unhide click -- the Add/unhide button (and every box's Hide/
+       Swap buttons) vanished the instant you used them once, making it look like
+       they plain didn't work. Swap never had this problem because it patches the
+       one box's content in place without a full re-render. Hide/unhide DO need a
+       full re-render (a box has to appear/disappear from the grid, which needs
+       Ordo.html's own per-page loop to run again), so instead this flag says
+       "re-enter edit mode for THIS page after the next render" -- set right
+       before calling render() by the Hide button and the unhide picker below,
+       consumed once here, after addBtn actually exists to show. */
+    if (window.__northGridReenterEdit === pageId) {
+      window.__northGridReenterEdit = null;
+      setEditing(true);
     }
-    addBtn.style.display = 'none';
-    addBtn.onclick = function () { openUnhidePicker(pageId); };
 
     if (toggleBtn) toggleBtn.onclick = function () { setEditing(!editing); };
     if (resetBtn) resetBtn.onclick = function () {
@@ -589,6 +601,7 @@
       btn.onclick = function (e) {
         e.stopPropagation();
         setWidgetAssignment(pageId, btn.getAttribute('data-gs-hide'), '__hidden__');
+        window.__northGridReenterEdit = pageId;
         if (typeof window.render === 'function') { window.render(); }
       };
     });
@@ -681,6 +694,7 @@
       row.onclick = function () {
         var boxId = row.getAttribute('data-gs-unhide');
         setWidgetAssignment(pageId, boxId, lib.defaults[boxId]);
+        window.__northGridReenterEdit = pageId;
         closeUnhidePicker();
         if (typeof window.render === 'function') { window.render(); }
       };
@@ -770,10 +784,17 @@
     if (window.__northGridSubId) { effectiveId = window.__northGridSubId; window.__northGridSubId = null; }
     var toggleBtn = document.getElementById('grid-edit-toggle');
     var resetBtn = document.getElementById('grid-reset');
+    var addTileBtn = document.getElementById('grid-addtile');
     var containerId = PAGE_GRID_CONTAINERS[effectiveId];
     var show = !!containerId;
     if (toggleBtn) toggleBtn.style.display = show ? '' : 'none';
     if (resetBtn) resetBtn.style.display = show ? '' : 'none';
+    // grid-addtile only ever shows WHILE editing (per Stef: "in edit mode it
+    // should be seen as an option to add or unhide") -- initGrid()'s setEditing()
+    // controls that. Here we only need to force it off on a page with no grid at
+    // all, so it doesn't stay visible (stale, from a previous grid page) when
+    // initGrid() never runs this time to otherwise manage it.
+    if (addTileBtn && !show) addTileBtn.style.display = 'none';
     if (containerId) initGrid(effectiveId, containerId);
   };
   window.northGetWidgetAssignments = getWidgetAssignments;

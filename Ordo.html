@@ -3288,10 +3288,27 @@ function gateDrop(ev,targetId){
   document.querySelectorAll('tr.gate-dragging').forEach(r=>r.classList.remove('gate-dragging'));
   const srcId=_gateDragId; _gateDragId=null;
   if(!srcId||srcId===targetId)return;
+  reorderGateTo(srcId,targetId);
+}
+/* 2026-09-23 (Stef's real-use report: "drag and drop on leads seems to be partially
+   working"): the previous gateDrop() called moveGate(srcId, dir), which only ever
+   nudges the source gate ONE position toward the drop target -- dragging a gate 4
+   rows down only moved it 1 row, matching exactly what he saw. This drops the gate
+   into the exact released-on slot in one commit, the way drag-and-drop is expected
+   to behave. moveGate() (the ↑/↓ buttons) is untouched -- this is drag's own path,
+   sharing moveGate's renumber-by-sorted-position logic rather than its one-step move. */
+function reorderGateTo(id,targetId){
   const s=CFG.gates.slice().sort((a,b)=>a.order-b.order);
-  const si=s.findIndex(x=>x.id===srcId), ti=s.findIndex(x=>x.id===targetId);
-  if(si<0||ti<0)return;
-  moveGate(srcId, ti>si?1:-1);
+  const i=s.findIndex(x=>x.id===id);
+  if(i<0||id===targetId)return;
+  const from=s[i];
+  stage('Gates','reorder',from.name+' moved',()=>{
+    const [item]=s.splice(i,1);
+    let j=s.findIndex(x=>x.id===targetId);
+    if(j<0) j=s.length;
+    s.splice(j,0,item);
+    s.forEach((x,k)=>{x.order=(k+1)*10;x.entry=(k===0);if(x.entry)x.rate=null;else if(x.rate==null)x.rate=1;});
+  });
 }
 const PRESETS={
   anaplan:[['Lead','LEAD',null],['MQL','MQL',1],['SQL','SQL',0.23],['SQO','SQO',0.34],['Win','WIN',0.15]],

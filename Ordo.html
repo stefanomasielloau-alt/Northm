@@ -3762,7 +3762,7 @@ function planBotWidgetDelivers(){
         <tr class="tot"><td>Total</td>${gTd(forward(d.bottomUpLeads*streamMixTotal(),m),1)}
           <td class="n">${F.n(sum(S().map(s=>forward(d.bottomUpLeads*s.mix,m)[exitGate().id]*s.mktContrib)),1)}</td>
           <td class="n">${F.mk(forward(d.bottomUpLeads*streamMixTotal(),m)[exitGate().id]*blendedDeal())}</td></tr>
-        </tbody></table></div>`;
+        </tbody></table></div></div>`;
 }
 function planBotWidgetWaterfall(){
   const d=CFG.drivers,m=verMult()*segBlend();

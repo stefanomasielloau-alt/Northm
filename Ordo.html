@@ -98,6 +98,26 @@ button{cursor:pointer}
 .simplestep.on{color:var(--ink);font-weight:700}
 .simplestep.on .n{background:var(--nav);color:#fff}
 .simplestep.done .n{background:var(--ok);color:#fff}
+/* 2026-09-23 (Stef's real-use request): horizontal stepper, additive to the existing
+   sidebar list above -- same data (SIMPLE_STEP_LABELS / UI.simpleStep / goSimpleStep),
+   just a second, visually-pleasing presentation sitting under each step's title. Shown
+   on the 4 built simple-flow steps only (Landing/Drivers/Projections/Regional) -- Step 5
+   (Activity leads) reuses Expert mode's own pageActivity() wholesale and was never part
+   of the mockup's 4-inner-page stepper treatment either. */
+.simplestepper-h{display:flex;align-items:flex-start;gap:0;margin:2px 0 18px;padding:0 2px}
+.simplestepper-h .hstep{display:flex;align-items:center;flex:1;text-decoration:none;color:inherit}
+.simplestepper-h .hstep:last-child{flex:0 0 auto}
+.simplestepper-h .hstep .n{width:24px;height:24px;border-radius:50%;background:var(--canvas-2);color:var(--ink-3);
+  font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.simplestepper-h .hstep .lbl{margin-left:8px;font-size:12px;font-weight:600;color:var(--ink-3);white-space:nowrap}
+.simplestepper-h .hstep.on .n{background:var(--nav);color:#fff}
+.simplestepper-h .hstep.on .lbl{color:var(--ink)}
+.simplestepper-h .hstep.done .n{background:var(--ok);color:#fff}
+.simplestepper-h .hstep.done .lbl{color:var(--ink-2)}
+.simplestepper-h .hline{flex:1;height:2px;background:var(--line);margin:0 10px;align-self:center}
+.simplestepper-h .hstep.done + .hline{background:var(--ok)}
+@media(max-width:860px){.simplestepper-h .lbl{display:none}.simplestepper-h .hline{margin:0 4px}}
+
 /* Expert mode toggle (item 29, 2026-09-08) -- lifted verbatim from Cursus.html's
    existing pilot so the control looks and behaves identically in both modules. */
 .modetoggle{display:inline-block;width:36px;height:20px;border-radius:20px;background:var(--line);position:relative;cursor:pointer;flex:none;transition:background .15s;}
@@ -487,6 +507,7 @@ window.closeFieldGuide=closeFieldGuide;
   <div class="sp" style="flex:1"></div>
   <button class="btn sm" id="grid-edit-toggle" type="button" style="display:none">⠿ Edit layout</button>
   <button class="btn sm" id="grid-reset" type="button" style="display:none">Reset layout</button>
+  <button class="btn sm" id="grid-reset-all" type="button" title="Clear every page's saved layout at once, not just this one">Reset ALL layouts</button>
 </div>
 <div class="wrap" id="wrap">
   <nav class="side" id="side"></nav>
@@ -5726,6 +5747,15 @@ function pageSimpleFlow(){
   const steps=[pageSimpleLanding,pageSimpleDrivers,pageSimpleProjections,pageSimpleRegional,pageSimpleActivities];
   const fn=steps[UI.simpleStep]||steps[0];
   let h=fn();
+  if(UI.simpleStep<4){
+    /* splice the horizontal stepper in right after the page's own .phead title block
+       closes -- every one of the 4 built step pages opens with the identical
+       `<div class="phead">...<p>...</p></div></div>` pattern, so replacing the FIRST
+       occurrence of its exact closing tags is a safe, targeted insertion point. */
+    const marker='</p></div></div>';
+    const idx=h.indexOf(marker);
+    if(idx>-1) h=h.slice(0,idx+marker.length)+simpleStepperHorizontalHtml()+h.slice(idx+marker.length);
+  }
   h+=simpleFlowNavHtml();
   return h;
 }
@@ -5738,6 +5768,22 @@ function simpleFlowNavHtml(){
       ? (CFG.canExpertMode ? `<button class="btn pri" onclick="setMode('expert')">Open full Expert view &rarr;</button>` : '<span></span>')
       : `<button class="btn pri" onclick="goSimpleStep(${UI.simpleStep+1})">Next &rarr;</button>`}
   </div>`;
+}
+/* 2026-09-23 (Stef's real-use request): additive horizontal stepper -- keeps the
+   existing sidebar list exactly as-is, just adds this visually-pleasing bar under
+   each of the 4 built steps' own title. Reuses the same goSimpleStep(i) the sidebar
+   and Previous/Next buttons already call -- no new navigation logic. */
+function simpleStepperHorizontalHtml(){
+  const n=4; // Landing / Drivers / Projections / Regional -- Activity leads (step 5) reuses pageActivity() and isn't part of this
+  let h='<div class="simplestepper-h">';
+  for(let i=0;i<n;i++){
+    const cls=UI.simpleStep===i?'on':(UI.simpleStep>i?'done':'');
+    h+=`<a href="#" class="hstep ${cls}" onclick="goSimpleStep(${i});return false">
+      <span class="n">${UI.simpleStep>i?'\u2713':(i+1)}</span><span class="lbl">${esc(SIMPLE_STEP_LABELS[i])}</span></a>`;
+    if(i<n-1) h+='<div class="hline"></div>';
+  }
+  h+='</div>';
+  return h;
 }
 
 /* Step 1 -- Landing: the same top-down funnel Expert mode's Planning engine shows,

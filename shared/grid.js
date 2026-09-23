@@ -503,6 +503,22 @@
       } catch (e) {}
       initGrid(pageId, containerId); // re-run in place, no need for a full app render
     };
+    // 2026-09-23 (Stef's real-use request): a single control that clears every
+    // page's saved layout at once, not just the current page's -- avoids having
+    // to click "Reset layout" once per page/tab after experimenting broadly.
+    // Prefix-matches localStorage rather than enumerating PAGE_GRID_CONTAINERS,
+    // so it stays correct automatically as pages are added.
+    var resetAllBtn = document.getElementById('grid-reset-all');
+    if (resetAllBtn) resetAllBtn.onclick = function () {
+      try {
+        Object.keys(localStorage).forEach(function (k) {
+          if (k.indexOf('northm_ordo_grid_') === 0 || k.indexOf('northm_ordo_widgets_') === 0) {
+            localStorage.removeItem(k);
+          }
+        });
+      } catch (e) {}
+      initGrid(pageId, containerId); // re-run the current page in place immediately
+    };
 
     gridEl.querySelectorAll('.gs-swap-btn').forEach(function (btn) {
       btn.onclick = function (e) {

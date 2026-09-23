@@ -702,7 +702,7 @@ async function loadFromSupabase(){
        org-wide Ask Alec kill-switch (Configuration > Integrations) Ordo.html's askAlex()
        already gates on -- reused as-is rather than inventing a second toggle. */
     sb.from('org_settings').select('webhook_url,webhook_enabled,fy_start_month,campaign_naming_pattern,campaign_naming_seq_scope,campaign_naming_seq_counters,partner_type_presets,win_target,bottom_up_leads,ai_screen_interpreter_enabled').eq('org_id',_orgId).maybeSingle(),
-    _crossOrg ? adminCrossOrg('audit_log', {p_limit:200}) : orgScoped(sb.from('audit_log').select('ts,what,detail').order('ts',{ascending:false}).limit(200)),
+    _crossOrg ? adminCrossOrg('audit_log', {p_limit:200}) : orgScoped(sb.from('audit_log').select('id,ts,what,detail').order('ts',{ascending:false}).limit(200)), /* 2026-09-23: select was missing 'id' -- same bug already found and fixed in Ordo.html on 2026-09-22 (missing id -> CFG.audit rows load with id:undefined -> the next upsertRows('audit_log',...) sends id:null for every row -> NOT NULL violation on every save/navigation). Confirmed broader in today's UAT pass; applying the identical fix here. */
     _crossOrg ? adminCrossOrg('partners') : orgScoped(sb.from('partners').select('id,name,type,contact_name,contact_email,contact_phone,notes,pod_id,acv_target,contact_terms,org_id')),
     _crossOrg ? adminCrossOrg('campaign_partner_allocations') : orgScoped(sb.from('campaign_partner_allocations').select('id,campaign_id,partner_id,role,budget_share_pct,lead_share_pct,org_id')),
     sb.from('assets').select('id,name,category'),

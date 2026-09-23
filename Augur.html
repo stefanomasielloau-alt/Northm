@@ -548,7 +548,7 @@ async function loadFromSupabase(){
     sb.from('campaigns').select('id,name'),
     orgScoped(sb.from('crm_contacts').select('id,org_id,name,title,account,email,phone,notes')),
     orgScoped(sb.from('crm_activities').select('id,org_id,contact_id,deal_id,type,summary,occurred_at,logged_by')),
-    (_crossOrgAudit ? sb.rpc('admin_cross_org_audit_log', {p_org_id:_savOrgFilter, p_limit:200}) : sb.from('audit_log').select('ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200)),
+    (_crossOrgAudit ? sb.rpc('admin_cross_org_audit_log', {p_org_id:_savOrgFilter, p_limit:200}) : sb.from('audit_log').select('id,ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200)), /* 2026-09-23: select was missing 'id' -- same bug already found and fixed in Ordo.html on 2026-09-22 (missing id -> CFG.audit rows load with id:undefined -> the next upsertRows('audit_log',...) sends id:null for every row -> NOT NULL violation on every save/navigation). Confirmed broader in today's UAT pass; applying the identical fix here. */
     orgScoped(sb.from('profiles').select('id,name,org_id'))
   ]);
   const [factorsR,tiersR,dealsR,campaignsR,contactsR,activitiesR,auditR,profilesR] = results;

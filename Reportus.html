@@ -769,7 +769,7 @@ async function recordReportView(what, detail){
   if(!_orgId || !_myProfile) return;
   try{
     await sb.from('audit_log').insert({
-      what, detail, who:_myProfile.name||'', role:(role&&role.name)||'',
+      id:uid(), what, detail, who:_myProfile.name||'', role:(role&&role.name)||'',
       user_id:_myProfile.id, ts:new Date().toISOString().slice(0,16).replace('T',' ')
     });
   }catch(e){ console.warn('Could not record report view to audit_log', e); }

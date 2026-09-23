@@ -6004,6 +6004,18 @@ function pageSimpleRegional(){
    already made this page directly useful on its own, and it was already read-only-safe
    for whatever role is looking at it. */
 function pageSimpleActivities(){
+  /* 2026-09-23 (Stef: Activity plan layout broken/floating box in Simple mode):
+     pageActivity() itself never sets window.__northGridSubId -- it doesn't need
+     to when reached directly as the 'activity' page, since UI.page==='activity'
+     already matches PAGE_GRID_CONTAINERS.activity. But reached from here,
+     UI.page is 'simple' (the whole 5-step flow is one page id), which has no
+     grid mapping at all -- so render()'s northGridAfterRender('simple') call
+     found no container and initGrid() never ran for this step's grid-stack
+     markup. The boxes rendered as plain unstyled divs with no GridStack
+     positioning, which is why box4 (Cost per win by activity) visually sat on
+     top of box3 (Entry volume by activity) instead of beside it. Same
+     __northGridSubId override pagePlan() already uses for its own tabs. */
+  window.__northGridSubId='activity';
   return pageActivity();
 }
 

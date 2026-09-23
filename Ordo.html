@@ -344,7 +344,7 @@ tr.gate-drag-over td{box-shadow:inset 0 2px 0 var(--input)}
   body{background:#fff !important}
 }
 
-/* --- Editable grid layout + widget swap (pilot: Home page, 2026-09-23) --- */
+/* --- Editable grid layout + widget swap, live across all 33 Strategy grid pages/tabs --- */
 .grid-stack{position:relative}
 .grid-stack-item-content{overflow:hidden}
 .gs-inner{height:auto;min-height:100%;display:flex;flex-direction:column}
@@ -394,6 +394,21 @@ tr.gate-drag-over td{box-shadow:inset 0 2px 0 var(--input)}
 .gs-swap-row-hint{display:block;font-size:11px;color:var(--ink-3);margin-top:1px}
 .gs-swap-disabled{opacity:.55;cursor:not-allowed}
 .gs-swap-disabled:hover{background:none}
+/* 2026-09-23 (Stef: Strategy-wide categorized widget library) -- the swap
+   picker's second section, browsing every other page's widgets grouped by
+   originating page. Reuses .gs-swap-row/-label/-hint for the rows themselves
+   so a library row looks identical to a "this page" row; these three classes
+   are just the section divider, category subheads and filter input. */
+.gs-swap-section-head{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:10px 16px;font-weight:700;font-size:12.5px;border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line);background:var(--canvas-2);position:sticky;top:0;
+}
+input.cel.gs-swap-filter{width:150px}
+.gs-swap-category{
+  padding:8px 12px 2px;font-size:10.5px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.02em;color:var(--ink-3);
+}
 </style>
 <link rel="stylesheet" href="assets/vendor/gridstack/gridstack.min.css">
 </head>

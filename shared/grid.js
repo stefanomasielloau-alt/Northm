@@ -1,6 +1,10 @@
 // North Strategy module — editable grid layout + widget-swap engine.
-// PILOT (2026-09-23): wired up for the Home page only (pageId 'home'),
-// on branch feature/strategy-grid-layout. Not yet on main / production.
+// 2026-09-23: rolled out across all 33 of Strategy's grid pages/tabs (see
+// PAGE_GRID_CONTAINERS below for the full list) and live on main/production
+// -- this comment used to say "pilot: Home page only, not yet on main",
+// true when this file was first written, stale by the time the rollout
+// actually finished. Corrected so a future read of this file doesn't
+// undersell what's already shipped.
 //
 // Ordo.html has no virtual DOM: render() fully replaces #main's innerHTML
 // every time ANY app state changes (dropdown, page nav, org switch — see
@@ -372,6 +376,105 @@
     }
   };
 
+  /* 2026-09-23 (Stef: "I think we should have a Strategy wide categorized
+     library of tiles and widgets ... you can choose from regardless of
+     screen"): human-readable category label per page/tab, used only by the
+     swap picker's cross-page "browse the full library" section below --
+     purely a display label, has no effect on WIDGET_LIBRARIES/defaults/
+     rendering. Taxonomy is "by originating page" per Stef's own answer, so
+     this is literally just PAGE_GRID_CONTAINERS' keys given a name a human
+     would recognize, matching the nav sidebar and each page's own tab
+     labels verbatim (ADMIN_TABS in Ordo.html, and the Planning engine /
+     Insight tab button labels in pagePlan()/pageInsight()). */
+  var PAGE_LABELS = {
+    home: 'Home',
+    dashboard: 'Dashboard',
+    calculator: 'Quick calculator',
+    drivers: 'Drivers & rates',
+    plan_top: 'Planning engine — Top-down',
+    plan_bot: 'Planning engine — Bottom-up',
+    plan_streamcmp: 'Planning engine — Compare by stream',
+    plan_rec: 'Planning engine — Reconciliation',
+    plan_phase: 'Planning engine — Time phasing',
+    geo: 'Geography & pods',
+    segment: 'Segment & audience',
+    activity: 'Activity plan',
+    campaign: 'Campaign & cost',
+    actuals: 'Actuals & history',
+    insight_season: 'Insight — Seasonality',
+    insight_vel: 'Insight — Velocity',
+    insight_lift: 'Insight — Activity lift',
+    insight_scen: 'Insight — Scenario compare',
+    insight_ready: 'Insight — Data sufficiency',
+    snapshots: 'Snapshots',
+    relationships: 'Relationships',
+    admin_gates: 'Admin & config — Funnel gates',
+    admin_geo: 'Admin & config — Geography',
+    admin_streams: 'Admin & config — Streams',
+    admin_acts: 'Admin & config — Activities',
+    admin_segs: 'Admin & config — Segments',
+    admin_camps: 'Admin & config — Campaigns',
+    admin_buckets: 'Admin & config — Cost buckets',
+    admin_time: 'Admin & config — Time',
+    admin_ver: 'Admin & config — Versions',
+    admin_users: 'Admin & config — Roles & users',
+    admin_feeds: 'Admin & config — Data feeds',
+    admin_audit: 'Admin & config — Audit log'
+  };
+
+  /* Flat, page-qualified index over WIDGET_LIBRARIES for cross-page browsing
+     and lookup: [{key:'plan_top.kpis', pageId, category, label, hint, fn}].
+     Built once at load time (108 widgets across 33 pages -- cheap, done
+     once, not rebuilt per picker open) rather than walking WIDGET_LIBRARIES
+     fresh on every openSwapPicker() call. */
+  var ALL_WIDGETS = [];
+  Object.keys(WIDGET_LIBRARIES).forEach(function (pid) {
+    var lib = WIDGET_LIBRARIES[pid];
+    Object.keys(lib.widgets).forEach(function (wid) {
+      var w = lib.widgets[wid];
+      ALL_WIDGETS.push({ key: pid + '.' + wid, pageId: pid, category: PAGE_LABELS[pid] || pid, label: w.label, hint: w.hint, fn: w.fn });
+    });
+  });
+
+  /* Resolves a widgetId that may be either a plain, page-local id (unchanged
+     meaning: "the box's own page's own widget catalog", exactly as every
+     widget assignment worked before today) or a page-qualified compound id
+     "sourcePageId.localId" (new: a cross-page pick from the library browser
+     below) into {label, hint, fn} -- or null if neither resolves. Centralised
+     here so both the live swap-click path (applyWidgetSwap) and the
+     initial-render path (initGrid's pre-pack pass below) resolve a pick
+     identically, and so a page's own initial-render HTML in Ordo.html never
+     needed to learn about compound ids at all -- it still only ever
+     generates its own page's default widget on first paint; initGrid()
+     patches in the real pick (same-page or cross-page) right after. */
+  function resolveWidget(pageId, widgetId) {
+    if (!widgetId) return null;
+    var dot = widgetId.indexOf('.');
+    if (dot === -1) {
+      var lib = WIDGET_LIBRARIES[pageId];
+      return lib ? (lib.widgets[widgetId] || null) : null;
+    }
+    var srcLib = WIDGET_LIBRARIES[widgetId.slice(0, dot)];
+    return srcLib ? (srcLib.widgets[widgetId.slice(dot + 1)] || null) : null;
+  }
+
+  /* Swaps a box's rendered content only -- no resize. Used by the initGrid()
+     pre-pack pass below (where packItems()'s own height-fit measurement runs
+     right after and would otherwise measure the wrong, stale content), and
+     by applyWidgetSwap (which layers its own resize pass on top, needed
+     there because nothing else runs afterward on a live click). Kept as one
+     shared function rather than copy-pasted so the two callers can't drift. */
+  function fillBoxContent(item, widgetInfo) {
+    var inner = item.querySelector('.gs-inner');
+    var handle = inner ? inner.querySelector('.gs-item-handle') : null;
+    if (!inner || !handle) return;
+    while (inner.lastChild && inner.lastChild !== handle) inner.removeChild(inner.lastChild);
+    var html = widgetInfo ? widgetInfo.fn() : '<div class="card"><div class="bd">Unknown widget.</div></div>';
+    var tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    while (tmp.firstChild) inner.appendChild(tmp.firstChild);
+  }
+
   var GRIDS = {}; // pageId -> live GridStack instance, kept for the swap handler to resize a box after its content changes
 
   function gridStorageKey(pageId) { return 'northm_ordo_grid_' + pageId; }
@@ -448,6 +551,30 @@
         missingFromSaved = items.filter(function (el) { return !savedIds[el.getAttribute('gs-id')]; });
       }
     } catch (e) {}
+
+    /* 2026-09-23 (Stef: "I think we should have a Strategy wide categorized
+       library of tiles and widgets ... you can choose from regardless of
+       screen"): a box picked from the cross-page library (see openSwapPicker
+       below) is saved as a page-qualified compound id ("sourcePageId.
+       localId"), which Ordo.html's own per-page render functions never
+       learned to understand -- each one only ever knows its OWN page's
+       plain widget ids (by design: "leave existing widgets as they are on
+       their current screens" -- nothing about a page's own default
+       rendering changed today). So on first paint after a reload, a box
+       with a cross-page pick still shows the page's original default
+       content; this patches in the real pick right here, before packItems()
+       below does its own height-fit measurement, so that pass measures the
+       actual final content instead of the stale default and doesn't need a
+       second, wasted layout pass afterward. A same-page (plain-id) pick
+       needs no patch -- Ordo.html's own render already got it right, same
+       as it always has; resolveWidget() only does real work for the dot. */
+    var assignedNow = getWidgetAssignments(pageId);
+    items.forEach(function (item) {
+      var widgetId = assignedNow[item.getAttribute('gs-id')];
+      if (widgetId && widgetId.indexOf('.') !== -1) {
+        fillBoxContent(item, resolveWidget(pageId, widgetId));
+      }
+    });
 
     /* 2026-09-23 (Stef's real-use report: "Reset ALL layouts still doesn't
        work" / "two widgets stuck on/in each other" on Planning engine, and a
@@ -674,12 +801,47 @@
     overlay.className = 'gs-swap-overlay';
     overlay.onclick = function (e) { if (e.target === overlay) closeSwapPicker(); };
 
-    var rows = Object.keys(lib.widgets).map(function (wid) {
-      var w = lib.widgets[wid];
-      var on = wid === currentId;
-      return '<button type="button" class="gs-swap-row' + (on ? ' on' : '') + '" data-wid="' + wid + '">' +
+    // 2026-09-23: matches Ordo.html's own esc() convention for generated HTML
+    // attribute values (see pageAdmin()'s "Admin &amp; configuration" heading)
+    // -- widget labels/hints are all internally-authored plain English, never
+    // untrusted input, but escaping & and " here is cheap and keeps this code
+    // consistent with how the rest of the app treats anything going into an
+    // HTML attribute.
+    function attrEsc(str) { return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
+    function rowHtml(wid, w, on) {
+      return '<button type="button" class="gs-swap-row' + (on ? ' on' : '') + '" data-wid="' + wid + '" data-search="' +
+        attrEsc((w.label + ' ' + w.hint).toLowerCase()) + '">' +
         '<span class="gs-swap-row-label">' + w.label + (on ? ' ✓' : '') + '</span>' +
         '<span class="gs-swap-row-hint">' + w.hint + '</span></button>';
+    }
+
+    var rows = Object.keys(lib.widgets).map(function (wid) {
+      return rowHtml(wid, lib.widgets[wid], wid === currentId);
+    }).join('');
+
+    /* 2026-09-23 (Stef: "I think we should have a Strategy wide categorized
+       library of tiles and widgets ... one place where widgets can be
+       connected / setup / configured ... you can choose from regardless of
+       screen"): everything below "This page" is new -- every OTHER page's
+       widgets, grouped by category (PAGE_LABELS, "by originating page" per
+       Stef's own answer), each pick stored as a page-qualified compound id
+       and resolved by resolveWidget()/applyWidgetSwap() above. Existing
+       widgets keep rendering on their current screens exactly as before
+       (per Stef's own answer, "leave existing widgets as they are") --
+       this only ADDS the ability to also place any of them somewhere else;
+       nothing about where a widget lives by default has changed. A plain
+       text filter is included since this list is 100+ rows once every page
+       is in it -- browsing that many without one would be the opposite of
+       the "efficiency in how someone uses North" Stef asked to keep in
+       mind. */
+    var libraryGroups = Object.keys(PAGE_LABELS).filter(function (pid) {
+      return pid !== pageId && WIDGET_LIBRARIES[pid];
+    }).map(function (pid) {
+      var otherLib = WIDGET_LIBRARIES[pid];
+      var groupRows = Object.keys(otherLib.widgets).map(function (wid) {
+        return rowHtml(pid + '.' + wid, otherLib.widgets[wid], (pid + '.' + wid) === currentId);
+      }).join('');
+      return '<div class="gs-swap-category" data-search="' + attrEsc(PAGE_LABELS[pid].toLowerCase()) + '">' + PAGE_LABELS[pid] + '</div>' + groupRows;
     }).join('');
 
     overlay.innerHTML =
@@ -690,18 +852,43 @@
       '<span class="gs-swap-row-label">+ Connect an external source</span>' +
       '<span class="gs-swap-row-hint">Not built yet — mocked to show the direction (a URL, a live API, another system). No real connection here.</span>' +
       '</button>' +
-      '</div></div>';
+      '</div>' +
+      '<div class="gs-swap-section-head">Browse the full widget library' +
+      '<input type="text" class="cel txt gs-swap-filter" placeholder="Filter by name or page…" id="gs-swap-filter-input"></div>' +
+      '<div class="gs-swap-list" id="gs-swap-library-list">' + libraryGroups + '</div>' +
+      '</div>';
 
     document.body.appendChild(overlay);
     overlay.querySelector('.gs-swap-close').onclick = closeSwapPicker;
-    overlay.querySelectorAll('.gs-swap-row[data-wid]').forEach(function (row) {
+    function wireRow(row) {
       row.onclick = function () {
         var wid = row.getAttribute('data-wid');
         setWidgetAssignment(pageId, boxId, wid);
         applyWidgetSwap(pageId, boxId, wid);
         closeSwapPicker();
       };
-    });
+    }
+    overlay.querySelectorAll('.gs-swap-row[data-wid]').forEach(wireRow);
+
+    var filterInput = overlay.querySelector('#gs-swap-filter-input');
+    var libraryList = overlay.querySelector('#gs-swap-library-list');
+    if (filterInput && libraryList) {
+      filterInput.oninput = function () {
+        var q = filterInput.value.trim().toLowerCase();
+        var lastCategoryShown = null;
+        Array.prototype.forEach.call(libraryList.children, function (el) {
+          if (el.classList.contains('gs-swap-category')) {
+            // Decide category visibility after seeing whether any of its rows matched -- a category with a matching name is always shown even if no individual row text matched.
+            lastCategoryShown = el;
+            el.style.display = q && el.getAttribute('data-search').indexOf(q) === -1 ? 'none' : '';
+          } else {
+            var match = !q || el.getAttribute('data-search').indexOf(q) !== -1 || (lastCategoryShown && lastCategoryShown.getAttribute('data-search').indexOf(q) !== -1);
+            el.style.display = match ? '' : 'none';
+            if (match && lastCategoryShown) lastCategoryShown.style.display = '';
+          }
+        });
+      };
+    }
   }
 
   // ---- Unhide / add-tile picker -------------------------------------------
@@ -751,21 +938,16 @@
   }
 
   function applyWidgetSwap(pageId, boxId, widgetId) {
-    var lib = WIDGET_LIBRARIES[pageId];
     var grid = GRIDS[pageId];
     var gridEl = grid ? grid.el : null;
-    if (!lib || !gridEl) return;
+    if (!gridEl) return;
     var item = gridEl.querySelector('.grid-stack-item[gs-id="' + boxId + '"]');
     if (!item) return;
-    var inner = item.querySelector('.gs-inner');
-    var handle = inner ? inner.querySelector('.gs-item-handle') : null;
-    if (!inner || !handle) return;
-    while (inner.lastChild && inner.lastChild !== handle) inner.removeChild(inner.lastChild);
-    var w = lib.widgets[widgetId];
-    var html = w ? w.fn() : '<div class="card"><div class="bd">Unknown widget.</div></div>';
-    var tmp = document.createElement('div');
-    tmp.innerHTML = html;
-    while (tmp.firstChild) inner.appendChild(tmp.firstChild);
+    // 2026-09-23 (Stef's widget-library request): widgetId can now be a
+    // page-qualified compound id from a cross-page pick, not just a plain
+    // id from this page's own WIDGET_LIBRARIES entry -- resolveWidget()
+    // handles both forms; see its own comment above for why.
+    fillBoxContent(item, resolveWidget(pageId, widgetId));
     // Content height likely changed — grow/shrink this one box to fit, same
     // measure-and-step approach as the initial layout pass, without moving
     // or resizing any other box.

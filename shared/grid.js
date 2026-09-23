@@ -436,77 +436,126 @@
 
     var settled = false;
     var restoredSaved = false;
+    var missingFromSaved = [];
+    var savedLayout = null;
     try {
-      var saved = JSON.parse(localStorage.getItem(gridStorageKey(pageId)) || 'null');
-      if (saved && saved.length) { grid.load(saved); restoredSaved = true; }
+      savedLayout = JSON.parse(localStorage.getItem(gridStorageKey(pageId)) || 'null');
+      if (savedLayout && savedLayout.length) {
+        grid.load(savedLayout);
+        restoredSaved = true;
+        var savedIds = {};
+        savedLayout.forEach(function (s) { savedIds[s.id] = true; });
+        missingFromSaved = items.filter(function (el) { return !savedIds[el.getAttribute('gs-id')]; });
+      }
     } catch (e) {}
-    if (restoredSaved) settled = true;
+
+    /* 2026-09-23 (Stef's real-use report: "Reset ALL layouts still doesn't
+       work" / "two widgets stuck on/in each other" on Planning engine, and a
+       floating box overlapping the table on Activity plan): this loop used to
+       ASSUME every pair of consecutive sub-12-width boxes was an even 6/6
+       split -- it hardcoded the second box's x to 6 regardless of the first
+       box's actual width. Any page with an unequal pair (drivers' box2/box3
+       is 4/8, so was plan_bot's) placed the second box at x=6 with w=8,
+       running it to column 14 -- 2 columns past the 12-column grid, visually
+       overlapping/overflowing into whatever the next row held. This is also
+       exactly the code path Reset ALL layouts forces (clearing the saved
+       layout makes every page fall back to this fresh-placement logic), which
+       is why resetting didn't fix it -- it re-triggered the same bug.
+       Replaced with a real row-packer: walk items left to right, add each to
+       the current row while its width still fits within the 12 columns used
+       so far, start a new row once it wouldn't fit (or immediately for a
+       w>=12 item, which always gets its own row) -- placing each item at the
+       actual x its own width and its row-mates' widths add up to, not a
+       hardcoded 0/6 split. Handles 2, 3 or more boxes per row correctly, not
+       just even pairs. Extracted into its own function 2026-09-23 (Stef:
+       "I can't add the missing tile" on Planning engine > Bottom-up) so it
+       can also pack just the boxes a stale saved layout doesn't cover yet --
+       see below. */
+    function packItems(els, startY) {
+      var unitPx = 12 + 10;
+      function initialGuess(px) { return Math.max(1, Math.ceil(px / unitPx)); }
+      function fitHeight(el, targetPx) {
+        var content = el.querySelector('.grid-stack-item-content');
+        var h = initialGuess(targetPx);
+        for (var guard = 0; guard < 10; guard++) {
+          grid.update(el, { h: Math.min(h, 400) });
+          var got = content.getBoundingClientRect().height;
+          if (got >= targetPx - 1) break;
+          h += Math.max(1, Math.ceil((targetPx - got) / unitPx));
+        }
+        return Math.min(h, 400);
+      }
+      var cursorUnits = startY;
+      var i = 0;
+      while (i < els.length) {
+        var rowItems = [];
+        var usedW = 0;
+        while (i < els.length) {
+          var wCandidate = parseInt(els[i].getAttribute('gs-w'), 10) || 12;
+          if (wCandidate >= 12) {
+            if (rowItems.length === 0) { rowItems.push(els[i]); i += 1; }
+            break;
+          }
+          if (usedW + wCandidate > 12) break;
+          rowItems.push(els[i]); usedW += wCandidate; i += 1;
+        }
+        var rowY = cursorUnits;
+        var x = 0;
+        var rowH = 0;
+        rowItems.forEach(function (el) {
+          var w = parseInt(el.getAttribute('gs-w'), 10) || 12;
+          var inner = el.querySelector('.gs-inner');
+          var innerH = inner ? inner.getBoundingClientRect().height : 0;
+          grid.update(el, { x: x, y: rowY, w: w, h: initialGuess(innerH) });
+          var h = fitHeight(el, innerH);
+          rowH = Math.max(rowH, h);
+          x += w;
+        });
+        cursorUnits += rowH;
+      }
+    }
 
     if (!restoredSaved) {
       requestAnimationFrame(function () {
-        var unitPx = 12 + 10;
-        function initialGuess(px) { return Math.max(1, Math.ceil(px / unitPx)); }
-        function fitHeight(el, targetPx) {
-          var content = el.querySelector('.grid-stack-item-content');
-          var h = initialGuess(targetPx);
-          for (var guard = 0; guard < 10; guard++) {
-            grid.update(el, { h: Math.min(h, 400) });
-            var got = content.getBoundingClientRect().height;
-            if (got >= targetPx - 1) break;
-            h += Math.max(1, Math.ceil((targetPx - got) / unitPx));
-          }
-          return Math.min(h, 400);
-        }
-        /* 2026-09-23 (Stef's real-use report: "Reset ALL layouts still doesn't
-           work" / "two widgets stuck on/in each other" on Planning engine, and a
-           floating box overlapping the table on Activity plan): this loop used to
-           ASSUME every pair of consecutive sub-12-width boxes was an even 6/6
-           split -- it hardcoded the second box's x to 6 regardless of the first
-           box's actual width. Any page with an unequal pair (drivers' box2/box3
-           is 4/8, so was plan_bot's) placed the second box at x=6 with w=8,
-           running it to column 14 -- 2 columns past the 12-column grid, visually
-           overlapping/overflowing into whatever the next row held. This is also
-           exactly the code path Reset ALL layouts forces (clearing the saved
-           layout makes every page fall back to this fresh-placement logic), which
-           is why resetting didn't fix it -- it re-triggered the same bug.
-           Replaced with a real row-packer: walk items left to right, add each to
-           the current row while its width still fits within the 12 columns used
-           so far, start a new row once it wouldn't fit (or immediately for a
-           w>=12 item, which always gets its own row) -- placing each item at the
-           actual x its own width and its row-mates' widths add up to, not a
-           hardcoded 0/6 split. Handles 2, 3 or more boxes per row correctly, not
-           just even pairs. */
-        var els = items;
-        var cursorUnits = 0;
-        var i = 0;
-        while (i < els.length) {
-          var rowItems = [];
-          var usedW = 0;
-          while (i < els.length) {
-            var wCandidate = parseInt(els[i].getAttribute('gs-w'), 10) || 12;
-            if (wCandidate >= 12) {
-              if (rowItems.length === 0) { rowItems.push(els[i]); i += 1; }
-              break;
-            }
-            if (usedW + wCandidate > 12) break;
-            rowItems.push(els[i]); usedW += wCandidate; i += 1;
-          }
-          var rowY = cursorUnits;
-          var x = 0;
-          var rowH = 0;
-          rowItems.forEach(function (el) {
-            var w = parseInt(el.getAttribute('gs-w'), 10) || 12;
-            var inner = el.querySelector('.gs-inner');
-            var innerH = inner ? inner.getBoundingClientRect().height : 0;
-            grid.update(el, { x: x, y: rowY, w: w, h: initialGuess(innerH) });
-            var h = fitHeight(el, innerH);
-            rowH = Math.max(rowH, h);
-            x += w;
-          });
-          cursorUnits += rowH;
-        }
+        packItems(items, 0);
         settled = true;
       });
+    } else if (missingFromSaved.length) {
+      /* 2026-09-23 (Stef: "I can't add the missing tile" on Planning engine >
+         Bottom-up): a page's saved grid layout can predate a box that didn't
+         exist in it yet -- either a genuinely new widget slot added to a page
+         (like today's 3 new Drivers widgets), or, as happened here, a box
+         that used to be silently trapped inside a sibling's unclosed div (see
+         the planBotWidgetDelivers() fix earlier today) and so was invisible
+         to GridStack the last time this page's layout was saved.
+         Confirmed live exactly what grid.load(savedLayout) above does to a
+         box it doesn't know about: it doesn't just leave it unpositioned, it
+         REMOVES it from the DOM outright (querySelectorAll count drops from
+         4 to 3 the instant load() runs) -- GridStack syncs the grid to
+         exactly match the given layout. That's why Stef's box4 (Marketing
+         contribution build-up) never came back even after the div fix
+         shipped, and why "+ Add / unhide tile" couldn't bring it back either
+         -- it was never marked hidden via the '__hidden__' sentinel, load()
+         had physically deleted it, a different problem the hide/unhide
+         feature doesn't cover. The element reference in missingFromSaved
+         (captured before load() ran) is still a valid, live DOM node --
+         just detached -- so re-appending it and re-registering it with
+         GridStack's own makeWidget() (confirmed live: this is what it's
+         for) brings it back as a real tracked grid item again, and only
+         then can packItems() give it a position. Packs as new rows appended
+         below everything the saved layout already placed. */
+      requestAnimationFrame(function () {
+        missingFromSaved.forEach(function (el) {
+          if (!gridEl.contains(el)) { gridEl.appendChild(el); }
+          grid.makeWidget(el);
+        });
+        var maxY = 0;
+        savedLayout.forEach(function (s) { maxY = Math.max(maxY, (s.y || 0) + (s.h || 0)); });
+        packItems(missingFromSaved, maxY);
+        settled = true;
+      });
+    } else {
+      settled = true;
     }
 
     grid.on('change', function () {

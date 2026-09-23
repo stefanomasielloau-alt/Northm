@@ -849,29 +849,32 @@
   window.northGetWidgetAssignments = getWidgetAssignments;
 
   /* 2026-09-23 (Stef's real-use report: "Reset ALL layouts did nothing"): the
-     previous resetAllBtn.onclick was wired up INSIDE initGrid(), so it only ever
+     original resetAllBtn.onclick was wired up INSIDE initGrid(), so it only ever
      got attached on a page/tab whose grid container successfully initialized --
      on any page with no registered grid for the currently-active effectiveId
      (e.g. mid-navigation, or a page whose subId never resolves), the button sat
-     there with no listener at all and a click genuinely did nothing. This control
-     is global by definition (it clears every page's saved layout, not just the
-     current one), so it's bound exactly once here, at script-load time, against
-     the static ctxbar markup that's already in the page before any render() runs
-     -- never inside a per-page/per-render code path. After clearing storage it
-     calls the app's own render() (if present) so whatever page is currently on
-     screen redraws and re-runs its own grid-init hook against the now-clean data,
-     picking up default positions immediately instead of needing a manual reload. */
-  var globalResetAllBtn = document.getElementById('grid-reset-all');
-  if (globalResetAllBtn) {
-    globalResetAllBtn.onclick = function () {
-      try {
-        Object.keys(localStorage).forEach(function (k) {
-          if (k.indexOf('northm_ordo_grid_') === 0 || k.indexOf('northm_ordo_widgets_') === 0) {
-            localStorage.removeItem(k);
-          }
-        });
-      } catch (e) {}
-      if (typeof window.render === 'function') { window.render(); }
-    };
-  }
+     there with no listener at all and a click genuinely did nothing.
+     2026-09-23 (Stef: "not sure we need a Reset all Layouts button on every
+     screen ... too easy to accidently click. Move it to Admin & configuration"):
+     the button itself has since moved from the static, always-visible ctxbar
+     into Admin & config > Audit log's dynamically-rendered tab content (see
+     Ordo.html's pageAdmin(), UI.adminTab==='audit'). That content gets replaced
+     on every render(), so a bind-once-to-a-DOM-element approach (as used when
+     this lived in the static ctxbar) would silently stop working the moment the
+     tab re-renders -- same failure shape as the original bug above, just from a
+     different cause. Exposed as a plain global function instead and called
+     directly via onclick="northResetAllLayouts()", the same way every other
+     admin-tab action button (addGate(), removeRegion(), preset(), etc.) is
+     wired -- resolved against global scope at click time, so it works correctly
+     regardless of when or how many times that tab's HTML has been rebuilt. */
+  window.northResetAllLayouts = function () {
+    try {
+      Object.keys(localStorage).forEach(function (k) {
+        if (k.indexOf('northm_ordo_grid_') === 0 || k.indexOf('northm_ordo_widgets_') === 0) {
+          localStorage.removeItem(k);
+        }
+      });
+    } catch (e) {}
+    if (typeof window.render === 'function') { window.render(); }
+  };
 })();

@@ -515,7 +515,6 @@ window.closeFieldGuide=closeFieldGuide;
   <button class="btn sm" id="grid-edit-toggle" type="button" style="display:none">⠿ Edit layout</button>
   <button class="btn sm" id="grid-reset" type="button" style="display:none">Reset layout</button>
   <button class="btn sm" id="grid-addtile" type="button" style="display:none">+ Add / unhide tile</button>
-  <button class="btn sm" id="grid-reset-all" type="button" title="Clear every page's saved layout at once, not just this one">Reset ALL layouts</button>
 </div>
 <div class="wrap" id="wrap">
   <nav class="side" id="side"></nav>
@@ -3199,6 +3198,23 @@ function pageAdmin(){
   if(UI.adminTab==='audit'){
     h+=`<div class="note"><strong>Every driver and dimension change is logged.</strong> Who, when, from, to.
       Configuration changes additionally record the impact acknowledgement.</div>`;
+    /* 2026-09-23 (Stef: "not sure we need a Reset all Layouts button on every
+       screen ... too easy to accidently click. Move it to Admin & configuration
+       under Data feeds or Audit Log"): was a static button in the global ctxbar,
+       visible on every Strategy page/tab, one click from anything else up there
+       (role/version/FY/grain, Edit layout, Reset layout). Moved here -- still one
+       click, but now behind Admin & config > Audit log, matching where a
+       clear-every-saved-layout action (a reset of UI state, not data) reads as a
+       deliberate admin action rather than something that can be brushed on the
+       way to changing a filter. Calls the same northResetAllLayouts() shared/
+       grid.js already defines (was previously bound once, globally, to the
+       static ctxbar element at script-load time -- now called directly via
+       onclick like every other admin-tab action button, so it works correctly
+       from inside dynamically-rendered tab content too). */
+    h+=`<div class="card"><h3>Layout reset</h3><div class="bd">
+      <p class="mini" style="margin:0 0 9px">Clears every page's saved widget layout at once (positions and hide/unhide state) -- not campaign, activity or any other data. Each page rebuilds its default layout next time it's opened.</p>
+      <button class="btn sm dgr" type="button" onclick="northResetAllLayouts()" title="Clear every page's saved layout at once, not just this one">Reset ALL layouts</button>
+    </div></div>`;
   }
 
   const tabCfg=ADMIN_TAB_WIDGETS[UI.adminTab];

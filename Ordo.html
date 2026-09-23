@@ -1617,6 +1617,7 @@ async function saveToSupabase(){
     upsertRows('cost_buckets', CFG.costBuckets, c=>({id:c.id,code:c.code,label:c.label,dept:c.dept||'Marketing',ext_code:c.extCode||''})),
     upsertRows('programmes', CFG.programmes, p=>({id:p.id,name:p.name,owner:p.owner||'',focus:p.focus||'',status:p.status||'Active',tracking_ref:p.trackingRef||null,cloned_from_id:p.clonedFromId||null,notes:p.notes||''})),
     upsertRows('versions', CFG.versions, v=>({id:v.id,name:v.name,kind:v.kind,locked:!!v.locked})),
+    upsertRows('custom_widgets', CFG.customWidgets, w=>({id:w.id,name:w.name,category_page_id:w.categoryPageId||null,hint:w.hint||'',type:w.type||'iframe',url:w.url||''})),
     /* NOT upsertRows() (2026-09-09 fix, live production bug): roles is NOT Strategy's table --
        the only thing this page ever edits on a role is requireCommitOnEdit, via
        toggleRequireCommit() above ("Requires commit on plan edits" panel). upsertRows()'s
@@ -1874,6 +1875,20 @@ async function loadFromSupabase(){
       id:s.id, fy:s.fy, name:s.name, payload:s.payload, createdBy:s.created_by||'', createdAt:s.created_at
     }));
   }catch(e){ /* board_report_snapshots migration not run yet -- history dropdown shows Live only. */ }
+
+  /* Custom / external widgets (2026-09-24, Stef: "Library page ... curate including ADDING
+     External Widgets/connectors"). Same fail-soft pattern as boardReportNotes/boardReportSnapshots
+     just above -- an org that hasn't run 2026-09-24-migration-custom-widgets-table.sql yet just
+     sees no External widgets in the library, nothing else breaks. Org-scoped via orgScoped() like
+     the other real dimensions (activities/streams/segments), not global like Regions/Pods. */
+  CFG.customWidgets = [];
+  try{
+    const { data: cwData, error: cwErr } = await orgScoped(sb.from('custom_widgets')
+      .select('id,org_id,name,category_page_id,hint,type,url'));
+    if(!cwErr) CFG.customWidgets = (cwData||[]).map(w=>({
+      id:w.id, orgId:w.org_id, name:w.name, categoryPageId:w.category_page_id||null, hint:w.hint||'', type:w.type||'iframe', url:w.url||''
+    }));
+  }catch(e){ /* custom_widgets migration not run yet -- Widget library's External widgets section shows none. */ }
 
   const rollupById = {};
   (rollupsR.data||[]).forEach(r=>{ rollupById[r.campaign_id] = {c:r.rollup_committed, a:r.rollup_actual}; });
@@ -2483,7 +2498,7 @@ function overlayPanel(){
 const ADMIN_TABS=[
   ['gates','Funnel gates'],['geo','Geography'],['streams','Streams'],['acts','Activities'],
   ['segs','Segments'],['camps','Campaigns'],['buckets','Cost buckets'],['time','Time'],['ver','Versions'],
-  ['users','Roles & users'],['feeds','Data feeds'],['audit','Audit log']
+  ['users','Roles & users'],['widgetlib','Widget library'],['feeds','Data feeds'],['audit','Audit log']
 ];
 function adminGatesWidgetSet(){
   const dis=canConfig()?'':'disabled';
@@ -2575,7 +2590,7 @@ function adminGeoWidgetRegions(){
       <td class="n calc">${P(r.id).length}</td>
       <td><div class="row"><div class="bar" style="width:80px"><i style="width:${clamp(t*100,0,100)}%;background:${ok?'var(--ok)':'var(--bad)'}"></i></div>
         <span class="pill ${ok?'ok':'bad'}">${F.p(t,0)}</span></div></td>
-      <td class="n">${r.unassigned?'':`<button class="btn sm dgr" ${dis} onclick="removeRegion('${r.id}')">Remove</button>`}</td>
+      <td class="n">${r.unassigned&&CFG.regions.filter(x=>x.unassigned).length<=1?`<button class="btn sm dgr" disabled title="This is the last Unassigned region -- some calculations depend on at least one always existing">Remove</button>`:`<button class="btn sm dgr" ${dis} onclick="removeRegion('${r.id}')">Remove</button>`}</td>
     </tr>`;
   });
   h+=`</tbody></table></div></div>`;
@@ -2598,7 +2613,7 @@ function adminGeoWidgetPods(){
           ${CFG.regions.map(x=>`<option value="${x.id}" ${x.id===p.regionId?'selected':''}>${esc(x.name)}</option>`).join('')}</select></td>
         <td class="n"><input class="cel w" value="${(p.share*100).toFixed(0)}" ${dis} onchange="setIn('pods','${p.id}','share',this.value,'pct')"></td>
         <td><div class="bar" style="width:100px"><i style="width:${clamp(p.share*100,0,100)}%"></i></div></td>
-        <td class="n">${p.unassigned?'':`<button class="btn sm dgr" ${dis} onclick="removePod('${p.id}')">Remove</button>`}</td>
+        <td class="n"><button class="btn sm dgr" ${dis} onclick="removePod('${p.id}')">Remove</button></td>
       </tr>`;
     });
   });
@@ -3123,7 +3138,7 @@ function pageAdmin(){
         <td class="n calc">${P(r.id).length}</td>
         <td><div class="row"><div class="bar" style="width:80px"><i style="width:${clamp(t*100,0,100)}%;background:${ok?'var(--ok)':'var(--bad)'}"></i></div>
           <span class="pill ${ok?'ok':'bad'}">${F.p(t,0)}</span></div></td>
-        <td class="n">${r.unassigned?'':`<button class="btn sm dgr" ${dis} onclick="removeRegion('${r.id}')">Remove</button>`}</td>
+        <td class="n">${r.unassigned&&CFG.regions.filter(x=>x.unassigned).length<=1?`<button class="btn sm dgr" disabled title="This is the last Unassigned region -- some calculations depend on at least one always existing">Remove</button>`:`<button class="btn sm dgr" ${dis} onclick="removeRegion('${r.id}')">Remove</button>`}</td>
       </tr>`;
     });
     h+=`</tbody></table></div></div>`;
@@ -3142,7 +3157,7 @@ function pageAdmin(){
             ${CFG.regions.map(x=>`<option value="${x.id}" ${x.id===p.regionId?'selected':''}>${esc(x.name)}</option>`).join('')}</select></td>
           <td class="n"><input class="cel w" value="${(p.share*100).toFixed(0)}" ${dis} onchange="setIn('pods','${p.id}','share',this.value,'pct')"></td>
           <td><div class="bar" style="width:100px"><i style="width:${clamp(p.share*100,0,100)}%"></i></div></td>
-          <td class="n">${p.unassigned?'':`<button class="btn sm dgr" ${dis} onclick="removePod('${p.id}')">Remove</button>`}</td>
+          <td class="n"><button class="btn sm dgr" ${dis} onclick="removePod('${p.id}')">Remove</button></td>
         </tr>`;
       });
     });
@@ -3201,6 +3216,58 @@ function pageAdmin(){
   if(UI.adminTab==='ver'){
     h+=`<div class="note"><strong>Versions separate plan from actual.</strong> Locked versions cannot be edited except by Admin.
       Scenarios branch freely and are compared in module 8.</div>`;
+  }
+  if(UI.adminTab==='widgetlib'){
+    /* 2026-09-24 (Stef: "Where is the Library config page so I can go and curate including
+       ADDING External Widgets/connectors etc ... Library page should exist in Admin and
+       Config"). Two halves: a read-only reference to the 108 built-in widgets (curating those
+       themselves -- renaming, re-categorising -- would mean turning WIDGET_LIBRARIES from
+       hardcoded JS into editable data, a bigger change not attempted tonight; flagged in the
+       overnight status doc), and a real, working curation surface for External widgets, which
+       genuinely are just data. Any external widget added here immediately shows up in every
+       page's "+ Add tile" picker, filed under whichever category was chosen, same as any of
+       the 108 built-in ones -- see resolveWidget()'s 'external.' handling in shared/grid.js. */
+    const pageLabels = window.PAGE_LABELS||{};
+    const catCount = Object.keys(pageLabels).length;
+    h+=`<div class="note"><strong>${catCount} pages, 108 built-in widgets.</strong> Every grid box's
+      "+ Add tile" / "⇄ Swap widget" picker already browses all of them, filterable by name or
+      page. Renaming or re-categorising a built-in widget isn't editable from here yet -- they're
+      defined in code, not data; only External widgets (below) are.</div>`;
+    h+=`<div class="card"><h3>Built-in categories <span class="sp"></span>
+      <span class="mini">by originating page</span></h3><div class="bd">
+      <div class="mini" style="line-height:1.9">${Object.keys(pageLabels).map(pid=>esc(pageLabels[pid])).join(' · ')}</div>
+      </div></div>`;
+    h+=`<div class="card"><h3>External widgets <span class="sp"></span></h3>
+      <div class="bd"><div class="mini">Embed something outside North -- a dashboard, a report,
+      any page that allows being framed -- as a tile on any grid page. Add one here, then pick it
+      from that page's "+ Add tile" library, under whichever category you choose below.</div></div>
+      <div class="bd flush"><table><thead><tr><th>Name</th><th>Category</th><th>Type</th><th>URL</th><th></th></tr></thead><tbody>
+      ${CFG.customWidgets.length?CFG.customWidgets.map(w=>`<tr>
+        <td class="lb">${esc(w.name)}</td>
+        <td>${esc(w.categoryPageId?(pageLabels[w.categoryPageId]||w.categoryPageId):'External widgets')}</td>
+        <td>${esc(w.type)}</td>
+        <td class="mini" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(w.url)}</td>
+        <td class="n"><button class="btn sm dgr" ${dis} onclick="removeCustomWidget('${w.id}')">Remove</button></td>
+      </tr>`).join(''):'<tr><td colspan="5" class="mini" style="padding:10px 14px">None added yet.</td></tr>'}
+      </tbody></table></div></div>`;
+    if(canConfig()){
+      h+=`<div class="card"><h3>Add an external widget</h3><div class="bd">
+        <div class="f"><label>Name</label><input class="in v" id="cwname" placeholder="e.g. Partner scorecard"></div>
+        <div class="f"><label>URL</label><input class="in v" id="cwurl" placeholder="https://…"></div>
+        <div class="f"><label>Type</label><select class="in v" id="cwtype">
+          <option value="iframe">Embedded page (iframe)</option>
+        </select>
+        <span class="hint">Any URL that allows being framed. More connector types (a live API,
+          a webhook-fed panel) can be added later -- ask if you want one built.</span></div>
+        <div class="f"><label>File under (category)</label><select class="in v" id="cwcat">
+          <option value="">External widgets (its own category)</option>
+          ${Object.keys(pageLabels).map(pid=>`<option value="${pid}">${esc(pageLabels[pid])}</option>`).join('')}
+        </select></div>
+        <div class="f"><label>Hint <span class="mini">(optional, shown in the picker)</span></label>
+          <input class="in v" id="cwhint" placeholder="One line describing what this shows"></div>
+        <button class="btn sm pri" onclick="addCustomWidget(document.getElementById('cwname').value,document.getElementById('cwurl').value,document.getElementById('cwcat').value,document.getElementById('cwhint').value,document.getElementById('cwtype').value);document.getElementById('cwname').value='';document.getElementById('cwurl').value='';document.getElementById('cwhint').value='';">Add widget</button>
+      </div></div>`;
+    }
   }
   if(UI.adminTab==='feeds'){
     const una=CFG.feeds.filter(f=>f.dir==='in'&&f.unassigned>0);
@@ -3378,11 +3445,37 @@ function preset(k){
     });
   });
 }
+/* Custom / external widgets (2026-09-24, Stef: "Library page ... curate including ADDING
+   External Widgets/connectors"). Deliberately NOT routed through stage()'s impact-review flow
+   -- that flow needs a MODULE_USE[dim] entry describing which modules/views/calcs reference the
+   dimension, which doesn't apply here (a custom widget is additive UI, not a planning dimension
+   other calculations read); same lighter direct-mutation shape as resetWinTarget() above. Still
+   gated on canConfig() and still logged to the audit trail. */
+function addCustomWidget(name,url,categoryPageId,hint,type){
+  if(!canConfig()){ toast('Your role cannot change configuration.'); return; }
+  name=(name||'').trim(); url=(url||'').trim();
+  if(!name||!url){ toast('Name and URL are both required.'); return; }
+  const w={id:uid('cw'),name:name,categoryPageId:categoryPageId||null,hint:(hint||'').trim(),type:type||'iframe',url:url};
+  CFG.customWidgets.push(w);
+  logAudit('add','Custom widgets/'+name);
+  render();
+}
+function removeCustomWidget(id){
+  if(!canConfig()){ toast('Your role cannot change configuration.'); return; }
+  const w=CFG.customWidgets.find(x=>x.id===id); if(!w)return;
+  CFG.customWidgets=CFG.customWidgets.filter(x=>x.id!==id);
+  deleteRow('custom_widgets',id);
+  logAudit('remove','Custom widgets/'+w.name);
+  render();
+}
 function addRegion(){ stage('Regions','add','a new region',()=>{
   const id=uid('r'); CFG.regions.splice(CFG.regions.length-1,0,{id:id,name:'New region',code:'NEW',aeHeads:1,acvTarget:1000000});
   CFG.pods.splice(CFG.pods.length-1,0,{id:uid('p'),name:'New region Pod 1',regionId:id,share:1});
 });}
-function removeRegion(id){ stage('Regions','remove',region(id).name,()=>{
+function removeRegion(id){
+  const rr=region(id);
+  if(rr&&rr.unassigned&&CFG.regions.filter(x=>x.unassigned).length<=1){ toast('This is the last Unassigned region -- some calculations depend on at least one always existing.'); return; }
+  stage('Regions','remove',region(id).name,()=>{
   const goingPods=CFG.pods.filter(p=>p.regionId===id).map(p=>p.id);
   CFG.regions=CFG.regions.filter(x=>x.id!==id); CFG.pods=CFG.pods.filter(p=>p.regionId!==id);
   CFG.users.forEach(u=>u.regionIds=u.regionIds.filter(r=>r!==id));
@@ -6755,7 +6848,6 @@ const PAGES=[
   {id:'home',    ix:'⌂',label:'Home',         fn:pageHome,     grp:'Overview'},
   {id:'dashboard',ix:'◆',label:'Dashboard',    fn:pageDashboard,grp:'Overview'},
   {id:'calculator',ix:'¤',label:'Quick calculator',fn:pageCalculator,grp:'Overview'},
-  {id:'admin',   ix:'0',label:'Admin & config',   fn:pageAdmin,    grp:'Configure'},
   {id:'drivers', ix:'1',label:'Drivers & rates',  fn:pageDrivers,  grp:'Plan'},
   {id:'plan',    ix:'2',label:'Planning engine',  fn:pagePlan,     grp:'Plan'},
   {id:'geo',     ix:'3',label:'Geography & pods', fn:pageGeo,      grp:'Plan'},
@@ -6766,6 +6858,7 @@ const PAGES=[
   {id:'insight', ix:'8',label:'Insight',          fn:pageInsight,  grp:'Measure'},
   {id:'snapshots',ix:'9',label:'Snapshots',        fn:pageSnapshots,grp:'Measure'},
   {id:'relationships',ix:'\u2194',label:'Relationships',fn:pageRelationships,grp:'Measure'},
+  {id:'admin',   ix:'0',label:'Admin & config',   fn:pageAdmin,    grp:'Configure'},
   /* 2026-09-03: kept in PAGES (so routing/go()/audit-logging still work for a direct link)
      but hidden:true -- per Stef's call, the Board report now belongs to the Reporting module
      (Reportus.html), not Strategy's own nav. renderSide() and the Home page's Quick Links both

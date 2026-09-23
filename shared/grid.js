@@ -454,7 +454,29 @@
       var lib = WIDGET_LIBRARIES[pageId];
       return lib ? (lib.widgets[widgetId] || null) : null;
     }
-    var srcLib = WIDGET_LIBRARIES[widgetId.slice(0, dot)];
+    var prefix = widgetId.slice(0, dot);
+    // 2026-09-24 (Stef: "ADDING External Widgets/connectors"): a custom widget added
+    // via Admin & config > Widget library, stored in CFG.customWidgets and picked
+    // via a compound id of the same 'category.identifier' shape every other
+    // cross-page pick already uses -- 'external.' isn't a real page id in
+    // WIDGET_LIBRARIES, so it's checked first. CFG lives in Ordo.html's own global
+    // scope, not this file's, but is reachable here as a bare identifier by the
+    // time any widget actually renders (long after Ordo.html's own script block has
+    // run) -- same reasoning as every widget fn() below already relies on.
+    if (prefix === 'external') {
+      var cwId = widgetId.slice(dot + 1);
+      var cw = (typeof CFG !== 'undefined' && CFG.customWidgets || []).filter(function (w) { return w.id === cwId; })[0];
+      if (!cw) return null;
+      return {
+        label: cw.name, hint: cw.hint || '',
+        fn: function () {
+          return '<div class="card" style="height:100%"><div class="bd" style="padding:0;height:100%">' +
+            '<iframe src="' + String(cw.url).replace(/"/g, '&quot;') + '" style="width:100%;height:100%;min-height:220px;border:0" ' +
+            'title="' + String(cw.name).replace(/"/g, '&quot;') + '"></iframe></div></div>';
+        }
+      };
+    }
+    var srcLib = WIDGET_LIBRARIES[prefix];
     return srcLib ? (srcLib.widgets[widgetId.slice(dot + 1)] || null) : null;
   }
 
@@ -496,6 +518,48 @@
     try { localStorage.setItem(widgetStorageKey(pageId), JSON.stringify(current)); } catch (e) {}
   }
 
+  /* 2026-09-24 (Stef: "what if I want to ADD it to the page... where is the Add
+     button"): custom boxes -- tiles a person adds beyond a page's own fixed
+     box1..boxN slots. Every native box's markup comes from Ordo.html's own
+     per-page render function (hardcoded box count/sizes, per the "no way to add
+     a genuinely NEW box" note this replaces), so a custom box has no HTML of its
+     own anywhere -- initGrid() below synthesizes its DOM node from scratch on
+     every render, the same shape (.grid-stack-item > .grid-stack-item-content)
+     the wrapping loop already expects, and its content is always painted via
+     fillBoxContent()/resolveWidget() since nothing else ever renders it. The id
+     list itself is a third, small localStorage key per page (alongside the
+     existing position and widget-assignment keys) -- just which custom box ids
+     exist on this page; their position comes from the normal grid-layout key
+     like any other box, and their widget comes from the normal widget-assignment
+     key like any other box. */
+  function customBoxStorageKey(pageId) { return 'northm_ordo_customboxes_' + pageId; }
+  function getCustomBoxIds(pageId) {
+    try {
+      var saved = JSON.parse(localStorage.getItem(customBoxStorageKey(pageId)) || 'null');
+      return Array.isArray(saved) ? saved : [];
+    } catch (e) { return []; }
+  }
+  function addCustomBoxId(pageId, boxId) {
+    var ids = getCustomBoxIds(pageId);
+    if (ids.indexOf(boxId) === -1) ids.push(boxId);
+    try { localStorage.setItem(customBoxStorageKey(pageId), JSON.stringify(ids)); } catch (e) {}
+  }
+  // Adds a brand-new tile to pageId showing widgetId, then re-renders (a new DOM
+  // node has to appear, same as Hide/Unhide -- see the __northGridReenterEdit
+  // comment below for why that needs a full render rather than an in-place patch).
+  function addNewTile(pageId, widgetId) {
+    var boxId = 'custom_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    addCustomBoxId(pageId, boxId);
+    setWidgetAssignment(pageId, boxId, widgetId);
+    window.__northGridReenterEdit = pageId;
+    if (typeof window.render === 'function') { window.render(); }
+  }
+  window.__northAddNewTile = addNewTile;
+  // Exposed so Ordo.html's own Admin & config > Widget library page (2026-09-24) can build
+  // its "which page does this file under" dropdown from the same category list the pickers
+  // use, instead of hand-duplicating it and risking drift.
+  window.PAGE_LABELS = PAGE_LABELS;
+
   function initGrid(pageId, containerId) {
     var gridEl = document.getElementById(containerId);
     if (!gridEl || typeof GridStack === 'undefined') return;
@@ -509,6 +573,29 @@
        know about the sentinel), but that markup never becomes visible -- it's
        stripped right here, before layout runs. */
     var hiddenNow = getWidgetAssignments(pageId);
+
+    // Synthesize a DOM node for every custom box this page has (see addNewTile()
+    // above) that isn't already sitting in the markup -- it never will be, since
+    // Ordo.html's own per-page render function only knows about its fixed native
+    // boxes. A hidden custom box is skipped entirely here, same as a hidden
+    // native box gets removed just below -- both end up simply absent from the
+    // grid either way.
+    var customIds = getCustomBoxIds(pageId);
+    customIds.forEach(function (boxId) {
+      if (hiddenNow[boxId] === '__hidden__') return;
+      if (gridEl.querySelector('.grid-stack-item[gs-id="' + boxId + '"]')) return;
+      var el = document.createElement('div');
+      el.className = 'grid-stack-item';
+      el.setAttribute('gs-id', boxId);
+      el.setAttribute('gs-w', '6');
+      var content = document.createElement('div');
+      content.className = 'grid-stack-item-content';
+      el.appendChild(content);
+      gridEl.appendChild(el);
+    });
+    var customIdSet = {};
+    customIds.forEach(function (id) { customIdSet[id] = true; });
+
     var items = Array.prototype.slice.call(gridEl.querySelectorAll('.grid-stack-item')).filter(function (item) {
       var boxId = item.getAttribute('gs-id');
       if (hiddenNow[boxId] === '__hidden__') { item.remove(); return false; }
@@ -570,8 +657,13 @@
        as it always has; resolveWidget() only does real work for the dot. */
     var assignedNow = getWidgetAssignments(pageId);
     items.forEach(function (item) {
-      var widgetId = assignedNow[item.getAttribute('gs-id')];
-      if (widgetId && widgetId.indexOf('.') !== -1) {
+      var boxId = item.getAttribute('gs-id');
+      var widgetId = assignedNow[boxId];
+      // A custom box (see addNewTile() above) has no native content from
+      // Ordo.html's own render at all, so it always needs painting here,
+      // plain id or compound -- unlike a native box, which only needs this
+      // for a compound (cross-page) pick.
+      if (widgetId && (widgetId.indexOf('.') !== -1 || customIdSet[boxId])) {
         fillBoxContent(item, resolveWidget(pageId, widgetId));
       }
     });
@@ -704,9 +796,13 @@
       var lib = WIDGET_LIBRARIES[pageId];
       var assigned = getWidgetAssignments(pageId);
       var hiddenCount = lib ? Object.keys(lib.defaults).filter(function (b) { return assigned[b] === '__hidden__'; }).length : 0;
-      addBtn.disabled = hiddenCount === 0;
-      addBtn.textContent = hiddenCount ? ('+ Add / unhide tile (' + hiddenCount + ' hidden)') : '+ Add / unhide tile';
-      addBtn.title = hiddenCount ? '' : 'Nothing hidden on this page right now';
+      // 2026-09-24: no longer disabled when nothing's hidden -- the picker this
+      // opens now also offers "add a tile from the library" (any of the 108
+      // widgets, on any page), which is always available regardless of hidden
+      // count. See openUnhidePicker()'s own comment for the full story.
+      addBtn.disabled = false;
+      addBtn.textContent = hiddenCount ? ('+ Add / unhide tile (' + hiddenCount + ' hidden)') : '+ Add tile';
+      addBtn.title = '';
     }
     function setEditing(on) {
       editing = on;
@@ -724,14 +820,13 @@
     // confirmed direction: "in edit mode it should be seen as an option to add or
     // unhide"; then: "move it to next to the layout buttons"). Shared, single
     // instance in the ctxbar (#grid-addtile), same as Edit layout/Reset layout --
-    // not created per-page anymore. Lists every box on THIS page currently set to
-    // the '__hidden__' sentinel and restores whichever one is picked back to its
-    // default widget. There's no way to add a genuinely NEW box beyond a page's
-    // fixed box1..boxN slots without a bigger structural change (every page's box
-    // count/sizes are hardcoded in its own render function in Ordo.html) -- so
-    // "add" here means "bring back a hidden slot," not "create an arbitrary extra
-    // tile." Button is disabled with an explanatory title when nothing on the
-    // page is currently hidden.
+    // not created per-page anymore. Opens openUnhidePicker(), which lists every
+    // box on THIS page currently set to the '__hidden__' sentinel (bring back a
+    // hidden slot) AND, as of 2026-09-24, lets a person add a genuinely new tile
+    // from the full cross-page widget library -- see addNewTile() and the custom
+    // box synthesis in initGrid() above for how a box with no native markup from
+    // Ordo.html's own per-page render still gets a real, persisted place on the
+    // grid.
     var addBtn = document.getElementById('grid-addtile');
     if (addBtn) addBtn.onclick = function () { openUnhidePicker(pageId); };
 
@@ -842,7 +937,12 @@
         return rowHtml(pid + '.' + wid, otherLib.widgets[wid], (pid + '.' + wid) === currentId);
       }).join('');
       return '<div class="gs-swap-category" data-search="' + attrEsc(PAGE_LABELS[pid].toLowerCase()) + '">' + PAGE_LABELS[pid] + '</div>' + groupRows;
-    }).join('');
+    }).join('') + ((typeof CFG !== 'undefined' && CFG.customWidgets && CFG.customWidgets.length) ?
+      '<div class="gs-swap-category" data-search="external widgets">External widgets</div>' +
+      CFG.customWidgets.map(function (w) {
+        var fullId = 'external.' + w.id;
+        return rowHtml(fullId, { label: w.name, hint: w.hint || '' }, fullId === currentId);
+      }).join('') : '');
 
     overlay.innerHTML =
       '<div class="gs-swap-panel">' +
@@ -905,24 +1005,67 @@
     if (!lib) return;
     var assigned = getWidgetAssignments(pageId);
     var hiddenBoxIds = Object.keys(lib.defaults).filter(function (b) { return assigned[b] === '__hidden__'; });
+    // 2026-09-24 (Stef: "what if I want to ADD it to the page... where is the
+    // Add button"): a hidden CUSTOM box (one added via the library section
+    // below, then hidden) belongs in this same unhide list -- restoring it
+    // just clears its '__hidden__' sentinel back to whatever widget it held,
+    // same mechanism as a native box, via the same row click handler below.
+    var customIds = getCustomBoxIds(pageId);
+    var hiddenCustomIds = customIds.filter(function (b) { return assigned[b] === '__hidden__'; });
 
     var overlay = document.createElement('div');
     overlay.id = 'gs-unhide-modal';
     overlay.className = 'gs-swap-overlay';
     overlay.onclick = function (e) { if (e.target === overlay) closeUnhidePicker(); };
 
-    var rows = hiddenBoxIds.map(function (boxId) {
+    function attrEsc(str) { return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
+    var nativeRows = hiddenBoxIds.map(function (boxId) {
       var defaultWidgetId = lib.defaults[boxId];
       var w = lib.widgets[defaultWidgetId] || { label: defaultWidgetId, hint: '' };
-      return '<button type="button" class="gs-swap-row" data-gs-unhide="' + boxId + '">' +
+      return '<button type="button" class="gs-swap-row" data-gs-unhide="' + boxId + '" data-gs-unhide-widget="' + defaultWidgetId + '">' +
         '<span class="gs-swap-row-label">' + w.label + '</span>' +
         '<span class="gs-swap-row-hint">' + w.hint + '</span></button>';
-    }).join('') || '<div class="gs-swap-row gs-swap-disabled">Nothing hidden on this page right now.</div>';
+    }).join('');
+    // A hidden custom box's own widget id gets overwritten by '__hidden__' when
+    // it's hidden (same as a native box), so what it held before isn't
+    // recoverable from current state alone -- not worth the extra storage for
+    // a first pass. It's simply not offered back through Unhide; picking it
+    // again from the library below makes a fresh tile instead, which is the
+    // same net result for the person (hiddenCustomIds is currently unused for
+    // that reason, kept only so a future pass can wire real recovery in).
+    var rows = nativeRows || '<div class="gs-swap-row gs-swap-disabled">Nothing hidden on this page right now.</div>';
+
+    var libraryGroups = Object.keys(PAGE_LABELS).map(function (pid) {
+      var pidLib = WIDGET_LIBRARIES[pid];
+      if (!pidLib) return '';
+      var prefix = pid === pageId ? '' : pid + '.';
+      var groupRows = Object.keys(pidLib.widgets).map(function (wid) {
+        var w = pidLib.widgets[wid];
+        var fullId = prefix + wid;
+        return '<button type="button" class="gs-swap-row" data-gs-addwidget="' + fullId + '" data-search="' +
+          attrEsc((w.label + ' ' + w.hint).toLowerCase()) + '">' +
+          '<span class="gs-swap-row-label">' + w.label + '</span>' +
+          '<span class="gs-swap-row-hint">' + w.hint + '</span></button>';
+      }).join('');
+      return '<div class="gs-swap-category" data-search="' + attrEsc(PAGE_LABELS[pid].toLowerCase()) + '">' + PAGE_LABELS[pid] + (pid === pageId ? ' (this page)' : '') + '</div>' + groupRows;
+    }).join('') + ((typeof CFG !== 'undefined' && CFG.customWidgets && CFG.customWidgets.length) ?
+      '<div class="gs-swap-category" data-search="external widgets">External widgets</div>' +
+      CFG.customWidgets.map(function (w) {
+        var fullId = 'external.' + w.id;
+        return '<button type="button" class="gs-swap-row" data-gs-addwidget="' + fullId + '" data-search="' +
+          attrEsc((w.name + ' ' + (w.hint || '')).toLowerCase()) + '">' +
+          '<span class="gs-swap-row-label">' + w.name + '</span>' +
+          '<span class="gs-swap-row-hint">' + (w.hint || '') + '</span></button>';
+      }).join('') : '');
 
     overlay.innerHTML =
       '<div class="gs-swap-panel">' +
       '<div class="gs-swap-head">Add / unhide a tile<button type="button" class="gs-swap-close" aria-label="Close">✕</button></div>' +
-      '<div class="gs-swap-list">' + rows + '</div></div>';
+      (hiddenBoxIds.length ? '<div class="gs-swap-section-head">Unhide</div><div class="gs-swap-list">' + rows + '</div>' : '') +
+      '<div class="gs-swap-section-head">Add a tile from the library' +
+      '<input type="text" class="cel txt gs-swap-filter" placeholder="Filter by name or page…" id="gs-unhide-filter-input"></div>' +
+      '<div class="gs-swap-list" id="gs-unhide-library-list">' + libraryGroups + '</div>' +
+      '</div>';
 
     document.body.appendChild(overlay);
     overlay.querySelector('.gs-swap-close').onclick = closeUnhidePicker;
@@ -935,6 +1078,31 @@
         if (typeof window.render === 'function') { window.render(); }
       };
     });
+    overlay.querySelectorAll('.gs-swap-row[data-gs-addwidget]').forEach(function (row) {
+      row.onclick = function () {
+        var wid = row.getAttribute('data-gs-addwidget');
+        closeUnhidePicker();
+        addNewTile(pageId, wid);
+      };
+    });
+    var filterInput = overlay.querySelector('#gs-unhide-filter-input');
+    var libraryList = overlay.querySelector('#gs-unhide-library-list');
+    if (filterInput && libraryList) {
+      filterInput.oninput = function () {
+        var q = filterInput.value.trim().toLowerCase();
+        var lastCategoryShown = null;
+        Array.prototype.forEach.call(libraryList.children, function (el) {
+          if (el.classList.contains('gs-swap-category')) {
+            lastCategoryShown = el;
+            el.style.display = q && el.getAttribute('data-search').indexOf(q) === -1 ? 'none' : '';
+          } else {
+            var match = !q || el.getAttribute('data-search').indexOf(q) !== -1 || (lastCategoryShown && lastCategoryShown.getAttribute('data-search').indexOf(q) !== -1);
+            el.style.display = match ? '' : 'none';
+            if (match && lastCategoryShown) lastCategoryShown.style.display = '';
+          }
+        });
+      };
+    }
   }
 
   function applyWidgetSwap(pageId, boxId, widgetId) {
@@ -951,7 +1119,15 @@
     // Content height likely changed — grow/shrink this one box to fit, same
     // measure-and-step approach as the initial layout pass, without moving
     // or resizing any other box.
+    // 2026-09-24 fix: this block reads `inner`'s height below but never declared it in
+    // this function's own scope -- it used to fill content inline (with its own local
+    // `inner`) before tonight's fillBoxContent() extraction moved that into a separate
+    // function scope. Left as a bare reference, this threw "inner is not defined" on
+    // every single widget swap and silently skipped the resize step. Re-declaring it
+    // here, the same way fillBoxContent() itself does, fixes it.
+    var inner = item.querySelector('.gs-inner');
     requestAnimationFrame(function () {
+      if (!inner) return;
       var content = item.querySelector('.grid-stack-item-content');
       var targetPx = inner.getBoundingClientRect().height;
       var unitPx = 12 + 10;

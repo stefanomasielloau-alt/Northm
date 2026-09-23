@@ -39,6 +39,330 @@
         validations: { label: 'Validations', hint: 'Blocking and advisory validation messages', fn: function () { return window.homeWidgetValidations(); } },
         recent: { label: 'Recent activity', hint: 'Latest entries from the audit log', fn: function () { return window.homeWidgetRecentActivity(); } }
       }
+    },
+    drivers: {
+      defaults: { box1: 'kpis', box2: 'global', box3: 'ratelibrary', box4: 'segmentmult', box5: 'streamcontrib' },
+      boxSizes: { box1: 12, box2: 4, box3: 8, box4: 6, box5: 6 }, // first-ever default only; drag/resize overrides after that
+      widgets: {
+        kpis: { label: 'KPI summary', hint: 'Win target, revenue, deal size, implied wins, end-to-end rate', fn: function () { return window.driversWidgetKpis(); } },
+        global: { label: 'Global drivers', hint: 'Editable base assumptions (deal size, revenue, win target, entry volume)', fn: function () { return window.driversWidgetGlobal(); } },
+        ratelibrary: { label: 'Rate library', hint: 'Published vs observed rate per gate, with evidence and adopt-observed action', fn: function () { return window.driversWidgetRateLibrary(); } },
+        segmentmult: { label: 'Segment rate multipliers', hint: 'Rate multiplier and mix by segment', fn: function () { return window.driversWidgetSegmentMultipliers(); } },
+        streamcontrib: { label: 'Stream marketing contribution', hint: 'Marketing-attributed wins by stream', fn: function () { return window.driversWidgetStreamContribution(); } }
+      }
+    },
+    // Planning engine is tab-based (UI.planTab): each tab gets its OWN grid,
+    // keyed 'plan_<tab>' rather than just 'plan' -- see the __northGridSubId
+    // override in northGridAfterRender below. Layout/widget-assignment
+    // localStorage is therefore independent per tab.
+    plan_top: {
+      defaults: { box1: 'kpis', box2: 'funnel', box3: 'bystream', box4: 'waterfall' },
+      boxSizes: { box1: 12, box2: 12, box3: 12, box4: 12 },
+      widgets: {
+        kpis: { label: 'KPI summary', hint: 'Gate-by-gate volumes required, top-down', fn: function () { return window.planTopWidgetKpis(); } },
+        funnel: { label: 'Funnel (top-down)', hint: 'Funnel chart of volume required at each gate', fn: function () { return window.planTopWidgetFunnel(); } },
+        bystream: { label: 'By stream', hint: 'Top-down volumes and ACV broken out by stream', fn: function () { return window.planTopWidgetByStream(); } },
+        waterfall: { label: 'Marketing contribution build-up', hint: 'Waterfall of marketing-attributed wins by stream', fn: function () { return window.planTopWidgetWaterfall(); } }
+      }
+    },
+    plan_bot: {
+      defaults: { box1: 'kpis', box2: 'entryvolume', box3: 'delivers', box4: 'waterfall' },
+      boxSizes: { box1: 12, box2: 4, box3: 8, box4: 12 },
+      widgets: {
+        kpis: { label: 'KPI summary', hint: 'Gate-by-gate volumes delivered, bottom-up', fn: function () { return window.planBotWidgetKpis(); } },
+        entryvolume: { label: 'Entry volume by stream', hint: 'Editable total entry volume, split by stream mix', fn: function () { return window.planBotWidgetEntryVolume(); } },
+        delivers: { label: 'What entry volume delivers', hint: 'Funnel and by-stream table for bottom-up volumes', fn: function () { return window.planBotWidgetDelivers(); } },
+        waterfall: { label: 'Marketing contribution build-up (bottom-up)', hint: 'Waterfall of marketing-attributed wins by stream, bottom-up', fn: function () { return window.planBotWidgetWaterfall(); } }
+      }
+    },
+    plan_streamcmp: {
+      defaults: { box1: 'table', box2: 'chart' },
+      boxSizes: { box1: 12, box2: 12 },
+      widgets: {
+        table: { label: 'By stream comparison table', hint: 'Top-down vs bottom-up wins/ACV/gap by stream', fn: function () { return window.planStreamcmpWidgetTable(); } },
+        chart: { label: 'Wins by stream chart', hint: 'Line chart of top-down vs bottom-up wins by stream', fn: function () { return window.planStreamcmpWidgetChart(); } }
+      }
+    },
+    plan_rec: {
+      defaults: { box1: 'kpis', box2: 'table', box3: 'chart' },
+      boxSizes: { box1: 12, box2: 12, box3: 12 },
+      widgets: {
+        kpis: { label: 'KPI summary', hint: 'Entry/exit gap between top-down and bottom-up', fn: function () { return window.planRecWidgetKpis(); } },
+        table: { label: 'By-gate comparison table', hint: 'Top-down vs bottom-up by gate, with gap % and status', fn: function () { return window.planRecWidgetTable(); } },
+        chart: { label: 'Gate comparison chart', hint: 'Line chart of top-down vs bottom-up by gate', fn: function () { return window.planRecWidgetChart(); } }
+      }
+    },
+    plan_phase: {
+      defaults: { box1: 'table', box2: 'chart' },
+      boxSizes: { box1: 12, box2: 12 },
+      widgets: {
+        table: { label: 'Phased plan table', hint: 'Volumes phased by seasonality, with entry lead-time', fn: function () { return window.planPhaseWidgetTable(); } },
+        chart: { label: 'Seasonality chart', hint: 'Bar chart of seasonality-weighted wins by period', fn: function () { return window.planPhaseWidgetChart(); } }
+      }
+    },
+    // Geography & pods: boxes 6-8 (pod breakdown / rate override / stream mix
+    // override) only render while a region is selected, and box 9 (rep
+    // breakdown) only while that region has a pod -- pageGeo() itself decides
+    // which boxes exist each render; this library just lists what CAN appear.
+    geo: {
+      defaults: { box1: 'kpis', box2: 'gapanalysis', box3: 'streamfunnel', box4: 'winschart', box5: 'acvchart', box6: 'podbreakdown', box7: 'rateoverride', box8: 'streammixoverride', box9: 'repbreakdown' },
+      boxSizes: { box1: 12, box2: 12, box3: 12, box4: 6, box5: 6, box6: 12, box7: 12, box8: 12, box9: 12 },
+      widgets: {
+        kpis: { label: 'KPI summary', hint: 'ACV target, projected revenue, variance, AE headcount, wins needed', fn: function () { return window.geoWidgetKpis(); } },
+        gapanalysis: { label: 'Gap analysis by region', hint: 'Editable ACV target per region vs demand potential', fn: function () { return window.geoWidgetGapAnalysis(); } },
+        streamfunnel: { label: 'Region × stream funnel', hint: 'Demand potential by region and stream, every gate', fn: function () { return window.geoWidgetStreamFunnel(); } },
+        winschart: { label: 'Wins needed by region', hint: 'Bar chart of wins needed per region', fn: function () { return window.geoWidgetWinsChart(); } },
+        acvchart: { label: 'ACV target vs demand potential', hint: 'Stacked chart of ACV target by region', fn: function () { return window.geoWidgetAcvChart(); } },
+        podbreakdown: { label: 'Pod breakdown', hint: 'Editable pod shares for the selected region', fn: function () { return window.geoWidgetPodBreakdown(); } },
+        rateoverride: { label: 'Rate override', hint: 'Per-gate rate override for the selected region', fn: function () { return window.geoWidgetRateOverride(); } },
+        streammixoverride: { label: 'Stream mix override', hint: 'Per-stream mix override for the selected region', fn: function () { return window.geoWidgetStreamMixOverride(); } },
+        repbreakdown: { label: 'Rep breakdown', hint: 'Editable rep shares for the selected pod', fn: function () { return window.geoWidgetRepBreakdown(); } }
+      }
+    },
+    activity: {
+      defaults: { box1: 'kpis', box2: 'funnel', box3: 'entrychart', box4: 'costchart' },
+      boxSizes: { box1: 12, box2: 12, box3: 6, box4: 6 },
+      widgets: {
+        kpis: { label: 'KPI summary', hint: 'Wins planned, gate volumes required, total and per-win cost', fn: function () { return window.activityWidgetKpis(); } },
+        funnel: { label: 'Activity funnel', hint: 'Editable win target per activity, grouped by route, with cost and capacity fit', fn: function () { return window.activityWidgetFunnel(); } },
+        entrychart: { label: 'Entry volume by activity', hint: 'Bar chart of entry-gate volume per activity', fn: function () { return window.activityWidgetEntryChart(); } },
+        costchart: { label: 'Cost per win by activity', hint: 'Bar chart of cost per win, activities with tracked cost only', fn: function () { return window.activityWidgetCostChart(); } }
+      }
+    },
+    segment: {
+      defaults: { box1: 'kpis', box2: 'derivedplan', box3: 'entrychart', box4: 'acvchart', box5: 'observedrate' },
+      boxSizes: { box1: 12, box2: 12, box3: 6, box4: 6, box5: 12 },
+      widgets: {
+        kpis: { label: 'KPI summary', hint: 'Blended rate multiplier, deal size, addressable/engaged accounts, mix total', fn: function () { return window.segmentWidgetKpis(); } },
+        derivedplan: { label: 'Derived plan by segment', hint: 'Wins, gate volumes, deal size and ACV per segment', fn: function () { return window.segmentWidgetDerivedPlan(); } },
+        entrychart: { label: 'Entry volume required by segment', hint: 'Bar chart of entry-gate volume per segment', fn: function () { return window.segmentWidgetEntryChart(); } },
+        acvchart: { label: 'ACV contribution by segment', hint: 'Waterfall of ACV contribution per segment', fn: function () { return window.segmentWidgetAcvChart(); } },
+        observedrate: { label: 'Observed rate by segment', hint: 'Historical observed rate per gate, by segment, with evidence', fn: function () { return window.segmentWidgetObservedRate(); } }
+      }
+    },
+    actuals: {
+      defaults: { box1: 'kpis', box2: 'planvsactual', box3: 'trendchart', box4: 'regionchart', box5: 'monthlydetail' },
+      boxSizes: { box1: 12, box2: 12, box3: 6, box4: 6, box5: 12 },
+      widgets: {
+        kpis: { label: 'KPI summary', hint: 'Actual vs plan per gate, plus actual cost', fn: function () { return window.actualsWidgetKpis(); } },
+        planvsactual: { label: 'Plan vs actual', hint: 'By-gate plan/actual/variance table with status', fn: function () { return window.actualsWidgetPlanVsActual(); } },
+        trendchart: { label: 'Multi-year trend', hint: 'Line chart of actual vs plan across FY25-FY27', fn: function () { return window.actualsWidgetTrendChart(); } },
+        regionchart: { label: 'Actual by region', hint: 'Bar chart of actual wins by region', fn: function () { return window.actualsWidgetRegionChart(); } },
+        monthlydetail: { label: 'Monthly detail', hint: 'Month-by-month gate volumes, cost and ACV for the selected FY', fn: function () { return window.actualsWidgetMonthlyDetail(); } }
+      }
+    },
+    // Insight is tab-based (UI.insightTab), same treatment as Planning engine:
+    // one grid per tab, keyed 'insight_<tab>'.
+    insight_season: {
+      defaults: { box1: 'indexchart', box2: 'monthlychart' },
+      boxSizes: { box1: 12, box2: 12 },
+      widgets: {
+        indexchart: { label: 'Seasonality index chart', hint: 'Bar chart of the seasonality index by fiscal month', fn: function () { return window.insightSeasonWidgetIndexChart(); } },
+        monthlychart: { label: 'Monthly actuals by FY', hint: 'Line chart of monthly exit-gate actuals across FY25/FY26', fn: function () { return window.insightSeasonWidgetMonthlyChart(); } }
+      }
+    },
+    insight_vel: {
+      defaults: { box1: 'dayschart', box2: 'stagelag' },
+      boxSizes: { box1: 12, box2: 12 },
+      widgets: {
+        dayschart: { label: 'Days to reach each gate', hint: 'Bar chart of cumulative days to each gate', fn: function () { return window.insightVelWidgetDaysChart(); } },
+        stagelag: { label: 'Stage lag table', hint: 'Editable median days per stage, with cumulative days and latest entry date', fn: function () { return window.insightVelWidgetStageLag(); } }
+      }
+    },
+    insight_lift: {
+      defaults: { box1: 'table', box2: 'heatmap' },
+      boxSizes: { box1: 12, box2: 12 },
+      widgets: {
+        table: { label: 'Observed rate vs baseline table', hint: 'Observed rate by activity vs the all-activity baseline, with lift and evidence', fn: function () { return window.insightLiftWidgetTable(); } },
+        heatmap: { label: 'Rate heat map', hint: 'Heat map of observed rate by activity x gate', fn: function () { return window.insightLiftWidgetHeatmap(); } }
+      }
+    },
+    insight_scen: {
+      defaults: { box1: 'table', box2: 'chart' },
+      boxSizes: { box1: 12, box2: 12 },
+      widgets: {
+        table: { label: 'Scenario comparison table', hint: 'Rate multiplier and gate volumes by scenario, vs Forecast', fn: function () { return window.insightScenWidgetTable(); } },
+        chart: { label: 'Entry volume by scenario chart', hint: 'Bar chart of entry-gate volume required by scenario', fn: function () { return window.insightScenWidgetChart(); } }
+      }
+    },
+    insight_ready: {
+      defaults: { box1: 'sufficiency', box2: 'dimensionality' },
+      boxSizes: { box1: 12, box2: 12 },
+      widgets: {
+        sufficiency: { label: 'Data sufficiency by gate', hint: 'Observation counts and confidence per gate, with what they support', fn: function () { return window.insightReadyWidgetSufficiency(); } },
+        dimensionality: { label: 'Dimensionality table', hint: 'Member counts and cumulative addressable cells by dimension', fn: function () { return window.insightReadyWidgetDimensionality(); } }
+      }
+    },
+    // Campaign, cost & capacity: boxes 5-7 (business case / pre-entry chain /
+    // pod allocation) only render while a campaign is selected, and box 6
+    // additionally only while that campaign's activity has a pre-entry chain
+    // -- pageCampaign() builds the box list dynamically each render, same
+    // approach as Geography & pods.
+    campaign: {
+      defaults: { box1: 'kpis', box2: 'calendar', box3: 'table', box4: 'costbucketchart', box5: 'businesscase', box6: 'prechain', box7: 'podallocation', box8: 'portfolio', box9: 'capacity' },
+      boxSizes: { box1: 12, box2: 12, box3: 12, box4: 12, box5: 12, box6: 12, box7: 12, box8: 12, box9: 12 },
+      widgets: {
+        kpis: { label: 'KPI summary', hint: 'Budgeted, committed, actual spend, peak concurrency, cost per win', fn: function () { return window.campaignWidgetKpis(); } },
+        calendar: { label: 'Campaign calendar', hint: 'Concurrency and straight-lined spend over the next 12 months', fn: function () { return window.campaignWidgetCalendar(); } },
+        table: { label: 'Campaigns in scope', hint: 'Full campaign table with budget, spend, conversion and cost/win', fn: function () { return window.campaignWidgetTable(); } },
+        costbucketchart: { label: 'Spend by cost bucket', hint: 'Bar chart of spend by cost bucket', fn: function () { return window.campaignWidgetCostBucketChart(); } },
+        businesscase: { label: 'Business case', hint: 'Budget to projected wins for a selected campaign', fn: function () { return window.campaignWidgetBusinessCase(); } },
+        prechain: { label: 'Pre-entry chain', hint: 'Channel-specific stages feeding into the entry gate for the selected campaign', fn: function () { return window.campaignWidgetPreChain(); } },
+        podallocation: { label: 'Pod allocation', hint: 'Optional split of a campaign across pods by percentage', fn: function () { return window.campaignWidgetPodAllocation(); } },
+        portfolio: { label: 'Portfolio business case', hint: 'Roll-up of every campaign business case in scope', fn: function () { return window.campaignWidgetPortfolio(); } },
+        capacity: { label: 'Capacity check', hint: 'Monthly capacity vs plan need by activity, with utilisation and status', fn: function () { return window.campaignWidgetCapacity(); } }
+      }
+    },
+    // Dashboard: all 5 boxes always render (no conditional omission, unlike
+    // Geography & pods / Campaign & cost) -- the drift card handles its own
+    // empty state internally when no snapshot exists yet.
+    dashboard: {
+      defaults: { box1: 'kpis', box2: 'funnel', box3: 'costbucketchart', box4: 'regions', box5: 'drift' },
+      boxSizes: { box1: 12, box2: 6, box3: 6, box4: 12, box5: 12 },
+      widgets: {
+        kpis: { label: 'KPI summary', hint: 'Exit gate plan vs actual, budgeted, committed, actual spend, ACV vs demand potential', fn: function () { return window.dashboardWidgetKpis(); } },
+        funnel: { label: 'Funnel — plan vs actual', hint: 'Gate-by-gate plan vs actual table with variance and status', fn: function () { return window.dashboardWidgetFunnel(); } },
+        costbucketchart: { label: 'Spend by cost bucket', hint: 'Bar chart of spend by cost bucket', fn: function () { return window.dashboardWidgetCostBucketChart(); } },
+        regions: { label: 'Regions at a glance', hint: 'Per-region ACV target vs demand potential table', fn: function () { return window.dashboardWidgetRegions(); } },
+        drift: { label: 'Plan drift vs baseline snapshot', hint: 'Target and budget drift since a named snapshot', fn: function () { return window.dashboardWidgetDrift(); } }
+      }
+    },
+    // Quick calculator: mostly interactive inputs, but the top-down and
+    // bottom-up assumption/result pairs render as single boxes (each pair
+    // was already one `grid g2` unit in the original layout, sharing state
+    // between its two halves) rather than splitting further.
+    calculator: {
+      defaults: { box1: 'topdown', box2: 'bottomup', box3: 'bystream', box4: 'scenarios', box5: 'reference' },
+      boxSizes: { box1: 12, box2: 12, box3: 12, box4: 12, box5: 12 },
+      widgets: {
+        topdown: { label: 'Top-down: assumptions & result', hint: 'Target wins, deal size, rate and cost/lead -> leads needed, cost, ROI', fn: function () { return window.calcWidgetTopDown(); } },
+        bottomup: { label: 'Bottom-up: from volume', hint: 'Given expected entry volume, wins/cost/revenue run forward instead of backward', fn: function () { return window.calcWidgetBottomUp(); } },
+        bystream: { label: 'By stream', hint: 'Top-down/bottom-up split across configured streams by mix share', fn: function () { return window.calcWidgetByStream(); } },
+        scenarios: { label: 'Scenarios', hint: 'Save, load and remove named calculator scenarios', fn: function () { return window.calcWidgetScenarios(); } },
+        reference: { label: 'Reference — real gate chain', hint: 'Blended assumption vs the detailed engine\'s actual per-gate rates', fn: function () { return window.calcWidgetReference(); } }
+      }
+    },
+    // Admin & config: a settings/CRUD page, not an analysis page, so this is
+    // the "awkward fit" treatment -- one grid per TAB (admin_<tab>, same
+    // __northGridSubId mechanism as Planning engine/Insight), boxes are each
+    // tab's existing card groupings. No conditional box omission (unlike
+    // Geography & pods / Campaign & cost) -- every admin tab's cards always
+    // render, since this is configuration state, not a drill-down view.
+    admin_gates: {
+      defaults: { box1: 'set', box2: 'preview', box3: 'presets' },
+      boxSizes: { box1: 12, box2: 6, box3: 6 },
+      widgets: {
+        set: { label: 'Gate set', hint: 'Editable funnel gate chain: name, code, rate, order', fn: function () { return window.adminGatesWidgetSet(); } },
+        preview: { label: 'Chain preview', hint: 'Funnel visualisation of the current gate chain', fn: function () { return window.adminGatesWidgetPreview(); } },
+        presets: { label: 'Gate naming presets', hint: 'Starter gate-chain presets and where gates are used', fn: function () { return window.adminGatesWidgetPresets(); } }
+      }
+    },
+    admin_geo: {
+      defaults: { box1: 'regions', box2: 'pods', box3: 'reps' },
+      boxSizes: { box1: 12, box2: 12, box3: 12 },
+      widgets: {
+        regions: { label: 'Regions', hint: 'Editable regions table with AE heads, ACV target, pod allocation', fn: function () { return window.adminGeoWidgetRegions(); } },
+        pods: { label: 'Pods', hint: 'Editable pods table grouped by region', fn: function () { return window.adminGeoWidgetPods(); } },
+        reps: { label: 'Reps', hint: 'Editable reps table grouped by pod', fn: function () { return window.adminGeoWidgetReps(); } }
+      }
+    },
+    admin_streams: {
+      defaults: { box1: 'table' },
+      boxSizes: { box1: 12 },
+      widgets: {
+        table: { label: 'Streams', hint: 'Editable stream mix, marketing contribution and derived wins', fn: function () { return window.adminStreamsWidgetTable(); } }
+      }
+    },
+    admin_acts: {
+      defaults: { box1: 'table', box2: 'prechains' },
+      boxSizes: { box1: 12, box2: 12 },
+      widgets: {
+        table: { label: 'Activities', hint: 'Editable activities table: route, cost/lead, capacity, active state', fn: function () { return window.adminActsWidgetTable(); } },
+        prechains: { label: 'Pre-Lead chains', hint: 'Optional per-activity channel-specific stages before the Lead gate', fn: function () { return window.adminActsWidgetPreChains(); } }
+      }
+    },
+    admin_segs: {
+      defaults: { box1: 'table' },
+      boxSizes: { box1: 12 },
+      widgets: {
+        table: { label: 'Segments', hint: 'Editable segments table: mix, rate/deal multipliers, addressable/engaged', fn: function () { return window.adminSegsWidgetTable(); } }
+      }
+    },
+    admin_camps: {
+      defaults: { box1: 'cursuslink', box2: 'programmes', box3: 'table' },
+      boxSizes: { box1: 12, box2: 12, box3: 12 },
+      widgets: {
+        cursuslink: { label: 'Campaign Planning link', hint: 'Export/import bridge to the separate Campaign Planning tool', fn: function () { return window.adminCampsWidgetCursusLink(); } },
+        programmes: { label: 'Programme roll-up', hint: 'Programmes with campaign count, budget, committed, actual', fn: function () { return window.adminCampsWidgetProgrammes(); } },
+        table: { label: 'Campaigns', hint: 'Full editable campaigns table', fn: function () { return window.adminCampsWidgetTable(); } }
+      }
+    },
+    admin_buckets: {
+      defaults: { box1: 'sharedconfig', box2: 'localautosave', box3: 'costbuckets' },
+      boxSizes: { box1: 6, box2: 6, box3: 12 },
+      widgets: {
+        sharedconfig: { label: 'Shared configuration', hint: 'Link and import from the cross-tool Configuration app', fn: function () { return window.adminBucketsWidgetSharedConfig(); } },
+        localautosave: { label: 'Local autosave', hint: 'Clear this browser\'s local autosave', fn: function () { return window.adminBucketsWidgetLocalAutosave(); } },
+        costbuckets: { label: 'Cost buckets', hint: 'Editable cost bucket list with campaign usage count', fn: function () { return window.adminBucketsWidgetCostBuckets(); } }
+      }
+    },
+    admin_time: {
+      defaults: { box1: 'fiscalcalendar', box2: 'periodmap' },
+      boxSizes: { box1: 12, box2: 12 },
+      widgets: {
+        fiscalcalendar: { label: 'Fiscal calendar', hint: 'FY start month, reporting grain, current FY', fn: function () { return window.adminTimeWidgetFiscalCalendar(); } },
+        periodmap: { label: 'Period map', hint: 'How loaded months resolve to FY/quarter/half/seasonality', fn: function () { return window.adminTimeWidgetPeriodMap(); } }
+      }
+    },
+    admin_ver: {
+      defaults: { box1: 'table' },
+      boxSizes: { box1: 12 },
+      widgets: {
+        table: { label: 'Versions & scenarios', hint: 'Version/scenario list with lock state and rate multiplier', fn: function () { return window.adminVerWidgetTable(); } }
+      }
+    },
+    admin_users: {
+      defaults: { box1: 'moved', box2: 'requirecommit' },
+      boxSizes: { box1: 12, box2: 12 },
+      widgets: {
+        moved: { label: 'Roles & users (moved)', hint: 'Pointer to Configuration, where roles & users now live', fn: function () { return window.adminUsersWidgetMoved(); } },
+        requirecommit: { label: 'Requires commit on plan edits', hint: 'Per-role toggle, Strategy/Campaign Planning only', fn: function () { return window.adminUsersWidgetRequireCommit(); } }
+      }
+    },
+    admin_feeds: {
+      defaults: { box1: 'connections', box2: 'loadrules', box3: 'adjacencies' },
+      boxSizes: { box1: 12, box2: 6, box3: 6 },
+      widgets: {
+        connections: { label: 'Connections', hint: 'Feed connections table with rows, rejects, unassigned, state', fn: function () { return window.adminFeedsWidgetConnections(); } },
+        loadrules: { label: 'Load rules', hint: 'The feed loading invariants (staging, idempotent keys, etc.)', fn: function () { return window.adminFeedsWidgetLoadRules(); } },
+        adjacencies: { label: 'Future adjacencies', hint: 'Reserved join keys for not-yet-integrated tools', fn: function () { return window.adminFeedsWidgetAdjacencies(); } }
+      }
+    },
+    admin_audit: {
+      defaults: { box1: 'log' },
+      boxSizes: { box1: 12 },
+      widgets: {
+        log: { label: 'Audit log', hint: 'This session\'s driver and dimension change log', fn: function () { return window.adminAuditWidgetLog(); } }
+      }
+    },
+    snapshots: {
+      defaults: { box1: 'save', box2: 'saved', box3: 'compare' },
+      boxSizes: { box1: 12, box2: 12, box3: 12 },
+      widgets: {
+        save: { label: 'Save a snapshot', hint: 'Name and save the current whole plan as a snapshot', fn: function () { return window.snapshotsWidgetSave(); } },
+        saved: { label: 'Saved snapshots', hint: 'Saved snapshot list -- revert, overlay, or remove', fn: function () { return window.snapshotsWidgetSaved(); } },
+        compare: { label: 'Compare vs snapshots & actual', hint: 'Gate-by-gate current plan vs up to 3 recent snapshots vs actual', fn: function () { return window.snapshotsWidgetCompare(); } }
+      }
+    },
+    // Relationships: a single interactive pan/zoom/drag canvas, not a set of
+    // independent lenses -- one box, no real widget picker, wrapped purely
+    // for structural consistency with the rest of the app.
+    relationships: {
+      defaults: { box1: 'graph' },
+      boxSizes: { box1: 12 },
+      widgets: {
+        graph: { label: 'Relationship graph', hint: 'Campaign -> owner / business-unit node graph, drag to pin, click to focus', fn: function () { return window.relationshipsWidgetGraph(); } }
+      }
     }
   };
 
@@ -274,17 +598,56 @@
   // markup added to Ordo.html) -- this list is also what drives whether the
   // shared Edit layout / Reset layout buttons in the ctxbar show at all.
   var PAGE_GRID_CONTAINERS = {
-    home: 'ordo-grid-home'
+    home: 'ordo-grid-home',
+    drivers: 'ordo-grid-drivers',
+    plan_top: 'ordo-grid-plan-top',
+    plan_bot: 'ordo-grid-plan-bot',
+    plan_streamcmp: 'ordo-grid-plan-streamcmp',
+    plan_rec: 'ordo-grid-plan-rec',
+    plan_phase: 'ordo-grid-plan-phase',
+    geo: 'ordo-grid-geo',
+    activity: 'ordo-grid-activity',
+    segment: 'ordo-grid-segment',
+    actuals: 'ordo-grid-actuals',
+    insight_season: 'ordo-grid-insight-season',
+    insight_vel: 'ordo-grid-insight-vel',
+    insight_lift: 'ordo-grid-insight-lift',
+    insight_scen: 'ordo-grid-insight-scen',
+    insight_ready: 'ordo-grid-insight-ready',
+    campaign: 'ordo-grid-campaign',
+    dashboard: 'ordo-grid-dashboard',
+    calculator: 'ordo-grid-calculator',
+    admin_gates: 'ordo-grid-admin-gates',
+    admin_geo: 'ordo-grid-admin-geo',
+    admin_streams: 'ordo-grid-admin-streams',
+    admin_acts: 'ordo-grid-admin-acts',
+    admin_segs: 'ordo-grid-admin-segs',
+    admin_camps: 'ordo-grid-admin-camps',
+    admin_buckets: 'ordo-grid-admin-buckets',
+    admin_time: 'ordo-grid-admin-time',
+    admin_ver: 'ordo-grid-admin-ver',
+    admin_users: 'ordo-grid-admin-users',
+    admin_feeds: 'ordo-grid-admin-feeds',
+    admin_audit: 'ordo-grid-admin-audit',
+    snapshots: 'ordo-grid-snapshots',
+    relationships: 'ordo-grid-relationships'
   };
 
+  // A page whose grid identity is finer than its top-level pageId (e.g. a
+  // tabbed page with one independent grid per tab) sets window.__northGridSubId
+  // to the real key just before returning its HTML. We consume it once here
+  // so render()'s generic `northGridAfterRender(p.id)` call still works
+  // unmodified for every page, tabbed or not.
   window.northGridAfterRender = function (pageId) {
+    var effectiveId = pageId;
+    if (window.__northGridSubId) { effectiveId = window.__northGridSubId; window.__northGridSubId = null; }
     var toggleBtn = document.getElementById('grid-edit-toggle');
     var resetBtn = document.getElementById('grid-reset');
-    var containerId = PAGE_GRID_CONTAINERS[pageId];
+    var containerId = PAGE_GRID_CONTAINERS[effectiveId];
     var show = !!containerId;
     if (toggleBtn) toggleBtn.style.display = show ? '' : 'none';
     if (resetBtn) resetBtn.style.display = show ? '' : 'none';
-    if (containerId) initGrid(pageId, containerId);
+    if (containerId) initGrid(effectiveId, containerId);
   };
   window.northGetWidgetAssignments = getWidgetAssignments;
 })();

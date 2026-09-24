@@ -3274,6 +3274,41 @@ function pageAdmin(){
     // re-render (like every other filter/select in this app) rather than client-side show/hide,
     // consistent with how the rest of Admin & config works.
     const wlPidsToShow = UI.wlCatFilter ? [UI.wlCatFilter] : Object.keys(pageLabels);
+    // 2026-09-24 (Stef: "a flag and text to show where they are being used .. that has a link
+    // to jump to that page"): a flattened grid-page id like 'plan_top' or 'admin_geo' isn't
+    // itself a nav target -- go(page,tab) takes them separately -- so this splits it back into
+    // the (page, tab) pair go() expects, generically from the id's own naming convention (every
+    // id in PAGE_GRID_CONTAINERS/PAGE_LABELS already follows 'admin_x'/'plan_x'/'insight_x'/
+    // plain, so no per-id table to keep in sync by hand).
+    const wlNavFor = flatId=>{
+      if(flatId.indexOf('admin_')===0) return {page:'admin', tab:flatId.slice(6)};
+      if(flatId.indexOf('plan_')===0) return {page:'plan', tab:flatId.slice(5)};
+      if(flatId.indexOf('insight_')===0) return {page:'insight', tab:flatId.slice(8)};
+      return {page:flatId, tab:null};
+    };
+    // Widget box assignments live in each browser's own localStorage (never synced to
+    // Supabase), so "used in" reflects what THIS browser currently shows, not a single
+    // org-wide truth -- a colleague's browser can have swapped things differently. Flagged
+    // once in the help text below rather than repeated on every tile.
+    const wlAssignCache={};
+    const wlAssignmentsFor = p=>{
+      if(!(p in wlAssignCache)) wlAssignCache[p]=(typeof window.northGetWidgetAssignments==='function'?window.northGetWidgetAssignments(p):{})||{};
+      return wlAssignCache[p];
+    };
+    const wlUsageFor = (pid,wid)=>{
+      const used=[];
+      Object.keys(pageLabels).forEach(p=>{
+        const assigned=wlAssignmentsFor(p);
+        Object.keys(assigned).some(boxId=>{
+          const v=assigned[boxId]; if(!v) return false;
+          const dot=v.indexOf('.');
+          const match = dot===-1 ? (p===pid && v===wid) : (v.slice(0,dot)===pid && v.slice(dot+1)===wid);
+          if(match && used.indexOf(p)===-1) used.push(p);
+          return match;
+        });
+      });
+      return used;
+    };
     let wlTiles='';
     wlPidsToShow.forEach(pid=>{
       const lib=WL[pid]; const wids=lib&&lib.widgets?Object.keys(lib.widgets):[];
@@ -3281,10 +3316,15 @@ function pageAdmin(){
       wlTiles+=`<div class="mini" style="grid-column:1/-1;font-weight:600;margin-top:10px">${esc(pageLabels[pid])}</div>`;
       wids.forEach(wid=>{
         const w=lib.widgets[wid];
+        const usedIn=wlUsageFor(pid,wid);
         wlTiles+=`<div class="card" style="margin:0"><div class="bd" style="padding:8px">
           <div style="font-size:18px;line-height:1">${wlIconFor(w.label,w.hint)}</div>
           <div style="font-weight:600;font-size:12.5px;margin-top:4px">${esc(w.label)}</div>
           ${w.hint?`<div class="mini" style="margin-top:2px">${esc(w.hint)}</div>`:''}
+          ${usedIn.length?`<div class="mini" style="margin-top:5px">${usedIn.map(p=>{
+            const nav=wlNavFor(p);
+            return `<a href="javascript:void(0)" class="pill ok" style="text-decoration:none;margin:2px 3px 0 0;display:inline-block" onclick="go('${nav.page}'${nav.tab?`,'${nav.tab}'`:''})" title="Jump to ${esc(pageLabels[p])}">${esc(pageLabels[p])}</a>`;
+          }).join('')}</div>`:''}
         </div></div>`;
       });
     });
@@ -3296,7 +3336,10 @@ function pageAdmin(){
       <div class="bd"><div class="mini" style="margin-bottom:8px">Reference only -- every one of
       these is already browsable, filterable, and addable from any grid box's "+ Add tile" /
       "⇄ Swap widget" picker. Renaming or re-categorising one isn't editable from here yet --
-      they're defined in code, not data; only External widgets (below) are.</div>
+      they're defined in code, not data; only External widgets (below) are. The green tags below
+      a tile show which page(s) it's currently placed on and jump you there on click -- based on
+      THIS browser's own layout choices (box positions/swaps live in your browser, not a shared
+      org setting), so it can look different on someone else's screen.</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">${wlTiles}</div>
       </div></div>`;
     h+=`<div class="card"><h3>External widgets <span class="sp"></span></h3>

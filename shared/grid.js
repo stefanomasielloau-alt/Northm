@@ -858,11 +858,10 @@
       var unitPx = 12 + 10;
       function initialGuess(px) { return Math.max(1, Math.ceil(px / unitPx)); }
       function fitHeight(el, targetPx) {
-        var content = el.querySelector('.grid-stack-item-content');
         var h = initialGuess(targetPx);
         for (var guard = 0; guard < 10; guard++) {
           grid.update(el, { h: Math.min(h, 400) });
-          var got = content.getBoundingClientRect().height;
+          var got = measureRealContentHeight(el);
           if (got >= targetPx - 1) break;
           h += Math.max(1, Math.ceil((targetPx - got) / unitPx));
         }
@@ -887,8 +886,7 @@
         var rowH = 0;
         rowItems.forEach(function (el) {
           var w = parseInt(el.getAttribute('gs-w'), 10) || 12;
-          var inner = el.querySelector('.gs-inner');
-          var innerH = inner ? inner.getBoundingClientRect().height : 0;
+          var innerH = measureRealContentHeight(el);
           grid.update(el, { x: x, y: rowY, w: w, h: initialGuess(innerH) });
           var h = fitHeight(el, innerH);
           rowH = Math.max(rowH, h);
@@ -1284,6 +1282,29 @@
     }
   }
 
+  // 2026-09-24 (Stef: "the padding issue seems to be exacerbated by the bar at the top of
+  // each tile, which you use to drag .. that seems to be the contributing difference in
+  // height"): exactly right. Every height fit below works by measuring .gs-inner's actual
+  // rendered height -- but .gs-inner also contains the drag/hide handle bar, which is only
+  // visible (display:flex, ~28px) while the grid is in edit mode. Several actions that
+  // trigger a fresh fit -- Hide, Unhide, + Add tile, a widget swap -- re-enter edit mode as
+  // part of that same action, right before the fit runs, so a height fit that happened to
+  // land during one of those baked the handle's height into the box permanently. Once
+  // editing ends and the handle goes back to display:none, that space never gets reclaimed
+  // -- it just sits there as a gap. Hiding the handle for the instant of measurement (put
+  // back exactly as it was straight after) makes every fit match how the tile actually
+  // looks day to day, whether or not editing happened to be on when it ran.
+  function measureRealContentHeight(item) {
+    var inner = item.querySelector('.gs-inner');
+    if (!inner) return 0;
+    var handle = inner.querySelector('.gs-item-handle');
+    var prevDisplay = handle ? handle.style.display : null;
+    if (handle) handle.style.display = 'none';
+    var h = inner.getBoundingClientRect().height;
+    if (handle) handle.style.display = prevDisplay;
+    return h;
+  }
+
   // 2026-09-24: extracted from applyWidgetSwap()'s own tail (below) so the same
   // measure-and-grow-until-it-fits loop can also run on demand from the new per-box
   // "⤢ Fit height" button, not just right after a widget swap.
@@ -1293,15 +1314,13 @@
     if (!gridEl) return;
     var item = gridEl.querySelector('.grid-stack-item[gs-id="' + boxId + '"]');
     if (!item) return;
-    var inner = item.querySelector('.gs-inner');
-    if (!inner) return;
-    var content = item.querySelector('.grid-stack-item-content');
-    var targetPx = inner.getBoundingClientRect().height;
+    var targetPx = measureRealContentHeight(item);
+    if (!targetPx) return;
     var unitPx = 12 + 10;
     var h = Math.max(1, Math.ceil(targetPx / unitPx));
     for (var guard = 0; guard < 10; guard++) {
       grid.update(item, { h: Math.min(h, 400) });
-      var got = content.getBoundingClientRect().height;
+      var got = measureRealContentHeight(item);
       if (got >= targetPx - 1) break;
       h += Math.max(1, Math.ceil((targetPx - got) / unitPx));
     }

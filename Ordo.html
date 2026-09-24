@@ -348,6 +348,14 @@ tr.gate-drag-over td{box-shadow:inset 0 2px 0 var(--input)}
 /* --- Editable grid layout + widget swap, live across all 33 Strategy grid pages/tabs --- */
 .grid-stack{position:relative}
 .grid-stack-item-content{overflow:hidden}
+/* 2026-09-24 (Stef: "tighten up the padding .. that would be a much better outcome"): a
+   widget's own content is very often just a bare .card (every widget fn() wraps its output
+   that way), and .card carries a 14px margin-bottom meant for cards stacked vertically in
+   normal page flow -- inside a grid tile there is nothing below it to space away from, so
+   that 14px just became dead, clipped space at the bottom of the tile on top of whatever
+   the grid's own row gap already provides. Zeroing it only inside a grid tile (every other
+   .card on every non-grid page keeps its normal spacing). */
+.grid-stack-item-content .card{margin-bottom:0}
 .gs-inner{height:auto;min-height:100%;display:flex;flex-direction:column}
 .gs-item-handle{
   display:none;align-items:center;justify-content:space-between;gap:8px;
@@ -2590,7 +2598,7 @@ function adminGeoWidgetRegions(){
     <div class="bd flush"><table ${ro}><thead><tr><th>Region</th><th>Code</th><th class="n">AE heads</th>
       <th class="n">ACV target</th><th class="n">Pods</th><th>Pod allocation</th><th></th></tr></thead><tbody>`;
   CFG.regions.forEach(r=>{
-    if(r.unassigned&&!UI.showSystemRegion) return;
+    if(r.unassigned&&(!canConfig()||!UI.showSystemRegion)) return;
     const t=podShareTotal(r.id),ok=Math.abs(t-1)<0.0001;
     h+=`<tr${r.unassigned?' style="opacity:.6"':''}>
       <td class="lb">${r.unassigned?esc(r.name)+' <span class="tag">system</span>':`<input class="cel txt" style="width:140px" value="${esc(r.name)}" ${dis} onchange="setIn('regions','${r.id}','name',this.value)">`}</td>
@@ -2604,7 +2612,7 @@ function adminGeoWidgetRegions(){
     </tr>`;
   });
   h+=`</tbody></table></div>
-    <div class="bd" style="padding-top:0"><a href="javascript:void(0)" onclick="UI.showSystemRegion=!UI.showSystemRegion;render()" style="font-size:12px">${UI.showSystemRegion?'Hide':'Show'} system row (Unassigned)</a></div>
+    ${canConfig()?`<div class="bd" style="padding-top:0"><a href="javascript:void(0)" onclick="UI.showSystemRegion=!UI.showSystemRegion;render()" style="font-size:12px">${UI.showSystemRegion?'Hide':'Show'} system row (Unassigned)</a></div>`:''}
   </div>`;
   return h;
 }
@@ -2689,7 +2697,7 @@ function adminActsWidgetTable(){
       <th>Activity</th><th>Route</th><th class="n">Cost / lead</th><th class="n">Capacity / month</th>
       <th class="n">Cost per win @ plan</th><th>Active</th><th></th></tr></thead><tbody>`;
   CFG.activities.forEach(a=>{
-    if(a.unassigned&&!UI.showSystemActivity) return;
+    if(a.unassigned&&(!canConfig()||!UI.showSystemActivity)) return;
     const cpw = cr>0? a.costPer/cr : null;
     h+=`<tr${a.unassigned?' style="opacity:.6"':''}>
       <td><input class="cel txt" style="width:170px" value="${esc(a.name)}" ${dis} onchange="setIn('activities','${a.id}','name',this.value)"></td>
@@ -2705,7 +2713,7 @@ function adminActsWidgetTable(){
     </tr>`;
   });
   h+=`</tbody></table></div>
-    <div class="bd" style="padding-top:0"><a href="javascript:void(0)" onclick="UI.showSystemActivity=!UI.showSystemActivity;render()" style="font-size:12px">${UI.showSystemActivity?'Hide':'Show'} system row (Unassigned)</a></div>
+    ${canConfig()?`<div class="bd" style="padding-top:0"><a href="javascript:void(0)" onclick="UI.showSystemActivity=!UI.showSystemActivity;render()" style="font-size:12px">${UI.showSystemActivity?'Hide':'Show'} system row (Unassigned)</a></div>`:''}
   </div></div>`;
   return h;
 }
@@ -3146,7 +3154,7 @@ function pageAdmin(){
       <div class="bd flush"><table ${ro}><thead><tr><th>Region</th><th>Code</th><th class="n">AE heads</th>
         <th class="n">ACV target</th><th class="n">Pods</th><th>Pod allocation</th><th></th></tr></thead><tbody>`;
     CFG.regions.forEach(r=>{
-      if(r.unassigned&&!UI.showSystemRegion) return;
+      if(r.unassigned&&(!canConfig()||!UI.showSystemRegion)) return;
       const t=podShareTotal(r.id),ok=Math.abs(t-1)<0.0001;
       h+=`<tr${r.unassigned?' style="opacity:.6"':''}>
         <td class="lb">${r.unassigned?esc(r.name)+' <span class="tag">system</span>':`<input class="cel txt" style="width:140px" value="${esc(r.name)}" ${dis} onchange="setIn('regions','${r.id}','name',this.value)">`}</td>
@@ -3160,7 +3168,7 @@ function pageAdmin(){
       </tr>`;
     });
     h+=`</tbody></table></div>
-      <div class="bd" style="padding-top:0"><a href="javascript:void(0)" onclick="UI.showSystemRegion=!UI.showSystemRegion;render()" style="font-size:12px">${UI.showSystemRegion?'Hide':'Show'} system row (Unassigned)</a></div>
+      ${canConfig()?`<div class="bd" style="padding-top:0"><a href="javascript:void(0)" onclick="UI.showSystemRegion=!UI.showSystemRegion;render()" style="font-size:12px">${UI.showSystemRegion?'Hide':'Show'} system row (Unassigned)</a></div>`:''}
     </div>`;
     h+=`<div class="card"><h3>Pods <span class="sp"></span>
       <button class="btn sm pri" ${dis} onclick="addPod()">Add pod</button></h3>

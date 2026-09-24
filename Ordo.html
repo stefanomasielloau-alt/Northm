@@ -191,6 +191,7 @@ tr.gp td{background:var(--canvas-2);font-size:10px;text-transform:uppercase;lett
 /* ---------- inputs ---------- */
 .f{display:flex;flex-direction:column;gap:3px;margin-bottom:9px}
 .f label{font-size:10.5px;font-weight:700;color:var(--ink-2);letter-spacing:.01em}
+.cw-addform .f label{text-align:right} entry fields need to be right justified"): scoped to just this one form, not every .f label app-wide -- .f is a shared class used everywhere else in left-aligned form.
 .f .hint{font-size:10px;color:var(--ink-3);font-weight:400}
 .in,input.in,select.in{
   border:1px solid #E1D3FA; border-radius:var(--r-sm); padding:6px 8px; background:var(--input-bg); width:100%; color:var(--ink)
@@ -3285,20 +3286,26 @@ function pageAdmin(){
         <td class="mini" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
           ${w.type==='webhook'?`POST ${esc(SUPABASE_URL)}/functions/v1/widget-webhook/${esc(w.id)}?token=${esc(w.webhookToken||'(not deployed yet)')}`:esc(w.url)}
         </td>
-        <td class="n"><button class="btn sm dgr" ${dis} onclick="removeCustomWidget('${w.id}')">Remove</button></td>
+        <td class="n"><button class="btn sm" ${dis} onclick="editCustomWidget('${w.id}')">Edit</button>
+          <button class="btn sm dgr" ${dis} onclick="removeCustomWidget('${w.id}')">Remove</button></td>
       </tr>`).join(''):'<tr><td colspan="5" class="mini" style="padding:10px 14px">None added yet.</td></tr>'}
       </tbody></table></div></div>`;
     if(canConfig()){
-      h+=`<div class="card"><h3>Add an external widget</h3><div class="bd">
-        <div class="f"><label>Name</label><input class="in v" id="cwname" placeholder="e.g. Partner scorecard"></div>
+      // 2026-09-24 (Stef: "Need ability to edit a External widget once created"): editCustomWidget()
+      // below just sets cwEditingId and re-renders -- this block then pre-fills the same Add form
+      // from the widget being edited and swaps its header/button/onclick to update instead of add,
+      // rather than building a second, separate edit form.
+      const cwEdit = cwEditingId ? CFG.customWidgets.find(w=>w.id===cwEditingId) : null;
+      h+=`<div class="card"><h3>${cwEdit?'Edit external widget':'Add an external widget'}</h3><div class="bd cw-addform">
+        <div class="f"><label>Name</label><input class="in v" id="cwname" placeholder="e.g. Partner scorecard" value="${cwEdit?esc(cwEdit.name):''}"></div>
         <div class="f"><label>Type</label><select class="in v" id="cwtype">
-          <option value="iframe">Embedded page (iframe)</option>
-          <option value="gdoc">Google Doc / Sheet / Slides (view)</option>
-          <option value="api">Live API (polls a JSON URL)</option>
-          <option value="webhook">Webhook-fed panel (no URL -- you get an endpoint)</option>
+          <option value="iframe" ${cwEdit&&cwEdit.type==='iframe'?'selected':''}>Embedded page (iframe)</option>
+          <option value="gdoc" ${cwEdit&&cwEdit.type==='gdoc'?'selected':''}>Google Doc / Sheet / Slides (view)</option>
+          <option value="api" ${cwEdit&&cwEdit.type==='api'?'selected':''}>Live API (polls a JSON URL)</option>
+          <option value="webhook" ${cwEdit&&cwEdit.type==='webhook'?'selected':''}>Webhook-fed panel (no URL -- you get an endpoint)</option>
         </select></div>
         <div class="f"><label>URL <span class="mini">(not used for Webhook)</span></label>
-          <input class="in v" id="cwurl" placeholder="https://…"></div>
+          <input class="in v" id="cwurl" placeholder="https://…" value="${cwEdit?esc(cwEdit.url):''}"></div>
         <div class="mini" style="margin:-6px 0 10px">
           <b>Embedded page:</b> any URL that allows being framed.
           <b>Google Doc/Sheet:</b> paste the normal "Copy link" share URL -- converted to an embeddable
@@ -3312,11 +3319,12 @@ function pageAdmin(){
         </div>
         <div class="f"><label>File under (category)</label><select class="in v" id="cwcat">
           <option value="">External widgets (its own category)</option>
-          ${Object.keys(pageLabels).map(pid=>`<option value="${pid}">${esc(pageLabels[pid])}</option>`).join('')}
+          ${Object.keys(pageLabels).map(pid=>`<option value="${pid}" ${cwEdit&&cwEdit.categoryPageId===pid?'selected':''}>${esc(pageLabels[pid])}</option>`).join('')}
         </select></div>
         <div class="f"><label>Hint <span class="mini">(optional, shown in the picker)</span></label>
-          <input class="in v" id="cwhint" placeholder="One line describing what this shows"></div>
-        <button class="btn sm pri" onclick="addCustomWidget(document.getElementById('cwname').value,document.getElementById('cwurl').value,document.getElementById('cwcat').value,document.getElementById('cwhint').value,document.getElementById('cwtype').value);document.getElementById('cwname').value='';document.getElementById('cwurl').value='';document.getElementById('cwhint').value='';">Add widget</button>
+          <input class="in v" id="cwhint" placeholder="One line describing what this shows" value="${cwEdit?esc(cwEdit.hint):''}"></div>
+        <button class="btn sm pri" onclick="${cwEdit?`updateCustomWidget('${cwEdit.id}'`:'addCustomWidget('}document.getElementById('cwname').value,document.getElementById('cwurl').value,document.getElementById('cwcat').value,document.getElementById('cwhint').value,document.getElementById('cwtype').value)">${cwEdit?'Save changes':'Add widget'}</button>
+        ${cwEdit?`<button class="btn sm" onclick="cwEditingId=null;render();">Cancel</button>`:''}
       </div></div>`;
     }
   }
@@ -3502,6 +3510,10 @@ function preset(k){
    dimension, which doesn't apply here (a custom widget is additive UI, not a planning dimension
    other calculations read); same lighter direct-mutation shape as resetWinTarget() above. Still
    gated on canConfig() and still logged to the audit trail. */
+let cwEditingId = null; // 2026-09-24: which CFG.customWidgets row the Add form (Admin & config >
+  // Widget library) is currently editing, if any -- null means the form is in plain Add mode.
+  // Ephemeral UI state only, deliberately not part of UI{} / not persisted -- there's nothing to
+  // recover if a reload interrupts an in-progress edit, same as any other unsaved form on this page.
 function addCustomWidget(name,url,categoryPageId,hint,type){
   if(!canConfig()){ toast('Your role cannot change configuration.'); return; }
   name=(name||'').trim(); url=(url||'').trim(); type=type||'iframe';
@@ -3515,11 +3527,34 @@ function addCustomWidget(name,url,categoryPageId,hint,type){
   logAudit('add','Custom widgets/'+name);
   render();
 }
+// 2026-09-24 (Stef: "Need ability to edit a External widget once created"): editCustomWidget()
+// just flips the Add form into edit mode (see the cwEdit block in pageAdmin()'s widgetlib
+// section); updateCustomWidget() does the actual save, mutating the existing row in place rather
+// than pushing a new one. Deliberately does NOT let type change away from/into 'webhook' here --
+// switching a live widget's type after the fact could silently orphan an already-issued
+// webhook_token/latest_payload or leave a URL-based widget with a blank URL; if that's ever
+// needed, remove and re-add instead, which is explicit about starting over.
+function editCustomWidget(id){
+  if(!CFG.customWidgets.find(x=>x.id===id))return;
+  cwEditingId=id; render();
+}
+function updateCustomWidget(id,name,url,categoryPageId,hint,type){
+  if(!canConfig()){ toast('Your role cannot change configuration.'); return; }
+  const w=CFG.customWidgets.find(x=>x.id===id); if(!w)return;
+  name=(name||'').trim(); url=(url||'').trim();
+  if(!name||(!url&&w.type!=='webhook')){ toast(w.type==='webhook'?'Name is required.':'Name and URL are both required.'); return; }
+  w.name=name; w.url=url; w.categoryPageId=categoryPageId||null; w.hint=(hint||'').trim();
+  // type intentionally not updated from here -- see editCustomWidget()'s comment above.
+  cwEditingId=null;
+  logAudit('edit','Custom widgets/'+name);
+  render();
+}
 function removeCustomWidget(id){
   if(!canConfig()){ toast('Your role cannot change configuration.'); return; }
   const w=CFG.customWidgets.find(x=>x.id===id); if(!w)return;
   CFG.customWidgets=CFG.customWidgets.filter(x=>x.id!==id);
   deleteRow('custom_widgets',id);
+  if(cwEditingId===id) cwEditingId=null;
   logAudit('remove','Custom widgets/'+w.name);
   render();
 }

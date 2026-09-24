@@ -700,6 +700,26 @@
     var items = Array.prototype.slice.call(gridEl.querySelectorAll('.grid-stack-item')).filter(function (item) {
       var boxId = item.getAttribute('gs-id');
       if (hiddenNow[boxId] === '__hidden__') { item.remove(); return false; }
+      // 2026-09-24 (Stef: "Once a widget is hidden the tile placeholder remains .. this should
+      // also disappear"): a custom tile showing an External widget that's since been removed
+      // from the library (Admin & config > Widget library) used to just sit there forever
+      // showing "Unknown widget" -- resolveWidget()'s 'external.' branch returns null once
+      // CFG.customWidgets no longer has that id, but nothing ever cleaned the box itself up. A
+      // custom box only exists because a widget was explicitly added to it, so if that widget's
+      // gone there's nothing left for the box to show -- self-heal by removing it the same way
+      // an explicitly-hidden box disappears, and prune it from bookkeeping so it doesn't try to
+      // recreate itself empty next render either. (Doesn't yet cover a NATIVE box that had one
+      // of its default widgets swapped for an since-removed external widget -- rarer path,
+      // native boxes need to fall back to their own default rather than simply vanish; not
+      // handled in this pass.)
+      var widgetIdNow = hiddenNow[boxId];
+      if (customIdSet[boxId] && widgetIdNow && widgetIdNow.indexOf('external.') === 0 && !resolveWidget(pageId, widgetIdNow)) {
+        item.remove();
+        var prunedIds = getCustomBoxIds(pageId).filter(function (id) { return id !== boxId; });
+        try { localStorage.setItem(customBoxStorageKey(pageId), JSON.stringify(prunedIds)); } catch (e) {}
+        delete customIdSet[boxId];
+        return false;
+      }
       return true;
     });
     items.forEach(function (item) {

@@ -781,6 +781,20 @@
     try {
       savedLayout = JSON.parse(localStorage.getItem(gridStorageKey(pageId)) || 'null');
       if (savedLayout && savedLayout.length) {
+        // 2026-09-24 fix (Stef: "the hide button hides the widget but not the area,
+        // we need to remove that area"): the saved layout is whatever was on screen
+        // the last time this page's positions were saved -- it still lists a box's
+        // old x/y/w/h after Hide has just removed that box's DOM node (above) and
+        // marked it '__hidden__'. grid.load() syncs the grid to match exactly what
+        // it's given, which includes recreating a blank placeholder for any id it's
+        // told about that isn't currently in the DOM -- so the hidden box's empty
+        // slot came right back the moment this ran. Confirmed live: without this,
+        // a box that's genuinely removed still gets an empty ghost box reinserted
+        // by the very next line. Dropping hidden ids from the layout before handing
+        // it to grid.load() stops that reinsertion for good.
+        savedLayout = savedLayout.filter(function (s) { return hiddenNow[s.id] !== '__hidden__'; });
+      }
+      if (savedLayout && savedLayout.length) {
         grid.load(savedLayout);
         restoredSaved = true;
         var savedIds = {};

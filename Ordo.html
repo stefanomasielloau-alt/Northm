@@ -634,7 +634,8 @@ const UI = {
      Regional & gaps, Activity leads). sidebarHidden collapses the sidebar down to just the
      mode toggle + step list, for the pure wizard look Stef also wanted available. Both persist
      to localStorage the same way ordo_mode already does, restored in bootApp() below. */
-  simpleStep:0, sidebarHidden:false
+  simpleStep:0, sidebarHidden:false,
+  wlCatFilter:'' // 2026-09-24: Widget library > Built-in widgets category filter ('' = All)
 };
 
 /* lookups */
@@ -2688,7 +2689,9 @@ function adminActsWidgetTable(){
       <td class="n"><input class="cel w" value="${a.capMonth}" ${dis} onchange="setIn('activities','${a.id}','capMonth',this.value,'num')"></td>
       <td class="n calc">${a.costPer?F.m(cpw):'—'}</td>
       <td><span class="pill ${a.active?'ok':'n'}">${a.active?'Active':'Retired'}</span></td>
-      <td class="n">${a.unassigned?'':`<button class="btn sm" ${dis} onclick="toggleActivity('${a.id}')">${a.active?'Retire':'Restore'}</button>`}</td>
+      <td class="n">${a.unassigned
+        ?`<button class="btn sm dgr" ${dis||(CFG.activities.filter(x=>x.unassigned).length<=1?'disabled':'')} title="${CFG.activities.filter(x=>x.unassigned).length<=1?'This is the last Unassigned activity -- kept so records missing a key still load instead of being rejected.':''}" onclick="removeActivity('${a.id}')">Remove</button>`
+        :`<button class="btn sm" ${dis} onclick="toggleActivity('${a.id}')">${a.active?'Retire':'Restore'}</button>`}</td>
     </tr>`;
   });
   h+=`</tbody></table></div></div></div>`;
@@ -3251,8 +3254,13 @@ function pageAdmin(){
       if(/budget|cost|spend|roi|revenue|pipeline/.test(t)) return '💰';
       return '🧩';
     };
+    // 2026-09-24 (Stef: "page is LOOONG ... ability to view all or a select category"):
+    // UI.wlCatFilter narrows which page's widgets render as tiles; '' means All. A plain
+    // re-render (like every other filter/select in this app) rather than client-side show/hide,
+    // consistent with how the rest of Admin & config works.
+    const wlPidsToShow = UI.wlCatFilter ? [UI.wlCatFilter] : Object.keys(pageLabels);
     let wlTiles='';
-    Object.keys(pageLabels).forEach(pid=>{
+    wlPidsToShow.forEach(pid=>{
       const lib=WL[pid]; const wids=lib&&lib.widgets?Object.keys(lib.widgets):[];
       if(!wids.length) return;
       wlTiles+=`<div class="mini" style="grid-column:1/-1;font-weight:600;margin-top:10px">${esc(pageLabels[pid])}</div>`;
@@ -3266,7 +3274,10 @@ function pageAdmin(){
       });
     });
     h+=`<div class="card"><h3>Built-in widgets <span class="sp"></span>
-      <span class="mini">${catCount} pages, 108 widgets</span></h3>
+      <select class="in" style="width:auto" onchange="UI.wlCatFilter=this.value;render()">
+        <option value="">All categories (${catCount} pages, 108 widgets)</option>
+        ${Object.keys(pageLabels).map(pid=>`<option value="${pid}" ${UI.wlCatFilter===pid?'selected':''}>${esc(pageLabels[pid])}</option>`).join('')}
+      </select></h3>
       <div class="bd"><div class="mini" style="margin-bottom:8px">Reference only -- every one of
       these is already browsable, filterable, and addable from any grid box's "+ Add tile" /
       "⇄ Swap widget" picker. Renaming or re-categorising one isn't editable from here yet --
@@ -3590,6 +3601,30 @@ function addActivity(){ stage('Activities','add','a new activity',()=>{
   CFG.activities.splice(CFG.activities.length-1,0,{id:uid('a'),name:'New activity',routeId:defRoute,costPer:0,capMonth:0,active:true,preChain:[],winTarget:null}); });}
 function toggleActivity(id){ const a=act(id);
   stage('Activities',a.active?'retire':'restore',a.name,()=>{ a.active=!a.active; });}
+// 2026-09-24 (Stef: "I still see one Activity I can't retire / remove"): the Unassigned system
+// activity row never had ANY removal control -- Retire/Restore is deliberately hidden for it
+// (toggling active on/off means nothing for a row A() already excludes via the unassigned flag
+// alone), but nothing offered Remove either, so a genuine duplicate (the route-dedup fallout --
+// see claude/2026-09-24-migration-activity-route-full-dedup-v2.sql) had no in-app way to clear.
+// Same shape as removeRegion(): guarded so the LAST Unassigned activity can't be removed (feeds
+// route unmatched records here -- see the Data feeds tab's own "Unassigned member exists on every
+// dimension" note), and blocks removal if any campaign still references it (this function is new,
+// so unlike removeRegion() -- which doesn't check campaigns -- there's no reason to allow orphaning
+// one from day one).
+function removeActivity(id){
+  const a=act(id); if(!a) return;
+  if(a.unassigned && CFG.activities.filter(x=>x.unassigned).length<=1){
+    toast('This is the last Unassigned activity -- kept so records missing a key still load instead of being rejected.'); return;
+  }
+  const refCamps=CFG.campaigns.filter(c=>c.activityId===id);
+  if(refCamps.length){
+    toast(refCamps.length+' campaign'+(refCamps.length>1?'s':'')+' still use this activity -- reassign or remove '+(refCamps.length>1?'them':'it')+' first.'); return;
+  }
+  stage('Activities','remove',a.name,()=>{
+    CFG.activities=CFG.activities.filter(x=>x.id!==id);
+    deleteRow('activities',id);
+  });
+}
 function resetWinTarget(id){ const a=act(id); if(!a) return;
   const old=a.winTarget; a.winTarget=null;
   logAudit('edit','activities/'+(a.name||id)+'.winTarget: '+old+' → auto (even split)'); render(); }

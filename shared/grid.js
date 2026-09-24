@@ -447,6 +447,77 @@
      needed to learn about compound ids at all -- it still only ever
      generates its own page's default widget on first paint; initGrid()
      patches in the real pick (same-page or cross-page) right after. */
+  // 2026-09-24: rewrites a normal Google Docs/Sheets/Slides SHARE link (the kind you get from
+  // the "Copy link" button, ".../edit?usp=sharing" etc) into that doc's embeddable form. Passes
+  // any URL it doesn't recognise straight through unchanged -- covers an Office Online / SharePoint
+  // embed URL a person already generated themselves, or any other doc host. Requires the doc to
+  // be shared "Anyone with the link can view" (or wider) -- North has no Google credentials of its
+  // own to authenticate a private doc with.
+  function toEmbeddableDocUrl(url) {
+    var u = String(url || '');
+    var m = u.match(/docs\.google\.com\/document\/d\/([a-zA-Z0-9_-]+)/);
+    if (m) return 'https://docs.google.com/document/d/' + m[1] + '/preview';
+    m = u.match(/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+    if (m) return 'https://docs.google.com/spreadsheets/d/' + m[1] + '/preview';
+    m = u.match(/docs\.google\.com\/presentation\/d\/([a-zA-Z0-9_-]+)/);
+    if (m) return 'https://docs.google.com/presentation/d/' + m[1] + '/embed';
+    return u;
+  }
+  // 2026-09-24: renders arbitrary JSON (from an API-type widget's live fetch, or a webhook-type
+  // widget's last stored payload) as something readable -- a table for an array of flat objects,
+  // a key/value table for a flat object, pretty-printed JSON as a last resort. Deliberately simple
+  // (no nested-table recursion) -- first pass, good enough for typical API/webhook payloads.
+  function renderJsonPayload(data) {
+    var esc = function (v) { return String(v == null ? '' : v).replace(/</g, '&lt;'); };
+    if (data == null) return '<div class="mini" style="opacity:.6">No data yet.</div>';
+    try {
+      if (Array.isArray(data) && data.length && data[0] && typeof data[0] === 'object') {
+        var cols = Object.keys(data[0]).slice(0, 6);
+        var rows = data.slice(0, 20);
+        var html = '<table class="tbl" style="width:100%;font-size:12px"><thead><tr>' +
+          cols.map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('') + '</tr></thead><tbody>';
+        rows.forEach(function (row) {
+          html += '<tr>' + cols.map(function (c) {
+            var v = row[c];
+            return '<td>' + esc(typeof v === 'object' ? JSON.stringify(v) : v) + '</td>';
+          }).join('') + '</tr>';
+        });
+        html += '</tbody></table>';
+        if (data.length > 20) html += '<div class="mini">+' + (data.length - 20) + ' more rows</div>';
+        return html;
+      }
+      if (typeof data === 'object') {
+        var keys = Object.keys(data).slice(0, 20);
+        return '<table class="tbl" style="width:100%;font-size:12px">' + keys.map(function (k) {
+          var v = data[k];
+          return '<tr><td style="font-weight:600;padding-right:8px">' + esc(k) + '</td><td>' +
+            esc(typeof v === 'object' ? JSON.stringify(v) : v) + '</td></tr>';
+        }).join('') + '</table>';
+      }
+      return '<div class="mini">' + esc(data) + '</div>';
+    } catch (e) {
+      try { return '<pre style="white-space:pre-wrap;font-size:11px">' + esc(JSON.stringify(data, null, 2)) + '</pre>'; }
+      catch (e2) { return '<div class="mini">Could not display this data.</div>'; }
+    }
+  }
+  // 2026-09-24: best-effort live fetch for an 'api'-type external widget. Most public APIs block
+  // a direct browser request (CORS) -- that shows as a readable message rather than a blank tile,
+  // since there's no way around it without a server-side proxy (a real, separate piece of work).
+  function renderApiWidget(containerId, cw) {
+    fetch(cw.url).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (data) {
+      var el = document.getElementById(containerId);
+      if (el) el.innerHTML = renderJsonPayload(data);
+    }).catch(function (err) {
+      var el = document.getElementById(containerId);
+      if (el) el.innerHTML = '<div class="mini" style="color:#c33">Could not load this API (' +
+        String(err && err.message || err).replace(/</g, '&lt;') +
+        '). Most public APIs block a direct browser request (CORS) -- this usually needs a small server-side proxy.</div>';
+    });
+  }
+
   function resolveWidget(pageId, widgetId) {
     if (!widgetId) return null;
     var dot = widgetId.indexOf('.');
@@ -467,12 +538,38 @@
       var cwId = widgetId.slice(dot + 1);
       var cw = (typeof CFG !== 'undefined' && CFG.customWidgets || []).filter(function (w) { return w.id === cwId; })[0];
       if (!cw) return null;
+      var cwType = cw.type || 'iframe';
+      var cwEsc = function (v) { return String(v == null ? '' : v).replace(/"/g, '&quot;'); };
       return {
         label: cw.name, hint: cw.hint || '',
+        // 2026-09-24 (Stef: "Need provision for API based widgets, webhook etc .. even a simple
+        // doc/gsheet xls/gsheet etc view/insert"): four types share this one resolver now.
+        // iframe/gdoc are both a plain embed (gdoc just rewrites a normal Google share link into
+        // its embeddable form first). api/webhook both display JSON data via renderJsonPayload --
+        // api fetches it live client-side each time the tile renders (best-effort; most public
+        // APIs block direct browser fetches with CORS, handled below as a readable error rather
+        // than a silent blank tile); webhook has no live fetch at all, it just displays whatever
+        // CFG.customWidgets already loaded into cw.latestPayload -- that field is written by an
+        // external system POSTing to a small Supabase Edge Function (prepared separately, see
+        // 2026-09-24-migration-custom-widgets-add-webhook-columns.sql / functions/widget-webhook),
+        // not by anything in this file. "Insert/write back" to a doc is NOT built -- it needs a
+        // real Google OAuth app (client id/secret, consent flow, token storage), a decision Stef
+        // hasn't made yet; flagged separately, not guessed at here.
         fn: function () {
+          if (cwType === 'api') {
+            var apiBoxId = 'extw_' + cwId.replace(/[^a-zA-Z0-9]/g, '') + '_' + Math.random().toString(36).slice(2, 8);
+            setTimeout(function () { renderApiWidget(apiBoxId, cw); }, 0);
+            return '<div class="card" style="height:100%"><div class="bd" style="height:100%;overflow:auto;padding:8px">' +
+              '<div id="' + apiBoxId + '" class="mini">Loading…</div></div></div>';
+          }
+          if (cwType === 'webhook') {
+            return '<div class="card" style="height:100%"><div class="bd" style="height:100%;overflow:auto;padding:8px">' +
+              renderJsonPayload(cw.latestPayload) + '</div></div>';
+          }
+          var src = (cwType === 'gdoc') ? toEmbeddableDocUrl(cw.url) : cw.url;
           return '<div class="card" style="height:100%"><div class="bd" style="padding:0;height:100%">' +
-            '<iframe src="' + String(cw.url).replace(/"/g, '&quot;') + '" style="width:100%;height:100%;min-height:220px;border:0" ' +
-            'title="' + String(cw.name).replace(/"/g, '&quot;') + '"></iframe></div></div>';
+            '<iframe src="' + cwEsc(src) + '" style="width:100%;height:100%;min-height:220px;border:0" ' +
+            'title="' + cwEsc(cw.name) + '"></iframe></div></div>';
         }
       };
     }
@@ -559,6 +656,10 @@
   // its "which page does this file under" dropdown from the same category list the pickers
   // use, instead of hand-duplicating it and risking drift.
   window.PAGE_LABELS = PAGE_LABELS;
+  // Exposed for the same reason as PAGE_LABELS above -- Ordo.html's Widget library page
+  // (2026-09-24 tile-view upgrade) reads the real 108-widget catalog to render one tile per
+  // widget (name + hint + icon), instead of hand-duplicating it.
+  window.WIDGET_LIBRARIES = WIDGET_LIBRARIES;
 
   function initGrid(pageId, containerId) {
     var gridEl = document.getElementById(containerId);

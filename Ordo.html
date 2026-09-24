@@ -1617,7 +1617,7 @@ async function saveToSupabase(){
     upsertRows('cost_buckets', CFG.costBuckets, c=>({id:c.id,code:c.code,label:c.label,dept:c.dept||'Marketing',ext_code:c.extCode||''})),
     upsertRows('programmes', CFG.programmes, p=>({id:p.id,name:p.name,owner:p.owner||'',focus:p.focus||'',status:p.status||'Active',tracking_ref:p.trackingRef||null,cloned_from_id:p.clonedFromId||null,notes:p.notes||''})),
     upsertRows('versions', CFG.versions, v=>({id:v.id,name:v.name,kind:v.kind,locked:!!v.locked})),
-    upsertRows('custom_widgets', CFG.customWidgets, w=>({id:w.id,name:w.name,category_page_id:w.categoryPageId||null,hint:w.hint||'',type:w.type||'iframe',url:w.url||''})),
+    upsertRows('custom_widgets', CFG.customWidgets, w=>({id:w.id,name:w.name,category_page_id:w.categoryPageId||null,hint:w.hint||'',type:w.type||'iframe',url:w.url||'',webhook_token:w.webhookToken||null})), // latest_payload deliberately excluded -- that column is written by the webhook receiver, never by North's own save
     /* NOT upsertRows() (2026-09-09 fix, live production bug): roles is NOT Strategy's table --
        the only thing this page ever edits on a role is requireCommitOnEdit, via
        toggleRequireCommit() above ("Requires commit on plan edits" panel). upsertRows()'s
@@ -1884,9 +1884,10 @@ async function loadFromSupabase(){
   CFG.customWidgets = [];
   try{
     const { data: cwData, error: cwErr } = await orgScoped(sb.from('custom_widgets')
-      .select('id,org_id,name,category_page_id,hint,type,url'));
+      .select('id,org_id,name,category_page_id,hint,type,url,webhook_token,latest_payload'));
     if(!cwErr) CFG.customWidgets = (cwData||[]).map(w=>({
-      id:w.id, orgId:w.org_id, name:w.name, categoryPageId:w.category_page_id||null, hint:w.hint||'', type:w.type||'iframe', url:w.url||''
+      id:w.id, orgId:w.org_id, name:w.name, categoryPageId:w.category_page_id||null, hint:w.hint||'', type:w.type||'iframe', url:w.url||'',
+      webhookToken:w.webhook_token||null, latestPayload:w.latest_payload==null?null:w.latest_payload
     }));
   }catch(e){ /* custom_widgets migration not run yet -- Widget library's External widgets section shows none. */ }
 
@@ -3228,37 +3229,87 @@ function pageAdmin(){
        page's "+ Add tile" picker, filed under whichever category was chosen, same as any of
        the 108 built-in ones -- see resolveWidget()'s 'external.' handling in shared/grid.js. */
     const pageLabels = window.PAGE_LABELS||{};
+    const WL = window.WIDGET_LIBRARIES||{};
     const catCount = Object.keys(pageLabels).length;
-    h+=`<div class="note"><strong>${catCount} pages, 108 built-in widgets.</strong> Every grid box's
-      "+ Add tile" / "⇄ Swap widget" picker already browses all of them, filterable by name or
-      page. Renaming or re-categorising a built-in widget isn't editable from here yet -- they're
-      defined in code, not data; only External widgets (below) are.</div>`;
-    h+=`<div class="card"><h3>Built-in categories <span class="sp"></span>
-      <span class="mini">by originating page</span></h3><div class="bd">
-      <div class="mini" style="line-height:1.9">${Object.keys(pageLabels).map(pid=>esc(pageLabels[pid])).join(' · ')}</div>
+    // 2026-09-24 (Stef: "Built-in categories list is hard to miss .. and is just a list not
+    // functional. Would be good to see a tile of what it is image and or description"): swapped
+    // the single-line category-name list for one tile per widget (grouped under a category
+    // heading), each showing its real label + hint text plus a lightweight icon picked from a
+    // handful of keyword rules below -- not a real per-widget image (there are no image assets
+    // for any of these, and live-rendering 108 widgets outside their normal grid context just to
+    // screenshot them isn't worth the risk/complexity for a reference list).
+    const wlIconFor = (label,hint)=>{
+      const t=((label||'')+' '+(hint||'')).toLowerCase();
+      if(/chart|trend|funnel|bar|line|waterfall|split/.test(t)) return '📊';
+      if(/table|list|breakdown|matrix/.test(t)) return '📋';
+      if(/kpi|summary|score|target|goal/.test(t)) return '🎯';
+      if(/calendar|timeline|schedule|month|quarter/.test(t)) return '🗓️';
+      if(/map|region|geo|pod|territory/.test(t)) return '🗺️';
+      if(/gauge|pace|status|health|risk/.test(t)) return '⏱️';
+      if(/gate|stage|conversion|funnel/.test(t)) return '🚦';
+      if(/budget|cost|spend|roi|revenue|pipeline/.test(t)) return '💰';
+      return '🧩';
+    };
+    let wlTiles='';
+    Object.keys(pageLabels).forEach(pid=>{
+      const lib=WL[pid]; const wids=lib&&lib.widgets?Object.keys(lib.widgets):[];
+      if(!wids.length) return;
+      wlTiles+=`<div class="mini" style="grid-column:1/-1;font-weight:600;margin-top:10px">${esc(pageLabels[pid])}</div>`;
+      wids.forEach(wid=>{
+        const w=lib.widgets[wid];
+        wlTiles+=`<div class="card" style="margin:0"><div class="bd" style="padding:8px">
+          <div style="font-size:18px;line-height:1">${wlIconFor(w.label,w.hint)}</div>
+          <div style="font-weight:600;font-size:12.5px;margin-top:4px">${esc(w.label)}</div>
+          ${w.hint?`<div class="mini" style="margin-top:2px">${esc(w.hint)}</div>`:''}
+        </div></div>`;
+      });
+    });
+    h+=`<div class="card"><h3>Built-in widgets <span class="sp"></span>
+      <span class="mini">${catCount} pages, 108 widgets</span></h3>
+      <div class="bd"><div class="mini" style="margin-bottom:8px">Reference only -- every one of
+      these is already browsable, filterable, and addable from any grid box's "+ Add tile" /
+      "⇄ Swap widget" picker. Renaming or re-categorising one isn't editable from here yet --
+      they're defined in code, not data; only External widgets (below) are.</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">${wlTiles}</div>
       </div></div>`;
     h+=`<div class="card"><h3>External widgets <span class="sp"></span></h3>
-      <div class="bd"><div class="mini">Embed something outside North -- a dashboard, a report,
-      any page that allows being framed -- as a tile on any grid page. Add one here, then pick it
-      from that page's "+ Add tile" library, under whichever category you choose below.</div></div>
-      <div class="bd flush"><table><thead><tr><th>Name</th><th>Category</th><th>Type</th><th>URL</th><th></th></tr></thead><tbody>
+      <div class="bd"><div class="mini">Embed something outside North -- a dashboard, a report, a
+      live API, a Google Doc/Sheet, or a webhook-fed panel -- as a tile on any grid page. Add one
+      here, then pick it from that page's "+ Add tile" library, under whichever category you
+      choose below.</div></div>
+      <div class="bd flush"><table><thead><tr><th>Name</th><th>Category</th><th>Type</th><th>URL / endpoint</th><th></th></tr></thead><tbody>
       ${CFG.customWidgets.length?CFG.customWidgets.map(w=>`<tr>
         <td class="lb">${esc(w.name)}</td>
         <td>${esc(w.categoryPageId?(pageLabels[w.categoryPageId]||w.categoryPageId):'External widgets')}</td>
-        <td>${esc(w.type)}</td>
-        <td class="mini" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(w.url)}</td>
+        <td>${esc({iframe:'Embed',gdoc:'Doc/Sheet',api:'API',webhook:'Webhook'}[w.type]||w.type)}</td>
+        <td class="mini" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          ${w.type==='webhook'?`POST ${esc(SUPABASE_URL)}/functions/v1/widget-webhook/${esc(w.id)}?token=${esc(w.webhookToken||'(not deployed yet)')}`:esc(w.url)}
+        </td>
         <td class="n"><button class="btn sm dgr" ${dis} onclick="removeCustomWidget('${w.id}')">Remove</button></td>
       </tr>`).join(''):'<tr><td colspan="5" class="mini" style="padding:10px 14px">None added yet.</td></tr>'}
       </tbody></table></div></div>`;
     if(canConfig()){
       h+=`<div class="card"><h3>Add an external widget</h3><div class="bd">
         <div class="f"><label>Name</label><input class="in v" id="cwname" placeholder="e.g. Partner scorecard"></div>
-        <div class="f"><label>URL</label><input class="in v" id="cwurl" placeholder="https://…"></div>
         <div class="f"><label>Type</label><select class="in v" id="cwtype">
           <option value="iframe">Embedded page (iframe)</option>
-        </select>
-        <span class="hint">Any URL that allows being framed. More connector types (a live API,
-          a webhook-fed panel) can be added later -- ask if you want one built.</span></div>
+          <option value="gdoc">Google Doc / Sheet / Slides (view)</option>
+          <option value="api">Live API (polls a JSON URL)</option>
+          <option value="webhook">Webhook-fed panel (no URL -- you get an endpoint)</option>
+        </select></div>
+        <div class="f"><label>URL <span class="mini">(not used for Webhook)</span></label>
+          <input class="in v" id="cwurl" placeholder="https://…"></div>
+        <div class="mini" style="margin:-6px 0 10px">
+          <b>Embedded page:</b> any URL that allows being framed.
+          <b>Google Doc/Sheet:</b> paste the normal "Copy link" share URL -- converted to an embeddable
+          view automatically (the doc needs to be shared "Anyone with the link can view").
+          <b>Live API:</b> a URL returning JSON -- fetched fresh each time the tile loads (most
+          public APIs block this with CORS; a small server-side proxy can be built if that happens).
+          <b>Webhook:</b> leave URL blank -- adding it gives you a unique endpoint + token below the
+          table above to have another system POST data to; the tile shows whatever it last received.
+          Two-way "insert/write back" to a Doc/Sheet isn't built yet -- it needs a Google OAuth app
+          set up first, a separate step.
+        </div>
         <div class="f"><label>File under (category)</label><select class="in v" id="cwcat">
           <option value="">External widgets (its own category)</option>
           ${Object.keys(pageLabels).map(pid=>`<option value="${pid}">${esc(pageLabels[pid])}</option>`).join('')}
@@ -3453,9 +3504,13 @@ function preset(k){
    gated on canConfig() and still logged to the audit trail. */
 function addCustomWidget(name,url,categoryPageId,hint,type){
   if(!canConfig()){ toast('Your role cannot change configuration.'); return; }
-  name=(name||'').trim(); url=(url||'').trim();
-  if(!name||!url){ toast('Name and URL are both required.'); return; }
-  const w={id:uid('cw'),name:name,categoryPageId:categoryPageId||null,hint:(hint||'').trim(),type:type||'iframe',url:url};
+  name=(name||'').trim(); url=(url||'').trim(); type=type||'iframe';
+  // 2026-09-24: a webhook widget has no embed/fetch URL at all -- it's a receiving endpoint,
+  // generated here, not typed in -- so URL isn't required for that type. Every other type still
+  // needs one (it's what gets embedded or polled).
+  if(!name||(!url&&type!=='webhook')){ toast(type==='webhook'?'Name is required.':'Name and URL are both required.'); return; }
+  const w={id:uid('cw'),name:name,categoryPageId:categoryPageId||null,hint:(hint||'').trim(),type:type,url:url,
+    webhookToken:type==='webhook'?crypto.randomUUID():null, latestPayload:null};
   CFG.customWidgets.push(w);
   logAudit('add','Custom widgets/'+name);
   render();

@@ -1431,7 +1431,13 @@
   window.northResetAllLayouts = function () {
     try {
       Object.keys(localStorage).forEach(function (k) {
-        if (k.indexOf('northm_ordo_grid_') === 0 || k.indexOf('northm_ordo_widgets_') === 0) {
+        // 2026-09-24 fix: this used to leave every page's northm_ordo_customboxes_*
+        // key behind -- the same gap already fixed on the per-page Reset layout
+        // button (see resetBtn.onclick above) was still open here, at global scope,
+        // for every custom tile on every page at once. A custom tile has no default
+        // to reset TO, so leaving its id behind here meant it came back everywhere
+        // as an empty, unrecoverable placeholder the next time each page rendered.
+        if (k.indexOf('northm_ordo_grid_') === 0 || k.indexOf('northm_ordo_widgets_') === 0 || k.indexOf('northm_ordo_customboxes_') === 0) {
           localStorage.removeItem(k);
         }
       });

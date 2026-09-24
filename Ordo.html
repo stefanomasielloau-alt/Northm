@@ -191,7 +191,7 @@ tr.gp td{background:var(--canvas-2);font-size:10px;text-transform:uppercase;lett
 /* ---------- inputs ---------- */
 .f{display:flex;flex-direction:column;gap:3px;margin-bottom:9px}
 .f label{font-size:10.5px;font-weight:700;color:var(--ink-2);letter-spacing:.01em}
-.cw-addform .f label{text-align:right} entry fields need to be right justified"): scoped to just this one form, not every .f label app-wide -- .f is a shared class used everywhere else in left-aligned form.
+/* 2026-09-24: Stef asked for the Add-external-widget form's labels back to left-aligned (the earlier right-justify request from the same session didn't hold up in practice) -- removing the override lets .f label's normal left alignment apply here too, same as every other form. */
 .f .hint{font-size:10px;color:var(--ink-3);font-weight:400}
 .in,input.in,select.in{
   border:1px solid #E1D3FA; border-radius:var(--r-sm); padding:6px 8px; background:var(--input-bg); width:100%; color:var(--ink)
@@ -635,7 +635,13 @@ const UI = {
      mode toggle + step list, for the pure wizard look Stef also wanted available. Both persist
      to localStorage the same way ordo_mode already does, restored in bootApp() below. */
   simpleStep:0, sidebarHidden:false,
-  wlCatFilter:'' // 2026-09-24: Widget library > Built-in widgets category filter ('' = All)
+  wlCatFilter:'', // 2026-09-24: Widget library > Built-in widgets category filter ('' = All)
+  // 2026-09-24 (Stef: the last Unassigned region/activity can't ever be removed -- it's the
+  // fallback bucket orphaned records land on instead of erroring out -- and a permanently
+  // greyed-out Remove button next to it just read as broken. "OK so can we just hide?" --
+  // these default it out of the admin tables entirely; a small link brings it back into view
+  // for the rare time someone needs to check what's landed on it.
+  showSystemRegion:false, showSystemActivity:false
 };
 
 /* lookups */
@@ -2584,6 +2590,7 @@ function adminGeoWidgetRegions(){
     <div class="bd flush"><table ${ro}><thead><tr><th>Region</th><th>Code</th><th class="n">AE heads</th>
       <th class="n">ACV target</th><th class="n">Pods</th><th>Pod allocation</th><th></th></tr></thead><tbody>`;
   CFG.regions.forEach(r=>{
+    if(r.unassigned&&!UI.showSystemRegion) return;
     const t=podShareTotal(r.id),ok=Math.abs(t-1)<0.0001;
     h+=`<tr${r.unassigned?' style="opacity:.6"':''}>
       <td class="lb">${r.unassigned?esc(r.name)+' <span class="tag">system</span>':`<input class="cel txt" style="width:140px" value="${esc(r.name)}" ${dis} onchange="setIn('regions','${r.id}','name',this.value)">`}</td>
@@ -2596,7 +2603,9 @@ function adminGeoWidgetRegions(){
       <td class="n">${r.unassigned&&CFG.regions.filter(x=>x.unassigned).length<=1?`<button class="btn sm dgr" disabled title="This is the last Unassigned region -- some calculations depend on at least one always existing">Remove</button>`:`<button class="btn sm dgr" ${dis} onclick="removeRegion('${r.id}')">Remove</button>`}</td>
     </tr>`;
   });
-  h+=`</tbody></table></div></div>`;
+  h+=`</tbody></table></div>
+    <div class="bd" style="padding-top:0"><a href="javascript:void(0)" onclick="UI.showSystemRegion=!UI.showSystemRegion;render()" style="font-size:12px">${UI.showSystemRegion?'Hide':'Show'} system row (Unassigned)</a></div>
+  </div>`;
   return h;
 }
 function adminGeoWidgetPods(){
@@ -2680,6 +2689,7 @@ function adminActsWidgetTable(){
       <th>Activity</th><th>Route</th><th class="n">Cost / lead</th><th class="n">Capacity / month</th>
       <th class="n">Cost per win @ plan</th><th>Active</th><th></th></tr></thead><tbody>`;
   CFG.activities.forEach(a=>{
+    if(a.unassigned&&!UI.showSystemActivity) return;
     const cpw = cr>0? a.costPer/cr : null;
     h+=`<tr${a.unassigned?' style="opacity:.6"':''}>
       <td><input class="cel txt" style="width:170px" value="${esc(a.name)}" ${dis} onchange="setIn('activities','${a.id}','name',this.value)"></td>
@@ -2694,7 +2704,9 @@ function adminActsWidgetTable(){
         :`<button class="btn sm" ${dis} onclick="toggleActivity('${a.id}')">${a.active?'Retire':'Restore'}</button>`}</td>
     </tr>`;
   });
-  h+=`</tbody></table></div></div></div>`;
+  h+=`</tbody></table></div>
+    <div class="bd" style="padding-top:0"><a href="javascript:void(0)" onclick="UI.showSystemActivity=!UI.showSystemActivity;render()" style="font-size:12px">${UI.showSystemActivity?'Hide':'Show'} system row (Unassigned)</a></div>
+  </div></div>`;
   return h;
 }
 function adminActsWidgetPreChains(){
@@ -3134,6 +3146,7 @@ function pageAdmin(){
       <div class="bd flush"><table ${ro}><thead><tr><th>Region</th><th>Code</th><th class="n">AE heads</th>
         <th class="n">ACV target</th><th class="n">Pods</th><th>Pod allocation</th><th></th></tr></thead><tbody>`;
     CFG.regions.forEach(r=>{
+      if(r.unassigned&&!UI.showSystemRegion) return;
       const t=podShareTotal(r.id),ok=Math.abs(t-1)<0.0001;
       h+=`<tr${r.unassigned?' style="opacity:.6"':''}>
         <td class="lb">${r.unassigned?esc(r.name)+' <span class="tag">system</span>':`<input class="cel txt" style="width:140px" value="${esc(r.name)}" ${dis} onchange="setIn('regions','${r.id}','name',this.value)">`}</td>
@@ -3146,7 +3159,9 @@ function pageAdmin(){
         <td class="n">${r.unassigned&&CFG.regions.filter(x=>x.unassigned).length<=1?`<button class="btn sm dgr" disabled title="This is the last Unassigned region -- some calculations depend on at least one always existing">Remove</button>`:`<button class="btn sm dgr" ${dis} onclick="removeRegion('${r.id}')">Remove</button>`}</td>
       </tr>`;
     });
-    h+=`</tbody></table></div></div>`;
+    h+=`</tbody></table></div>
+      <div class="bd" style="padding-top:0"><a href="javascript:void(0)" onclick="UI.showSystemRegion=!UI.showSystemRegion;render()" style="font-size:12px">${UI.showSystemRegion?'Hide':'Show'} system row (Unassigned)</a></div>
+    </div>`;
     h+=`<div class="card"><h3>Pods <span class="sp"></span>
       <button class="btn sm pri" ${dis} onclick="addPod()">Add pod</button></h3>
       <div class="bd flush"><div class="scroll cap"><table ${ro}><thead><tr>

@@ -641,6 +641,19 @@
     if (ids.indexOf(boxId) === -1) ids.push(boxId);
     try { localStorage.setItem(customBoxStorageKey(pageId), JSON.stringify(ids)); } catch (e) {}
   }
+  // 2026-09-24 (Stef: "would delete rather than hide be better?" for a custom tile):
+  // fully removes a custom box -- prunes its id from the bookkeeping list AND clears
+  // its widget assignment, so nothing is left for a later render to recreate empty
+  // (see the Reset layout fix above) or for the self-heal branch below to keep finding
+  // and re-pruning. Shared by the self-heal branch and the Hide button's custom-tile
+  // path below, so both go through one place.
+  function removeCustomBox(pageId, boxId) {
+    var prunedIds = getCustomBoxIds(pageId).filter(function (id) { return id !== boxId; });
+    try { localStorage.setItem(customBoxStorageKey(pageId), JSON.stringify(prunedIds)); } catch (e) {}
+    var all = getWidgetAssignments(pageId);
+    delete all[boxId];
+    try { localStorage.setItem(widgetStorageKey(pageId), JSON.stringify(all)); } catch (e) {}
+  }
   // Adds a brand-new tile to pageId showing widgetId, then re-renders (a new DOM
   // node has to appear, same as Hide/Unhide -- see the __northGridReenterEdit
   // comment below for why that needs a full render rather than an in-place patch).
@@ -715,8 +728,7 @@
       var widgetIdNow = hiddenNow[boxId];
       if (customIdSet[boxId] && widgetIdNow && widgetIdNow.indexOf('external.') === 0 && !resolveWidget(pageId, widgetIdNow)) {
         item.remove();
-        var prunedIds = getCustomBoxIds(pageId).filter(function (id) { return id !== boxId; });
-        try { localStorage.setItem(customBoxStorageKey(pageId), JSON.stringify(prunedIds)); } catch (e) {}
+        removeCustomBox(pageId, boxId);
         delete customIdSet[boxId];
         return false;
       }
@@ -729,9 +741,24 @@
         wrap.className = 'gs-inner';
         var h = document.createElement('div');
         h.className = 'gs-item-handle';
+        var boxIdForHandle = item.getAttribute('gs-id');
+        // 2026-09-24 (Stef: "would delete rather than hide be better?"): a custom tile
+        // (added via + Add tile) has no page default to fall back to the way a native
+        // box does, so its Hide button now deletes it outright instead -- see the click
+        // handler below. Native boxes keep the original hide/unhide behaviour, since
+        // Unhide genuinely restores something meaningful for those.
+        var hideBtnHtml = customIdSet[boxIdForHandle]
+          ? '<button type="button" class="gs-hide-btn" data-gs-hide="' + boxIdForHandle + '" title="Delete this tile — it was added from the widget library and can be added again the same way">🗑 Delete tile</button>'
+          : '<button type="button" class="gs-hide-btn" data-gs-hide="' + boxIdForHandle + '" title="Hide this tile — bring it back later from + Add / unhide tile">✕ Hide</button>';
         h.innerHTML = '<span>⠿⠿ drag to move · drag corner to resize</span>' +
-          '<button type="button" class="gs-swap-btn" data-gs-swap="' + item.getAttribute('gs-id') + '">⇄ Swap widget</button>' +
-          '<button type="button" class="gs-hide-btn" data-gs-hide="' + item.getAttribute('gs-id') + '" title="Hide this tile — bring it back later from + Add / unhide tile">✕ Hide</button>';
+          '<button type="button" class="gs-swap-btn" data-gs-swap="' + boxIdForHandle + '">⇄ Swap widget</button>' +
+          hideBtnHtml +
+          // 2026-09-24 (Stef: "Let's try the fit height"): manual, opt-in per-box resize
+          // to the content's actual current height -- a safe alternative to re-fitting
+          // every box on every load (which risks shrinking a box someone sized on
+          // purpose). Same measure-and-grow logic packItems() uses for a fresh layout,
+          // now callable on demand for one box -- see fitBoxHeight() below.
+          '<button type="button" class="gs-fit-btn" data-gs-fit="' + boxIdForHandle + '" title="Resize this tile to fit its current content — use if it looks too tall, or has empty space at the bottom">⤢ Fit height</button>';
         wrap.appendChild(h);
         while (c.firstChild) wrap.appendChild(c.firstChild);
         c.appendChild(wrap);
@@ -974,6 +1001,16 @@
       try {
         localStorage.removeItem(gridStorageKey(pageId));
         localStorage.removeItem(widgetStorageKey(pageId));
+        // 2026-09-24 fix (Stef: "Tile placeholder remains after reset layout clicked"):
+        // this used to leave the page's custom-box id list untouched. A custom tile has
+        // no default state to reset TO, so leaving its id behind meant the synthesis loop
+        // just above in initGrid() recreated it as a brand-new, completely empty DOM node
+        // on the very next render (its widget assignment was just wiped above, so nothing
+        // ever got painted into it either) -- Reset layout was silently reviving custom
+        // tiles as blank boxes instead of clearing them. Clearing this key too makes
+        // Reset layout mean what it says: every custom tile on this page is gone, same as
+        // its position and widget picks.
+        localStorage.removeItem(customBoxStorageKey(pageId));
       } catch (e) {}
       initGrid(pageId, containerId); // re-run in place, no need for a full app render
     };
@@ -992,9 +1029,20 @@
     gridEl.querySelectorAll('.gs-hide-btn').forEach(function (btn) {
       btn.onclick = function (e) {
         e.stopPropagation();
-        setWidgetAssignment(pageId, btn.getAttribute('data-gs-hide'), '__hidden__');
+        var boxId = btn.getAttribute('data-gs-hide');
+        if (customIdSet[boxId]) {
+          removeCustomBox(pageId, boxId);
+        } else {
+          setWidgetAssignment(pageId, boxId, '__hidden__');
+        }
         window.__northGridReenterEdit = pageId;
         if (typeof window.render === 'function') { window.render(); }
+      };
+    });
+    gridEl.querySelectorAll('.gs-fit-btn').forEach(function (btn) {
+      btn.onclick = function (e) {
+        e.stopPropagation();
+        fitBoxHeight(pageId, btn.getAttribute('data-gs-fit'));
       };
     });
   }
@@ -1226,6 +1274,29 @@
     }
   }
 
+  // 2026-09-24: extracted from applyWidgetSwap()'s own tail (below) so the same
+  // measure-and-grow-until-it-fits loop can also run on demand from the new per-box
+  // "⤢ Fit height" button, not just right after a widget swap.
+  function fitBoxHeight(pageId, boxId) {
+    var grid = GRIDS[pageId];
+    var gridEl = grid ? grid.el : null;
+    if (!gridEl) return;
+    var item = gridEl.querySelector('.grid-stack-item[gs-id="' + boxId + '"]');
+    if (!item) return;
+    var inner = item.querySelector('.gs-inner');
+    if (!inner) return;
+    var content = item.querySelector('.grid-stack-item-content');
+    var targetPx = inner.getBoundingClientRect().height;
+    var unitPx = 12 + 10;
+    var h = Math.max(1, Math.ceil(targetPx / unitPx));
+    for (var guard = 0; guard < 10; guard++) {
+      grid.update(item, { h: Math.min(h, 400) });
+      var got = content.getBoundingClientRect().height;
+      if (got >= targetPx - 1) break;
+      h += Math.max(1, Math.ceil((targetPx - got) / unitPx));
+    }
+  }
+
   function applyWidgetSwap(pageId, boxId, widgetId) {
     var grid = GRIDS[pageId];
     var gridEl = grid ? grid.el : null;
@@ -1238,28 +1309,10 @@
     // handles both forms; see its own comment above for why.
     fillBoxContent(item, resolveWidget(pageId, widgetId));
     // Content height likely changed — grow/shrink this one box to fit, same
-    // measure-and-step approach as the initial layout pass, without moving
-    // or resizing any other box.
-    // 2026-09-24 fix: this block reads `inner`'s height below but never declared it in
-    // this function's own scope -- it used to fill content inline (with its own local
-    // `inner`) before tonight's fillBoxContent() extraction moved that into a separate
-    // function scope. Left as a bare reference, this threw "inner is not defined" on
-    // every single widget swap and silently skipped the resize step. Re-declaring it
-    // here, the same way fillBoxContent() itself does, fixes it.
-    var inner = item.querySelector('.gs-inner');
-    requestAnimationFrame(function () {
-      if (!inner) return;
-      var content = item.querySelector('.grid-stack-item-content');
-      var targetPx = inner.getBoundingClientRect().height;
-      var unitPx = 12 + 10;
-      var h = Math.max(1, Math.ceil(targetPx / unitPx));
-      for (var guard = 0; guard < 10; guard++) {
-        grid.update(item, { h: Math.min(h, 400) });
-        var got = content.getBoundingClientRect().height;
-        if (got >= targetPx - 1) break;
-        h += Math.max(1, Math.ceil((targetPx - got) / unitPx));
-      }
-    });
+    // measure-and-step approach as the initial layout pass, without moving or
+    // resizing any other box. (2026-09-24: now shared with the manual "Fit height"
+    // button via fitBoxHeight() above, instead of keeping its own copy of this loop.)
+    requestAnimationFrame(function () { fitBoxHeight(pageId, boxId); });
   }
 
   // pageId -> its <div class="grid-stack"> container id. A page appears here

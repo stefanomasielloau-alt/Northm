@@ -750,15 +750,17 @@
         var hideBtnHtml = customIdSet[boxIdForHandle]
           ? '<button type="button" class="gs-hide-btn" data-gs-hide="' + boxIdForHandle + '" title="Delete this tile — it was added from the widget library and can be added again the same way">🗑 Delete tile</button>'
           : '<button type="button" class="gs-hide-btn" data-gs-hide="' + boxIdForHandle + '" title="Hide this tile — bring it back later from + Add / unhide tile">✕ Hide</button>';
+        // 2026-09-24 (Stef: "I don't like the fit height, I prefer the ability to drag
+        // it as I need"): the manual per-tile "Fit height" button tried here was pulled
+        // back out at his request -- drag-to-resize (the corner handles, "e/se/s/sw/w")
+        // is the real answer and was already wired up via grid.enableResize()/the
+        // 'resizable' handles option, just easy to miss since GridStack only shows a
+        // handle on hover of that exact corner pixel. fitBoxHeight() itself is kept --
+        // applyWidgetSwap() below still uses it to auto-grow/shrink a box right after a
+        // widget swap, which was never in question.
         h.innerHTML = '<span>⠿⠿ drag to move · drag corner to resize</span>' +
           '<button type="button" class="gs-swap-btn" data-gs-swap="' + boxIdForHandle + '">⇄ Swap widget</button>' +
-          hideBtnHtml +
-          // 2026-09-24 (Stef: "Let's try the fit height"): manual, opt-in per-box resize
-          // to the content's actual current height -- a safe alternative to re-fitting
-          // every box on every load (which risks shrinking a box someone sized on
-          // purpose). Same measure-and-grow logic packItems() uses for a fresh layout,
-          // now callable on demand for one box -- see fitBoxHeight() below.
-          '<button type="button" class="gs-fit-btn" data-gs-fit="' + boxIdForHandle + '" title="Resize this tile to fit its current content — use if it looks too tall, or has empty space at the bottom">⤢ Fit height</button>';
+          hideBtnHtml;
         wrap.appendChild(h);
         while (c.firstChild) wrap.appendChild(c.firstChild);
         c.appendChild(wrap);
@@ -1037,12 +1039,6 @@
         }
         window.__northGridReenterEdit = pageId;
         if (typeof window.render === 'function') { window.render(); }
-      };
-    });
-    gridEl.querySelectorAll('.gs-fit-btn').forEach(function (btn) {
-      btn.onclick = function (e) {
-        e.stopPropagation();
-        fitBoxHeight(pageId, btn.getAttribute('data-gs-fit'));
       };
     });
   }

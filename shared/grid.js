@@ -518,6 +518,32 @@
     });
   }
 
+  // 2026-09-24 (Stef: "Id [I'd] rather have click-to-edit directly on the tile"): which Note
+  // widgets are currently in edit mode, keyed by custom_widgets id. Module-scoped state, not
+  // persisted anywhere -- same "nothing to recover if interrupted" tradeoff Ordo.html's own
+  // cwEditingId (the Admin & config form's edit toggle) already accepts for the same reason.
+  // Editing a note is now done in-place, right on its tile, instead of only via that admin form.
+  var noteEditingIds = {};
+  window.__northStartNoteEdit = function (cwId) {
+    noteEditingIds[cwId] = true;
+    if (typeof window.render === 'function') window.render();
+  };
+  window.__northCancelNoteEdit = function (cwId) {
+    delete noteEditingIds[cwId];
+    if (typeof window.render === 'function') window.render();
+  };
+  window.__northSaveNoteEdit = function (cwId, taId) {
+    var ta = document.getElementById(taId);
+    var val = ta ? ta.value : '';
+    var cw = (typeof CFG !== 'undefined' && CFG.customWidgets || []).filter(function (w) { return w.id === cwId; })[0];
+    if (cw) cw.body = val;
+    delete noteEditingIds[cwId];
+    // window.render() re-runs Ordo.html's central render(), which already ends every call with
+    // scheduleSupabaseSave() -- same debounced-save path every other CFG edit in the app uses,
+    // nothing extra needed here to persist the change.
+    if (typeof window.render === 'function') window.render();
+  };
+
   function resolveWidget(pageId, widgetId) {
     if (!widgetId) return null;
     var dot = widgetId.indexOf('.');
@@ -567,18 +593,32 @@
               renderJsonPayload(cw.latestPayload) + '</div></div>';
           }
           if (cwType === 'note') {
-            // 2026-09-24 (Stef: "a widget to add a random note or instructions to a page"): a
-            // free-text tile -- cw.body is plain text set from the Admin & config > Widget
-            // library form (not editable on the tile itself, same as every other external
-            // widget type), rendered here with a real HTML-escape (unlike cwEsc above, which
-            // only escapes quotes for an attribute) since this text becomes element content.
-            var escBody = function (v) {
-              return String(v == null ? '' : v)
-                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                .replace(/\n/g, '<br>');
+            // 2026-09-24 (Stef: "a widget to add a random note or instructions to a page", then
+            // "Id [I'd] rather have click-to-edit directly on the tile"): a free-text tile whose
+            // text lives in cw.body, editable two ways -- the Admin & config > Widget library
+            // form (name/category/hint, same as every other external widget type), or directly
+            // on the tile itself via the little Edit link below, using noteEditingIds/the
+            // window.__northStartNoteEdit family just above.
+            var escAttr = function (v) {
+              return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             };
-            return '<div class="card" style="height:100%"><div class="bd" style="height:100%;overflow:auto;padding:10px 12px;font-size:13px;line-height:1.5">' +
-              (cw.body ? escBody(cw.body) : '<span class="mini" style="opacity:.6">No text yet -- edit this widget in Admin &amp; config &gt; Widget library.</span>') +
+            var escBody = function (v) { return escAttr(v).replace(/\n/g, '<br>'); };
+            var canEditNote = (typeof canConfig === 'function') && canConfig();
+            if (noteEditingIds[cwId]) {
+              var taId = 'notebody_' + cwId.replace(/[^a-zA-Z0-9]/g, '');
+              return '<div class="card" style="height:100%"><div class="bd" style="height:100%;display:flex;flex-direction:column;padding:8px">' +
+                '<textarea id="' + taId + '" style="flex:1;width:100%;resize:none;font:inherit;font-size:13px;padding:6px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box" placeholder="Free text or instructions to show on the tile">' +
+                escAttr(cw.body) + '</textarea>' +
+                '<div style="margin-top:6px;text-align:right">' +
+                '<button class="btn sm" onclick="window.__northCancelNoteEdit(\'' + cwId + '\')">Cancel</button> ' +
+                '<button class="btn sm pri" onclick="window.__northSaveNoteEdit(\'' + cwId + '\',\'' + taId + '\')">Save</button>' +
+                '</div></div></div>';
+            }
+            return '<div class="card" style="height:100%"><div class="bd" style="height:100%;overflow:auto;padding:10px 12px;font-size:13px;line-height:1.5;position:relative">' +
+              (canEditNote ? '<a href="javascript:void(0)" onclick="window.__northStartNoteEdit(\'' + cwId + '\')" ' +
+                'style="position:absolute;top:4px;right:6px;font-size:11px;opacity:.55;text-decoration:none" title="Edit this note">&#9998; Edit</a>' : '') +
+              (cw.body ? escBody(cw.body) : '<span class="mini" style="opacity:.6">No text yet.' +
+                (canEditNote ? ' Click &#9998; Edit to add some.' : '') + '</span>') +
               '</div></div>';
           }
           var src = (cwType === 'gdoc') ? toEmbeddableDocUrl(cw.url) : cw.url;

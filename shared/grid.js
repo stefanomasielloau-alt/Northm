@@ -566,6 +566,21 @@
             return '<div class="card" style="height:100%"><div class="bd" style="height:100%;overflow:auto;padding:8px">' +
               renderJsonPayload(cw.latestPayload) + '</div></div>';
           }
+          if (cwType === 'note') {
+            // 2026-09-24 (Stef: "a widget to add a random note or instructions to a page"): a
+            // free-text tile -- cw.body is plain text set from the Admin & config > Widget
+            // library form (not editable on the tile itself, same as every other external
+            // widget type), rendered here with a real HTML-escape (unlike cwEsc above, which
+            // only escapes quotes for an attribute) since this text becomes element content.
+            var escBody = function (v) {
+              return String(v == null ? '' : v)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/\n/g, '<br>');
+            };
+            return '<div class="card" style="height:100%"><div class="bd" style="height:100%;overflow:auto;padding:10px 12px;font-size:13px;line-height:1.5">' +
+              (cw.body ? escBody(cw.body) : '<span class="mini" style="opacity:.6">No text yet -- edit this widget in Admin &amp; config &gt; Widget library.</span>') +
+              '</div></div>';
+          }
           var src = (cwType === 'gdoc') ? toEmbeddableDocUrl(cw.url) : cw.url;
           return '<div class="card" style="height:100%"><div class="bd" style="padding:0;height:100%">' +
             '<iframe src="' + cwEsc(src) + '" style="width:100%;height:100%;min-height:220px;border:0" ' +

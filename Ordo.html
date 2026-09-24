@@ -1633,7 +1633,7 @@ async function saveToSupabase(){
     upsertRows('cost_buckets', CFG.costBuckets, c=>({id:c.id,code:c.code,label:c.label,dept:c.dept||'Marketing',ext_code:c.extCode||''})),
     upsertRows('programmes', CFG.programmes, p=>({id:p.id,name:p.name,owner:p.owner||'',focus:p.focus||'',status:p.status||'Active',tracking_ref:p.trackingRef||null,cloned_from_id:p.clonedFromId||null,notes:p.notes||''})),
     upsertRows('versions', CFG.versions, v=>({id:v.id,name:v.name,kind:v.kind,locked:!!v.locked})),
-    upsertRows('custom_widgets', CFG.customWidgets, w=>({id:w.id,name:w.name,category_page_id:w.categoryPageId||null,hint:w.hint||'',type:w.type||'iframe',url:w.url||'',webhook_token:w.webhookToken||null})), // latest_payload deliberately excluded -- that column is written by the webhook receiver, never by North's own save
+    upsertRows('custom_widgets', CFG.customWidgets, w=>({id:w.id,name:w.name,category_page_id:w.categoryPageId||null,hint:w.hint||'',type:w.type||'iframe',url:w.url||'',webhook_token:w.webhookToken||null,body:w.body||null})), // latest_payload deliberately excluded -- that column is written by the webhook receiver, never by North's own save
     /* NOT upsertRows() (2026-09-09 fix, live production bug): roles is NOT Strategy's table --
        the only thing this page ever edits on a role is requireCommitOnEdit, via
        toggleRequireCommit() above ("Requires commit on plan edits" panel). upsertRows()'s
@@ -1902,7 +1902,7 @@ async function loadFromSupabase(){
     const { data: cwData, error: cwErr } = await orgScoped(sb.from('custom_widgets')
       .select('id,org_id,name,category_page_id,hint,type,url,webhook_token,latest_payload'));
     if(!cwErr) CFG.customWidgets = (cwData||[]).map(w=>({
-      id:w.id, orgId:w.org_id, name:w.name, categoryPageId:w.category_page_id||null, hint:w.hint||'', type:w.type||'iframe', url:w.url||'',
+      id:w.id, orgId:w.org_id, name:w.name, categoryPageId:w.category_page_id||null, hint:w.hint||'', type:w.type||'iframe', url:w.url||'', body:w.body||'',
       webhookToken:w.webhook_token||null, latestPayload:w.latest_payload==null?null:w.latest_payload
     }));
   }catch(e){ /* custom_widgets migration not run yet -- Widget library's External widgets section shows none. */ }
@@ -3359,9 +3359,9 @@ function pageAdmin(){
       ${CFG.customWidgets.length?CFG.customWidgets.map(w=>`<tr>
         <td class="lb">${esc(w.name)}</td>
         <td>${esc(w.categoryPageId?(pageLabels[w.categoryPageId]||w.categoryPageId):'External widgets')}</td>
-        <td>${esc({iframe:'Embed',gdoc:'Doc/Sheet',api:'API',webhook:'Webhook'}[w.type]||w.type)}</td>
+        <td>${esc({iframe:'Embed',gdoc:'Doc/Sheet',api:'API',webhook:'Webhook',note:'Note'}[w.type]||w.type)}</td>
         <td class="mini" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-          ${w.type==='webhook'?`POST ${esc(SUPABASE_URL)}/functions/v1/widget-webhook/${esc(w.id)}?token=${esc(w.webhookToken||'(not deployed yet)')}`:esc(w.url)}
+          ${w.type==='webhook'?`POST ${esc(SUPABASE_URL)}/functions/v1/widget-webhook/${esc(w.id)}?token=${esc(w.webhookToken||'(not deployed yet)')}`:(w.type==='note'?esc((w.body||'').slice(0,80)):esc(w.url))}
         </td>
         <td class="n"><button class="btn sm" ${dis} onclick="editCustomWidget('${w.id}')">Edit</button>
           <button class="btn sm dgr" ${dis} onclick="removeCustomWidget('${w.id}')">Remove</button></td>
@@ -3380,9 +3380,12 @@ function pageAdmin(){
           <option value="gdoc" ${cwEdit&&cwEdit.type==='gdoc'?'selected':''}>Google Doc / Sheet / Slides (view)</option>
           <option value="api" ${cwEdit&&cwEdit.type==='api'?'selected':''}>Live API (polls a JSON URL)</option>
           <option value="webhook" ${cwEdit&&cwEdit.type==='webhook'?'selected':''}>Webhook-fed panel (no URL -- you get an endpoint)</option>
+          <option value="note" ${cwEdit&&cwEdit.type==='note'?'selected':''}>Note / free text (no URL -- type the text below)</option>
         </select></div>
-        <div class="f"><label>URL <span class="mini">(not used for Webhook)</span></label>
+        <div class="f"><label>URL <span class="mini">(not used for Webhook or Note)</span></label>
           <input class="in v" id="cwurl" placeholder="https://…" value="${cwEdit?esc(cwEdit.url):''}"></div>
+        <div class="f"><label>Text <span class="mini">(only used for Note)</span></label>
+          <textarea class="in v" id="cwbody" rows="4" placeholder="Free text or instructions to show on the tile">${cwEdit?esc(cwEdit.body||''):''}</textarea></div>
         <div class="mini" style="margin:-6px 0 10px">
           <b>Embedded page:</b> any URL that allows being framed.
           <b>Google Doc/Sheet:</b> paste the normal "Copy link" share URL -- converted to an embeddable
@@ -3391,6 +3394,9 @@ function pageAdmin(){
           public APIs block this with CORS; a small server-side proxy can be built if that happens).
           <b>Webhook:</b> leave URL blank -- adding it gives you a unique endpoint + token below the
           table above to have another system POST data to; the tile shows whatever it last received.
+          <b>Note:</b> leave URL blank -- type the text to display in the Text box above; the tile
+          just shows it as-is (line breaks kept). Editing it later is done from this same form, not
+          on the tile itself.
           Two-way "insert/write back" to a Doc/Sheet isn't built yet -- it needs a Google OAuth app
           set up first, a separate step.
         </div>
@@ -3400,7 +3406,7 @@ function pageAdmin(){
         </select></div>
         <div class="f"><label>Hint <span class="mini">(optional, shown in the picker)</span></label>
           <input class="in v" id="cwhint" placeholder="One line describing what this shows" value="${cwEdit?esc(cwEdit.hint):''}"></div>
-        <button class="btn sm pri" onclick="${cwEdit?`updateCustomWidget('${cwEdit.id}'`:'addCustomWidget('}document.getElementById('cwname').value,document.getElementById('cwurl').value,document.getElementById('cwcat').value,document.getElementById('cwhint').value,document.getElementById('cwtype').value)">${cwEdit?'Save changes':'Add widget'}</button>
+        <button class="btn sm pri" onclick="${cwEdit?`updateCustomWidget('${cwEdit.id}'`:'addCustomWidget('}document.getElementById('cwname').value,document.getElementById('cwurl').value,document.getElementById('cwcat').value,document.getElementById('cwhint').value,document.getElementById('cwtype').value,document.getElementById('cwbody').value)">${cwEdit?'Save changes':'Add widget'}</button>
         ${cwEdit?`<button class="btn sm" onclick="cwEditingId=null;render();">Cancel</button>`:''}
       </div></div>`;
     }
@@ -3591,14 +3597,15 @@ let cwEditingId = null; // 2026-09-24: which CFG.customWidgets row the Add form 
   // Widget library) is currently editing, if any -- null means the form is in plain Add mode.
   // Ephemeral UI state only, deliberately not part of UI{} / not persisted -- there's nothing to
   // recover if a reload interrupts an in-progress edit, same as any other unsaved form on this page.
-function addCustomWidget(name,url,categoryPageId,hint,type){
+function addCustomWidget(name,url,categoryPageId,hint,type,body){
   if(!canConfig()){ toast('Your role cannot change configuration.'); return; }
-  name=(name||'').trim(); url=(url||'').trim(); type=type||'iframe';
+  name=(name||'').trim(); url=(url||'').trim(); type=type||'iframe'; body=(body||'').trim();
   // 2026-09-24: a webhook widget has no embed/fetch URL at all -- it's a receiving endpoint,
-  // generated here, not typed in -- so URL isn't required for that type. Every other type still
-  // needs one (it's what gets embedded or polled).
-  if(!name||(!url&&type!=='webhook')){ toast(type==='webhook'?'Name is required.':'Name and URL are both required.'); return; }
-  const w={id:uid('cw'),name:name,categoryPageId:categoryPageId||null,hint:(hint||'').trim(),type:type,url:url,
+  // generated here, not typed in -- so URL isn't required for that type. A note widget has no
+  // URL either -- its content is the typed text -- so it's exempted the same way. Every other
+  // type still needs a URL (it's what gets embedded or polled).
+  if(!name||(!url&&type!=='webhook'&&type!=='note')){ toast((type==='webhook'||type==='note')?'Name is required.':'Name and URL are both required.'); return; }
+  const w={id:uid('cw'),name:name,categoryPageId:categoryPageId||null,hint:(hint||'').trim(),type:type,url:url,body:body,
     webhookToken:type==='webhook'?crypto.randomUUID():null, latestPayload:null};
   CFG.customWidgets.push(w);
   logAudit('add','Custom widgets/'+name);
@@ -3615,12 +3622,12 @@ function editCustomWidget(id){
   if(!CFG.customWidgets.find(x=>x.id===id))return;
   cwEditingId=id; render();
 }
-function updateCustomWidget(id,name,url,categoryPageId,hint,type){
+function updateCustomWidget(id,name,url,categoryPageId,hint,type,body){
   if(!canConfig()){ toast('Your role cannot change configuration.'); return; }
   const w=CFG.customWidgets.find(x=>x.id===id); if(!w)return;
-  name=(name||'').trim(); url=(url||'').trim();
-  if(!name||(!url&&w.type!=='webhook')){ toast(w.type==='webhook'?'Name is required.':'Name and URL are both required.'); return; }
-  w.name=name; w.url=url; w.categoryPageId=categoryPageId||null; w.hint=(hint||'').trim();
+  name=(name||'').trim(); url=(url||'').trim(); body=(body||'').trim();
+  if(!name||(!url&&w.type!=='webhook'&&w.type!=='note')){ toast((w.type==='webhook'||w.type==='note')?'Name is required.':'Name and URL are both required.'); return; }
+  w.name=name; w.url=url; w.body=body; w.categoryPageId=categoryPageId||null; w.hint=(hint||'').trim();
   // type intentionally not updated from here -- see editCustomWidget()'s comment above.
   cwEditingId=null;
   logAudit('edit','Custom widgets/'+name);

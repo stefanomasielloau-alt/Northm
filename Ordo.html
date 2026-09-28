@@ -368,6 +368,12 @@ tr.gate-drag-over td{box-shadow:inset 0 2px 0 var(--input)}
   border-bottom:1px solid var(--line);border-radius:var(--r) var(--r) 0 0;cursor:move;user-select:none;
 }
 .grid-edit-mode .gs-item-handle{display:flex}
+/* 2026-09-28 (Stef: option A): in edit mode the drag bar floats over the top of the tile instead
+   of pushing the content down, so a tile's size and content position are identical in view and
+   edit mode and nothing is clipped at the bottom while editing. */
+.gs-inner{position:relative}
+.grid-edit-mode .gs-item-handle{position:absolute;top:0;left:0;right:0;z-index:5;
+  background:rgba(245,247,251,.96);box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .grid-edit-mode .grid-stack-item{outline:1px dashed #B9C2D6;border-radius:var(--r)}
 .gs-swap-btn{
   font-size:10.5px;padding:2px 8px;border-radius:var(--r-sm);border:1px solid var(--line);

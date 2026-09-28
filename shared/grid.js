@@ -955,7 +955,11 @@
     });
 
     var grid = GridStack.init({
-      column: 12, cellHeight: 12, margin: 10, float: true, animate: false,
+      // 2026-09-28 (Stef: "the padding top and bottom of each tile is affecting the spacing"):
+      // GridStack applies `margin` to EVERY side of every tile's content, so margin 10 gave a
+      // 20px gap between neighbouring tiles (10 + 10) and cost each tile 20px of height. 4 gives
+      // a tidy 8px gap. Heights still auto-fit, since fitting measures the real content area.
+      column: 12, cellHeight: 12, margin: 4, float: true, animate: false,
       disableDrag: true, disableResize: true,
       handle: '.gs-item-handle', resizable: { handles: 'e, se, s, sw, w' },
       // 2026-09-28 (Stef: "I can't resize my tiles"): GridStack's default only shows resize

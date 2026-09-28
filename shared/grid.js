@@ -957,7 +957,12 @@
     var grid = GridStack.init({
       column: 12, cellHeight: 12, margin: 10, float: true, animate: false,
       disableDrag: true, disableResize: true,
-      handle: '.gs-item-handle', resizable: { handles: 'e, se, s, sw, w' }
+      handle: '.gs-item-handle', resizable: { handles: 'e, se, s, sw, w' },
+      // 2026-09-28 (Stef: "I can't resize my tiles"): GridStack's default only shows resize
+      // handles while the pointer is over a tile, as thin invisible strips -- easy to miss. In
+      // edit mode they are now always shown (outside edit mode resizing is disabled, which
+      // hides them anyway).
+      alwaysShowResizeHandle: true
     }, gridEl);
     GRIDS[pageId] = grid;
 
@@ -980,6 +985,13 @@
         // by the very next line. Dropping hidden ids from the layout before handing
         // it to grid.load() stops that reinsertion for good.
         savedLayout = savedLayout.filter(function (s) { return hiddenNow[s.id] !== '__hidden__'; });
+        // 2026-09-28 (Stef: "the bounding box remains when I delete it"): the same ghost problem
+        // for a DELETED custom tile -- its id is gone from the page but still in the saved layout,
+        // so grid.load() recreated an empty box for it. Only hand grid.load() ids that actually
+        // exist on the page right now.
+        var presentIds = {};
+        items.forEach(function (el) { presentIds[el.getAttribute('gs-id')] = true; });
+        savedLayout = savedLayout.filter(function (s) { return presentIds[s.id]; });
       }
       if (savedLayout && savedLayout.length) {
         grid.load(savedLayout);
@@ -1140,6 +1152,9 @@
           if (!gridEl.contains(el)) { gridEl.appendChild(el); }
           grid.makeWidget(el);
         });
+        // 2026-09-28: a tile added while already in edit mode is registered here, after edit
+        // mode was switched on -- re-apply it so the new tile can be moved and resized too.
+        if (editing) { grid.enableMove(true); grid.enableResize(true); }
         var maxY = 0;
         savedLayout.forEach(function (s) { maxY = Math.max(maxY, (s.y || 0) + (s.h || 0)); });
         packItems(missingFromSaved, maxY);

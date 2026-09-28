@@ -152,6 +152,56 @@ svg.canvas{display:block; cursor:default;}
 .authbrand img{width:auto;max-width:210px;height:auto;display:block;margin:0 auto 8px;}
 .authbrand .ab-name{font-weight:800;font-size:18px;color:var(--ink);}
 .authbrand .ab-ver{font-size:9px;letter-spacing:.08em;color:var(--ink-3);font-weight:700;text-transform:uppercase;margin-top:1px;}
+/* 2026-09-28 (Stef: "Process Maps as a rules engine"): Process rules (preview) page */
+.pr-prev{background:var(--warn-bg);color:var(--warn);vertical-align:middle;margin-left:4px}
+.pr-draft{font-size:10.5px;font-weight:700;color:var(--warn);background:var(--warn-bg);border:1px solid #F3DDBB;border-radius:20px;padding:2px 9px;white-space:nowrap}
+.pr-layout{display:flex;gap:14px;align-items:flex-start}
+.pr-procs{width:230px;flex-shrink:0;position:sticky;top:70px}
+.pr-body{flex:1 1 0;min-width:0;width:0}
+.pr-proc{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 14px;color:var(--ink-2);text-decoration:none;font-size:12.5px;border-left:3px solid transparent}
+.pr-proc:hover{background:var(--canvas-2)}
+.pr-proc.on{background:var(--canvas-2);border-left-color:var(--nav);color:var(--ink);font-weight:700}
+.pr-cnt{font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.pr-sub{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);font-weight:700;padding:12px 14px 4px;border-top:1px solid var(--line-2);margin-top:6px}
+.pr-strip{display:flex;align-items:stretch;overflow-x:auto;padding:4px 2px 8px}
+.pr-step{flex:1 0 118px;max-width:180px;background:var(--surface);border:1.5px solid var(--line);border-top:4px solid var(--nav);border-radius:var(--r);padding:10px 11px;cursor:pointer;display:flex;flex-direction:column;gap:6px;transition:box-shadow .12s,border-color .12s}
+.pr-step:hover{box-shadow:var(--sh-2)}
+.pr-step.sel{border-color:var(--nav);box-shadow:0 0 0 3px rgba(58,90,140,.15)}
+.pr-step.t-ok{border-top-color:var(--ok)} .pr-step.t-bad{border-top-color:var(--bad)} .pr-step.t-warn{border-top-color:var(--warn)}
+.pr-sname{font-weight:700;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pr-n{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--ink);background:none;border:none;padding:0;text-align:left;cursor:pointer;font-family:inherit;line-height:1.1;align-self:flex-start;border-bottom:1px dashed var(--line)}
+.pr-n:hover,.pr-n.on{color:var(--nav);border-bottom-color:var(--nav)}
+.pr-arrow{flex:0 0 auto;display:flex;align-items:center;padding:0 4px;color:var(--ink-3)}
+.pr-chip{background:#E3E8FD;color:#1F3AC7}
+.pr-note a,.pr-body a,.pr-procs .mini a{color:var(--nav)}
+.pr-rules td a{text-decoration:none;font-weight:600}
+.pr-hit{background:var(--ok-bg);color:var(--ok)}
+.pr-rules td{vertical-align:top;padding-top:8px;padding-bottom:8px}
+.pr-rules tr.pr-off td{opacity:.55}
+.pr-modal{width:min(820px,100%)}
+.pr-sec{display:flex;gap:12px;align-items:flex-start;border-top:1px solid var(--line-2);padding:12px 0}
+.pr-kw{flex:0 0 52px;font-size:11px;font-weight:800;letter-spacing:.06em;color:#fff;background:var(--nav);border-radius:4px;text-align:center;padding:4px 0;margin-top:2px}
+.pr-act{border:1px solid var(--line);border-radius:var(--r);padding:10px;margin-bottom:8px;background:var(--canvas)}
+.pr-num{width:20px;height:20px;border-radius:50%;background:var(--nav);color:#fff;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.pr-fields{display:flex;flex-wrap:wrap;gap:10px}
+.pr-f{flex:1 1 220px;min-width:0}
+.pr-f.wide{flex-basis:100%}
+.pr-f .in,.pr-f textarea.in{width:100%}
+.pr-f select.in{max-width:100%}
+.pr-f .lbl{display:block;margin-bottom:3px}
+.pr-picks{max-height:110px;overflow:auto;border:1px solid var(--line-2);background:#fff;border-radius:5px;padding:4px 6px;margin-top:4px;font-size:12px}
+.pr-picks label{display:block;white-space:nowrap}
+.pr-dry{border:1px solid var(--line-2);border-radius:var(--r);padding:10px 12px;margin-bottom:10px}
+.pr-match{border-top:1px dashed var(--line);padding:6px 0 2px}
+.pr-mname{font-weight:600;font-size:12.5px}
+.pr-match ol{margin:3px 0 4px;padding-left:20px;font-size:12px;color:var(--ink-2)}
+.pr-match li{margin:2px 0;word-break:break-word}
+@media (max-width:860px){
+  .pr-layout{flex-direction:column}
+  .pr-procs{width:100%;position:static}
+  .pr-body{width:100%}
+  .pr-sec{flex-direction:column;gap:6px}
+}
 </style>
 </head>
 <body>
@@ -2298,10 +2348,748 @@ function pageEditor(){
   return html;
 }
 
+/* ============================================================================
+   2026-09-28 (Stef: "rethink Process Maps as a rules engine -- visualize existing
+   processes (or draw your own), then attach triggers at any step: WHEN something
+   happens at a step, IF conditions hold, THEN run actions").
+   PROCESS RULES (PREVIEW). Everything in this block is a client-side preview:
+   - Live processes are derived from records this page already reads (plus one
+     fail-soft, read-only select('*') per table, loaded lazily the first time this
+     page opens, so boot is unaffected and a missing column never breaks anything).
+   - Rules are DRAFTS kept in this browser's localStorage only
+     (northm_schema_rules_draft_<orgId>) -- nothing here runs, sends, or writes.
+   - "Test against live data" is a pure dry run: no email/alert/webhook/agent/insert.
+   - The ONLY database path is "Publish as automation", which goes through the
+     Automations page's own addAutomation() + the module's normal save, gated by
+     canConfig() and a confirm, and only for rules that map 1:1 onto an existing
+     automation trigger/action shape.
+   Reuses: resolveTargetUserIds(), targetSummary(), automationMatches()'s overdue /
+   low-stock definitions, CFG.agentDestinations, CFG.orgUsers/orgRegions/teams,
+   CFG.evalExternalEvents, addAutomation(), canConfig()/isViewer(), esc(), toast().
+   ============================================================================ */
+const PR_TODAY=()=>new Date().toISOString().slice(0,10);
+const PR_PROCS=[
+  {key:'campaign', label:'Campaign sign-off', obj:'Campaign', table:'campaigns', page:'Cursus.html', stepField:'signoff_status',
+    canon:['Draft','Submitted','Approved','Rejected'], last:['Rejected'], valueField:'budget',
+    dateTry:['signoff_updated_at','status_changed_at','updated_at','created_at','start_date'],
+    keyCols:[['budget','Budget'],['actual','Actual'],['committed','Committed'],['owner_name','Owner'],['start_date','Start'],['end_date','End']],
+    good:['Approved'], bad:['Rejected']},
+  {key:'deal', label:'Deal pipeline', obj:'Deal', table:'augur_deals', page:'Augur.html', stepField:'stage',
+    canon:['Prospecting','Qualifying','Proposal','Negotiation','Closed Won','Closed Lost'], last:['Closed Won','Closed Lost'], valueField:'value',
+    dateTry:['stage_changed_at','updated_at','created_at','close_date'],
+    keyCols:[['account','Account'],['value','Value'],['owner_name','Owner'],['close_date','Close date'],['updated_at','Updated']],
+    good:['Closed Won'], bad:['Closed Lost']},
+  {key:'event', label:'Event lifecycle', obj:'Event', table:'eventus_events', page:'Eventus.html', stepField:'status',
+    canon:['Planned','Approved','Confirmed','Completed','Cancelled'], last:['Completed','Cancelled'], valueField:'budget',
+    dateTry:['status_changed_at','updated_at','created_at','start_date'],
+    keyCols:[['start_date','Start'],['end_date','End'],['location','Location'],['budget','Budget'],['owner_name','Owner']],
+    good:['Completed'], bad:['Cancelled']},
+  {key:'task', label:'Task lifecycle', obj:'Task', table:'tasks', page:'Cursus.html', stepField:'status',
+    canon:['Planned','Submitted','Approved','In progress','Overdue','Completed'], last:['Overdue','Completed'], valueField:'planned_cost',
+    dateTry:['updated_at','created_at','due_date','start_date'],
+    keyCols:[['due_date','Due'],['owner','Owner'],['owner_name','Owner'],['type','Type'],['planned_cost','Planned cost']],
+    good:['Completed'], bad:['Overdue']},
+  {key:'asset', label:'Asset stock', obj:'Asset', table:'assets', page:'Custodia.html', stepField:null,
+    canon:['OK','Low','Out'], last:[], valueField:'stock',
+    dateTry:['updated_at','created_at'],
+    keyCols:[['stock','Stock'],['low_stock_at','Low at'],['location','Location'],['category','Category']],
+    good:['OK'], bad:['Out'], warn:['Low']}
+];
+/* Read-only data cache for this page (NOT in CFG, so it never lands in saveLocal()'s
+   autosave blob or any upsert). Before the lazy select('*') lands -- or if it fails --
+   rows fall back to the narrow CFG.eval* reads loadFromSupabase() already did. */
+const PR_DATA={loaded:false, loading:false, rows:{}, src:{}};
+const PR_FALLBACK={
+  campaigns:()=>(CFG.evalCampaigns||[]).map(c=>({id:c.id,name:c.name,signoff_status:c.signoffStatus,budget:c.budget,actual:c.actual,committed:c.committed,
+    start_date:c.start||null,end_date:c.end||null,owner_id:c.ownerId,owner_name:c.ownerName,owner_email:c.ownerEmail})),
+  tasks:()=>(CFG.evalTasks||[]).map(t=>({id:t.id,name:t.name,campaign_id:t.campaignId,due_date:t.dueDate||null,status:t.status})),
+  augur_deals:()=>(CFG.evalDeals||[]).map(d=>({id:d.id,name:d.name,stage:d.stage})),
+  eventus_events:()=>(CFG.evalEvents||[]).map(e=>({id:e.id,name:e.name,status:e.status})),
+  assets:()=>(CFG.evalAssets||[]).map(a=>({id:a.id,name:a.name,stock:a.stock,low_stock_at:a.lowStockAt}))
+};
+async function prEnsureData(){
+  if(PR_DATA.loaded||PR_DATA.loading) return;
+  PR_DATA.loading=true;
+  await Promise.all(Object.keys(PR_FALLBACK).map(async t=>{
+    try{
+      let q=sb.from(t).select('*');
+      if(typeof _savOrgFilter!=='undefined' && _savOrgFilter) q=q.eq('org_id',_savOrgFilter);
+      const { data, error } = await q.limit(5000);
+      if(error) throw error;
+      PR_DATA.rows[t]=data||[]; PR_DATA.src[t]='full';
+    }catch(e){
+      console.warn('Process rules preview: full read of '+t+' unavailable -- using the basic fields already loaded.', e);
+      PR_DATA.src[t]='basic';
+    }
+  }));
+  PR_DATA.loaded=true; PR_DATA.loading=false;
+  if(UI.page==='rules') render();
+}
+window.prEnsureData=prEnsureData;
+function prRows(table){ return PR_DATA.rows[table] || (PR_FALLBACK[table]?PR_FALLBACK[table]():[]); }
+
+function prIsOverdue(t){ return !!(t.due_date && String(t.due_date).slice(0,10)<PR_TODAY() && t.status!=='Completed'); } /* same definition as automationMatches('task_overdue') */
+function prAssetStep(a){
+  const s=a.stock==null?null:Number(a.stock), lo=a.low_stock_at==null?null:Number(a.low_stock_at);
+  if(s==null||isNaN(s)) return 'Untracked';
+  if(s<=0) return 'Out';
+  if(lo!=null && !isNaN(lo) && s<=lo) return 'Low'; /* same "stock <= low_stock_at" definition as asset_low_stock */
+  return 'OK';
+}
+function prOwnerOf(row){
+  const direct=row.owner_name||row.owner||row.assignee_name||row.assigned_to_name;
+  if(direct && typeof direct==='string' && !/^[0-9a-f-]{36}$/i.test(direct)) return direct;
+  const oid=row.owner_id||row.assignee_id||(typeof row.owner==='string'?row.owner:null);
+  const u=oid?byId(CFG.orgUsers||[],oid):null;
+  return u?u.name:'';
+}
+function prLink(page){ try{ return new URL(page, location.href).href; }catch(e){ return page; } }
+function prProc(key){
+  if(String(key).startsWith('wf:')){
+    const w=byId(CFG.workflows||[], key.slice(3)); if(!w) return null;
+    return {key:key, label:w.name||'Untitled diagram', obj:'Diagram step', isDiagram:true, wf:w, page:'Schema.html', canon:[], last:[], keyCols:[], dateTry:[]};
+  }
+  return PR_PROCS.find(p=>p.key===key)||null;
+}
+/* One normalised record list per process: {id,name,step,fields,value,owner,link}. */
+function prRecords(P){
+  if(!P || P.isDiagram) return [];
+  const rows=prRows(P.table);
+  return rows.map(r=>{
+    let step;
+    if(P.key==='asset') step=prAssetStep(r);
+    else if(P.key==='task' && prIsOverdue(r)) step='Overdue';
+    else step=(r[P.stepField]==null||r[P.stepField]==='')?'(not set)':String(r[P.stepField]);
+    return {id:r.id, name:r.name||r.title||'(unnamed)', step:step, fields:r,
+      value:(P.valueField && r[P.valueField]!=null)?r[P.valueField]:'', owner:prOwnerOf(r), link:prLink(P.page)};
+  });
+}
+function prSteps(P){
+  if(!P) return [];
+  if(P.isDiagram){
+    const w=P.wf, lanes=w.lanes||[];
+    const laneIx=n=>{
+      let i=lanes.findIndex(l=>l.id===n.laneId);
+      if(i<0) i=lanes.findIndex(l=>n.y>=l.y && n.y<l.y+(l.height||0));
+      return i<0?999:i;
+    };
+    return (w.nodes||[]).slice().sort((a,b)=>(laneIx(a)-laneIx(b))||((a.x||0)-(b.x||0)))
+      .map(n=>({key:n.id, label:n.label||'(unlabelled)', lane:(lanes[laneIx(n)]||{}).name||''}));
+  }
+  const recs=prRecords(P);
+  const present=new Set(recs.map(r=>r.step));
+  const lastSet=new Set(P.last||[]);
+  const out=[];
+  if(present.has('(not set)')) out.push('(not set)');
+  (P.canon||[]).filter(s=>!lastSet.has(s)).forEach(s=>out.push(s));
+  const extras=Array.from(present).filter(s=>s!=='(not set)' && !(P.canon||[]).includes(s) && s!=='Untracked').sort();
+  /* Extra distinct values go before the terminal steps, so Closed Won/Lost etc. stay last. */
+  extras.forEach(s=>out.push(s));
+  (P.last||[]).forEach(s=>out.push(s));
+  if(present.has('Untracked')) out.push('Untracked');
+  return out.map(s=>({key:s,label:s,tone:(P.good||[]).includes(s)?'ok':(P.bad||[]).includes(s)?'bad':(P.warn||[]).includes(s)?'warn':''}));
+}
+function prFieldKeys(P){
+  if(!P||P.isDiagram) return [];
+  const set=new Set();
+  prRows(P.table).slice(0,300).forEach(r=>Object.keys(r).forEach(k=>set.add(k)));
+  ['id','org_id'].forEach(k=>set.delete(k));
+  return Array.from(set).sort();
+}
+function prNumericKeys(P){
+  if(!P||P.isDiagram) return [];
+  const rows=prRows(P.table).slice(0,300);
+  return prFieldKeys(P).filter(k=>rows.some(r=>typeof r[k]==='number' || (typeof r[k]==='string' && r[k]!=='' && !isNaN(Number(r[k])) && !/^\d{4}-\d{2}-\d{2}/.test(r[k]))));
+}
+function prDateKeys(P){
+  if(!P||P.isDiagram) return [];
+  const rows=prRows(P.table).slice(0,300);
+  return prFieldKeys(P).filter(k=>rows.some(r=>typeof r[k]==='string' && /^\d{4}-\d{2}-\d{2}/.test(r[k])));
+}
+function prDefaultDateField(P, stepKey){
+  const keys=prDateKeys(P);
+  if(P && P.key==='task' && stepKey==='Overdue' && keys.includes('due_date')) return 'due_date';
+  return ((P&&P.dateTry)||[]).find(k=>keys.includes(k)) || keys[0] || '';
+}
+function prDaysSince(v){ const t=Date.parse(v); return isNaN(t)?null:Math.floor((Date.now()-t)/86400000); }
+
+/* ---------- draft storage (this browser only) ---------- */
+let PR_RULES=null, PR_RULES_KEY=null;
+function prStoreKey(){
+  const o=(typeof _savOrgFilter!=='undefined' && _savOrgFilter) ? _savOrgFilter : (_orgId||'none');
+  return 'northm_schema_rules_draft_'+o;
+}
+function prRules(){
+  const k=prStoreKey();
+  if(PR_RULES && PR_RULES_KEY===k) return PR_RULES;
+  PR_RULES_KEY=k; PR_RULES=[];
+  try{ const raw=localStorage.getItem(k); const p=raw?JSON.parse(raw):null; if(p && Array.isArray(p.rules)) PR_RULES=p.rules; }catch(e){ PR_RULES=[]; }
+  return PR_RULES;
+}
+function prSaveRules(){
+  try{ localStorage.setItem(prStoreKey(), JSON.stringify({v:1, savedAt:new Date().toISOString(), rules:prRules()})); return true; }
+  catch(e){ toast('Could not save the draft in this browser (storage blocked or full).'); return false; }
+}
+
+/* ---------- page UI state (transient) ---------- */
+const PRU={proc:'campaign', step:null, listStep:null, editing:null, dry:{}, dryOrder:[]};
+function prSelectProc(key){ PRU.proc=key; PRU.step=null; PRU.listStep=null; render(); }
+function prSelectStep(i){ const s=prSteps(prProc(PRU.proc))[i]; if(!s) return; PRU.step=s.key; render(); }
+function prToggleList(i){ const s=prSteps(prProc(PRU.proc))[i]; if(!s) return; PRU.step=s.key; PRU.listStep=(PRU.listStep===s.key?null:s.key); render(); }
+window.prSelectProc=prSelectProc; window.prSelectStep=prSelectStep; window.prToggleList=prToggleList;
+function prSelectProcIx(i){ const all=prAllProcs(); if(all[i]) prSelectProc(all[i].key); }
+window.prSelectProcIx=prSelectProcIx;
+function prAllProcs(){ return PR_PROCS.concat((CFG.workflows||[]).map(w=>prProc('wf:'+w.id)).filter(Boolean)); }
+
+const PR_WHEN_TYPES=[
+  ['enters','Enters this step'],['stuck','Still at this step after N days'],['threshold','A field crosses a threshold'],
+  ['schedule','On a schedule'],['external','An external event (from Hub)'],['manual','Manual (Run now)']
+];
+const PR_ACTION_TYPES=[
+  ['note','Log a note'],['alert','Alert people'],['email','Send email'],['task','Create a task'],['escalate','Escalate'],
+  ['calc','Calculate / update a field'],['webhook','Call an external app (webhook)'],['agent','AI agent'],['chat','Chat message (Slack/Teams)']
+];
+const PR_OPS=[['eq','='],['ne','≠'],['gt','>'],['lt','<'],['contains','contains'],['empty','is empty']];
+function prNewAction(type){
+  const base={type:type};
+  if(type==='note') return Object.assign(base,{message:'{{name}} is now at {{step}}'});
+  if(type==='alert') return Object.assign(base,{targetType:'org',targetIds:[],message:'{{name}} reached {{step}} — {{link}}'});
+  if(type==='email') return Object.assign(base,{recipientIds:[],subject:'{{name}} is at {{step}}',body:'Hi,\n\n{{name}} (owner: {{owner}}) is now at {{step}}.\n\n{{link}}'});
+  if(type==='task') return Object.assign(base,{title:'Follow up: {{name}}',ownerId:'{{owner}}',dueDays:3});
+  if(type==='escalate') return Object.assign(base,{days:5,targetType:'users',targetIds:[],message:'{{name}} has been at {{step}} for a while — please review. {{link}}'});
+  if(type==='calc') return Object.assign(base,{field:'',expr:'=value*0.2'});
+  if(type==='webhook') return Object.assign(base,{url:'https://',method:'POST',body:'{"name":"{{name}}","step":"{{step}}","value":"{{value}}"}'});
+  if(type==='agent') return Object.assign(base,{mode:'push',destId:((CFG.agentDestinations||[]).find(d=>d.isOrgDefault)||{}).id||'',brief:'Summarise the status of {{name}} ({{step}}, {{value}}) and suggest a next step.',intoField:''});
+  if(type==='chat') return Object.assign(base,{destId:'',message:'{{name}} → {{step}} ({{link}})'});
+  return base;
+}
+function prBlankRule(procKey, stepKey){
+  const P=prProc(procKey);
+  return {id:uid('prule'), name:'', procKey:procKey, step:stepKey, enabled:true,
+    when:{type:'enters', days:7, dateField:prDefaultDateField(P,stepKey), field:'', op:'gt', value:'', pctOf:'', freq:'daily', time:'09:00', key:''},
+    conds:[], actions:[prNewAction('note')], createdAt:new Date().toISOString(), updatedAt:'', publishedAutomationId:null};
+}
+function prOpenNew(){
+  if(!PRU.step){ toast('Select a step first.'); return; }
+  PRU.editing=prBlankRule(PRU.proc, PRU.step); PRU.editingIsNew=true; render();
+}
+function prOpenEdit(id){
+  const r=prRules().find(x=>x.id===id); if(!r) return;
+  PRU.editing=JSON.parse(JSON.stringify(r)); PRU.editingIsNew=false; render();
+}
+function prCloseEditor(){ PRU.editing=null; render(); }
+window.prOpenNew=prOpenNew; window.prOpenEdit=prOpenEdit; window.prCloseEditor=prCloseEditor;
+/* Field setters: text inputs update state WITHOUT re-rendering (so typing is never
+   interrupted); selects/structure changes re-render. */
+function prSet(path,val,rr){
+  const e=PRU.editing; if(!e) return;
+  const parts=path.split('.'); let o=e;
+  for(let i=0;i<parts.length-1;i++) o=o[parts[i]];
+  o[parts[parts.length-1]]=val;
+  if(rr) render();
+}
+function prCondAdd(){ const e=PRU.editing; if(!e) return; const P=prProc(e.procKey); e.conds.push({field:(prFieldKeys(P)[0]||''),op:'eq',value:''}); render(); }
+function prCondSet(i,k,v,rr){ const c=PRU.editing&&PRU.editing.conds[i]; if(!c) return; c[k]=v; if(rr) render(); }
+function prCondDel(i){ PRU.editing.conds.splice(i,1); render(); }
+function prActAdd(type){ if(!PRU.editing||!type) return; PRU.editing.actions.push(prNewAction(type)); render(); }
+function prActSet(i,k,v,rr){ const a=PRU.editing&&PRU.editing.actions[i]; if(!a) return; a[k]=v; if(rr) render(); }
+function prActType(i,type){ const e=PRU.editing; if(!e||!e.actions[i]) return; e.actions[i]=prNewAction(type); render(); }
+function prActDel(i){ PRU.editing.actions.splice(i,1); render(); }
+function prActMove(i,d){ const A=PRU.editing.actions, j=i+d; if(j<0||j>=A.length) return; const t=A[i]; A[i]=A[j]; A[j]=t; render(); }
+function prActToggleIx(i,listKey,srcKind,ix){
+  const a=PRU.editing&&PRU.editing.actions[i]; if(!a) return;
+  const src=srcKind==='users'?(CFG.orgUsers||[]):srcKind==='regions'?(CFG.orgRegions||[]):(CFG.teams||[]);
+  const item=src[ix]; if(!item) return;
+  a[listKey]=a[listKey]||[];
+  if(a[listKey].includes(item.id)) a[listKey]=a[listKey].filter(x=>x!==item.id); else a[listKey].push(item.id);
+  render();
+}
+function prActTargetType(i,t){ const a=PRU.editing&&PRU.editing.actions[i]; if(!a) return; a.targetType=t; a.targetIds=[]; render(); }
+Object.assign(window,{prSet,prCondAdd,prCondSet,prCondDel,prActAdd,prActSet,prActType,prActDel,prActMove,prActToggleIx,prActTargetType});
+function prSaveEditor(){
+  const e=PRU.editing; if(!e) return;
+  if(!String(e.name||'').trim()){ toast('Give the trigger a name.'); return; }
+  if(!e.actions.length){ toast('Add at least one action.'); return; }
+  const rules=prRules();
+  e.updatedAt=new Date().toISOString();
+  const ix=rules.findIndex(x=>x.id===e.id);
+  if(ix>=0) rules[ix]=e; else rules.push(e);
+  if(prSaveRules()) toast('Draft saved in this browser — nothing runs yet.');
+  PRU.editing=null; delete PRU.dry[e.id]; render();
+}
+window.prSaveEditor=prSaveEditor;
+function prDuplicate(id){
+  const r=prRules().find(x=>x.id===id); if(!r) return;
+  const c=JSON.parse(JSON.stringify(r)); c.id=uid('prule'); c.name=(r.name||'Trigger')+' (copy)'; c.publishedAutomationId=null; c.createdAt=new Date().toISOString();
+  prRules().push(c); prSaveRules(); render(); toast('Duplicated.');
+}
+function prDelete(id){
+  const r=prRules().find(x=>x.id===id); if(!r) return;
+  if(!confirm('Delete the draft trigger "'+(r.name||'Untitled')+'"? This only removes it from this browser.')) return;
+  PR_RULES=prRules().filter(x=>x.id!==id); prSaveRules(); delete PRU.dry[id]; render();
+}
+function prToggleEnabled(id){ const r=prRules().find(x=>x.id===id); if(!r) return; r.enabled=!r.enabled; prSaveRules(); render(); }
+Object.assign(window,{prDuplicate,prDelete,prToggleEnabled});
+
+/* ---------- dry run (pure: reads loaded records, writes nothing) ---------- */
+function prFill(text, m){
+  return String(text==null?'':text).replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g,(all,k)=>{
+    if(k==='name') return m.name||'';
+    if(k==='step') return m.stepLabel||m.step||'';
+    if(k==='owner') return m.owner||'(no owner)';
+    if(k==='value') return (m.value===''||m.value==null)?'':String(m.value);
+    if(k==='link') return m.link||'';
+    if(m.fields && m.fields[k]!=null) return String(m.fields[k]);
+    return all;
+  });
+}
+function prNum(v){ const n=Number(v); return isNaN(n)?null:n; }
+function prCondHolds(c, m){
+  const v=m.fields?m.fields[c.field]:undefined;
+  if(c.op==='empty') return v==null || v==='' || (Array.isArray(v)&&!v.length);
+  const sv=v==null?'':String(v), cv=String(c.value==null?'':c.value);
+  if(c.op==='contains') return sv.toLowerCase().includes(cv.toLowerCase());
+  const a=prNum(v), b=prNum(c.value);
+  if(c.op==='gt') return a!=null && b!=null && a>b;
+  if(c.op==='lt') return a!=null && b!=null && a<b;
+  const same=(a!=null&&b!=null&&sv!==''&&cv!=='')?a===b:sv.toLowerCase()===cv.toLowerCase();
+  return c.op==='ne'?!same:same;
+}
+function prThresholdHolds(w, m){
+  let x=prNum(m.fields?m.fields[w.field]:null); const lim=prNum(w.value);
+  if(x==null||lim==null) return false;
+  if(w.pctOf){ const base=prNum(m.fields[w.pctOf]); if(!base) return false; x=x/base*100; }
+  if(w.op==='gt') return x>lim; if(w.op==='ge') return x>=lim; if(w.op==='lt') return x<lim; if(w.op==='le') return x<=lim;
+  return false;
+}
+function prWhenText(r){
+  const w=r.when||{}, P=prProc(r.procKey), st=prStepLabel(r);
+  if(w.type==='enters') return 'Enters "'+st+'"';
+  if(w.type==='stuck') return 'Still at "'+st+'" after '+(w.days||0)+' days (by '+(w.dateField||'no date field')+')';
+  if(w.type==='threshold'){ const opT={gt:'>',ge:'≥',lt:'<',le:'≤'}[w.op]||w.op; return 'At "'+st+'" and '+(w.field||'?')+(w.pctOf?' as % of '+w.pctOf:'')+' '+opT+' '+(w.value===''?'?':w.value)+(w.pctOf?'%':''); }
+  if(w.type==='schedule') return 'Every '+({daily:'day',weekly:'week',hourly:'hour'}[w.freq]||w.freq)+(w.freq==='hourly'?'':' at '+(w.time||'—'))+' for records at "'+st+'"';
+  if(w.type==='external') return 'External event "'+(w.key||'?')+'"';
+  if(w.type==='manual') return 'Manual (Run now) at "'+st+'"';
+  return w.type||'—';
+}
+function prStepLabel(r){
+  const P=prProc(r.procKey); if(!P) return r.step;
+  const s=prSteps(P).find(x=>x.key===r.step); return s?s.label:r.step;
+}
+function prCalcPreview(expr, m){
+  let e=String(expr||'').trim().replace(/^=/,'');
+  if(!e) return {ok:false, text:'(no expression)'};
+  const vars=Object.assign({}, m.fields||{}, {value:m.value});
+  let bad=null;
+  e=e.replace(/[A-Za-z_][A-Za-z0-9_]*/g, k=>{ const n=prNum(vars[k]); if(n==null){ bad=k; return '0'; } return '('+n+')'; });
+  if(bad) return {ok:false, text:'unknown or non-numeric field "'+bad+'"'};
+  if(!/^[0-9+\-*/().\s]+$/.test(e)) return {ok:false, text:'only + − × ÷ and brackets are allowed'};
+  try{ const v=Function('"use strict";return ('+e+')')(); return (typeof v==='number'&&isFinite(v))?{ok:true,text:String(Math.round(v*100)/100)}:{ok:false,text:'not a number'}; }
+  catch(err){ return {ok:false, text:'could not evaluate'}; }
+}
+function prTargetText(type, ids){
+  const t={actionTargetType:type||'org', actionTargetIds:ids||[]};
+  const who=targetSummary(t);                 /* reuse: same wording as the Automations table */
+  const resolved=resolveTargetUserIds(t);      /* reuse: pure lookup, no side effects */
+  return who+(resolved===null?'':' ('+resolved.length+' '+(resolved.length===1?'person':'people')+')');
+}
+function prDestName(id){ const d=byId(CFG.agentDestinations||[], id); return d?d.name:'(no destination picked)'; }
+function prActionPreview(a, m, r){
+  const P=prProc(r.procKey);
+  if(a.type==='note') return 'Log a note: “'+prFill(a.message||('"'+r.name+'" matched: {{name}}'),m)+'”';
+  if(a.type==='alert') return 'Alert '+prTargetText(a.targetType,a.targetIds)+': “'+prFill(a.message,m)+'”';
+  if(a.type==='email'){
+    const to=(a.recipientIds||[]).map(id=>{ const u=byId(CFG.orgUsers||[],id); return u?(u.name+(u.email?' <'+u.email+'>':' (no email)')):'—'; });
+    return 'Email '+(to.length?to.join(', '):'(no recipients picked)')+' — subject “'+prFill(a.subject,m)+'”; body “'+prFill(a.body,m).replace(/\s*\n+\s*/g,' ⏎ ')+'”';
+  }
+  if(a.type==='task'){
+    const owner=a.ownerId==='{{owner}}'?(m.owner||'(record has no owner)'):((byId(CFG.orgUsers||[],a.ownerId)||{}).name||'(unassigned)');
+    const due=new Date(Date.now()+(Number(a.dueDays)||0)*86400000).toISOString().slice(0,10);
+    return 'Create task “'+prFill(a.title,m)+'” for '+owner+', due '+due;
+  }
+  if(a.type==='escalate'){
+    let when='';
+    const df=(r.when&&r.when.dateField)||prDefaultDateField(P,r.step);
+    const d=(df && m.fields)?prDaysSince(m.fields[df]):null;
+    if(d!=null) when=d>=(Number(a.days)||0)?' — already '+d+' days by '+df+', so this would escalate now':' — '+d+' days so far by '+df+', would escalate in '+((Number(a.days)||0)-d)+' days';
+    else if(!P || P.isDiagram) when=' — no date field on diagram steps';
+    else when=' — no date field on this record';
+    return 'Escalate if still at “'+(m.stepLabel||m.step)+'” after '+(a.days||0)+' days → alert '+prTargetText(a.targetType,a.targetIds)+': “'+prFill(a.message,m)+'”'+when;
+  }
+  if(a.type==='calc'){ const c=prCalcPreview(a.expr,m); return 'Set '+(a.field||'(no field)')+' = '+String(a.expr||'').replace(/^\s*=/,'')+' → '+(c.ok?c.text:'⚠ '+c.text)+' (preview only, not written)'; }
+  if(a.type==='webhook'){
+    const body=prFill(a.body,m); let ok=true; if(a.method!=='GET' && body.trim()){ try{ JSON.parse(body); }catch(e){ ok=false; } }
+    return (a.method||'POST')+' '+prFill(a.url,m)+(a.method==='GET'?'':' with body '+body+(ok?'':'  ⚠ not valid JSON'));
+  }
+  if(a.type==='agent'){
+    if(a.mode==='pull') return 'Ask agent '+prDestName(a.destId)+' and write its answer into '+(a.intoField||'(no field)')+': “'+prFill(a.brief,m)+'”';
+    return 'Push brief to agent '+prDestName(a.destId)+': “'+prFill(a.brief,m)+'”';
+  }
+  if(a.type==='chat'){ const d=byId(CFG.agentDestinations||[],a.destId); return 'Post to '+(d?d.name+' ('+(d.type==='teams_webhook'?'Teams':'Slack')+')':'(no chat destination picked)')+': “'+prFill(a.message,m)+'”'; }
+  return a.type;
+}
+function prEvalRule(r){
+  const P=prProc(r.procKey);
+  if(!P) return {matches:[], note:'This rule\'s process no longer exists (was the diagram deleted?).'};
+  const steps=prSteps(P), st=steps.find(s=>s.key===r.step);
+  const stepLabel=st?st.label:r.step;
+  const w=r.when||{};
+  let matches=[], note='';
+  if(w.type==='external'){
+    const evs=(CFG.evalExternalEvents||[]).filter(ev=>w.key && ev.triggerKey===w.key);
+    matches=evs.slice(-50).map(ev=>({id:'ext:'+ev.id, name:'External event “'+ev.triggerKey+'”'+(ev.receivedAt?' ('+F.dt(ev.receivedAt)+')':''), step:r.step, stepLabel:stepLabel,
+      fields:ev.payload||{}, value:'', owner:'', link:prLink(P.page)}));
+    if(!w.key) note='No trigger key set.'; else if(!matches.length) note='No external events with key “'+w.key+'” have been received by this page yet.';
+    return {matches, note};
+  }
+  if(P.isDiagram){
+    if(w.type==='schedule'||w.type==='manual'){
+      matches=[{id:'wf:'+r.step, name:P.label, step:r.step, stepLabel:stepLabel, fields:{}, value:'', owner:'', link:prLink('Schema.html')}];
+      note='Diagram steps have no live records, so this shows one sample run.';
+    } else note='Diagram steps have no live records to test against — only schedule, manual and external triggers can be dry-run here.';
+    return {matches, note};
+  }
+  let recs=prRecords(P).filter(x=>x.step===r.step).map(x=>Object.assign(x,{stepLabel:stepLabel}));
+  if(w.type==='enters'){ matches=recs; note='Dry run treats “enters” as “is currently at” this step — there is no step history yet.'; }
+  else if(w.type==='manual'){ matches=recs; note='Run now would act on every record currently at this step.'; }
+  else if(w.type==='schedule'){ matches=recs; note='Each scheduled run would act on the records at this step at that time.'; }
+  else if(w.type==='stuck'){
+    if(!w.dateField){ note='No date field available on these records, so time-in-step cannot be measured.'; matches=[]; }
+    else matches=recs.filter(x=>{ const d=prDaysSince(x.fields[w.dateField]); return d!=null && d>=(Number(w.days)||0); });
+  }
+  else if(w.type==='threshold'){
+    if(!w.field||w.value===''){ note='Threshold field or value not set.'; matches=[]; }
+    else matches=recs.filter(x=>prThresholdHolds(w,x));
+  }
+  const conds=(r.conds||[]).filter(c=>c.field);
+  if(conds.length) matches=matches.filter(m=>conds.every(c=>prCondHolds(c,m)));
+  return {matches, note, atStep:recs.length};
+}
+function prTest(id){
+  const r=prRules().find(x=>x.id===id); if(!r) return;
+  PRU.dry={}; PRU.dryOrder=[id];
+  PRU.dry[id]=Object.assign(prEvalRule(r),{ts:new Date().toISOString()});
+  render();
+  setTimeout(()=>{ const el=document.getElementById('prDry'); if(el&&el.scrollIntoView) el.scrollIntoView({behavior:'smooth',block:'start'}); },30);
+}
+function prTestAll(){
+  PRU.dry={}; PRU.dryOrder=[];
+  prRules().forEach(r=>{ PRU.dryOrder.push(r.id); PRU.dry[r.id]=r.enabled?Object.assign(prEvalRule(r),{ts:new Date().toISOString()}):{skipped:true}; });
+  if(!PRU.dryOrder.length) toast('No draft triggers to test yet.');
+  render();
+  setTimeout(()=>{ const el=document.getElementById('prDry'); if(el&&el.scrollIntoView) el.scrollIntoView({behavior:'smooth',block:'start'}); },30);
+}
+function prClearDry(){ PRU.dry={}; PRU.dryOrder=[]; render(); }
+Object.assign(window,{prTest,prTestAll,prClearDry});
+
+/* ---------- publish bridge (the ONE database path on this page) ---------- */
+const PR_PUB_OK_ACTIONS=['note','alert','email','chat','agent'];
+const PR_PHASE2='Needs the server rules engine (phase 2)';
+function prPublishPlan(r){
+  const P=prProc(r.procKey), w=r.when||{};
+  const no=why=>({ok:false, reason:PR_PHASE2+' — '+why});
+  if(!P) return no('process not found');
+  let triggerType=null, triggerValue='', scheduleTime='';
+  if(w.type==='manual') triggerType='manual';
+  else if(w.type==='schedule'){ triggerType='time_based'; triggerValue=w.freq||'daily'; scheduleTime=w.freq==='hourly'?'':(w.time||''); }
+  else if(w.type==='external'){ if(!w.key) return no('no trigger key'); triggerType='external_trigger_key'; triggerValue=w.key; }
+  else if(w.type==='enters'){
+    if(P.key==='campaign' && ['Draft','Submitted','Approved','Rejected'].includes(r.step)){ triggerType='campaign_signoff_status'; triggerValue=r.step; }
+    else if(P.key==='deal' && ['Prospecting','Qualifying','Proposal','Negotiation','Closed Won','Closed Lost'].includes(r.step)){ triggerType='deal_stage_reached'; triggerValue=r.step; }
+    else if(P.key==='event' && ['Planned','Approved','Confirmed','Completed','Cancelled'].includes(r.step)){ triggerType='event_status_reached'; triggerValue=r.step; }
+    else if(P.key==='asset' && r.step==='Low'){ triggerType='asset_low_stock'; }
+    else if(P.key==='task' && r.step==='Overdue'){ triggerType='task_overdue'; }
+    else return no('no existing automation trigger for this step');
+  }
+  else return no('“'+(PR_WHEN_TYPES.find(x=>x[0]===w.type)||[0,w.type])[1]+'” has no automation equivalent yet');
+  if((r.conds||[]).some(c=>c.field)) return no('IF conditions aren\'t supported by today\'s automations');
+  const acts=r.actions||[];
+  if(!acts.length) return no('no actions');
+  const badAct=acts.find(a=>!PR_PUB_OK_ACTIONS.includes(a.type) || (a.type==='agent' && a.mode==='pull'));
+  if(badAct) return no('“'+((PR_ACTION_TYPES.find(x=>x[0]===badAct.type)||[0,badAct.type])[1])+(badAct.type==='agent'?' (pull)':'')+'” actions');
+  const alerts=acts.filter(a=>a.type==='alert'), emails=acts.filter(a=>a.type==='email'), chats=acts.filter(a=>a.type==='chat'), agents=acts.filter(a=>a.type==='agent');
+  if(chats.length>1) return no('more than one chat destination');
+  let targetType='org', targetIds=[];
+  if(alerts.length>1){
+    const k=alerts.map(a=>a.targetType+':'+(a.targetIds||[]).slice().sort().join(','));
+    if(new Set(k).size>1) return no('alerts to different audiences');
+  }
+  if(alerts.length){ targetType=alerts[0].targetType||'org'; targetIds=(alerts[0].targetIds||[]).slice(); }
+  if(emails.length){
+    const rec=new Set(); emails.forEach(e=>(e.recipientIds||[]).forEach(x=>rec.add(x)));
+    if(!rec.size) return no('email has no recipients');
+    if(alerts.length && targetType!=='users') return no('email recipients differ from the alert audience');
+    targetType='users'; targetIds=Array.from(new Set(targetIds.concat(Array.from(rec))));
+  }
+  const isAlert=alerts.length||emails.length||chats.length||agents.length;
+  const firstMsg=(acts.map(a=>a.message||a.body||a.brief||'').find(x=>x))||'';
+  const fields={triggerType, triggerValue, scheduleTime, actionType:isAlert?'alert_people':'log_note', actionMessage:firstMsg,
+    actionTargetType:isAlert?targetType:'org', actionTargetIds:isAlert?targetIds:[],
+    actionChatDestId:chats.length?(chats[0].destId||''):'', actionTargetAgent:!!agents.length};
+  const warn=[];
+  if(/\{\{/.test(firstMsg)) warn.push('Today\'s automations send the message as typed — {{placeholders}} are not filled in.');
+  if(agents.length && agents.some(a=>a.destId && !(byId(CFG.agentDestinations||[],a.destId)||{}).isOrgDefault)) warn.push('AI agent briefs are queued to the org default destination (the automation engine has no per-rule agent destination).');
+  if(triggerType==='asset_low_stock') warn.push('“Asset low stock” also matches assets that are Out (stock ≤ low-stock level).');
+  if(acts.filter(a=>a.type==='note').length && isAlert) warn.push('Notes are folded into the alert (one message per automation).');
+  return {ok:true, fields, warn};
+}
+function prPublish(id){
+  if(isViewer()){ toast('Your role is read-only — automation editing is disabled.'); return; }
+  if(!canConfig()){ toast('Your role cannot manage automation rules.'); return; }
+  const r=prRules().find(x=>x.id===id); if(!r) return;
+  const plan=prPublishPlan(r);
+  if(!plan.ok){ toast(plan.reason); return; }
+  const f=plan.fields;
+  const msg='Publish "'+r.name+'" as a real automation?\n\n'+
+    'Trigger: '+f.triggerType+(f.triggerValue?' = '+f.triggerValue:'')+(f.scheduleTime?' at '+f.scheduleTime:'')+'\n'+
+    'Action: '+(f.actionType==='alert_people'?'Alert '+targetSummary({actionTargetType:f.actionTargetType,actionTargetIds:f.actionTargetIds}):'Log a note')+
+    (f.actionChatDestId?' + chat post':'')+(f.actionTargetAgent?' + AI agent brief':'')+'\n'+
+    (plan.warn.length?'\nNote: '+plan.warn.join('\n• ')+'\n':'')+
+    '\nIt is created DISABLED on the Automations page — review it there and switch it on when ready.';
+  if(!confirm(msg)) return;
+  const before=CFG.automations.length;
+  addAutomation(); /* same code path as the Automations page's "Add automation" button */
+  if(CFG.automations.length===before) return;
+  const a=CFG.automations[CFG.automations.length-1];
+  Object.assign(a, f, {name:r.name, enabled:false, mode:'automatic'});
+  logAudit('edit automation','Published from Process rules (preview): '+r.name);
+  r.publishedAutomationId=a.id; prSaveRules();
+  render();
+  toast('Published as a disabled automation — enable it on the Automations page.');
+}
+window.prPublish=prPublish;
+
+/* ---------- page ---------- */
+function prRuleCountsByStep(procKey){
+  const m={}; prRules().filter(r=>r.procKey===procKey).forEach(r=>{ m[r.step]=(m[r.step]||0)+1; }); return m;
+}
+function prFmt(v){
+  if(v==null||v==='') return '—';
+  if(typeof v==='number') return v.toLocaleString('en-AU');
+  if(typeof v==='string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) return F.dt(v);
+  if(typeof v==='object') return JSON.stringify(v).slice(0,60);
+  return String(v);
+}
+function prTargetPicker(i, a, typeKey, idsKey){
+  const t=a[typeKey]||'org';
+  const src=t==='users'?(CFG.orgUsers||[]):t==='regions'?(CFG.orgRegions||[]):t==='teams'?(CFG.teams||[]):[];
+  return `<select class="in" onchange="prActTargetType(${i},this.value)">
+      <option value="org" ${t==='org'?'selected':''}>Everyone</option>
+      <option value="users" ${t==='users'?'selected':''}>Specific people</option>
+      <option value="regions" ${t==='regions'?'selected':''}>A region</option>
+      <option value="teams" ${t==='teams'?'selected':''}>An alert group</option></select>
+    ${t==='org'?'':`<div class="pr-picks">${src.length?src.map((x,ix)=>`<label><input type="checkbox" ${(a[idsKey]||[]).includes(x.id)?'checked':''} onchange="prActToggleIx(${i},'${idsKey}','${t}',${ix})"> ${esc(x.name||'—')}</label>`).join(''):'<span class="mini">none configured</span>'}</div>`}
+    <div class="mini" style="margin-top:3px">${esc(prTargetText(t,a[idsKey]))}</div>`;
+}
+function prActionFields(a,i,P){
+  const fld=(label,html,wide)=>`<div class="pr-f${wide?' wide':''}"><label class="lbl">${label}</label>${html}</div>`;
+  const txt=(k,ph)=>`<input class="in" value="${esc(a[k]||'')}" placeholder="${esc(ph||'')}" oninput="prActSet(${i},'${k}',this.value)">`;
+  const area=(k,rows)=>`<textarea class="in" rows="${rows||3}" oninput="prActSet(${i},'${k}',this.value)">${esc(a[k]||'')}</textarea>`;
+  const users=(CFG.orgUsers||[]);
+  const dests=(CFG.agentDestinations||[]);
+  if(a.type==='note') return fld('Note',txt('message','{{name}} is now at {{step}}'),true);
+  if(a.type==='alert') return fld('Who',prTargetPicker(i,a,'targetType','targetIds'))+fld('Message',area('message',2));
+  if(a.type==='email') return fld('Recipients',`<div class="pr-picks">${users.length?users.map((u,ix)=>`<label><input type="checkbox" ${(a.recipientIds||[]).includes(u.id)?'checked':''} onchange="prActToggleIx(${i},'recipientIds','users',${ix})"> ${esc(u.name||'—')}${u.email?'':' <span class="mini">(no email)</span>'}</label>`).join(''):'<span class="mini">no people loaded</span>'}</div>`)
+    +`<div class="pr-f"><label class="lbl">Subject</label>${txt('subject')}<label class="lbl" style="margin-top:6px">Body</label>${area('body',4)}</div>`;
+  if(a.type==='task') return fld('Task title',txt('title'))+fld('Owner',`<select class="in" onchange="prActSet(${i},'ownerId',this.value)">
+      <option value="{{owner}}" ${a.ownerId==='{{owner}}'?'selected':''}>Record owner ({{owner}})</option>
+      <option value="" ${!a.ownerId?'selected':''}>Unassigned</option>
+      ${users.map(u=>`<option value="${esc(u.id)}" ${a.ownerId===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}</select>`)
+    +fld('Due in (days)',`<input class="in" type="number" min="0" style="width:90px" value="${esc(a.dueDays)}" oninput="prActSet(${i},'dueDays',this.value)">`);
+  if(a.type==='escalate') return fld('If still here after (days)',`<input class="in" type="number" min="0" style="width:90px" value="${esc(a.days)}" oninput="prActSet(${i},'days',this.value)">`)
+    +fld('Alert',prTargetPicker(i,a,'targetType','targetIds'))+fld('Message',area('message',2),true);
+  if(a.type==='calc'){
+    const keys=prNumericKeys(P).concat(prFieldKeys(P).filter(k=>!prNumericKeys(P).includes(k)));
+    return fld('Target field',`<select class="in" onchange="prActSet(${i},'field',this.value)"><option value="">— pick —</option>${keys.map(k=>`<option ${a.field===k?'selected':''}>${esc(k)}</option>`).join('')}</select>`)
+      +fld('Expression',txt('expr','=value*0.2')+`<div class="mini">Use field names or <code>value</code>; + − * / and brackets. Preview only — nothing is written.</div>`);
+  }
+  if(a.type==='webhook') return fld('Method',`<select class="in" onchange="prActSet(${i},'method',this.value,true)"><option ${a.method==='POST'?'selected':''}>POST</option><option ${a.method==='GET'?'selected':''}>GET</option></select>`)
+    +fld('URL',txt('url','https://…'),true)+(a.method==='GET'?'':fld('JSON body template',area('body',3),true));
+  if(a.type==='agent') return fld('Mode',`<select class="in" onchange="prActSet(${i},'mode',this.value,true)"><option value="push" ${a.mode!=='pull'?'selected':''}>Push a brief</option><option value="pull" ${a.mode==='pull'?'selected':''}>Pull a result into a field</option></select>`)
+    +fld('Agent destination',`<select class="in" onchange="prActSet(${i},'destId',this.value)"><option value="">— pick —</option>${dests.filter(d=>d.type!=='slack_webhook'&&d.type!=='teams_webhook').map(d=>`<option value="${esc(d.id)}" ${a.destId===d.id?'selected':''}>${esc(d.name)}${d.isOrgDefault?' (org default)':''}</option>`).join('')}</select>`)
+    +(a.mode==='pull'?fld('Write result into',`<select class="in" onchange="prActSet(${i},'intoField',this.value)"><option value="">— pick —</option>${prFieldKeys(P).map(k=>`<option ${a.intoField===k?'selected':''}>${esc(k)}</option>`).join('')}</select>`):'')
+    +fld('Brief',area('brief',3),true);
+  if(a.type==='chat'){
+    const cd=dests.filter(d=>d.type==='slack_webhook'||d.type==='teams_webhook');
+    return fld('Channel',`<select class="in" onchange="prActSet(${i},'destId',this.value)"><option value="">— pick —</option>${cd.map(d=>`<option value="${esc(d.id)}" ${a.destId===d.id?'selected':''}>${esc(d.name)} (${d.type==='slack_webhook'?'Slack':'Teams'})</option>`).join('')}</select>${cd.length?'':'<div class="mini">No Slack/Teams destinations yet — add one on Automations.</div>'}`)
+      +fld('Message',area('message',2));
+  }
+  return '';
+}
+function prEditorHtml(){
+  const e=PRU.editing; if(!e) return '';
+  const P=prProc(e.procKey), w=e.when;
+  const dateKeys=prDateKeys(P), numKeys=prNumericKeys(P), fieldKeys=prFieldKeys(P);
+  const stuckDisabled=!P||P.isDiagram||!dateKeys.length;
+  const threshDisabled=!P||P.isDiagram||!numKeys.length;
+  let whenExtra='';
+  if(w.type==='stuck') whenExtra=stuckDisabled?'<div class="mini">No date field on these records, so time-in-step can\'t be measured.</div>':
+    `<div class="row" style="flex-wrap:wrap;gap:8px"><span class="mini">after</span><input class="in" type="number" min="0" style="width:70px" value="${esc(w.days)}" oninput="prSet('when.days',this.value)"><span class="mini">days, measured from</span>
+     <select class="in" onchange="prSet('when.dateField',this.value)">${dateKeys.map(k=>`<option ${w.dateField===k?'selected':''}>${esc(k)}</option>`).join('')}</select></div>`;
+  if(w.type==='threshold') whenExtra=threshDisabled?'<div class="mini">No numeric fields on these records.</div>':
+    `<div class="row" style="flex-wrap:wrap;gap:8px">
+      <select class="in" onchange="prSet('when.field',this.value)"><option value="">— field —</option>${numKeys.map(k=>`<option ${w.field===k?'selected':''}>${esc(k)}</option>`).join('')}</select>
+      <select class="in" onchange="prSet('when.pctOf',this.value,true)"><option value="">(raw value)</option>${numKeys.map(k=>`<option value="${esc(k)}" ${w.pctOf===k?'selected':''}>as % of ${esc(k)}</option>`).join('')}</select>
+      <select class="in" onchange="prSet('when.op',this.value)">${[['gt','>'],['ge','≥'],['lt','<'],['le','≤']].map(([v,l])=>`<option value="${v}" ${w.op===v?'selected':''}>${l}</option>`).join('')}</select>
+      <input class="in" style="width:90px" value="${esc(w.value)}" placeholder="${w.pctOf?'e.g. 90':'e.g. 50000'}" oninput="prSet('when.value',this.value)">${w.pctOf?'<span class="mini">%</span>':''}</div>`;
+  if(w.type==='schedule') whenExtra=`<div class="row" style="gap:8px"><select class="in" onchange="prSet('when.freq',this.value,true)">${[['daily','Daily'],['weekly','Weekly'],['hourly','Hourly']].map(([v,l])=>`<option value="${v}" ${w.freq===v?'selected':''}>${l}</option>`).join('')}</select>
+      ${w.freq==='hourly'?'':`<span class="mini">at</span><input class="in" type="time" value="${esc(w.time)}" oninput="prSet('when.time',this.value)">`}</div>`;
+  if(w.type==='external') whenExtra=`<input class="in" style="width:220px" placeholder="trigger key, e.g. crm_stage_change" value="${esc(w.key)}" oninput="prSet('when.key',this.value)">
+      <div class="mini">Same trigger keys external systems POST to Hub (see Automations → External trigger).</div>`;
+  if(w.type==='manual') whenExtra='<div class="mini">Fires only when someone clicks Run now.</div>';
+  const stepLabel=prStepLabel(e);
+  const plan=prPublishPlan(e);
+  return `<div class="mask" onclick="if(event.target===this)prCloseEditor()"><div class="modal pr-modal">
+    <h3 style="display:flex;align-items:center;gap:8px">${PRU.editingIsNew?'Add trigger':'Edit trigger'} <span class="pill n">${esc(P?P.label:'?')} · ${esc(stepLabel)}</span><span class="sp"></span>
+      <span class="pr-draft">Draft — this browser only</span></h3>
+    <div class="bd">
+      <div class="pr-f wide"><label class="lbl">Name</label><input class="in" id="prName" style="width:100%" value="${esc(e.name)}" placeholder="e.g. Chase approvals stuck in Submitted" oninput="prSet('name',this.value)"></div>
+      <div class="pr-sec"><div class="pr-kw">WHEN</div><div style="flex:1;min-width:0">
+        <select class="in" id="prWhenType" onchange="prSet('when.type',this.value,true)">
+          ${PR_WHEN_TYPES.map(([v,l])=>{ const dis=(v==='stuck'&&stuckDisabled)||(v==='threshold'&&threshDisabled);
+            return `<option value="${v}" ${w.type===v?'selected':''} ${dis?'disabled':''}>${esc(l)}${dis?(P&&P.isDiagram?' — n/a for diagram steps':(v==='stuck'?' — no date field':' — no numeric field')):''}</option>`; }).join('')}
+        </select>
+        <div style="margin-top:8px">${whenExtra}</div></div></div>
+      <div class="pr-sec"><div class="pr-kw">IF</div><div style="flex:1;min-width:0">
+        ${P&&P.isDiagram?'<div class="mini">Diagram steps have no record fields to test.</div>':`
+        ${e.conds.length?'':'<div class="mini" style="margin-bottom:6px">No conditions — every record matching WHEN qualifies.</div>'}
+        ${e.conds.map((c,i)=>`<div class="row pr-cond" style="gap:6px;margin-bottom:6px;flex-wrap:wrap">
+          <select class="in" onchange="prCondSet(${i},'field',this.value)">${fieldKeys.map(k=>`<option ${c.field===k?'selected':''}>${esc(k)}</option>`).join('')}</select>
+          <select class="in" onchange="prCondSet(${i},'op',this.value,true)">${PR_OPS.map(([v,l])=>`<option value="${v}" ${c.op===v?'selected':''}>${esc(l)}</option>`).join('')}</select>
+          ${c.op==='empty'?'':`<input class="in" style="width:140px" value="${esc(c.value)}" oninput="prCondSet(${i},'value',this.value)">`}
+          <button class="btn sm" title="Remove condition" onclick="prCondDel(${i})">✕</button></div>`).join('')}
+        <button class="btn sm" onclick="prCondAdd()">+ Condition</button>`}
+      </div></div>
+      <div class="pr-sec"><div class="pr-kw">THEN</div><div style="flex:1;min-width:0">
+        ${e.actions.map((a,i)=>`<div class="pr-act">
+          <div class="row" style="gap:6px;margin-bottom:8px"><span class="pr-num">${i+1}</span>
+            <select class="in" onchange="prActType(${i},this.value)">${PR_ACTION_TYPES.map(([v,l])=>`<option value="${v}" ${a.type===v?'selected':''}>${esc(l)}</option>`).join('')}</select>
+            <span class="sp"></span>
+            <button class="btn sm" title="Move up" ${i===0?'disabled':''} onclick="prActMove(${i},-1)">↑</button>
+            <button class="btn sm" title="Move down" ${i===e.actions.length-1?'disabled':''} onclick="prActMove(${i},1)">↓</button>
+            <button class="btn sm dgr" title="Remove action" onclick="prActDel(${i})">✕</button></div>
+          <div class="pr-fields">${prActionFields(a,i,P)}</div></div>`).join('')}
+        <select class="in" id="prAddAction" onchange="prActAdd(this.value)"><option value="">+ Add action…</option>${PR_ACTION_TYPES.map(([v,l])=>`<option value="${v}">${esc(l)}</option>`).join('')}</select>
+        <div class="mini" style="margin-top:6px">Placeholders: <code>{{name}}</code> <code>{{step}}</code> <code>{{owner}}</code> <code>{{value}}</code> <code>{{link}}</code> (or any field name).</div>
+      </div></div>
+      <div class="mini" style="margin-top:4px">${plan.ok?'✓ This trigger maps onto an existing automation and can be published after saving.':esc(plan.reason)}</div>
+      <div class="row" style="margin-top:14px;gap:8px"><span class="sp"></span>
+        <button class="btn" onclick="prCloseEditor()">Cancel</button>
+        <button class="btn pri" id="prSaveBtn" onclick="prSaveEditor()">Save draft</button></div>
+    </div></div></div>`;
+}
+function prDryHtml(){
+  if(!PRU.dryOrder.length) return '';
+  const rules=prRules();
+  let h=`<div class="card" id="prDry"><h3>Dry run results <span class="pill n">no side effects</span><span class="sp"></span>
+    <span class="mini">${esc(F.dt(new Date().toISOString()))}</span><button class="btn sm" onclick="prClearDry()">Clear</button></h3><div class="bd">`;
+  PRU.dryOrder.forEach(id=>{
+    const r=rules.find(x=>x.id===id), res=PRU.dry[id]; if(!r||!res) return;
+    const P=prProc(r.procKey);
+    h+=`<div class="pr-dry">
+      <div class="row" style="gap:8px;flex-wrap:wrap"><b>${esc(r.name)}</b><span class="pill n">${esc(P?P.label:'?')} · ${esc(prStepLabel(r))}</span>
+        ${res.skipped?'<span class="pill">Disabled — skipped</span>':`<span class="pill ${res.matches.length?'pr-hit':''}">${res.matches.length} match${res.matches.length===1?'':'es'}</span>`}</div>
+      <div class="mini" style="margin:3px 0 6px">WHEN ${esc(prWhenText(r))}${(r.conds||[]).filter(c=>c.field).length?' · IF '+esc((r.conds||[]).filter(c=>c.field).map(c=>c.field+' '+(PR_OPS.find(o=>o[0]===c.op)||[0,c.op])[1]+(c.op==='empty'?'':' '+c.value)).join(' and ')):''}</div>
+      ${res.skipped?'':(res.note?`<div class="mini" style="margin-bottom:6px;color:var(--ink-2)">${esc(res.note)}</div>`:'')}
+      ${res.skipped||!res.matches.length?'':res.matches.slice(0,25).map(m=>`<div class="pr-match"><div class="pr-mname">${esc(m.name)}${m.owner?` <span class="mini">· ${esc(m.owner)}</span>`:''}${(m.value!==''&&m.value!=null)?` <span class="mini">· ${esc(prFmt(m.value))}</span>`:''}</div>
+          <ol>${(r.actions||[]).map(a=>`<li>${esc(prActionPreview(a,m,r))}</li>`).join('')}</ol></div>`).join('')
+        +(res.matches.length>25?`<div class="mini">…and ${res.matches.length-25} more.</div>`:'')}
+    </div>`;
+  });
+  return h+'</div></div>';
+}
+function pageRules(){
+  if(!PR_DATA.loaded && !PR_DATA.loading) setTimeout(prEnsureData,0);
+  const all=prAllProcs();
+  if(!prProc(PRU.proc)) PRU.proc='campaign';
+  const P=prProc(PRU.proc), steps=prSteps(P), recs=prRecords(P);
+  if(PRU.step && !steps.some(s=>s.key===PRU.step)) PRU.step=null;
+  if(!PRU.step && steps.length) PRU.step=steps[0].key;
+  const ruleCounts=prRuleCountsByStep(P.key);
+  const rules=prRules();
+  let h=`<div class="phead"><div><h1>Process rules <span class="pill pr-prev">Preview</span></h1>
+    <p>See your live processes step by step, then attach triggers at any step: <b>WHEN</b> something happens there, <b>IF</b> conditions hold,
+      <b>THEN</b> run actions (notes, alerts, email, tasks, escalations, calculations, webhooks, AI agents, chat).</p></div>
+    <div class="sp"></div><button class="btn" onclick="prTestAll()">Test all</button></div>`;
+  h+=`<div class="note pr-note"><b>Preview — nothing on this page runs.</b> Triggers you add here are drafts saved in this browser only, and “Test against live data”
+    is a dry run with no emails, alerts, webhooks or writes. What actually runs today lives on <a href="#" onclick="go('automations');return false">Automations</a>;
+    a draft that maps onto an existing automation can be published there. To draw your own process, use <a href="#" onclick="go('list');return false">Diagrams</a> — it then appears below under “Your diagrams”.
+    ${PR_DATA.loading?'<span class="mini"> · Loading full record details…</span>':''}</div>`;
+  h+=`<div class="pr-layout"><div class="pr-procs card"><h3>Live processes</h3><div class="bd flush">
+    ${all.map((p,i)=>p.isDiagram?'':`<a href="#" class="pr-proc ${p.key===P.key?'on':''}" onclick="prSelectProcIx(${i});return false"><span>${esc(p.label)}</span><span class="pr-cnt">${prRecords(p).length}</span></a>`).join('')}
+    <div class="pr-sub">Your diagrams</div>
+    ${all.some(p=>p.isDiagram)?all.map((p,i)=>!p.isDiagram?'':`<a href="#" class="pr-proc ${p.key===P.key?'on':''}" onclick="prSelectProcIx(${i});return false"><span>${esc(p.label)}</span><span class="pr-cnt mini">${(p.wf.nodes||[]).length} steps</span></a>`).join('')
+      :'<div class="mini" style="padding:6px 14px 12px">No diagrams yet — <a href="#" onclick="go(\'list\');return false">draw one</a>.</div>'}
+  </div></div><div class="pr-body">`;
+  /* stage strip */
+  h+=`<div class="card"><h3>${esc(P.label)} <span class="mini" style="font-weight:400">${P.isDiagram?'your diagram — no live counts':(recs.length+' '+esc(P.obj.toLowerCase())+(recs.length===1?'':'s')+' · '+(PR_DATA.src[P.table]==='full'?'live':'basic fields'))}</span></h3>
+    <div class="bd"><div class="pr-strip">${steps.length?steps.map((s,i)=>{
+      const n=P.isDiagram?null:recs.filter(r=>r.step===s.key).length;
+      const rc=ruleCounts[s.key]||0;
+      return `${i?'<div class="pr-arrow" aria-hidden="true"><svg width="22" height="14" viewBox="0 0 22 14"><path d="M1 7h17M13 2l6 5-6 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>':''}
+      <div class="pr-step ${s.tone?'t-'+s.tone:''} ${PRU.step===s.key?'sel':''}" onclick="prSelectStep(${i})" role="button" tabindex="0">
+        <div class="pr-sname" title="${esc(s.label)}">${esc(s.label)}</div>
+        ${s.lane?`<div class="mini">${esc(s.lane)}</div>`:''}
+        ${n==null?'<div class="pr-n mini">—</div>':`<button class="pr-n ${PRU.listStep===s.key?'on':''}" title="Show these records" onclick="event.stopPropagation();prToggleList(${i})">${n}</button>`}
+        <div>${rc?`<span class="pill pr-chip">${rc} trigger${rc===1?'':'s'}</span>`:'<span class="mini">no triggers</span>'}</div>
+      </div>`; }).join(''):'<div class="empty" style="width:100%">This diagram has no steps yet.</div>'}</div></div></div>`;
+  /* records at a step */
+  if(PRU.listStep && !P.isDiagram){
+    const list=recs.filter(r=>r.step===PRU.listStep);
+    const cols=P.keyCols.filter(([k])=>list.some(r=>r.fields[k]!=null&&r.fields[k]!==''));
+    const ownerCol=!cols.some(([k])=>k==='owner_name'||k==='owner') && list.some(r=>r.owner);
+    h+=`<div class="card"><h3>${esc(P.obj)}s at “${esc(PRU.listStep)}” <span class="pill n">${list.length}</span><span class="sp"></span><button class="btn sm" onclick="prToggleList(${steps.findIndex(s=>s.key===PRU.listStep)})">Hide</button></h3>
+      <div class="bd flush" style="overflow-x:auto"><table class="no-tt"><thead><tr><th>Name</th>${cols.map(([,l])=>`<th>${esc(l)}</th>`).join('')}${ownerCol?'<th>Owner</th>':''}</tr></thead><tbody>
+      ${list.length?list.slice(0,200).map(r=>`<tr><td><a href="${esc(r.link)}" target="tool_${esc(P.page.replace('.html',''))}">${esc(r.name)}</a></td>${cols.map(([k])=>`<td class="${typeof r.fields[k]==='number'?'n':''}">${esc(prFmt(r.fields[k]))}</td>`).join('')}${ownerCol?`<td>${esc(r.owner||'—')}</td>`:''}</tr>`).join('')
+        :`<tr><td colspan="${cols.length+1+(ownerCol?1:0)}" class="empty">Nothing at this step right now.</td></tr>`}
+      </tbody></table></div></div>`;
+  }
+  /* triggers at the selected step */
+  const st=steps.find(s=>s.key===PRU.step);
+  const here=rules.filter(r=>r.procKey===P.key && r.step===PRU.step);
+  h+=`<div class="card"><h3>Triggers at “${esc(st?st.label:'—')}” <span class="pill n">${here.length}</span><span class="sp"></span>
+      <button class="btn sm pri" id="prAddBtn" ${st?'':'disabled'} onclick="prOpenNew()">+ Add trigger at this step</button></h3><div class="bd ${here.length?'flush':''}">
+    ${here.length?prRuleRows(here):'<div class="empty" style="padding:8px">No triggers here yet. Add one to describe what should happen when a record reaches or sits at this step.</div>'}
+  </div></div>`;
+  const others=rules.filter(r=>!(r.procKey===P.key && r.step===PRU.step));
+  h+=`<div class="card"><h3>All draft triggers <span class="pill n">${rules.length}</span><span class="sp"></span><span class="pr-draft">Draft — saved in this browser only, nothing runs yet</span></h3><div class="bd ${others.length?'flush':''}">
+    ${others.length?prRuleRows(others,true):`<div class="mini">${rules.length?'All your draft triggers are at the step shown above.':'None yet.'}</div>`}</div></div>`;
+  h+=prDryHtml();
+  h+=`</div></div>`;
+  h+=prEditorHtml();
+  return h;
+}
+function prRuleRows(list, showWhere){
+  const canPub=canConfig() && !isViewer();
+  return `<div style="overflow-x:auto"><table class="no-tt pr-rules"><thead><tr><th>On</th><th>Trigger</th>${showWhere?'<th>Where</th>':''}<th>When / If</th><th>Then</th><th></th></tr></thead><tbody>
+    ${list.map(r=>{
+      const P=prProc(r.procKey), plan=prPublishPlan(r);
+      const pubA=r.publishedAutomationId?byId(CFG.automations||[],r.publishedAutomationId):null;
+      const nC=(r.conds||[]).filter(c=>c.field).length;
+      return `<tr class="${r.enabled?'':'pr-off'}">
+        <td><input type="checkbox" title="Enabled (affects dry runs only)" ${r.enabled?'checked':''} onchange="prToggleEnabled('${esc(r.id)}')"></td>
+        <td><b>${esc(r.name||'Untitled')}</b>${pubA?`<div class="mini">↗ published: <a href="#" onclick="go('automations');return false">${esc(pubA.name)}</a> (${pubA.enabled?'enabled':'disabled'})</div>`:''}</td>
+        ${showWhere?`<td class="mini">${P?`<a href="#" onclick="prGoRule('${esc(r.id)}');return false">${esc(P.label)} · ${esc(prStepLabel(r))}</a>`:'(missing process)'}</td>`:''}
+        <td class="mini">${esc(prWhenText(r))}${nC?'<br>IF '+nC+' condition'+(nC===1?'':'s'):''}</td>
+        <td>${(r.actions||[]).map(a=>`<span class="pill n" style="margin:1px 2px 1px 0">${esc((PR_ACTION_TYPES.find(x=>x[0]===a.type)||[0,a.type])[1])}</span>`).join('')}</td>
+        <td class="n"><div class="row" style="justify-content:flex-end;flex-wrap:wrap;gap:4px">
+          <button class="btn sm" onclick="prTest('${esc(r.id)}')">Test against live data</button>
+          <button class="btn sm" onclick="prOpenEdit('${esc(r.id)}')">Edit</button>
+          <button class="btn sm" onclick="prDuplicate('${esc(r.id)}')">Duplicate</button>
+          <span title="${esc(plan.ok?(canPub?'Create a normal automation from this trigger':'Your role cannot manage automation rules'):plan.reason)}"><button class="btn sm" ${plan.ok&&canPub?'':'disabled'} onclick="prPublish('${esc(r.id)}')">Publish as automation</button></span>
+          <button class="btn sm dgr" onclick="prDelete('${esc(r.id)}')">Delete</button></div></td></tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+function prGoRule(id){ const r=prRules().find(x=>x.id===id); if(!r) return; PRU.proc=r.procKey; PRU.step=r.step; PRU.listStep=null; render(); }
+window.prGoRule=prGoRule;
+/* 2026-09-28 end of Process rules (preview) block */
+
 const NAV_PAGES=[
   {id:'home',        ix:'0', label:'Home'},
   {id:'list',        ix:'1', label:'Diagrams'},
-  {id:'automations', ix:'2', label:'Automations'}
+  {id:'automations', ix:'2', label:'Automations'},
+  /* 2026-09-28 (Stef: "Process Maps as a rules engine") -- preview page, see the Process rules block above */
+  {id:'rules',       ix:'3', label:'Process rules (preview)', fn:pageRules}
 ];
 function renderSide(){
   if(UI.page==='editor') return '';
@@ -2343,7 +3131,10 @@ const HELP_FAQ=[
   {q:"What's the difference between Simple and Expert mode?", a:'In Campaign Planning, Simple mode shows the core fields; Expert mode adds business case, sign-off, partner allocation and more \u2014 toggle it from Campaign Planning if your role allows it.'},
   {q:'What does Cross-region visibility mean?', a:'"Transparent" means you see every region in your organization. "Isolated" means you only see the regions specifically checked for you.'},
   {q:'What is Super Admin?', a:"Super Admin isn't a role in the Roles table \u2014 it's a separate flag on a login that gives full cross-organization visibility in Configuration, independent of any one organization's roles."},
-  {q:'What does the Super Admin cross-org view bar do?', a:'If you\u2019re a Super Admin, a bar appears letting you view this module as your own organization, all organizations merged, or one specific organization (and optionally one user within it). Switching to \u2018All\u2019 or another organization always starts read-only \u2014 editing is a separate, conscious click every time the view changes, and \u2018All\u2019 (merged data) can never be edited since there\u2019s no single organization to attribute a change to.'}
+  {q:'What does the Super Admin cross-org view bar do?', a:'If you\u2019re a Super Admin, a bar appears letting you view this module as your own organization, all organizations merged, or one specific organization (and optionally one user within it). Switching to \u2018All\u2019 or another organization always starts read-only \u2014 editing is a separate, conscious click every time the view changes, and \u2018All\u2019 (merged data) can never be edited since there\u2019s no single organization to attribute a change to.'},
+  /* 2026-09-28 (Stef: "Process Maps as a rules engine") */
+  {q:'What is Process rules (preview)?', a:'A new page in Process Maps that shows your live processes step by step (campaign sign-off, deal pipeline, event lifecycle, task lifecycle, asset stock, plus any diagram you have drawn), with a live count of records at each step. At any step you can add a trigger: WHEN something happens (enters the step, sits there for N days, a field crosses a threshold, a schedule, an external event, or manual), IF optional conditions hold, THEN an ordered list of actions (note, alert, email, task, escalation, calculation, webhook, AI agent, Slack/Teams message). Click a count to see the records behind it.'},
+  {q:'Do preview rules run?', a:'No. Triggers on Process rules (preview) are drafts saved in your browser only \u2014 other people cannot see them and nothing is sent, written or called. \u201cTest against live data\u201d is a dry run that shows which current records would match and exactly what each action would do, with placeholders filled in. If a trigger maps onto an existing automation (for example a campaign entering Submitted with alert/email/chat actions), an admin can use \u201cPublish as automation\u201d to create it, disabled, on the Automations page \u2014 that is what actually runs.'}
 ];
 function helpPanelHtml(){
   const mod = MODULES.find(m=>m.id===THIS_MODULE) || {label:THIS_MODULE, desc:''};
@@ -2501,6 +3292,8 @@ function render(){
       main.className='main tight'; main.innerHTML=pageEditor();
     } else if(UI.page==='automations'){
       main.className='main'; main.innerHTML=pageAutomations();
+    } else if(UI.page==='rules'){ /* 2026-09-28 (Stef: "Process Maps as a rules engine") */
+      main.className='main'; main.innerHTML=pageRules();
     } else if(UI.page==='home'){
       main.className='main'; main.innerHTML=pageHome();
     } else {

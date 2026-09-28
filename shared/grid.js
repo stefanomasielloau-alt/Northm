@@ -910,7 +910,22 @@
        can also pack just the boxes a stale saved layout doesn't cover yet --
        see below. */
     function packItems(els, startY) {
-      var unitPx = 12 + 10;
+      // 2026-09-28 (Stef: "Drivers & rate library" tiles still short, with a very
+      // specific and correct hunch -- "the bar at the top... the height of that
+      // whole area should be saved N pixels smaller/bigger"): this divisor was
+      // wrong at 22 (cellHeight 12 + margin 10) -- GridStack's own item height is
+      // h * cellHeight only; margin is the gap BETWEEN rows, not part of any one
+      // item's own height. Confirmed empirically live: a box saved at h=13 (grid
+      // units) rendered at exactly 156px = 13*12, not 13*22=286. Every fresh
+      // auto-fit was computing initialGuess(targetPx) with the wrong divisor,
+      // undersizing every box by ~45% (22 vs 12) -- e.g. a widget needing 265px
+      // got Math.ceil(265/22)=13 units (156px, clipping ~110px of real content)
+      // instead of the ceil(265/12)=23 units (276px) it actually needs. This was
+      // the real, page-wide cause of "boxes too short after a fresh pack" -- not
+      // the drag-handle-height bug fixed 09-24 (b0f02f9), which was real but much
+      // smaller, and not something a page-level Reset layout could ever fix on
+      // its own since it just re-ran this same wrong math.
+      var unitPx = 12;
       function initialGuess(px) { return Math.max(1, Math.ceil(px / unitPx)); }
       function fitHeight(el, targetPx) {
         var h = initialGuess(targetPx);
@@ -941,8 +956,16 @@
         var rowH = 0;
         rowItems.forEach(function (el) {
           var w = parseInt(el.getAttribute('gs-w'), 10) || 12;
+          // 2026-09-28: measure AFTER applying this row's real x/y/w (not before)
+          // -- defensive correctness so the height target always reflects the
+          // width the box will actually end up at, in case a widget's content is
+          // ever width-sensitive (text wrap, a chart with a width-scaled height).
+          // The unitPx fix just above is what was actually causing "Drivers & rate
+          // library" to come out short -- this is a smaller belt-and-braces fix
+          // found while tracing the same code path, not a second bug.
+          grid.update(el, { x: x, y: rowY, w: w, h: 1 });
           var innerH = measureRealContentHeight(el);
-          grid.update(el, { x: x, y: rowY, w: w, h: initialGuess(innerH) });
+          grid.update(el, { h: initialGuess(innerH) });
           var h = fitHeight(el, innerH);
           rowH = Math.max(rowH, h);
           x += w;
@@ -1371,7 +1394,8 @@
     if (!item) return;
     var targetPx = measureRealContentHeight(item);
     if (!targetPx) return;
-    var unitPx = 12 + 10;
+    var unitPx = 12; // 2026-09-28: see packItems()'s unitPx comment above -- GridStack's
+    // item height is h * cellHeight (12), not h * (cellHeight + margin) (22).
     var h = Math.max(1, Math.ceil(targetPx / unitPx));
     for (var guard = 0; guard < 10; guard++) {
       grid.update(item, { h: Math.min(h, 400) });

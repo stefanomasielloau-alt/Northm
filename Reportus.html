@@ -451,7 +451,8 @@ async function loadFromSupabase(){
     reportusCrossOrgSafe('programmes', sb.from('programmes').select('id,name,owner,focus,status')),
     sb.from('activities').select('id,name,route_id,cost_per,cap_month'),
     sb.from('routes').select('id,name'),
-    sb.from('pods').select('id,name,region_id,share,unassigned'),
+    /* 2026-09-28: pods.archived (soft-archive, run sheet part 1 step 5) -- select('*') so this still works before that column exists; archived pods are dropped client-side */
+    sb.from('pods').select('*').then(r=>{ if(r&&r.data) r.data=r.data.filter(p=>!p.archived); return r; }),
     reportusCrossOrgSafe('partners', sb.from('partners').select('id,name,type,pod_id,acv_target')),
     reportusCrossOrgSafe('campaign_partner_allocations', sb.from('campaign_partner_allocations').select('id,campaign_id,partner_id,role,budget_share_pct,lead_share_pct'))
   ]);
@@ -768,8 +769,9 @@ async function recordReportView(what, detail){
   logAudit(what, detail);
   if(!_orgId || !_myProfile) return;
   try{
+    /* 2026-09-28 (hygiene audit): org_id was missing, so these report-view entries never showed in any org's audit log. */
     await sb.from('audit_log').insert({
-      id:uid(), what, detail, who:_myProfile.name||'', role:(role&&role.name)||'',
+      id:uid(), org_id:_orgId, what, detail, who:_myProfile.name||'', role:(role&&role.name)||'',
       user_id:_myProfile.id, ts:new Date().toISOString().slice(0,16).replace('T',' ')
     });
   }catch(e){ console.warn('Could not record report view to audit_log', e); }
@@ -1439,7 +1441,10 @@ async function submitFeedback(){
   try{
     const { error } = await sb.from('feedback_items').insert({
       org_id:_orgId, reporter_id:_myProfile.id, reporter_name:name,
-      page:FEEDBACK_MODULE, url:location.href, comment:comment
+      page:FEEDBACK_MODULE, url:location.href,
+      /* 2026-09-28 (feedback cross-org attribution): the item stays filed under the reporter's own org
+         (RLS requires that), but if a Super Admin was viewing ANOTHER org, say which, so triage has context. */
+      comment:comment+((typeof _savOrgFilter!=='undefined'&&_savOrgFilter&&_savOrgFilter!==_orgId)?'\n\n[Reported while viewing org '+_savOrgFilter+']':'')
     });
     if(error){ toast('Could not submit: '+error.message); return; }
     closeFeedbackModal();

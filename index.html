@@ -231,6 +231,7 @@ window.closeFieldGuide=closeFieldGuide;
 <script src="shared/dateFormat.js"></script>
 <script src="shared/orgSwitcher.js"></script>
 <script src="shared/superAdminView.js"></script>
+<script src="shared/clientAdmin.js"></script>
 <script>
 /* ============================================================================
    North — suite dashboard. Same Supabase auth pattern as every other tool in
@@ -294,6 +295,16 @@ async function loadFromSupabase(){
   CFG.platformAdminLevel = _paLevel;
   CFG.isFullSuperAdmin = _paLevel === 'L0';
   CFG.isSuperAdmin = _paLevel === 'L0' || _paLevel === 'L1';
+  /* 2026-09-28: L2/L3 client-group tiers -- see shared/clientAdmin.js. A client admin gets the same
+     "view as" bar as a Super Admin, but scoped (by row-level security) to their client group only. */
+  CFG.clientAdminLevel = null; CFG.loadClientOrganizations = null;
+  if(!CFG.isSuperAdmin && typeof window.northLoadClientAdmin==='function'){
+    const _ca = await window.northLoadClientAdmin(sb);
+    CFG.clientAdminLevel = _ca.level; CFG.loadClientOrganizations = _ca.loadOrgs;
+  }
+  CFG.isClientAdmin = !!CFG.clientAdminLevel;
+  CFG.savEnabled = !!(CFG.isSuperAdmin || CFG.isClientAdmin);
+  if(CFG.isClientAdmin && typeof SAV!=='undefined') SAV.setClientScope({readOnly: CFG.clientAdminLevel==='L3'});
 
   /* 2026-09-15 round 17 fix (Stef live-testing, P1 #4: "Scoring's numbers disagree with
      Dashboard" -- "yes never disagree"): this dashboard never applied an org_id filter to
@@ -311,7 +322,7 @@ async function loadFromSupabase(){
      warning bar Augur does, instead of silently disagreeing with it. */
   SAV.init(_orgId);
   let _savOrgFilter = _orgId;
-  if(CFG.isSuperAdmin) _savOrgFilter = SAV.effectiveOrgId();
+  if(CFG.savEnabled) _savOrgFilter = SAV.effectiveOrgId();
   function orgScoped(q, col){ return _savOrgFilter===null ? q : q.eq(col||'org_id', _savOrgFilter); }
   CFG.loadAllOrganizations = async function(){
     const { data } = await sb.from('organizations').select('id,name').order('name');
@@ -579,8 +590,8 @@ function _renderSavBarSafely(){
   try{
     if(typeof SAV==='undefined') return;
     SAV.renderBar({
-      isSuperAdmin: CFG.isSuperAdmin,
-      loadOrganizations: CFG.loadAllOrganizations,
+      isSuperAdmin: CFG.savEnabled, clientScope: (!CFG.isSuperAdmin && CFG.isClientAdmin),
+      loadOrganizations: (CFG.isSuperAdmin ? CFG.loadAllOrganizations : CFG.loadClientOrganizations),
       lockSelector: '#wrap'
     });
   }catch(e){ console.warn('SAV bar failed to render', e); }
@@ -977,7 +988,10 @@ async function submitFeedback(){
   try{
     const { error } = await sb.from('feedback_items').insert({
       org_id:_orgId, reporter_id:_myProfile.id, reporter_name:name,
-      page:FEEDBACK_MODULE, url:location.href, comment:comment
+      page:FEEDBACK_MODULE, url:location.href,
+      /* 2026-09-28 (feedback cross-org attribution): the item stays filed under the reporter's own org
+         (RLS requires that), but if a Super Admin was viewing ANOTHER org, say which, so triage has context. */
+      comment:comment+((typeof _savOrgFilter!=='undefined'&&_savOrgFilter&&_savOrgFilter!==_orgId)?'\n\n[Reported while viewing org '+_savOrgFilter+']':'')
     });
     if(error){ toast('Could not submit: '+error.message); return; }
     closeFeedbackModal();

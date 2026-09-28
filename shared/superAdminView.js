@@ -57,6 +57,13 @@
        default) and as the safe fallback everywhere else. */
     init(ownOrgId){ this._ownOrgId = ownOrgId; },
 
+    /* 2026-09-28 (L2/L3 client-group tiers): the same bar, scoped to a client admin's own client
+       group. The org list comes from client_admin_org_list() and row-level security limits every
+       read to that group -- "All organizations" means all orgs in the client group, never the
+       whole platform. readOnly (L3 Client Overseer) means cross-org editing is never offered. */
+    _client: false, _clientRO: false,
+    setClientScope(opts){ this._client = true; this._clientRO = !!(opts && opts.readOnly); },
+
     mode(){ return this._ctx.mode; },
     context(){ return Object.assign({}, this._ctx); },
 
@@ -80,6 +87,7 @@
     canEdit(){
       if(this._ctx.mode==='own') return true;
       if(this._ctx.mode==='all') return false;
+      if(this._clientRO) return false;
       return !!this._ctx.editing;
     },
 
@@ -186,10 +194,10 @@
          regardless of this page's styles. */
       const SEL_STYLE = 'background:#fff;color:#111;border-radius:4px;border:1px solid rgba(255,255,255,.5);padding:2px 4px;';
       bar.innerHTML =
-        '<b>Super Admin view:</b>'+
+        (opts.clientScope ? '<b>Client view:</b>' : '<b>Super Admin view:</b>')+
         `<select id="savModeSel" style="${SEL_STYLE}">`+
           `<option value="own" ${ctx.mode==='own'?'selected':''}>My organization</option>`+
-          `<option value="all" ${ctx.mode==='all'?'selected':''}>All organizations</option>`+
+          `<option value="all" ${ctx.mode==='all'?'selected':''}>${opts.clientScope?'All my client organizations':'All organizations'}</option>`+
           `<option value="org" ${(ctx.mode==='org'||ctx.mode==='user')?'selected':''}>Choose an organization…</option>`+
         '</select>'+
         `<span id="savOrgWrap" style="display:${(ctx.mode==='org'||ctx.mode==='user')?'inline':'none'}">`+
@@ -198,7 +206,7 @@
         `<span id="savUserWrap" style="display:${(ctx.mode==='org'||ctx.mode==='user')&&ctx.orgId?'inline':'none'}">`+
           `→ <select id="savUserSel" style="${SEL_STYLE}">${userOptions}</select>`+
         '</span>'+
-        ((crossOrg && ctx.mode!=='all') ? `<button id="savEditBtn" style="margin-left:auto;font-weight:700;cursor:pointer;padding:4px 10px;border-radius:4px;border:1px solid rgba(255,255,255,.5);background:transparent;color:inherit;">${editing?'✏️ Editing enabled — click to lock':'🔒 Read-only — click to enable editing'}</button>` : '') +
+        ((crossOrg && ctx.mode!=='all' && !SAV._clientRO) ? `<button id="savEditBtn" style="margin-left:auto;font-weight:700;cursor:pointer;padding:4px 10px;border-radius:4px;border:1px solid rgba(255,255,255,.5);background:transparent;color:inherit;">${editing?'✏️ Editing enabled — click to lock':'🔒 Read-only — click to enable editing'}</button>` : '') +
         (crossOrg ? `<span style="opacity:.9;${ctx.mode==='all'?'margin-left:auto;':''}">${ctx.mode==='all'?'Viewing every organization merged together — always read-only. Pick a specific organization to edit its data.':'Viewing as if you belonged to this organization.'}</span>` : '');
 
       // If the page loaded directly into 'org'/'user' mode (persisted from a previous

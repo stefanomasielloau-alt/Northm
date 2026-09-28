@@ -627,8 +627,9 @@ async function loadFromSupabase(){
      scripts and each module's own upsertRows() call), so this is additive, no migration
      needed. Super-Admin-only (same tier as allOrganizations/orgRelations above), read-only. */
   if(CFG.isSuperAdmin){
-    const { data: allPods } = await sb.from('pods').select('id,org_id,name,region_id');
-    CFG.allPods = (allPods||[]).map(p=>({id:p.id,orgId:p.org_id,name:p.name,regionId:p.region_id}));
+    const { data: allPods } = await sb.from('pods').select('*');
+    /* 2026-09-28: pods.archived (soft-archive, run sheet part 1 step 5) -- select('*') so this still works before that column exists; archived pods are dropped client-side */
+    CFG.allPods = (allPods||[]).filter(p=>!p.archived).map(p=>({id:p.id,orgId:p.org_id,name:p.name,regionId:p.region_id}));
     const { data: allReps } = await sb.from('reps').select('id,org_id,name,pod_id');
     CFG.allReps = (allReps||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name,podId:r.pod_id}));
   }
@@ -688,6 +689,18 @@ async function loadFromSupabase(){
       CFG.platformAdminGrants = (grantsR.data||[]).map(g=>({id:g.id,profileId:g.profile_id,grantedBy:g.granted_by,grantedAt:g.granted_at,note:g.note||''}));
     }
   }catch(e){ /* table not created yet -- fine, additive and opt-in until the migration runs. */ }
+
+  /* 2026-09-28: L2/L3 client-group grants -- fail-soft until run sheet part 3 creates the table. */
+  CFG.clientAdminGrants = []; CFG.clientAdminGrantsAvailable = false;
+  if(CFG.isFullSuperAdmin){
+    try{
+      const cagR = await sb.from('client_admin_grants').select('id,profile_id,root_org_id,level,granted_at');
+      if(!cagR.error){
+        CFG.clientAdminGrantsAvailable = true;
+        CFG.clientAdminGrants = (cagR.data||[]).map(g=>({id:g.id,profileId:g.profile_id,rootOrgId:g.root_org_id,level:g.level,grantedAt:g.granted_at}));
+      }
+    }catch(e){ /* not migrated yet */ }
+  }
 
   /* item 36 (2026-09-07): Licensing MVP -- plans + proforma invoices, loaded fail-soft.
      Full Super Admin only in practice (RLS restricts rows to is_platform_admin()), but the
@@ -2143,6 +2156,69 @@ function renderNorthAdminsCard(){
       </tbody></table>`}
     </div></div>`;
 }
+/* 2026-09-28 -- L2/L3 client-group tiers (Stef: "Client group tiers"). A grant names a person and a
+   client ROOT organisation; their scope is that org plus every org beneath it (parent_org_id).
+   L2 Client Super User = view + edit those orgs (editing still needs the explicit "enable editing"
+   click, same as a Super Admin). L3 Client Overseer = view only. Neither gets billing, licensing,
+   org creation or platform settings. Enforced by row-level security (run sheet part 3); this card
+   only manages the grants. Full Super Admin (L0) only. */
+function _clientScopeNames(rootId){
+  const all=CFG.allOrganizations||[]; const out=[]; const seen=new Set();
+  (function walk(id){ if(seen.has(id)) return; seen.add(id); const o=all.find(x=>x.id===id); if(o) out.push(o.name); all.filter(x=>x.parentOrgId===id).forEach(x=>walk(x.id)); })(rootId);
+  return out;
+}
+function renderClientAdminsCard(){
+  const grants=CFG.clientAdminGrants||[];
+  const userById=id=>CFG.users.find(u=>u.id===id);
+  const orgs=(CFG.allOrganizations||[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const users=CFG.users.slice().sort((a,b)=>(a.name||a.email||'').localeCompare(b.name||b.email||''));
+  const off=CFG.clientAdminGrantsAvailable?'':'disabled';
+  return `<div class="card"><h3>Client group access (L2 / L3) <span class="sp"></span><span class="pill v">Full Super Admin only</span></h3>
+    <div class="bd">
+      <p class="mini" style="margin:0 0 10px"><b>L2 Client Super User</b> can view and edit every organisation in a client group;
+        <b>L3 Client Overseer</b> can view them only. A client group is the organisation you pick plus every organisation set
+        beneath it (its "parent organisation"). No billing, licensing, org creation or platform settings for either tier.</p>
+      ${CFG.clientAdminGrantsAvailable?'':'<div class="note w"><strong>Not switched on yet.</strong> Run 2026-09-28-supabase-run-sheet-part3.sql (step 1), then reload.</div>'}
+      <div class="row" style="gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <select class="cel txt" id="caUser" style="width:220px" ${off}>${users.map(u=>`<option value="${u.id}">${esc(u.name||u.email)} (${esc(orgName(u.orgId))})</option>`).join('')}</select>
+        <select class="cel txt" id="caRoot" style="width:200px" ${off}>${orgs.map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select>
+        <select class="cel txt" id="caLevel" style="width:170px" ${off}><option value="L3">L3 Client Overseer (view)</option><option value="L2">L2 Client Super User (edit)</option></select>
+        <button class="btn sm pri" ${off} onclick="grantClientAdmin()">Grant</button>
+      </div>
+      ${!grants.length?'<div class="empty">No client group access granted yet.</div>':`<table><thead><tr><th>Person</th><th>Tier</th><th>Client group</th><th>Granted</th><th></th></tr></thead><tbody>
+        ${grants.map(g=>{ const u=userById(g.profileId); const names=_clientScopeNames(g.rootOrgId); return `<tr>
+          <td class="lb">${u?esc(u.name||u.email):'(user not found)'}</td>
+          <td><span class="pill ${g.level==='L2'?'warn':'n'}">${g.level==='L2'?'L2 Super User':'L3 Overseer'}</span></td>
+          <td class="mini">${esc(names.join(', ')||'(organisation not found)')}</td>
+          <td class="mini">${esc((g.grantedAt||'').slice(0,10))}</td>
+          <td class="n"><button class="btn sm dgr" onclick="revokeClientAdmin('${g.id}')">Revoke</button></td></tr>`; }).join('')}
+      </tbody></table>`}
+    </div></div>`;
+}
+async function grantClientAdmin(){
+  if(!CFG.isFullSuperAdmin){ toast('Only the full Super Admin can grant client group access.'); return; }
+  const v=id=>{ const el=document.getElementById(id); return el?el.value:''; };
+  const profileId=v('caUser'), rootOrgId=v('caRoot'), level=v('caLevel');
+  if(!profileId||!rootOrgId||!['L2','L3'].includes(level)) return;
+  const u=CFG.users.find(x=>x.id===profileId); const names=_clientScopeNames(rootOrgId);
+  if(!confirm('Grant '+level+' ('+(level==='L2'?'view and edit':'view only')+') to '+(u?(u.name||u.email):'this person')+' across: '+names.join(', ')+'?')) return;
+  const { data, error } = await sb.from('client_admin_grants').insert({ profile_id:profileId, root_org_id:rootOrgId, level:level, granted_by:_myProfile?_myProfile.id:null }).select().single();
+  if(error){ toast('Could not grant: '+error.message); return; }
+  CFG.clientAdminGrants.push({id:data.id,profileId:data.profile_id,rootOrgId:data.root_org_id,level:data.level,grantedAt:data.granted_at});
+  logAudit('grant client group access ('+level+')',(u?(u.name||u.email):profileId)+' -> '+names.join(', '));
+  render(); toast('Access granted. They will see the Client view bar after reloading North.');
+}
+async function revokeClientAdmin(grantId){
+  if(!CFG.isFullSuperAdmin){ toast('Only the full Super Admin can revoke client group access.'); return; }
+  const g=(CFG.clientAdminGrants||[]).find(x=>x.id===grantId); if(!g) return;
+  if(!confirm('Revoke this client group access?')) return;
+  const { error } = await sb.from('client_admin_grants').delete().eq('id',grantId);
+  if(error){ toast('Could not revoke: '+error.message); return; }
+  CFG.clientAdminGrants=CFG.clientAdminGrants.filter(x=>x.id!==grantId);
+  logAudit('revoke client group access ('+g.level+')',g.profileId);
+  render(); toast('Access revoked.');
+}
+window.grantClientAdmin=grantClientAdmin; window.revokeClientAdmin=revokeClientAdmin;
 async function grantNorthAdmin(){
   if(!CFG.isFullSuperAdmin){ toast('Only the full Super Admin can grant North Admin.'); return; }
   const sel = document.getElementById('northAdminCandidate');
@@ -2395,6 +2471,21 @@ function setCurrencyRateField(id,field,val){
   bumpConfigVersion(); logAudit('edit currency rate',row.code||id); render();
 }
 window.setCurrencyRateField=setCurrencyRateField;
+/* 2026-09-28 (Stef: "Live FX rates -- put in the ability to link to a site"): no live feed, but
+   the org can store the rate site it trusts. Saved inside currency_config (no migration). The URL
+   may contain {FROM} and {TO}, which become each row's currency and the main currency -- e.g.
+   https://www.xe.com/currencyconverter/convert/?Amount=1&From={FROM}&To={TO} */
+function setCurrencySourceUrl(val){
+  const v=(val||'').trim();
+  if(v && !/^https:\/\//i.test(v)){ toast('The rate site link must start with https://'); render(); return; }
+  CFG.currency.sourceUrl=v.slice(0,500);
+  bumpConfigVersion(); logAudit('set FX rate source link',v||'(cleared)'); render();
+}
+window.setCurrencySourceUrl=setCurrencySourceUrl;
+function fxLinkFor(code){
+  const u=(CFG.currency&&CFG.currency.sourceUrl)||''; if(!u) return '';
+  return u.replace(/\{FROM\}/g,encodeURIComponent(code||'')).replace(/\{TO\}/g,encodeURIComponent(CFG.currency.main||''));
+}
 /* Reference "snapshot at entry" conversion helper -- convert once when a $ value is saved,
    store both the original and converted amount on the record, and never re-convert on
    read (so a later rate edit doesn't retroactively change historical figures). Not called
@@ -2575,17 +2666,22 @@ function pageCurrency(){
     <p>Set your main currency and the rates other currencies convert to it at. Ordo, Cursus,
       Eventus and Custodia all read these live -- budgets, RAG status and rollups convert
       through them automatically. Rates are entered by hand here -- there's no live
-      exchange-rate feed -- editing a rate's value is what stamps its "updated" date.</p></div></div>`;
+      exchange-rate feed -- editing a rate's value is what stamps its "updated" date. Add a rate
+      source link below to jump straight to today's rate for each currency.</p></div></div>`;
   h+=`<div class="card"><h3>Main currency</h3>
     <div class="bd"><div class="field"><label class="lbl">All rates below convert to this currency</label>
       <input class="cel" style="width:80px;text-transform:uppercase" maxlength="3" value="${esc(CFG.currency.main)}" onchange="setCurrencyMain(this.value)"></div></div></div>`;
+  h+=`<div class="card"><h3>Rate source link</h3>
+    <div class="bd"><div class="field"><label class="lbl">A site you trust for today's rates (optional). Use {FROM} and {TO} to link straight to each pair.</label>
+      <input class="cel txt" style="width:100%;max-width:560px" placeholder="https://www.xe.com/currencyconverter/convert/?Amount=1&From={FROM}&To={TO}" value="${esc(CFG.currency.sourceUrl||'')}" onchange="setCurrencySourceUrl(this.value)">
+      ${CFG.currency.sourceUrl?` <a href="${esc(fxLinkFor(''))}" target="_blank" rel="noopener" class="mini">Open rate site ↗</a>`:''}</div></div></div>`;
   h+=`<div class="card"><h3>Exchange rates <span class="sp"></span><span class="pill n">${CFG.currency.rates.length}</span>
       <button class="btn sm pri" onclick="addCurrencyRate()">Add currency</button></h3>
     <div class="bd flush"><table><thead><tr><th>Currency</th><th class="n">Rate to ${esc(CFG.currency.main)}</th><th>Updated</th><th></th></tr></thead><tbody>
     ${!CFG.currency.rates.length?`<tr><td colspan="4" class="empty">No rates added yet.</td></tr>`:CFG.currency.rates.map(r=>`<tr>
       <td><input class="cel txt" style="width:80px;text-transform:uppercase" maxlength="3" placeholder="USD" value="${esc(r.code)}" onchange="setCurrencyRateField('${r.id}','code',this.value)"></td>
       <td class="n"><input class="cel w" value="${r.rate}" onchange="setCurrencyRateField('${r.id}','rate',this.value)"></td>
-      <td class="mini">${r.updatedAt?F.dt(r.updatedAt):'—'}</td>
+      <td class="mini">${r.updatedAt?F.dt(r.updatedAt):'—'}${CFG.currency.sourceUrl&&r.code?` · <a href="${esc(fxLinkFor(r.code))}" target="_blank" rel="noopener">check ${esc(r.code)}→${esc(CFG.currency.main)} ↗</a>`:''}</td>
       <td class="n"><button class="btn sm dgr" onclick="removeCurrencyRate('${r.id}')">Remove</button></td></tr>`).join('')}
     </tbody></table></div></div>`;
   return h;
@@ -3213,6 +3309,7 @@ function pageUsers(){
     h+=renderOrgMembershipsCard();
     h+=renderHubConnectionsCard();
     if(CFG.isFullSuperAdmin) h+=renderNorthAdminsCard();
+    if(CFG.isFullSuperAdmin) h+=renderClientAdminsCard();
   }
   h+=`<div class="row" style="gap:8px;align-items:center;margin:0 0 14px;flex-wrap:wrap">
     <label class="mini">Filter by region:</label>
@@ -4395,7 +4492,10 @@ async function submitFeedback(){
   try{
     const { error } = await sb.from('feedback_items').insert({
       org_id:_orgId, reporter_id:_myProfile.id, reporter_name:name,
-      page:FEEDBACK_MODULE, url:location.href, comment:comment
+      page:FEEDBACK_MODULE, url:location.href,
+      /* 2026-09-28 (feedback cross-org attribution): the item stays filed under the reporter's own org
+         (RLS requires that), but if a Super Admin was viewing ANOTHER org, say which, so triage has context. */
+      comment:comment+((typeof _savOrgFilter!=='undefined'&&_savOrgFilter&&_savOrgFilter!==_orgId)?'\n\n[Reported while viewing org '+_savOrgFilter+']':'')
     });
     if(error){ toast('Could not submit: '+error.message); return; }
     closeFeedbackModal();

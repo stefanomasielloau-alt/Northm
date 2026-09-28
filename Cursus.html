@@ -255,6 +255,7 @@ window.closeFieldGuide=closeFieldGuide;
 <script src="shared/dateFormat.js"></script>
 <script src="shared/orgSwitcher.js"></script>
 <script src="shared/superAdminView.js"></script>
+<script src="shared/clientAdmin.js"></script>
 <script src="shared/convertToMain.js"></script>
 <script src="shared/currencyOptions.js"></script>
 <div id="authGate" style="display:none"></div>
@@ -302,6 +303,9 @@ const AUTH_LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAEJwAAAZ2CAYAAAG
 /* real UUIDs now — every DB primary key is uuid type. Prefix arg kept for call-site
    compatibility (uid('c'), uid('tk') etc still work) but no longer affects the id itself. */
 const uid = _p => crypto.randomUUID();
+/* 2026-09-28 (hygiene audit): capture a new row's org when it is created, not at autosave time. */
+function _clickOrgId(){ return (typeof _savOrgFilter!=='undefined' && _savOrgFilter!==null) ? _savOrgFilter : _orgId; }
+
 const F = {
   n:(v,d=0)=>(v==null||isNaN(v))?'—':Number(v).toLocaleString('en-AU',{minimumFractionDigits:d,maximumFractionDigits:d}),
   m:v=>(v==null||isNaN(v))?'—':'$'+Math.round(v).toLocaleString('en-AU'),
@@ -449,7 +453,7 @@ let _skipNextSignOutReload = false;
 
 async function upsertRows(table, rows, mapFn){
   if(!rows || !rows.length) return;
-  if(CFG.isSuperAdmin && !SAV.canEdit()) return; // read-only cross-org view -- item 68
+  if(CFG.savEnabled && !SAV.canEdit()) return; // read-only cross-org view -- item 68
   try{
     /* item 68 (2026-09-10): stamp each row's OWN recorded org (r.orgId, populated on load
        for every table this view can show cross-org) instead of the blind ambient _orgId --
@@ -464,7 +468,7 @@ async function upsertRows(table, rows, mapFn){
   }catch(e){ console.error('Save failed for '+table, e); toast('Could not save '+table+' to the database — see console.'); }
 }
 async function deleteRow(table, id, rowOrgId){
-  if(CFG.isSuperAdmin && !SAV.canEdit()) return; // read-only cross-org view -- item 68
+  if(CFG.savEnabled && !SAV.canEdit()) return; // read-only cross-org view -- item 68
   /* In 'org'/'user' mode every visible row genuinely belongs to the selected org, so
      SAV.effectiveOrgId() (not the admin's own _orgId) is the correct fallback target --
      'all' mode is excluded from canEdit() entirely (see superAdminView.js), so it can
@@ -555,7 +559,7 @@ async function saveToSupabase(){
 
 function scheduleSupabaseSave(){
   if(!_orgId) return;
-  if(CFG.isSuperAdmin && !SAV.canEdit()) return; // read-only cross-org view -- item 68
+  if(CFG.savEnabled && !SAV.canEdit()) return; // read-only cross-org view -- item 68
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(()=>{ saveToSupabase(); }, 900);
 }
@@ -609,6 +613,16 @@ async function loadFromSupabase(){
   CFG.platformAdminLevel = _paLevel;
   CFG.isFullSuperAdmin = _paLevel === 'L0';
   CFG.isSuperAdmin = _paLevel === 'L0' || _paLevel === 'L1';
+  /* 2026-09-28: L2/L3 client-group tiers -- see shared/clientAdmin.js. A client admin gets the same
+     "view as" bar as a Super Admin, but scoped (by row-level security) to their client group only. */
+  CFG.clientAdminLevel = null; CFG.loadClientOrganizations = null;
+  if(!CFG.isSuperAdmin && typeof window.northLoadClientAdmin==='function'){
+    const _ca = await window.northLoadClientAdmin(sb);
+    CFG.clientAdminLevel = _ca.level; CFG.loadClientOrganizations = _ca.loadOrgs;
+  }
+  CFG.isClientAdmin = !!CFG.clientAdminLevel;
+  CFG.savEnabled = !!(CFG.isSuperAdmin || CFG.isClientAdmin);
+  if(CFG.isClientAdmin && typeof SAV!=='undefined') SAV.setClientScope({readOnly: CFG.clientAdminLevel==='L3'});
 
   /* item 68 (2026-09-10): Super Admin "view as All / a specific org / a specific user"
      context -- see shared/superAdminView.js for the full design writeup. _savOrgFilter is
@@ -619,7 +633,7 @@ async function loadFromSupabase(){
   SAV.init(_orgId);
   _savOrgFilter = _orgId;
   _savUserFilter = null;
-  if(CFG.isSuperAdmin){
+  if(CFG.savEnabled){
     _savOrgFilter = SAV.effectiveOrgId();
     _savUserFilter = SAV.effectiveUserId();
   }
@@ -685,7 +699,8 @@ async function loadFromSupabase(){
     /* 2026-09-08 (item 41): Pod linkage for Partners -- id+name+region_id only, same
        narrow-reference pattern as the profiles read just above. Cursus doesn't own or
        edit pods (Strategy/Ordo.html does), just needs the list for a dropdown. */
-    sb.from('pods').select('id,name,region_id'),
+    /* 2026-09-28: pods.archived (soft-archive, run sheet part 1 step 5) -- select('*') so this still works before that column exists; archived pods are dropped client-side */
+    sb.from('pods').select('*').then(r=>{ if(r&&r.data) r.data=r.data.filter(p=>!p.archived); return r; }),
     _crossOrg ? adminCrossOrg('programmes') : orgScoped(sb.from('programmes').select('id,name,org_id')),
     sb.from('cost_buckets').select('id,code,label'),
     _crossOrg ? adminCrossOrg('campaigns', {p_user_id:_savUserFilter}) : userScoped(orgScoped(sb.from('campaigns').select('id,name,programme_id,region_id,cost_bucket_id,start_date,end_date,budget,crm_ref,period_type,period_label,tracking_ref,business_case,signoff_status,po_number,registration_url,project_folder_url,external_links,applicable_splits,partner_motion_tags,cloned_from_id,contact_list_ref,icp_ref,sort_order,notes,owner_id,owner_name,owner_email,alert_threshold_pct,org_id'))),
@@ -1126,8 +1141,8 @@ function _renderSavBarSafely(){
   try{
     if(typeof SAV==='undefined') return;
     SAV.renderBar({
-      isSuperAdmin: CFG.isSuperAdmin,
-      loadOrganizations: CFG.loadAllOrganizations,
+      isSuperAdmin: CFG.savEnabled, clientScope: (!CFG.isSuperAdmin && CFG.isClientAdmin),
+      loadOrganizations: (CFG.isSuperAdmin ? CFG.loadAllOrganizations : CFG.loadClientOrganizations),
       usersForOrg: (orgId)=> (CFG.orgUsers||[]).filter(u=>u.orgId===orgId)
     });
   }catch(e){
@@ -1207,7 +1222,7 @@ async function bootApp(){
 /* ---------- CRUD ---------- */
 function addTask(campaignId){
   const sib=TASK(campaignId);
-  CFG.tasks.push({id:uid('tk'),campaignId:campaignId,name:'New activity',type:'General',owner:'',
+  CFG.tasks.push({orgId:_clickOrgId(),id:uid('tk'),campaignId:campaignId,name:'New activity',type:'General',owner:'',
     startDate:'',dueDate:'',status:'Planned',notes:'',supplier:'',po:'',templateId:null,
     costBucketId:CFG.costBuckets[0].id,plannedCost:0,committedCost:0,actualCost:0,
     trackingRef:nextTrackingRef('activity'),sortOrder:sib.length,eventId:null});
@@ -1239,13 +1254,13 @@ function commitTask(id){
 }
 function saveTaskAsTemplate(id){
   const t=byId(CFG.tasks,id); if(!t)return;
-  CFG.templates.push({id:uid('tpl'),name:t.name+' (template)',type:t.type,defaultCostBucketId:t.costBucketId,notes:t.notes||''});
+  CFG.templates.push({orgId:_clickOrgId(),id:uid('tpl'),name:t.name+' (template)',type:t.type,defaultCostBucketId:t.costBucketId,notes:t.notes||''});
   logAudit('save template',t.name); render(); toast('Saved as a reusable template.');
 }
 function addTaskFromTemplate(campaignId,templateId){
   const tpl=byId(CFG.templates,templateId); if(!tpl)return;
   const sib=TASK(campaignId);
-  CFG.tasks.push({id:uid('tk'),campaignId:campaignId,name:tpl.name.replace(' (template)',''),type:tpl.type,owner:'',
+  CFG.tasks.push({orgId:_clickOrgId(),id:uid('tk'),campaignId:campaignId,name:tpl.name.replace(' (template)',''),type:tpl.type,owner:'',
     startDate:'',dueDate:'',status:'Planned',notes:tpl.notes||'',supplier:'',po:'',templateId:tpl.id,
     costBucketId:tpl.defaultCostBucketId,plannedCost:0,committedCost:0,actualCost:0,sortOrder:sib.length,eventId:null});
   logAudit('add activity from template',tpl.name); render(); toast('Activity created from template.');
@@ -1256,13 +1271,13 @@ function removeTemplate(id){
   deleteRow('templates',id);
 }
 function addTemplate(){
-  CFG.templates.push({id:uid('tpl'),name:'New template',type:'General',defaultCostBucketId:CFG.costBuckets[0].id,notes:''});
+  CFG.templates.push({orgId:_clickOrgId(),id:uid('tpl'),name:'New template',type:'General',defaultCostBucketId:CFG.costBuckets[0].id,notes:''});
   logAudit('create template','New template'); render(); toast('Template created — edit its fields below.');
 }
 window.addTemplate=addTemplate;
 
 function addPartner(){
-  CFG.partners.push({id:uid('ptn'),name:'New partner',type:'',contactName:'',contactEmail:'',contactPhone:'',notes:'',podId:null,acvTarget:null,contactTerms:[]});
+  CFG.partners.push({orgId:_clickOrgId(),id:uid('ptn'),name:'New partner',type:'',contactName:'',contactEmail:'',contactPhone:'',notes:'',podId:null,acvTarget:null,contactTerms:[]});
   logAudit('add partner','New partner'); render(); toast('Partner added — edit its fields below.');
 }
 window.addPartner=addPartner;
@@ -1336,7 +1351,7 @@ window.removePartnerContactTerm = removePartnerContactTerm;
 
 function addCampaignPartnerAlloc(campaignId){
   if(!CFG.partners.length){ toast('Add a partner first, on the Partners page.'); return; }
-  CFG.campaignPartnerAllocations.push({id:uid('cpa'),campaignId:campaignId,partnerId:CFG.partners[0].id,role:'',budgetSharePct:0,leadSharePct:0});
+  CFG.campaignPartnerAllocations.push({orgId:_clickOrgId(),id:uid('cpa'),campaignId:campaignId,partnerId:CFG.partners[0].id,role:'',budgetSharePct:0,leadSharePct:0});
   logAudit('add partner allocation','on campaign '+campaignId); render();
 }
 window.addCampaignPartnerAlloc=addCampaignPartnerAlloc;
@@ -1353,7 +1368,7 @@ function addTaskCampaignLink(taskId){
   const t=byId(CFG.tasks,taskId); if(!t)return;
   const other=CFG.campaigns.find(c=>c.id!==t.campaignId);
   if(!other){ toast('No other campaign to link to yet.'); return; }
-  CFG.taskCampaignLinks.push({id:uid('tcl'),taskId:taskId,campaignId:other.id,role:'',budgetSharePct:0});
+  CFG.taskCampaignLinks.push({orgId:_clickOrgId(),id:uid('tcl'),taskId:taskId,campaignId:other.id,role:'',budgetSharePct:0});
   logAudit('add secondary campaign link','on activity '+t.name); render();
 }
 window.addTaskCampaignLink=addTaskCampaignLink;
@@ -1653,7 +1668,7 @@ function submitCampaignWizard(){
   CFG.campaigns.push(c);
   (w.partnerAllocs||[]).forEach(pa=>{
     if(!pa.partnerId) return;
-    CFG.campaignPartnerAllocations.push({id:uid('cpa'),campaignId:id,partnerId:pa.partnerId,role:pa.role||'',budgetSharePct:pa.budgetSharePct||0,leadSharePct:pa.leadSharePct||0});
+    CFG.campaignPartnerAllocations.push({orgId:_clickOrgId(),id:uid('cpa'),campaignId:id,partnerId:pa.partnerId,role:pa.role||'',budgetSharePct:pa.budgetSharePct||0,leadSharePct:pa.leadSharePct||0});
   });
   logAudit('create campaign', c.name+' · '+ref);
   UI.wizard=null;
@@ -3989,7 +4004,10 @@ async function submitFeedback(){
   try{
     const { error } = await sb.from('feedback_items').insert({
       org_id:_orgId, reporter_id:_myProfile.id, reporter_name:name,
-      page:FEEDBACK_MODULE, url:location.href, comment:comment
+      page:FEEDBACK_MODULE, url:location.href,
+      /* 2026-09-28 (feedback cross-org attribution): the item stays filed under the reporter's own org
+         (RLS requires that), but if a Super Admin was viewing ANOTHER org, say which, so triage has context. */
+      comment:comment+((typeof _savOrgFilter!=='undefined'&&_savOrgFilter&&_savOrgFilter!==_orgId)?'\n\n[Reported while viewing org '+_savOrgFilter+']':'')
     });
     if(error){ toast('Could not submit: '+error.message); return; }
     closeFeedbackModal();

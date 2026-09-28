@@ -4,8 +4,66 @@
     {
       "source": "/(.*).html",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store, must-revalidate" }
+        {
+          "key": "Cache-Control",
+          "value": "no-store, must-revalidate"
+        }
       ]
+    },
+    {
+      "source": "/(strategy|campaigns|campaign-planning|events|asset-register|targets|scoring|process-maps|configuration|reporting|dashboard)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, must-revalidate"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/strategy",
+      "destination": "/Ordo.html"
+    },
+    {
+      "source": "/campaigns",
+      "destination": "/Cursus.html"
+    },
+    {
+      "source": "/campaign-planning",
+      "destination": "/Cursus.html"
+    },
+    {
+      "source": "/events",
+      "destination": "/Eventus.html"
+    },
+    {
+      "source": "/asset-register",
+      "destination": "/Custodia.html"
+    },
+    {
+      "source": "/targets",
+      "destination": "/Prospectus.html"
+    },
+    {
+      "source": "/scoring",
+      "destination": "/Augur.html"
+    },
+    {
+      "source": "/process-maps",
+      "destination": "/Schema.html"
+    },
+    {
+      "source": "/configuration",
+      "destination": "/Norma.html"
+    },
+    {
+      "source": "/reporting",
+      "destination": "/Reportus.html"
+    },
+    {
+      "source": "/dashboard",
+      "destination": "/index.html"
     }
   ]
 }

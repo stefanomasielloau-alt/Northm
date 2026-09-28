@@ -115,8 +115,8 @@
     // breakdown) only while that region has a pod -- pageGeo() itself decides
     // which boxes exist each render; this library just lists what CAN appear.
     geo: {
-      defaults: { box1: 'kpis', box2: 'gapanalysis', box3: 'streamfunnel', box4: 'winschart', box5: 'acvchart', box6: 'podbreakdown', box7: 'rateoverride', box8: 'streammixoverride', box9: 'repbreakdown' },
-      boxSizes: { box1: 12, box2: 12, box3: 12, box4: 6, box5: 6, box6: 12, box7: 12, box8: 12, box9: 12 },
+      defaults: { box1: 'kpis', box2: 'gapanalysis', box3: 'streamfunnel', box4: 'winschart', box5: 'acvchart', box6: 'podbreakdown', box7: 'rateoverride', box8: 'streammixoverride', box9: 'repbreakdown', box10: 'podrateoverride', box11: 'podstreammixoverride' },
+      boxSizes: { box1: 12, box2: 12, box3: 12, box4: 6, box5: 6, box6: 12, box7: 12, box8: 12, box9: 12, box10: 6, box11: 6 },
       widgets: {
         kpis: { label: 'KPI summary', hint: 'ACV target, projected revenue, variance, AE headcount, wins needed', fn: function () { return window.geoWidgetKpis(); } },
         gapanalysis: { label: 'Gap analysis by region', hint: 'Editable ACV target per region vs demand potential', fn: function () { return window.geoWidgetGapAnalysis(); } },
@@ -126,7 +126,9 @@
         podbreakdown: { label: 'Pod breakdown', hint: 'Editable pod shares for the selected region', fn: function () { return window.geoWidgetPodBreakdown(); } },
         rateoverride: { label: 'Rate override', hint: 'Per-gate rate override for the selected region', fn: function () { return window.geoWidgetRateOverride(); } },
         streammixoverride: { label: 'Stream mix override', hint: 'Per-stream mix override for the selected region', fn: function () { return window.geoWidgetStreamMixOverride(); } },
-        repbreakdown: { label: 'Rep breakdown', hint: 'Editable rep shares for the selected pod', fn: function () { return window.geoWidgetRepBreakdown(); } }
+        repbreakdown: { label: 'Rep breakdown', hint: 'Editable rep shares for the selected pod', fn: function () { return window.geoWidgetRepBreakdown(); } },
+        podrateoverride: { label: 'Pod rate override', hint: 'Per-gate rate override for the selected pod (pod > region > global)', fn: function () { return window.geoWidgetPodRateOverride(); } },
+        podstreammixoverride: { label: 'Pod stream mix', hint: 'Per-stream mix override for the selected pod', fn: function () { return window.geoWidgetPodStreamMixOverride(); } }
       }
     },
     activity: {
@@ -291,6 +293,28 @@
         prechains: { label: 'Pre-Lead chains', hint: 'Optional per-activity channel-specific stages before the Lead gate', fn: function () { return window.adminActsWidgetPreChains(); } }
       }
     },
+    admin_routes: {
+      defaults: { box1: 'table' },
+      boxSizes: { box1: 12 },
+      widgets: {
+        table: { label: 'Routes', hint: 'Add, rename or remove routes; removal blocked while activities use one', fn: function () { return window.adminRoutesWidgetTable(); } }
+      }
+    },
+    admin_naming: {
+      defaults: { box1: 'table' },
+      boxSizes: { box1: 12 },
+      widgets: {
+        table: { label: 'Naming', hint: "Your organisation's words for gates, regions, pods and other dimensions", fn: function () { return window.adminNamingWidgetTable(); } }
+      }
+    },
+    admin_customfields: {
+      defaults: { box1: 'defs', box2: 'values' },
+      boxSizes: { box1: 12, box2: 12 },
+      widgets: {
+        defs: { label: 'Custom field definitions', hint: 'Define extra fields captured on each campaign', fn: function () { return window.adminCustomFieldsWidgetDefs(); } },
+        values: { label: 'Custom field values', hint: 'Edit custom field values per campaign', fn: function () { return window.adminCustomFieldsWidgetValues(); } }
+      }
+    },
     admin_segs: {
       defaults: { box1: 'table' },
       boxSizes: { box1: 12 },
@@ -412,6 +436,9 @@
     admin_geo: 'Admin & config — Geography',
     admin_streams: 'Admin & config — Streams',
     admin_acts: 'Admin & config — Activities',
+    admin_routes: 'Admin & config — Routes',
+    admin_naming: 'Admin & config — Naming',
+    admin_customfields: 'Admin & config — Custom fields',
     admin_segs: 'Admin & config — Segments',
     admin_camps: 'Admin & config — Campaigns',
     admin_buckets: 'Admin & config — Cost buckets',
@@ -503,20 +530,119 @@
   // 2026-09-24: best-effort live fetch for an 'api'-type external widget. Most public APIs block
   // a direct browser request (CORS) -- that shows as a readable message rather than a blank tile,
   // since there's no way around it without a server-side proxy (a real, separate piece of work).
-  function renderApiWidget(containerId, cw) {
-    fetch(cw.url).then(function (r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    }).then(function (data) {
-      var el = document.getElementById(containerId);
-      if (el) el.innerHTML = renderJsonPayload(data);
-    }).catch(function (err) {
-      var el = document.getElementById(containerId);
-      if (el) el.innerHTML = '<div class="mini" style="color:#c33">Could not load this API (' +
-        String(err && err.message || err).replace(/</g, '&lt;') +
-        '). Most public APIs block a direct browser request (CORS) -- this usually needs a small server-side proxy.</div>';
+  // 2026-09-28: if the direct request fails (usually CORS), retry through the widget-api-proxy
+  // Supabase Edge Function (supabase/functions/widget-api-proxy -- fetches the widget's saved URL
+  // server-side for a signed-in user of the widget's own org). Optional polling via
+  // cw.config.refreshSeconds (min 15s) keeps re-fetching while the tile is on screen.
+  function _proxyFetch(cw) {
+    if (typeof sb === 'undefined' || typeof SUPABASE_URL === 'undefined') return Promise.reject(new Error('proxy unavailable'));
+    return sb.auth.getSession().then(function (res) {
+      var tok = res && res.data && res.data.session && res.data.session.access_token;
+      if (!tok) throw new Error('not signed in');
+      return fetch(SUPABASE_URL + '/functions/v1/widget-api-proxy', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+        body: JSON.stringify({ widget_id: cw.id })
+      });
+    }).then(function (r) {
+      if (r.status === 404) throw new Error('the widget-api-proxy function is not deployed yet');
+      return r.json().then(function (j) { if (!r.ok || (j && j.error)) throw new Error((j && j.error) || ('HTTP ' + r.status)); return j.data; });
     });
   }
+  function renderApiWidget(containerId, cw) {
+    var paint = function (data, via) {
+      var el = document.getElementById(containerId);
+      if (el) el.innerHTML = renderJsonPayload(data) +
+        '<div class="mini" style="opacity:.5;margin-top:4px">Updated ' + new Date().toLocaleTimeString() + (via ? ' · via proxy' : '') + '</div>';
+    };
+    var run = function () {
+      fetch(cw.url).then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      }).then(function (data) { paint(data, false); })
+        .catch(function () {
+          return _proxyFetch(cw).then(function (data) { paint(data, true); });
+        }).catch(function (err) {
+          var el = document.getElementById(containerId);
+          if (el) el.innerHTML = '<div class="mini" style="color:#c33">Could not load this API (' +
+            String(err && err.message || err).replace(/</g, '&lt;') +
+            '). The direct request was blocked and the server-side proxy also failed -- see Admin &amp; config &gt; Widget library.</div>';
+        });
+    };
+    run();
+    var secs = cw.config && +cw.config.refreshSeconds;
+    if (secs && secs >= 15) {
+      var t = setInterval(function () {
+        if (!document.getElementById(containerId)) { clearInterval(t); return; }
+        run();
+      }, secs * 1000);
+    }
+  }
+
+  // 2026-09-28: two-way Google Sheet widget ('gsheet'). Reads and writes a range through
+  // Hub-Backend's existing /sheets/request endpoint (the same one the Board Report -> Sheets export
+  // uses), authenticated with the viewer's North session. Needs Google OAuth configured on
+  // Hub-Backend (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REDIRECT_URI) and the viewer's
+  // matching Hub account to have Google connected -- until then it shows that message instead.
+  var gsheetCache = {};
+  function _sheetsCall(payload) {
+    if (typeof sb === 'undefined' || typeof CONTACT_URL === 'undefined') return Promise.reject(new Error('not available on this page'));
+    return sb.auth.getSession().then(function (res) {
+      var tok = res && res.data && res.data.session && res.data.session.access_token;
+      if (!tok) throw new Error('your North session has expired -- sign in again');
+      payload.north_token = tok; payload.org = (typeof _hubOrgSlug !== 'undefined' ? _hubOrgSlug : '');
+      return fetch(CONTACT_URL + '/sheets/request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (!r.ok || (j && j.error)) throw new Error((j && j.error) || ('HTTP ' + r.status));
+        return j;
+      });
+    });
+  }
+  function _sheetIdOf(u) { var m = String(u || '').match(/\/d\/([a-zA-Z0-9_-]{20,})/); return m ? m[1] : String(u || '').trim(); }
+  function renderGsheetWidget(containerId, cw) {
+    var range = (cw.config && cw.config.range) || 'A1:F20';
+    var canEdit = (typeof canConfig === 'function' && canConfig()) || (typeof readOnly === 'function' && !readOnly());
+    _sheetsCall({ method: 'get', sheetId: _sheetIdOf(cw.url), range: range }).then(function (j) {
+      var rows = j.values || [];
+      gsheetCache[cw.id] = { rows: rows, range: range };
+      var el = document.getElementById(containerId); if (!el) return;
+      var width = rows.reduce(function (m, r) { return Math.max(m, r.length); }, 0) || 1;
+      var h = '<table style="width:100%;font-size:12px"><tbody>';
+      rows.forEach(function (r, ri) {
+        h += '<tr>';
+        for (var ci = 0; ci < width; ci++) {
+          var v = r[ci] == null ? '' : String(r[ci]).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+          h += '<td style="padding:1px">' + (canEdit
+            ? '<input class="cel txt" style="width:100%;min-width:60px" value="' + v + '" onchange="window.__northGsheetEdit(\'' + cw.id + '\',' + ri + ',' + ci + ',this.value)">'
+            : v) + '</td>';
+        }
+        h += '</tr>';
+      });
+      h += '</tbody></table>';
+      if (canEdit) h += '<div style="margin-top:6px;text-align:right"><span class="mini" id="' + containerId + '_st" style="opacity:.6;margin-right:8px"></span>' +
+        '<button class="btn sm pri" onclick="window.__northGsheetSave(\'' + cw.id + '\',\'' + containerId + '\')">Save to Sheet</button></div>';
+      el.innerHTML = h;
+    }).catch(function (err) {
+      var el = document.getElementById(containerId);
+      if (el) el.innerHTML = '<div class="mini" style="color:#c33">Could not read the sheet (' + String(err && err.message || err).replace(/</g, '&lt;') +
+        '). Needs Google connected for your account in Hub Settings, and the Google OAuth keys set on Hub-Backend.</div>';
+    });
+  }
+  window.__northGsheetEdit = function (cwId, ri, ci, val) {
+    var c = gsheetCache[cwId]; if (!c) return;
+    while (c.rows.length <= ri) c.rows.push([]);
+    while (c.rows[ri].length <= ci) c.rows[ri].push('');
+    c.rows[ri][ci] = val; c.dirty = true;
+  };
+  window.__northGsheetSave = function (cwId, containerId) {
+    var c = gsheetCache[cwId]; if (!c || !c.dirty) return;
+    var cw = (typeof CFG !== 'undefined' && CFG.customWidgets || []).filter(function (w) { return w.id === cwId; })[0]; if (!cw) return;
+    var st = document.getElementById(containerId + '_st'); if (st) st.textContent = 'Saving…';
+    _sheetsCall({ method: 'update', sheetId: _sheetIdOf(cw.url), range: c.range, body: { values: c.rows } }).then(function () {
+      c.dirty = false; if (st) st.textContent = 'Saved ' + new Date().toLocaleTimeString();
+      if (typeof logAudit === 'function') logAudit('edit', 'Google Sheet widget/' + cw.name + ' (' + c.range + ')');
+    }).catch(function (err) { if (st) st.textContent = 'Save failed: ' + (err && err.message || err); });
+  };
 
   // 2026-09-24 (Stef: "Id [I'd] rather have click-to-edit directly on the tile"): which Note
   // widgets are currently in edit mode, keyed by custom_widgets id. Module-scoped state, not
@@ -587,6 +713,12 @@
             setTimeout(function () { renderApiWidget(apiBoxId, cw); }, 0);
             return '<div class="card" style="height:100%"><div class="bd" style="height:100%;overflow:auto;padding:8px">' +
               '<div id="' + apiBoxId + '" class="mini">Loading…</div></div></div>';
+          }
+          if (cwType === 'gsheet') {
+            var gsBoxId = 'extg_' + cwId.replace(/[^a-zA-Z0-9]/g, '') + '_' + Math.random().toString(36).slice(2, 8);
+            setTimeout(function () { renderGsheetWidget(gsBoxId, cw); }, 0);
+            return '<div class="card" style="height:100%"><div class="bd" style="height:100%;overflow:auto;padding:8px">' +
+              '<div id="' + gsBoxId + '" class="mini">Loading sheet…</div></div></div>';
           }
           if (cwType === 'webhook') {
             return '<div class="card" style="height:100%"><div class="bd" style="height:100%;overflow:auto;padding:8px">' +
@@ -1405,6 +1537,18 @@
     }
   }
 
+  // Width of the box a widget normally lives in on its home page (the widest box that has it as a
+  // default), or null if it isn't anyone's default (external widgets, etc).
+  function nativeWidgetWidth(pageId, widgetId) {
+    var dot = widgetId.indexOf('.');
+    var libId = dot === -1 ? pageId : widgetId.slice(0, dot);
+    var wId = dot === -1 ? widgetId : widgetId.slice(dot + 1);
+    var lib = WIDGET_LIBRARIES[libId]; if (!lib || !lib.defaults || !lib.boxSizes) return null;
+    var best = null;
+    Object.keys(lib.defaults).forEach(function (b) { if (lib.defaults[b] === wId && lib.boxSizes[b]) best = Math.max(best || 0, lib.boxSizes[b]); });
+    return best;
+  }
+
   function applyWidgetSwap(pageId, boxId, widgetId) {
     var grid = GRIDS[pageId];
     var gridEl = grid ? grid.el : null;
@@ -1416,6 +1560,15 @@
     // id from this page's own WIDGET_LIBRARIES entry -- resolveWidget()
     // handles both forms; see its own comment above for why.
     fillBoxContent(item, resolveWidget(pageId, widgetId));
+    // 2026-09-28 (backlog: "no auto-resize when a cross-page widget doesn't fit its target box's
+    // shape"): a widget designed for a full-width (12) box squeezed into a half-width (6) box
+    // renders cramped. If the widget's own home box is wider than this one, widen this box to
+    // match (never narrower); GridStack reflows the neighbours. Height is fitted just below.
+    try {
+      var nw = nativeWidgetWidth(pageId, widgetId);
+      var curW = +(item.getAttribute('gs-w') || 0);
+      if (nw && curW && nw > curW) grid.update(item, { w: nw });
+    } catch (e) { /* width is a nicety -- never block the swap over it */ }
     // Content height likely changed — grow/shrink this one box to fit, same
     // measure-and-step approach as the initial layout pass, without moving or
     // resizing any other box. (2026-09-24: now shared with the manual "Fit height"
@@ -1451,6 +1604,9 @@
     admin_geo: 'ordo-grid-admin-geo',
     admin_streams: 'ordo-grid-admin-streams',
     admin_acts: 'ordo-grid-admin-acts',
+    admin_routes: 'ordo-grid-admin-routes',
+    admin_naming: 'ordo-grid-admin-naming',
+    admin_customfields: 'ordo-grid-admin-customfields',
     admin_segs: 'ordo-grid-admin-segs',
     admin_camps: 'ordo-grid-admin-camps',
     admin_buckets: 'ordo-grid-admin-buckets',

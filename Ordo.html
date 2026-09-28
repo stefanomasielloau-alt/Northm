@@ -418,6 +418,8 @@ input.cel.gs-swap-filter{width:150px}
   padding:8px 12px 2px;font-size:10.5px;font-weight:700;text-transform:uppercase;
   letter-spacing:.02em;color:var(--ink-3);
 }
+  tr.dropon td{outline:2px dashed var(--acc,#3b82f6);outline-offset:-2px}
+  tr[draggable="true"]{cursor:grab}
 </style>
 <link rel="stylesheet" href="assets/vendor/gridstack/gridstack.min.css">
 </head>
@@ -512,6 +514,7 @@ window.closeFieldGuide=closeFieldGuide;
 <script src="shared/dateFormat.js"></script>
 <script src="shared/orgSwitcher.js"></script>
 <script src="shared/superAdminView.js"></script>
+<script src="shared/clientAdmin.js"></script>
 <script src="shared/convertToMain.js"></script>
 <script src="shared/currencyOptions.js"></script>
 <script src="shared/charts.js"></script>
@@ -567,6 +570,12 @@ function jit(base,pct){ return base*(1+(rnd()*2-1)*pct); }
 /* real UUIDs now — every DB primary key is uuid type. The prefix arg is kept for call-site
    compatibility (uid('c'), uid('snap') etc still work) but no longer affects the id itself. */
 const uid = _p => crypto.randomUUID();
+/* 2026-09-28 (hygiene audit: "new row never stamped with org_id at click time"): the org a new row
+   belongs to is captured when it is CREATED, not when autosave later runs -- so a Super Admin who
+   switches the "view as" org between clicking Add and the save firing can't mis-file the row.
+   Same rule the gates/regions/routes adders already follow. */
+function _clickOrgId(){ return (typeof _savOrgFilter!=='undefined' && _savOrgFilter!==null) ? _savOrgFilter : _orgId; }
+
 
 const F = {
   n:(v,d=0)=>(v==null||isNaN(v))?'—':Number(v).toLocaleString('en-AU',{minimumFractionDigits:d,maximumFractionDigits:d}),
@@ -795,8 +804,11 @@ function chain(){ return CFG.gates.filter(g=>g.active).sort((a,b)=>a.order-b.ord
 const entryGate=()=>chain()[0];
 const exitGate=()=>{ const c=chain(); return c[c.length-1]; };
 
-function rateOf(g,mult=1,regionId=null){
+function rateOf(g,mult=1,regionId=null,podId=null){
   if(!g||g.entry||g.rate==null)return 1;
+  /* 2026-09-28: pod-level override (pod_gate_rates) wins over the region override, which wins over
+     global -- a pod with no row of its own inherits its region exactly as before. */
+  if(podId){ const pv=podGateRateFor(podId,g.id); if(pv!=null) return clamp(pv*mult,0,1); }
   if(regionId){ const ov=regionGateRateFor(regionId,g.id); if(ov!=null) return clamp(ov*mult,0,1); }
   return clamp(g.rate*mult,0,1);
 }
@@ -819,24 +831,24 @@ function rateIssues(){
   });
   return out;
 }
-function backward(target,mult=1,regionId=null){
+function backward(target,mult=1,regionId=null,podId=null){
   const c=chain(),out={};
   out[c[c.length-1].id]=target;
   for(let i=c.length-1;i>0;i--){
-    const r=rateOf(c[i],mult,regionId);
+    const r=rateOf(c[i],mult,regionId,podId);
     out[c[i-1].id]= r>0 ? out[c[i].id]/r : NaN;
   }
   return out;
 }
-function forward(entry,mult=1,regionId=null){
+function forward(entry,mult=1,regionId=null,podId=null){
   const c=chain(),out={};
   out[c[0].id]=entry;
-  for(let i=1;i<c.length;i++) out[c[i].id]=out[c[i-1].id]*rateOf(c[i],mult,regionId);
+  for(let i=1;i<c.length;i++) out[c[i].id]=out[c[i-1].id]*rateOf(c[i],mult,regionId,podId);
   return out;
 }
-function cumRate(gid,mult=1,regionId=null){
+function cumRate(gid,mult=1,regionId=null,podId=null){
   const c=chain(); let r=1;
-  for(let i=1;i<c.length;i++){ r*=rateOf(c[i],mult,regionId); if(c[i].id===gid)break; }
+  for(let i=1;i<c.length;i++){ r*=rateOf(c[i],mult,regionId,podId); if(c[i].id===gid)break; }
   return r;
 }
 /* campaign-level conversion override: manual entry, industry benchmark, or the org's own history —
@@ -865,7 +877,7 @@ function applyRateSource(id,src){
   render();
 }
 function addCostBucket(){
-  CFG.costBuckets.push({id:uid('cb'),code:'NEW',label:'New bucket',dept:'Marketing',extCode:''});
+  CFG.costBuckets.push({orgId:_clickOrgId(),id:uid('cb'),code:'NEW',label:'New bucket',dept:'Marketing',extCode:''});
   logAudit('add cost bucket','New bucket'); render(); toast('Cost bucket added.');
 }
 function removeCostBucket(id){
@@ -890,7 +902,7 @@ function withCFGSnapshot(data,fn){
 function saveSnapshot(name){
   const data=JSON.parse(JSON.stringify(CFG));
   delete data.snapshots;
-  CFG.snapshots.push({id:uid('snap'),name:name,createdBy:user().name,timestamp:new Date().toISOString(),data:data});
+  CFG.snapshots.push({orgId:_clickOrgId(),id:uid('snap'),name:name,createdBy:user().name,timestamp:new Date().toISOString(),data:data});
   logAudit('save snapshot',name); render(); toast('Snapshot saved: '+name);
 }
 function revertSnapshot(id){
@@ -985,7 +997,7 @@ function closeOverlay(){ UI.overlay=null; render(); }
 function toggleOverlayItem(i){ if(!UI.overlay)return; UI.overlay.selected[i]=!UI.overlay.selected[i]; render(); }
 function toggleOverlayAll(state){ if(!UI.overlay)return; UI.overlay.changes.forEach((c,i)=>{UI.overlay.selected[i]=state;}); render(); }
 function addProgramme(){ stage('Programmes','add','a new programme',()=>{
-  CFG.programmes.push({id:uid('prog'),name:'New programme',owner:'',focus:'',status:'Active'});
+  CFG.programmes.push({orgId:_clickOrgId(),id:uid('prog'),name:'New programme',owner:'',focus:'',status:'Active'});
 });}
 function removeProgramme(id){
   const p=byId(CFG.programmes,id); if(!p)return;
@@ -999,7 +1011,7 @@ function removeProgramme(id){
 function cloneProgramme(id){
   const p=byId(CFG.programmes,id); if(!p)return;
   stage('Programmes','add',p.name+' (copy)',()=>{
-    CFG.programmes.push({id:uid('prog'),name:p.name+' (copy)',owner:p.owner||'',focus:p.focus||'',status:'Active',trackingRef:null,clonedFromId:p.id});
+    CFG.programmes.push({orgId:_clickOrgId(),id:uid('prog'),name:p.name+' (copy)',owner:p.owner||'',focus:p.focus||'',status:'Active',trackingRef:null,clonedFromId:p.id});
   });
 }
 window.cloneProgramme=cloneProgramme;
@@ -1221,7 +1233,7 @@ function addPodAllocation(campaignId){
   const already=podAllocationsFor(campaignId).map(x=>x.podId);
   const nextPod=(regionPods.find(p=>!already.includes(p.id))||P()[0]);
   if(!nextPod){ toast('No pods exist yet — add one in Admin > Regions & pods.'); return; }
-  CFG.campaignPodAllocations.push({id:uid('cpa'),campaignId:campaignId,podId:nextPod.id,sharePct:0});
+  CFG.campaignPodAllocations.push({orgId:_clickOrgId(),id:uid('cpa'),campaignId:campaignId,podId:nextPod.id,sharePct:0});
   logAudit('add pod allocation',c.name+' → '+nextPod.name);
   render();
 }
@@ -1264,7 +1276,7 @@ function setRegionGateRate(regionId,gateId,val){
     const old=existing.rate; existing.rate=v;
     logAudit('edit','region_gate_rates/'+(g?g.name:gateId)+' @ '+regionId+': '+F.p(old)+' → '+F.p(v));
   } else {
-    CFG.regionGateRates.push({id:uid('rgr'),regionId:regionId,gateId:gateId,rate:v});
+    CFG.regionGateRates.push({orgId:_clickOrgId(),id:uid('rgr'),regionId:regionId,gateId:gateId,rate:v});
     logAudit('add','region_gate_rates/'+(g?g.name:gateId)+' @ '+regionId+': '+F.p(v)+' (region override)');
   }
   render();
@@ -1310,7 +1322,7 @@ function setRegionStreamMix(regionId,streamId,val){
     const old=existing.mix; existing.mix=v;
     logAudit('edit','region_streams/'+(s?s.name:streamId)+' @ '+regionId+': '+F.p(old)+' → '+F.p(v));
   } else {
-    CFG.regionStreams.push({id:uid('rs'),regionId:regionId,streamId:streamId,mix:v});
+    CFG.regionStreams.push({orgId:_clickOrgId(),id:uid('rs'),regionId:regionId,streamId:streamId,mix:v});
     logAudit('add','region_streams/'+(s?s.name:streamId)+' @ '+regionId+': '+F.p(v)+' (region override)');
   }
   render();
@@ -1318,6 +1330,51 @@ function setRegionStreamMix(regionId,streamId,val){
 window.setRegionStreamMix=setRegionStreamMix;
 function resetRegionStreamMix(regionId,streamId){ setRegionStreamMix(regionId,streamId,''); }
 window.resetRegionStreamMix=resetRegionStreamMix;
+
+/* ---------- per-POD rate + stream-mix overrides (2026-09-28, backlog "pod-level overrides") ----------
+   Exact mirror of the region-level Gap 2/Gap 3 design one level down: pod_gate_rates / pod_streams
+   hold only the gates/streams a specific pod has explicitly overridden. Resolution order for a
+   rate is pod -> region -> global (see rateOf()). Both tables are loaded fail-soft, so before
+   2026-09-28-supabase-run-sheet-part2.sql runs, every pod simply inherits its region as before. */
+const podGateRateFor=(podId,gateId)=>{
+  const r=(CFG.podGateRates||[]).find(x=>x.podId===podId&&x.gateId===gateId);
+  return r?r.rate:null;
+};
+const podHasOverrides=podId=>(CFG.podGateRates||[]).some(x=>x.podId===podId);
+const podStreamMixFor=(podId,streamId)=>{
+  const r=(CFG.podStreams||[]).find(x=>x.podId===podId&&x.streamId===streamId);
+  return r?r.mix:null;
+};
+const podStreamsHaveOverrides=podId=>(CFG.podStreams||[]).some(x=>x.podId===podId);
+const effectivePodStreams=(podId,regionId)=>S().map(s=>{
+  const pv=podStreamMixFor(podId,s.id);
+  if(pv!=null) return {stream:s, mix:pv, override:'pod'};
+  const rv=regionStreamMixFor(regionId,s.id);
+  return {stream:s, mix:rv!=null?rv:s.mix, override:rv!=null?'region':null};
+});
+const podStreamMixTotal=(podId,regionId)=>sum(effectivePodStreams(podId,regionId).map(x=>x.mix));
+function _podOverrideSet(listKey,table,idKey,podId,keyId,val,field,label){
+  const p=pod(podId); if(!p) return;
+  if(!canWriteRegion(p.regionId)){ toast('Your role cannot edit overrides for this pod.'); return; }
+  CFG[listKey]=CFG[listKey]||[];
+  const existing=CFG[listKey].find(x=>x.podId===podId&&x[idKey]===keyId);
+  if(val===''||val==null){
+    if(!existing)return;
+    CFG[listKey]=CFG[listKey].filter(x=>x.id!==existing.id);
+    logAudit('edit',table+'/'+label+' @ '+p.name+': reset to region/global');
+    render(); deleteRow(table,existing.id); return;
+  }
+  let v=parseFloat(String(val).replace(/[%\s]/g,'')); if(isNaN(v))return; v=v/100;
+  if(existing){ const old=existing[field]; existing[field]=v; logAudit('edit',table+'/'+label+' @ '+p.name+': '+F.p(old)+' → '+F.p(v)); }
+  else {
+    const row={id:uid('pov'),orgId:p.orgId,podId:podId}; row[idKey]=keyId; row[field]=v;
+    CFG[listKey].push(row); logAudit('add',table+'/'+label+' @ '+p.name+': '+F.p(v)+' (pod override)');
+  }
+  render();
+}
+function setPodGateRate(podId,gateId,val){ const g=byId(CFG.gates,gateId); _podOverrideSet('podGateRates','pod_gate_rates','gateId',podId,gateId,val,'rate',g?g.name:gateId); }
+function setPodStreamMix(podId,streamId,val){ const s=byId(CFG.streams,streamId); _podOverrideSet('podStreams','pod_streams','streamId',podId,streamId,val,'mix',s?s.name:streamId); }
+window.setPodGateRate=setPodGateRate; window.setPodStreamMix=setPodStreamMix;
 const repShareTotal=pid=>sum(REP(pid).map(x=>x.share));
 
 function verMult(){
@@ -1455,6 +1512,14 @@ function confBand(n){
    Before a dimension change commits, enumerate everything it touches.
    ============================================================================ */
 const MODULE_USE = {
+  /* 2026-09-28: Routes gets its own admin page -- impactOf() needs an entry or stage() has no impact panel to show. */
+  Routes:{
+    modules:['0 Admin','5 Activity Plan'],
+    views:['Activity funnel (grouped by route)','Activities admin table'],
+    calcs:['Route roll-up of activity volumes'],
+    valids:['Route in use cannot be removed'],
+    feeds:['Marketing automation — leads & membership']
+  },
   Gates:{
     modules:['1 Drivers & Rate Library','2 Planning Engine','3 Geography & Pods','4 Segment & Audience','5 Activity Plan','6 Campaign, Cost & Capacity','7 Actuals & History','8 Insight'],
     views:['Top-down funnel','Bottom-up funnel','Reconciliation','Regional funnel','Pod funnel','Segment split','Activity funnel','Plan vs actual','Velocity','Seasonality','Rate library','Gate cross-tab'],
@@ -1595,7 +1660,7 @@ let _skipNextSignOutReload = false;
 
 async function upsertRows(table, rows, mapFn){
   if(!rows || !rows.length) return;
-  if(CFG.isSuperAdmin && !SAV.canEdit()) return; // read-only cross-org view -- item 68
+  if(CFG.savEnabled && !SAV.canEdit()) return; // read-only cross-org view -- item 68
   try{
     const ambientOrgId = (_savOrgFilter!==null ? _savOrgFilter : _orgId);
     const payload = rows.map(r=>Object.assign(mapFn(r), {org_id: SAV.stampOrgId(r.orgId, ambientOrgId)}));
@@ -1609,7 +1674,7 @@ async function upsertRows(table, rows, mapFn){
    stays instant; a failure just toasts and logs, it doesn't roll back the local removal
    (same trust model as every other save in this app -- see the UPSERT error handling). */
 async function deleteRow(table, id, rowOrgId){
-  if(CFG.isSuperAdmin && !SAV.canEdit()) return; // read-only cross-org view -- item 68
+  if(CFG.savEnabled && !SAV.canEdit()) return; // read-only cross-org view -- item 68
   const ambientOrgId = (_savOrgFilter!==null ? _savOrgFilter : _orgId);
   const targetOrgId = SAV.stampOrgId(rowOrgId, ambientOrgId);
   if(!targetOrgId || !id) return;
@@ -1633,7 +1698,11 @@ async function saveToSupabase(){
     upsertRows('cost_buckets', CFG.costBuckets, c=>({id:c.id,code:c.code,label:c.label,dept:c.dept||'Marketing',ext_code:c.extCode||''})),
     upsertRows('programmes', CFG.programmes, p=>({id:p.id,name:p.name,owner:p.owner||'',focus:p.focus||'',status:p.status||'Active',tracking_ref:p.trackingRef||null,cloned_from_id:p.clonedFromId||null,notes:p.notes||''})),
     upsertRows('versions', CFG.versions, v=>({id:v.id,name:v.name,kind:v.kind,locked:!!v.locked})),
-    upsertRows('custom_widgets', CFG.customWidgets, w=>({id:w.id,name:w.name,category_page_id:w.categoryPageId||null,hint:w.hint||'',type:w.type||'iframe',url:w.url||'',webhook_token:w.webhookToken||null,body:w.body||null})), // latest_payload deliberately excluded -- that column is written by the webhook receiver, never by North's own save
+    /* 2026-09-28: body/webhook_token/config only sent once their columns exist (probed at load),
+       so saving a widget before run sheet part 1 step 4 / part 3 doesn't fail the whole upsert. */
+    upsertRows('custom_widgets', CFG.customWidgets, w=>Object.assign({id:w.id,name:w.name,category_page_id:w.categoryPageId||null,hint:w.hint||'',type:w.type||'iframe',url:w.url||''},
+      CFG.customWidgetsHasBody?{webhook_token:w.webhookToken||null,body:w.body||null}:{},
+      CFG.customWidgetsHasConfig?{config:w.config||{}}:{})), // latest_payload deliberately excluded -- that column is written by the webhook receiver, never by North's own save
     /* NOT upsertRows() (2026-09-09 fix, live production bug): roles is NOT Strategy's table --
        the only thing this page ever edits on a role is requireCommitOnEdit, via
        toggleRequireCommit() above ("Requires commit on plan edits" panel). upsertRows()'s
@@ -1661,6 +1730,8 @@ async function saveToSupabase(){
     upsertRows('campaign_pod_allocations', CFG.campaignPodAllocations, a=>({id:a.id,campaign_id:a.campaignId,pod_id:a.podId,share_pct:a.sharePct||0})),
     upsertRows('region_gate_rates', CFG.regionGateRates, r=>({id:r.id,region_id:r.regionId,gate_id:r.gateId,rate:r.rate})),
     upsertRows('region_streams', CFG.regionStreams, r=>({id:r.id,region_id:r.regionId,stream_id:r.streamId,mix:r.mix})),
+    upsertRows('pod_gate_rates', CFG.podGateRates, r=>({id:r.id,pod_id:r.podId,gate_id:r.gateId,rate:r.rate})),
+    upsertRows('pod_streams', CFG.podStreams, r=>({id:r.id,pod_id:r.podId,stream_id:r.streamId,mix:r.mix})),
     upsertRows('snapshots', CFG.snapshots, s=>({id:s.id,name:s.name,created_by:s.createdBy,created_at:s.timestamp,data:s.data})),
     upsertRows('audit_log', CFG.audit, a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail,who:a.who,role:a.role,user_id:_myProfile?_myProfile.id:null})),
     /* campaigns is a shared table Campaign Planning also writes to — upsert only, same as everything
@@ -1688,7 +1759,7 @@ async function saveToSupabase(){
 
 function scheduleSupabaseSave(){
   if(!_orgId) return;
-  if(CFG.isSuperAdmin && !SAV.canEdit()) return; // read-only cross-org view -- item 68
+  if(CFG.savEnabled && !SAV.canEdit()) return; // read-only cross-org view -- item 68
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(()=>{ saveToSupabase(); }, 900);
 }
@@ -1724,6 +1795,16 @@ async function loadFromSupabase(){
   CFG.isFullSuperAdmin = _paLevel === 'L0';
   CFG.isPlatformAdmin = _paLevel === 'L0' || _paLevel === 'L1';
   CFG.isSuperAdmin = CFG.isPlatformAdmin;
+  /* 2026-09-28: L2/L3 client-group tiers -- see shared/clientAdmin.js. A client admin gets the same
+     "view as" bar as a Super Admin, but scoped (by row-level security) to their client group only. */
+  CFG.clientAdminLevel = null; CFG.loadClientOrganizations = null;
+  if(!CFG.isSuperAdmin && typeof window.northLoadClientAdmin==='function'){
+    const _ca = await window.northLoadClientAdmin(sb);
+    CFG.clientAdminLevel = _ca.level; CFG.loadClientOrganizations = _ca.loadOrgs;
+  }
+  CFG.isClientAdmin = !!CFG.clientAdminLevel;
+  CFG.savEnabled = !!(CFG.isSuperAdmin || CFG.isClientAdmin);
+  if(CFG.isClientAdmin && typeof SAV!=='undefined') SAV.setClientScope({readOnly: CFG.clientAdminLevel==='L3'});
 
   /* item 68 rollout (2026-09-10): Super Admin "view as" context -- see shared/superAdminView.js.
      Strategy/Ordo's own write-owned tables kept their original RLS bypass (v3/v4 only rolled
@@ -1736,7 +1817,7 @@ async function loadFromSupabase(){
   SAV.init(_orgId);
   _savOrgFilter = _orgId;
   _savUserFilter = null;
-  if(CFG.isSuperAdmin){
+  if(CFG.savEnabled){
     _savOrgFilter = SAV.effectiveOrgId();
     _savUserFilter = SAV.effectiveUserId();
   }
@@ -1768,7 +1849,8 @@ async function loadFromSupabase(){
   const results = await Promise.all([
     orgScoped(sb.from('roles').select('id,org_id,name,config,publish,write_all,scope,description,require_commit_on_edit,allow_expert_mode')),
     orgScoped(sb.from('regions').select('id,org_id,name,code,ae_heads,acv_target,unassigned')),
-    orgScoped(sb.from('pods').select('id,org_id,name,region_id,share,unassigned')),
+    /* 2026-09-28: pods.archived (soft-archive, run sheet part 1 step 5) -- select('*') so this still works before that column exists; archived pods are dropped client-side */
+    orgScoped(sb.from('pods').select('*')).then(r=>{ if(r&&r.data) r.data=r.data.filter(p=>!p.archived); return r; }),
     orgScoped(sb.from('reps').select('id,org_id,name,pod_id,share')),
     orgScoped(sb.from('gates').select('id,org_id,name,code,order,entry,rate,active,note').order('order')),
     orgScoped(sb.from('streams').select('id,org_id,name,mix,mkt_contrib,unassigned')),
@@ -1809,6 +1891,20 @@ async function loadFromSupabase(){
   const [rolesR,regionsR,podsR,repsR,gatesR,streamsR,routesR,activitiesR,segmentsR,costBucketsR,
          programmesR,versionsR,campaignsR,podAllocsR,regionGateRatesR,regionStreamsR,rollupsR,profilesR,orgSettingsR,snapshotsR,auditR] = results;
   for(const r of results){ if(r===regionGateRatesR||r===regionStreamsR) continue; if(r.error) throw r.error; }
+
+  /* 2026-09-28: pod_gate_rates / pod_streams (pod-level overrides) and campaigns.custom_fields --
+     all additive, all fail-soft: before run sheet part 2 runs these just load empty. */
+  CFG.podGateRates=[]; CFG.podStreams=[]; CFG.campaignCustom={}; CFG.customFieldsAvailable=false;
+  try{
+    const [pgr,pst,ccf] = await Promise.all([
+      orgScoped(sb.from('pod_gate_rates').select('id,org_id,pod_id,gate_id,rate')),
+      orgScoped(sb.from('pod_streams').select('id,org_id,pod_id,stream_id,mix')),
+      orgScoped(sb.from('campaigns').select('id,custom_fields'))
+    ]);
+    if(!pgr.error) CFG.podGateRates=(pgr.data||[]).map(r=>({id:r.id,orgId:r.org_id,podId:r.pod_id,gateId:r.gate_id,rate:r.rate}));
+    if(!pst.error) CFG.podStreams=(pst.data||[]).map(r=>({id:r.id,orgId:r.org_id,podId:r.pod_id,streamId:r.stream_id,mix:r.mix}));
+    if(!ccf.error){ CFG.customFieldsAvailable=true; (ccf.data||[]).forEach(r=>{ CFG.campaignCustom[r.id]=r.custom_fields||{}; }); }
+  }catch(e){ /* tables/column not created yet -- inherit region/global, no custom fields */ }
 
   /* org_units/org_unit_access (phase8) and regions.org_unit_id (phase14) are
      optional, additive schema pieces -- an org that hasn't run those
@@ -1899,12 +1995,20 @@ async function loadFromSupabase(){
      the other real dimensions (activities/streams/segments), not global like Regions/Pods. */
   CFG.customWidgets = [];
   try{
-    const { data: cwData, error: cwErr } = await orgScoped(sb.from('custom_widgets')
-      .select('id,org_id,name,category_page_id,hint,type,url,webhook_token,latest_payload'));
+    /* 2026-09-28 BUG FIX: this used to select an explicit column list that did NOT include
+       `body` -- so every Note widget loaded with empty text, and the next autosave (whose upsert
+       DOES write body) blanked the saved text in the database. select('*') fixes that and is also
+       fail-soft for columns that don't exist yet (webhook_token/latest_payload/body/config). */
+    const { data: cwData, error: cwErr } = await orgScoped(sb.from('custom_widgets').select('*'));
     if(!cwErr) CFG.customWidgets = (cwData||[]).map(w=>({
       id:w.id, orgId:w.org_id, name:w.name, categoryPageId:w.category_page_id||null, hint:w.hint||'', type:w.type||'iframe', url:w.url||'', body:w.body||'',
-      webhookToken:w.webhook_token||null, latestPayload:w.latest_payload==null?null:w.latest_payload
+      webhookToken:w.webhook_token||null, latestPayload:w.latest_payload==null?null:w.latest_payload,
+      config:(w.config&&typeof w.config==='object')?w.config:{}
     }));
+    const cfgProbe = await sb.from('custom_widgets').select('config').limit(1);
+    CFG.customWidgetsHasConfig = !cfgProbe.error;
+    const bodyProbe = await sb.from('custom_widgets').select('body,webhook_token').limit(1);
+    CFG.customWidgetsHasBody = !bodyProbe.error;
   }catch(e){ /* custom_widgets migration not run yet -- Widget library's External widgets section shows none. */ }
 
   const rollupById = {};
@@ -2058,6 +2162,12 @@ async function loadFromSupabase(){
      board_report_sheet_id migration runs, since an unmigrated column just comes back
      undefined here rather than erroring (same as calc_scenarios/asset_tag_presets elsewhere). */
   CFG.boardReportSheetId = os.board_report_sheet_id || '';
+  /* 2026-09-28: org-level naming table + custom field definitions, same fail-soft
+     "unmigrated column just comes back undefined" pattern as board_report_sheet_id. */
+  CFG.naming = (os.naming_config && typeof os.naming_config==='object') ? os.naming_config : {};
+  CFG.namingAvailable = Object.prototype.hasOwnProperty.call(os,'naming_config');
+  CFG.customFieldDefs = Array.isArray(os.custom_fields_config) ? os.custom_fields_config : [];
+  CFG.customFieldDefsAvailable = Object.prototype.hasOwnProperty.call(os,'custom_fields_config');
 
   /* sample history depends on gates/regions/activities/segments/drivers/seasonality all
      being loaded — build it last, once everything above is in place. */
@@ -2312,7 +2422,7 @@ async function bootApp(){
         hideAuthGate();
         if(new URLSearchParams(location.search).get('page')==='boardreport'){ UI.page='boardreport'; }
         render();
-        SAV.renderBar({ isSuperAdmin: CFG.isSuperAdmin, loadOrganizations: CFG.loadAllOrganizations,
+        SAV.renderBar({ isSuperAdmin: CFG.savEnabled, clientScope: (!CFG.isSuperAdmin && CFG.isClientAdmin), loadOrganizations: (CFG.isSuperAdmin ? CFG.loadAllOrganizations : CFG.loadClientOrganizations),
           usersForOrg: (orgId)=> (CFG.users||[]).filter(u=>u.orgId===orgId) });
         subscribeRealtime();
         toast('The cross-org view was stuck, so this reset back to "My organization." Re-select a specific org from the Super Admin bar if you still need it.');
@@ -2338,8 +2448,8 @@ async function bootApp(){
   if(new URLSearchParams(location.search).get('page')==='boardreport'){ UI.page='boardreport'; }
   render();
   SAV.renderBar({
-    isSuperAdmin: CFG.isSuperAdmin,
-    loadOrganizations: CFG.loadAllOrganizations,
+    isSuperAdmin: CFG.savEnabled, clientScope: (!CFG.isSuperAdmin && CFG.isClientAdmin),
+    loadOrganizations: (CFG.isSuperAdmin ? CFG.loadAllOrganizations : CFG.loadClientOrganizations),
     usersForOrg: (orgId)=> (CFG.users||[]).filter(u=>u.orgId===orgId)
   });
   subscribeRealtime();
@@ -2352,7 +2462,7 @@ function stage(dim,action,memberName,apply){
      etc.) -- it's the right place to enforce the Super Admin cross-org read-only lock,
      not a blanket CSS freeze on the whole page (see shared/superAdminView.js's same-day
      fix). gateWrite() toasts its own explanation when it returns false. */
-  if(CFG.isSuperAdmin && typeof SAV!=='undefined' && !SAV.gateWrite(action+' '+dim.toLowerCase())) return;
+  if(CFG.savEnabled && typeof SAV!=='undefined' && !SAV.gateWrite(action+' '+dim.toLowerCase())) return;
   UI.pending={impact:impactOf(dim,action,memberName),apply:apply};
   render();
 }
@@ -2517,6 +2627,11 @@ const ADMIN_TABS=[
   ['segs','Segments'],['camps','Campaigns'],['buckets','Cost buckets'],['time','Time'],['ver','Versions'],
   ['users','Roles & users'],['widgetlib','Widget library'],['feeds','Data feeds'],['audit','Audit log']
 ];
+/* 2026-09-28: Routes (admin page), Naming (org-level terminology) and Custom fields tabs. Spliced in
+   after the tab they relate to rather than rewriting the array literal above. */
+ADMIN_TABS.splice(ADMIN_TABS.findIndex(t=>t[0]==='acts')+1,0,['routes','Routes']);
+ADMIN_TABS.splice(ADMIN_TABS.findIndex(t=>t[0]==='camps')+1,0,['customfields','Custom fields']);
+ADMIN_TABS.splice(ADMIN_TABS.findIndex(t=>t[0]==='time'),0,['naming','Naming']);
 function adminGatesWidgetSet(){
   const dis=canConfig()?'':'disabled';
   const ro=canConfig()?'':'class="locked"';
@@ -2593,7 +2708,7 @@ function adminGatesWidgetPresets(){
 function adminGeoWidgetRegions(){
   const dis=canConfig()?'':'disabled';
   const ro=canConfig()?'':'class="locked"';
-  let h=`<div class="card"><h3>Regions <span class="sp"></span>
+  let h=`<div class="card"><h3>${esc(LBL('region',true))} <span class="sp"></span>
     <button class="btn sm pri" ${dis} onclick="addRegion()">Add region</button></h3>
     <div class="bd flush"><table ${ro}><thead><tr><th>Region</th><th>Code</th><th class="n">AE heads</th>
       <th class="n">ACV target</th><th class="n">Pods</th><th>Pod allocation</th><th></th></tr></thead><tbody>`;
@@ -2619,40 +2734,46 @@ function adminGeoWidgetRegions(){
 function adminGeoWidgetPods(){
   const dis=canConfig()?'':'disabled';
   const ro=canConfig()?'':'class="locked"';
-  let h=`<div class="card"><h3>Pods <span class="sp"></span>
+  let h=`<div class="card"><h3>${esc(LBL('pod',true))} <span class="sp"></span>
     <button class="btn sm pri" ${dis} onclick="addPod()">Add pod</button></h3>
     <div class="bd flush"><div class="scroll cap"><table ${ro}><thead><tr>
       <th>Pod name</th><th>Region</th><th class="n">Share of region</th><th>Allocation</th><th></th></tr></thead><tbody>`;
   CFG.regions.forEach(r=>{
-    const pods=CFG.pods.filter(p=>p.regionId===r.id); if(!pods.length)return;
-    h+=`<tr class="gp"><td colspan="5">${esc(r.name)}</td></tr>`;
+    /* 2026-09-28 (Stef: pod-level Unassigned row gets a Remove option): same system-row pattern as
+       Regions/Activities -- hidden unless "Show system row" is on, tagged, and the last one is guarded. */
+    const pods=CFG.pods.filter(p=>p.regionId===r.id && (!p.unassigned || (canConfig()&&UI.showSystemPod))); if(!pods.length)return;
+    h+=`<tr class="gp" ondragover="geoDragOver(event,'pod')" ondragleave="geoDragLeave(event)" ondrop="geoDrop(event,'pod','${r.id}')"><td colspan="5">${esc(r.name)}</td></tr>`;
     pods.forEach(p=>{
-      h+=`<tr${p.unassigned?' style="opacity:.6"':''}>
-        <td><input class="cel txt" style="width:190px" value="${esc(p.name)}" ${dis} onchange="setIn('pods','${p.id}','name',this.value)"></td>
+      h+=`<tr${p.unassigned?' style="opacity:.6"':''} ${canConfig()&&!p.unassigned?`draggable="true" ondragstart="geoDragStart(event,'pod','${p.id}')" title="Drag onto another region to move it"`:''}>
+        <td>${p.unassigned?esc(p.name)+' <span class="tag">system</span>':`<input class="cel txt" style="width:190px" value="${esc(p.name)}" ${dis} onchange="setIn('pods','${p.id}','name',this.value)">`}</td>
         <td><select class="cel txt" style="width:120px" ${dis} onchange="setIn('pods','${p.id}','regionId',this.value)">
           ${CFG.regions.map(x=>`<option value="${x.id}" ${x.id===p.regionId?'selected':''}>${esc(x.name)}</option>`).join('')}</select></td>
         <td class="n"><input class="cel w" value="${(p.share*100).toFixed(0)}" ${dis} onchange="setIn('pods','${p.id}','share',this.value,'pct')"></td>
         <td><div class="bar" style="width:100px"><i style="width:${clamp(p.share*100,0,100)}%"></i></div></td>
-        <td class="n"><button class="btn sm dgr" ${dis} onclick="removePod('${p.id}')">Remove</button></td>
+        <td class="n">${p.unassigned&&CFG.pods.filter(x=>x.unassigned).length<=1
+          ?`<button class="btn sm dgr" disabled title="This is the last Unassigned pod -- kept so records missing a pod still load instead of being rejected">Remove</button>`
+          :`<button class="btn sm dgr" ${dis} onclick="removePod('${p.id}')">Remove</button>`}</td>
       </tr>`;
     });
   });
-  h+=`</tbody></table></div></div></div>`;
+  h+=`</tbody></table></div>
+    ${canConfig()?`<div class="bd" style="padding-top:0"><a href="javascript:void(0)" onclick="UI.showSystemPod=!UI.showSystemPod;render()" style="font-size:12px">${UI.showSystemPod?'Hide':'Show'} system row (Unassigned)</a></div>`:''}
+  </div></div>`;
   return h;
 }
 function adminGeoWidgetReps(){
   const dis=canConfig()?'':'disabled';
   const ro=canConfig()?'':'class="locked"';
-  let h=`<div class="card"><h3>Reps <span class="sp"></span>
+  let h=`<div class="card"><h3>${esc(LBL('rep',true))} <span class="sp"></span>
     <span class="mini">Third hierarchy level — Region &gt; Pod &gt; Rep — for contribution tracking down to a salesperson</span></h3>
     <div class="bd flush"><div class="scroll cap"><table ${ro}><thead><tr>
       <th>Rep name</th><th>Pod</th><th class="n">Share of pod</th><th>Allocation</th><th></th></tr></thead><tbody>`;
   CFG.pods.filter(p=>!p.unassigned).forEach(p=>{
     const reps=REP(p.id);
-    h+=`<tr class="gp"><td colspan="5">${esc(p.name)} <button class="btn sm" style="margin-left:8px" ${dis} onclick="addRep('${p.id}')">Add rep</button></td></tr>`;
+    h+=`<tr class="gp" ondragover="geoDragOver(event,'rep')" ondragleave="geoDragLeave(event)" ondrop="geoDrop(event,'rep','${p.id}')"><td colspan="5">${esc(p.name)} <button class="btn sm" style="margin-left:8px" ${dis} onclick="addRep('${p.id}')">Add rep</button></td></tr>`;
     if(!reps.length){ h+=`<tr><td colspan="5" class="mini" style="padding-left:14px">No reps added — pod total is planned as one block.</td></tr>`; return; }
     reps.forEach(x=>{
-      h+=`<tr><td><input class="cel txt" style="width:190px" value="${esc(x.name)}" ${dis} onchange="setIn('reps','${x.id}','name',this.value)"></td>
+      h+=`<tr ${canConfig()?`draggable="true" ondragstart="geoDragStart(event,'rep','${x.id}')" title="Drag onto another pod to move it"`:''}><td><input class="cel txt" style="width:190px" value="${esc(x.name)}" ${dis} onchange="setIn('reps','${x.id}','name',this.value)"></td>
         <td><select class="cel txt" style="width:150px" ${dis} onchange="setIn('reps','${x.id}','podId',this.value)">
           ${CFG.pods.filter(pp=>!pp.unassigned).map(pp=>`<option value="${pp.id}" ${pp.id===x.podId?'selected':''}>${esc(pp.name)}</option>`).join('')}</select></td>
         <td class="n"><input class="cel w" value="${(x.share*100).toFixed(0)}" ${dis} onchange="setIn('reps','${x.id}','share',this.value,'pct')"></td>
@@ -3023,6 +3144,10 @@ window.adminGeoWidgetReps=adminGeoWidgetReps;
 window.adminStreamsWidgetTable=adminStreamsWidgetTable;
 window.adminActsWidgetTable=adminActsWidgetTable;
 window.adminActsWidgetPreChains=adminActsWidgetPreChains;
+window.adminRoutesWidgetTable=adminRoutesWidgetTable;
+window.adminNamingWidgetTable=adminNamingWidgetTable;
+window.adminCustomFieldsWidgetDefs=adminCustomFieldsWidgetDefs;
+window.adminCustomFieldsWidgetValues=adminCustomFieldsWidgetValues;
 window.adminSegsWidgetTable=adminSegsWidgetTable;
 window.adminCampsWidgetCursusLink=adminCampsWidgetCursusLink;
 window.adminCampsWidgetProgrammes=adminCampsWidgetProgrammes;
@@ -3044,6 +3169,9 @@ const ADMIN_TAB_WIDGETS={
   geo:{boxSizes:{box1:12,box2:12,box3:12},defaults:{box1:'regions',box2:'pods',box3:'reps'},fns:{regions:adminGeoWidgetRegions,pods:adminGeoWidgetPods,reps:adminGeoWidgetReps}},
   streams:{boxSizes:{box1:12},defaults:{box1:'table'},fns:{table:adminStreamsWidgetTable}},
   acts:{boxSizes:{box1:12,box2:12},defaults:{box1:'table',box2:'prechains'},fns:{table:adminActsWidgetTable,prechains:adminActsWidgetPreChains}},
+  routes:{boxSizes:{box1:12},defaults:{box1:'table'},fns:{table:adminRoutesWidgetTable}},
+  naming:{boxSizes:{box1:12},defaults:{box1:'table'},fns:{table:adminNamingWidgetTable}},
+  customfields:{boxSizes:{box1:12,box2:12},defaults:{box1:'defs',box2:'values'},fns:{defs:adminCustomFieldsWidgetDefs,values:adminCustomFieldsWidgetValues}},
   segs:{boxSizes:{box1:12},defaults:{box1:'table'},fns:{table:adminSegsWidgetTable}},
   camps:{boxSizes:{box1:12,box2:12,box3:12},defaults:{box1:'cursuslink',box2:'programmes',box3:'table'},fns:{cursuslink:adminCampsWidgetCursusLink,programmes:adminCampsWidgetProgrammes,table:adminCampsWidgetTable}},
   buckets:{boxSizes:{box1:6,box2:6,box3:12},defaults:{box1:'sharedconfig',box2:'localautosave',box3:'costbuckets'},fns:{sharedconfig:adminBucketsWidgetSharedConfig,localautosave:adminBucketsWidgetLocalAutosave,costbuckets:adminBucketsWidgetCostBuckets}},
@@ -3059,157 +3187,22 @@ function pageAdmin(){
     <div class="sp"></div>
     ${canConfig()?'<span class="pill ok">Configuration unlocked</span>':'<span class="pill bad">Read only for '+esc(roleName())+'</span>'}
     </div>`;
-  h+=`<div class="tabs">${ADMIN_TABS.map(t=>`<button class="tab ${UI.adminTab===t[0]?'on':''}" onclick="go('admin','${t[0]}')">${t[1]}</button>`).join('')}</div>`;
+  const _tabTerm={gates:'gate',streams:'stream',acts:'activity',routes:'route',segs:'segment',camps:'campaign'};
+  h+=`<div class="tabs">${ADMIN_TABS.map(t=>`<button class="tab ${UI.adminTab===t[0]?'on':''}" onclick="go('admin','${t[0]}')">${_tabTerm[t[0]]&&(CFG.naming||{})[_tabTerm[t[0]]]?esc(LBL(_tabTerm[t[0]],true)):t[1]}</button>`).join('')}</div>`;
   const dis=canConfig()?'':'disabled';
   const ro=canConfig()?'':'class="locked"';
 
-  if(UI.adminTab==='gates'){
-    const c=chain(),iss=rateIssues();
-    /* 2026-09-11 (real-use fix): if this org has zero gates -- the exact state that
-       caused last night's Strategy crash-loop -- this whole page used to crash too,
-       at exitGate().name a few lines below, right where the "Add gate"/preset buttons
-       live. That was a genuine dead end: the message telling you to come here to fix
-       it pointed at a page that was ALSO broken. Guarded here so this page is now
-       ALWAYS reachable and ALWAYS offers a way to add gates, regardless of count. */
-    const _exitG = exitGate();
-    /* 2026-09-11 (real-use fix): "if I'm looking at an MQL as super user but there
-       are three MQLs, is it a duplicate or a different org's?" -- show which org each
-       gate belongs to whenever viewing merged cross-org data ("All organizations"),
-       where that's genuinely ambiguous without it. Not shown in 'own'/single-org
-       views, where every row already belongs to the same org. */
-    const _showOrgCol = typeof SAV!=='undefined' && SAV.mode && SAV.mode()==='all';
-    const _orgName = oid => { const o=(CFG.allOrganizations||[]).find(x=>x.id===oid); return o?o.name:(oid?'Unknown org':'—'); };
-    if(!c.length){
-      h+=`<div class="note b"><strong>No gates are configured for this organization yet.</strong> Strategy needs at least one gate to compute anything. Click "Add gate" below, or use a starter preset from the "Gate naming presets" card underneath to get going quickly.</div>`;
-    } else {
-      h+=`<div class="note"><strong>How the chain works.</strong> Each gate converts from the one above it.
-        The first gate is the entry point and has no inbound rate. Reorder with the arrows — the engine re-resolves immediately.
-        A pass-through gate takes <b>100%</b>, never 0%.</div>`;
-    }
-    if(iss.length) h+=`<div class="note b"><strong>${iss.length} rate issue${iss.length>1?'s':''}.</strong> ${iss.map(i=>(i.gate?esc(i.gate.name)+': ':'')+esc(i.msg)).join(' ')}</div>`;
-    /* 2026-09-11 (real-use fix): "be good to sort that column so we can bundle all
-       the organizations together" -- click the Org header to group by organization
-       (then order within each), click again to go back to the normal reorderable
-       chain view. Uses a display-only copy (.slice()) so this never mutates the
-       real CFG.gates order the engine actually resolves against -- only sort-by-order
-       (the default) writes through moveGate()'s up/down buttons. */
-    const _gatesDisplay = (_showOrgCol && UI.gatesSortByOrg)
-      ? CFG.gates.slice().sort((a,b)=> _orgName(a.orgId).localeCompare(_orgName(b.orgId)) || a.order-b.order)
-      : CFG.gates.sort((a,b)=>a.order-b.order);
-    h+=`<div class="card"><h3>Gate set <span class="sp"></span>
-      <span class="pill n">${c.length} active</span>
-      <button class="btn sm pri" ${dis} onclick="addGate()">Add gate</button></h3>
-      <div class="bd flush"><div class="scroll"><table ${ro}><thead><tr>
-        <th style="width:30px"></th><th>Gate name</th><th>Code</th>${_showOrgCol?`<th style="cursor:pointer" onclick="UI.gatesSortByOrg=!UI.gatesSortByOrg;render();" title="Click to ${UI.gatesSortByOrg?'go back to chain order':'group by organization'}">Org ${UI.gatesSortByOrg?'▾':'⇅'}</th>`:''}
-        <th class="n" title="The conversion rate INTO this gate from the previous one, as a percentage (e.g. 25 means 25% of the prior stage converts through). The entry gate has no inbound rate -- nothing converts into it.">Rate in (%) ⓘ</th>
-        <th class="n" title="Cumulative conversion rate from the entry gate all the way down to this one.">Cum. to here</th><th>Role</th><th>Definition shown to users</th><th class="n">Order</th><th></th>
-      </tr></thead><tbody>`;
-    _gatesDisplay.forEach((g,i)=>{
-      const isEntry=g.entry, cum=g.active?cumRate(g.id):null;
-      h+=`<tr${g.active?'':' style="opacity:.45"'} ondragover="gateDragOver(event,this)" ondragleave="gateDragLeave(event,this)" ondrop="gateDrop(event,'${g.id}')">
-        <td><span class="grab" draggable="true" title="Drag to reorder" ondragstart="gateDragStart(event,'${g.id}',this)" ondragend="gateDragEnd(event,this)">⋮⋮</span></td>
-        <td><input class="cel txt" value="${esc(g.name)}" ${dis} onchange="setIn('gates','${g.id}','name',this.value)"></td>
-        <td><input class="cel txt" style="width:70px" value="${esc(g.code)}" ${dis} onchange="setIn('gates','${g.id}','code',this.value)"></td>
-        ${_showOrgCol?`<td class="mini">${esc(_orgName(g.orgId))}</td>`:''}
-        <td class="n">${isEntry?'<span class="mini">entry</span>':
-          `<input class="cel w ${g.rate===0?'bad':''}" value="${(g.rate*100).toFixed(0)}" ${dis} onchange="setIn('gates','${g.id}','rate',this.value,'pct')" title="Percent -- e.g. 25 means 25%">%</td>`}</td>
-        <td class="n calc">${isEntry?'100%':F.p(cum,2)}</td>
-        <td>${isEntry?'<span class="pill v">Entry</span>':(i===CFG.gates.length-1?'<span class="pill ok">Target</span>':'<span class="pill n">Stage</span>')}</td>
-        <td><input class="cel txt" style="width:260px" value="${esc(g.note||'')}" ${dis} onchange="setIn('gates','${g.id}','note',this.value)"></td>
-        <td class="n">
-          <button class="btn sm" ${dis||i===0?'disabled':''} onclick="moveGate('${g.id}',-1)">↑</button>
-          <button class="btn sm" ${dis||i===CFG.gates.length-1?'disabled':''} onclick="moveGate('${g.id}',1)">↓</button></td>
-        <td class="n"><button class="btn sm dgr" ${dis} onclick="removeGate('${g.id}')">Remove</button></td>
-      </tr>`;
-    });
-    h+=`</tbody></table></div></div></div>`;
-    h+=`<div class="grid g2"><div class="card"><h3>Chain preview</h3><div class="bd">
-      ${c.length?svgFunnel(Object.values(backward(100)).reverse().reverse(),c.map(g=>g.name),600):'<p class="mini">Add at least one gate to see a preview.</p>'}
-      <div class="mini" style="margin-top:6px">${_exitG?('Volumes required to land <b>100</b> at '+esc(_exitG.name)+'.'):'Add at least one gate to compute required volumes.'}</div>
-    </div></div>
-    <div class="card"><h3>Gate naming presets</h3><div class="bd">
-      <p class="mini" style="margin:0 0 9px">Different organisations gate differently. Load a preset, then rename freely.</p>
-      <div class="row">
-        <button class="btn" ${dis} onclick="preset('anaplan')">5-gate (Lead→Win)</button>
-        <button class="btn" ${dis} onclick="preset('full')">6-gate incl. SAO</button>
-        <button class="btn" ${dis} onclick="preset('mqlsql')">4-gate (MQL→Win)</button>
-        <button class="btn" ${dis} onclick="preset('long')">8-gate enterprise</button>
-      </div>
-      <div class="dv"></div>
-      <div class="mini"><b>Where gates appear.</b> ${MODULE_USE.Gates.modules.length} modules,
-        ${MODULE_USE.Gates.views.length} views, ${MODULE_USE.Gates.calcs.length} calculations,
-        ${MODULE_USE.Gates.valids.length} validations, ${MODULE_USE.Gates.feeds.length} feed mappings.
-        Full list shows on any change.</div>
-    </div></div></div>`;
-  }
-
+  /* 2026-09-28 FIX: the Gates tab used to render its full legacy table/preview/presets here AND the same
+     three cards again through the grid below (ADMIN_TAB_WIDGETS.gates) -- every card showed twice. The
+     grid widgets (adminGatesWidgetSet/Preview/Presets) are the maintained copies; legacy block removed. */
   if(UI.adminTab==='geo'){
     h+=`<div class="note"><strong>Pod shares must total 100% within each region.</strong> The bar turns red if they don't, and publish is blocked.</div>`;
     h+=`<div class="note"><strong>Regions and Pods are shared across every organization</strong> -- there is no
       per-org copy of this geography list. A new or cloned organization sees the same shared Regions/Pods everyone
       else does, not its own independent set. The org_units layer (optional) can restrict which regions a person
       sees, but does not give an organization its own separate regions.</div>`;
-    h+=`<div class="card"><h3>Regions <span class="sp"></span>
-      <button class="btn sm pri" ${dis} onclick="addRegion()">Add region</button></h3>
-      <div class="bd flush"><table ${ro}><thead><tr><th>Region</th><th>Code</th><th class="n">AE heads</th>
-        <th class="n">ACV target</th><th class="n">Pods</th><th>Pod allocation</th><th></th></tr></thead><tbody>`;
-    CFG.regions.forEach(r=>{
-      if(r.unassigned&&(!canConfig()||!UI.showSystemRegion)) return;
-      const t=podShareTotal(r.id),ok=Math.abs(t-1)<0.0001;
-      h+=`<tr${r.unassigned?' style="opacity:.6"':''}>
-        <td class="lb">${r.unassigned?esc(r.name)+' <span class="tag">system</span>':`<input class="cel txt" style="width:140px" value="${esc(r.name)}" ${dis} onchange="setIn('regions','${r.id}','name',this.value)">`}</td>
-        <td>${esc(r.code)}</td>
-        <td class="n"><input class="cel w" value="${r.aeHeads}" ${dis} onchange="setIn('regions','${r.id}','aeHeads',this.value,'num')"></td>
-        <td class="n"><input class="cel" value="${r.acvTarget}" ${dis} onchange="setIn('regions','${r.id}','acvTarget',this.value,'money')"></td>
-        <td class="n calc">${P(r.id).length}</td>
-        <td><div class="row"><div class="bar" style="width:80px"><i style="width:${clamp(t*100,0,100)}%;background:${ok?'var(--ok)':'var(--bad)'}"></i></div>
-          <span class="pill ${ok?'ok':'bad'}">${F.p(t,0)}</span></div></td>
-        <td class="n">${r.unassigned&&CFG.regions.filter(x=>x.unassigned).length<=1?`<button class="btn sm dgr" disabled title="This is the last Unassigned region -- some calculations depend on at least one always existing">Remove</button>`:`<button class="btn sm dgr" ${dis} onclick="removeRegion('${r.id}')">Remove</button>`}</td>
-      </tr>`;
-    });
-    h+=`</tbody></table></div>
-      ${canConfig()?`<div class="bd" style="padding-top:0"><a href="javascript:void(0)" onclick="UI.showSystemRegion=!UI.showSystemRegion;render()" style="font-size:12px">${UI.showSystemRegion?'Hide':'Show'} system row (Unassigned)</a></div>`:''}
-    </div>`;
-    h+=`<div class="card"><h3>Pods <span class="sp"></span>
-      <button class="btn sm pri" ${dis} onclick="addPod()">Add pod</button></h3>
-      <div class="bd flush"><div class="scroll cap"><table ${ro}><thead><tr>
-        <th>Pod name</th><th>Region</th><th class="n">Share of region</th><th>Allocation</th><th></th></tr></thead><tbody>`;
-    CFG.regions.forEach(r=>{
-      const pods=CFG.pods.filter(p=>p.regionId===r.id); if(!pods.length)return;
-      const gRegT=podShareTotal(r.id),gRegOk=Math.abs(gRegT-1)<0.0001;
-      h+=`<tr class="gp"><td colspan="5">${esc(r.name)} <span class="pill ${gRegOk?'ok':'bad'}">${F.p(gRegT,0)}</span></td></tr>`;
-      pods.forEach(p=>{
-        h+=`<tr${p.unassigned?' style="opacity:.6"':''}>
-          <td><input class="cel txt" style="width:190px" value="${esc(p.name)}" ${dis} onchange="setIn('pods','${p.id}','name',this.value)"></td>
-          <td><select class="cel txt" style="width:120px" ${dis} onchange="setIn('pods','${p.id}','regionId',this.value)">
-            ${CFG.regions.map(x=>`<option value="${x.id}" ${x.id===p.regionId?'selected':''}>${esc(x.name)}</option>`).join('')}</select></td>
-          <td class="n"><input class="cel w" value="${(p.share*100).toFixed(0)}" ${dis} onchange="setIn('pods','${p.id}','share',this.value,'pct')"></td>
-          <td><div class="bar" style="width:100px"><i style="width:${clamp(p.share*100,0,100)}%"></i></div></td>
-          <td class="n"><button class="btn sm dgr" ${dis} onclick="removePod('${p.id}')">Remove</button></td>
-        </tr>`;
-      });
-    });
-    h+=`</tbody></table></div></div></div>`;
-    h+=`<div class="card"><h3>Reps <span class="sp"></span>
-      <span class="mini">Third hierarchy level — Region &gt; Pod &gt; Rep — for contribution tracking down to a salesperson</span></h3>
-      <div class="bd flush"><div class="scroll cap"><table ${ro}><thead><tr>
-        <th>Rep name</th><th>Pod</th><th class="n">Share of pod</th><th>Allocation</th><th></th></tr></thead><tbody>`;
-    CFG.pods.filter(p=>!p.unassigned).forEach(p=>{
-      const reps=REP(p.id);
-      const gRepT=repShareTotal(p.id),gRepOk=Math.abs(gRepT-1)<0.0001;
-      const gRepBadge=reps.length?` <span class="pill ${gRepOk?'ok':'bad'}">${F.p(gRepT,0)}</span>`:'';
-      h+=`<tr class="gp"><td colspan="5">${esc(p.name)}${gRepBadge} <button class="btn sm" style="margin-left:8px" ${dis} onclick="addRep('${p.id}')">Add rep</button></td></tr>`;
-      if(!reps.length){ h+=`<tr><td colspan="5" class="mini" style="padding-left:14px">No reps added — pod total is planned as one block.</td></tr>`; return; }
-      reps.forEach(x=>{
-        h+=`<tr><td><input class="cel txt" style="width:190px" value="${esc(x.name)}" ${dis} onchange="setIn('reps','${x.id}','name',this.value)"></td>
-          <td><select class="cel txt" style="width:150px" ${dis} onchange="setIn('reps','${x.id}','podId',this.value)">
-            ${CFG.pods.filter(pp=>!pp.unassigned).map(pp=>`<option value="${pp.id}" ${pp.id===x.podId?'selected':''}>${esc(pp.name)}</option>`).join('')}</select></td>
-          <td class="n"><input class="cel w" value="${(x.share*100).toFixed(0)}" ${dis} onchange="setIn('reps','${x.id}','share',this.value,'pct')"></td>
-          <td><div class="bar" style="width:100px"><i style="width:${clamp(x.share*100,0,100)}%"></i></div></td>
-          <td class="n"><button class="btn sm dgr" ${dis} onclick="removeRep('${x.id}')">Remove</button></td></tr>`;
-      });
-    });
-    h+=`</tbody></table></div></div></div>`;
+    /* 2026-09-28 FIX: the Regions / Pods / Reps tables used to be rendered here AND again by the grid
+       widgets below (adminGeoWidgetRegions/Pods/Reps) -- each showed twice. Notes kept, tables removed. */
   }
   if(UI.adminTab==='streams'){
     const t=streamMixTotal(),ok=Math.abs(t-1)<0.0001;
@@ -3359,7 +3352,7 @@ function pageAdmin(){
       ${CFG.customWidgets.length?CFG.customWidgets.map(w=>`<tr>
         <td class="lb">${esc(w.name)}</td>
         <td>${esc(w.categoryPageId?(pageLabels[w.categoryPageId]||w.categoryPageId):'External widgets')}</td>
-        <td>${esc({iframe:'Embed',gdoc:'Doc/Sheet',api:'API',webhook:'Webhook',note:'Note'}[w.type]||w.type)}</td>
+        <td>${esc({iframe:'Embed',gdoc:'Doc/Sheet',api:'API',webhook:'Webhook',note:'Note',gsheet:'Sheet (2-way)'}[w.type]||w.type)}</td>
         <td class="mini" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
           ${w.type==='webhook'?`POST ${esc(SUPABASE_URL)}/functions/v1/widget-webhook/${esc(w.id)}?token=${esc(w.webhookToken||'(not deployed yet)')}`:(w.type==='note'?esc((w.body||'').slice(0,80)):esc(w.url))}
         </td>
@@ -3381,7 +3374,12 @@ function pageAdmin(){
           <option value="api" ${cwEdit&&cwEdit.type==='api'?'selected':''}>Live API (polls a JSON URL)</option>
           <option value="webhook" ${cwEdit&&cwEdit.type==='webhook'?'selected':''}>Webhook-fed panel (no URL -- you get an endpoint)</option>
           <option value="note" ${cwEdit&&cwEdit.type==='note'?'selected':''}>Note / free text (no URL -- type the text below)</option>
+          <option value="gsheet" ${cwEdit&&cwEdit.type==='gsheet'?'selected':''}>Google Sheet -- view AND edit (two-way)</option>
         </select></div>
+        <div class="f"><label>Sheet range <span class="mini">(Google Sheet two-way only, e.g. Sheet1!A1:F20)</span></label>
+          <input class="in v" id="cwrange" placeholder="A1:F20" value="${cwEdit&&cwEdit.config&&cwEdit.config.range?esc(cwEdit.config.range):''}"></div>
+        <div class="f"><label>Refresh every <span class="mini">(seconds, Live API only; blank = only on load; minimum 15)</span></label>
+          <input class="in v" id="cwrefresh" placeholder="e.g. 60" value="${cwEdit&&cwEdit.config&&cwEdit.config.refreshSeconds?esc(String(cwEdit.config.refreshSeconds)):''}"></div>
         <div class="f"><label>URL <span class="mini">(not used for Webhook or Note)</span></label>
           <input class="in v" id="cwurl" placeholder="https://…" value="${cwEdit?esc(cwEdit.url):''}"></div>
         <div class="f"><label>Text <span class="mini">(only used for Note)</span></label>
@@ -3390,15 +3388,17 @@ function pageAdmin(){
           <b>Embedded page:</b> any URL that allows being framed.
           <b>Google Doc/Sheet:</b> paste the normal "Copy link" share URL -- converted to an embeddable
           view automatically (the doc needs to be shared "Anyone with the link can view").
-          <b>Live API:</b> a URL returning JSON -- fetched fresh each time the tile loads (most
-          public APIs block this with CORS; a small server-side proxy can be built if that happens).
+          <b>Live API:</b> a URL returning JSON -- fetched when the tile loads, and every N seconds if you set
+          "Refresh every".
           <b>Webhook:</b> leave URL blank -- adding it gives you a unique endpoint + token below the
           table above to have another system POST data to; the tile shows whatever it last received.
           <b>Note:</b> leave URL blank -- type the text to display in the Text box above; the tile
           shows it as-is (line breaks kept). Editing it later can be done from this same form, or
           directly on the tile itself via the small Edit link in its corner (Admin-level roles only).
-          Two-way "insert/write back" to a Doc/Sheet isn't built yet -- it needs a Google OAuth app
-          set up first, a separate step.
+          <b>Google Sheet two-way:</b> paste the sheet URL and a range (e.g. Sheet1!A1:F20); the tile shows the
+          cells and lets you edit and "Save to Sheet". Uses your own Google connection in Hub Settings and needs
+          the Google OAuth keys set on Hub-Backend. Live API tiles that the browser blocks now retry through a
+          small server-side proxy (the widget-api-proxy function -- deploy steps in the run sheet).
         </div>
         <div class="f"><label>File under (category)</label><select class="in v" id="cwcat">
           <option value="">External widgets (its own category)</option>
@@ -3406,7 +3406,7 @@ function pageAdmin(){
         </select></div>
         <div class="f"><label>Hint <span class="mini">(optional, shown in the picker)</span></label>
           <input class="in v" id="cwhint" placeholder="One line describing what this shows" value="${cwEdit?esc(cwEdit.hint):''}"></div>
-        <button class="btn sm pri" onclick="${cwEdit?`updateCustomWidget('${cwEdit.id}'`:'addCustomWidget('}document.getElementById('cwname').value,document.getElementById('cwurl').value,document.getElementById('cwcat').value,document.getElementById('cwhint').value,document.getElementById('cwtype').value,document.getElementById('cwbody').value)">${cwEdit?'Save changes':'Add widget'}</button>
+        <button class="btn sm pri" onclick="${cwEdit?`updateCustomWidget('${cwEdit.id}',`:'addCustomWidget('}document.getElementById('cwname').value,document.getElementById('cwurl').value,document.getElementById('cwcat').value,document.getElementById('cwhint').value,document.getElementById('cwtype').value,document.getElementById('cwbody').value,document.getElementById('cwrange').value,document.getElementById('cwrefresh').value)">${cwEdit?'Save changes':'Add widget'}</button>
         ${cwEdit?`<button class="btn sm" onclick="cwEditingId=null;render();">Cancel</button>`:''}
       </div></div>`;
     }
@@ -3459,6 +3459,196 @@ function pageAdmin(){
   return h;
 }
 
+
+/* ============================================================================
+   2026-09-28 -- Admin & config additions: Routes page, Naming table, Custom fields,
+   and drag-and-drop for the Region > Pod > Rep hierarchy.
+   ============================================================================ */
+
+/* ---------- Routes admin page ----------
+   Routes previously had no admin UI at all (only the <select> when editing an activity), which is
+   why duplicate seed routes went unnoticed. Add / rename / remove, with removal blocked while any
+   activity still sits on the route. */
+function adminRoutesWidgetTable(){
+  const dis=canConfig()?'':'disabled';
+  const ro=canConfig()?'':'class="locked"';
+  let h=`<div class="card"><h3>${esc(LBL('route',true))} <span class="sp"></span>
+    <button class="btn sm pri" ${dis} onclick="addRoute()">Add ${esc(LBL('route').toLowerCase())}</button></h3>
+    <div class="bd"><div class="mini">Routes group activities (e.g. Inbound, Outbound, Partner). A route can only be removed once no activity uses it —
+      move its activities to another route in the Activities tab first.</div></div>
+    <div class="bd flush"><table ${ro}><thead><tr><th>Route</th><th class="n">Activities</th><th>Used by</th><th></th></tr></thead><tbody>`;
+  const counts={}; CFG.routes.forEach(r=>counts[r.name.trim().toLowerCase()]=(counts[r.name.trim().toLowerCase()]||0)+1);
+  CFG.routes.forEach(r=>{
+    const acts=CFG.activities.filter(a=>a.routeId===r.id);
+    const dup=counts[r.name.trim().toLowerCase()]>1;
+    h+=`<tr><td><input class="cel txt" style="width:200px" value="${esc(r.name)}" ${dis} onchange="setIn('routes','${r.id}','name',this.value)">
+        ${dup?' <span class="pill warn" title="Another route has the same name">duplicate name</span>':''}</td>
+      <td class="n calc">${acts.length}</td>
+      <td class="mini">${acts.slice(0,4).map(a=>esc(a.name)).join(', ')}${acts.length>4?'…':''}</td>
+      <td class="n">${acts.length
+        ?`<button class="btn sm dgr" disabled title="${acts.length} activit${acts.length>1?'ies use':'y uses'} this route -- move ${acts.length>1?'them':'it'} first">Remove</button>`
+        :`<button class="btn sm dgr" ${dis} onclick="removeRoute('${r.id}')">Remove</button>`}</td></tr>`;
+  });
+  if(!CFG.routes.length) h+=`<tr><td colspan="4" class="mini">No routes yet.</td></tr>`;
+  h+=`</tbody></table></div></div>`;
+  return h;
+}
+function addRoute(){
+  const _orgForNew = (typeof _savOrgFilter!=='undefined' && _savOrgFilter!==null) ? _savOrgFilter : _orgId;
+  stage('Routes','add','a new route',()=>{ CFG.routes.push({id:uid('rt'),orgId:_orgForNew,name:'New route'}); });
+}
+function removeRoute(id){
+  const r=byId(CFG.routes,id); if(!r) return;
+  const n=CFG.activities.filter(a=>a.routeId===id).length;
+  if(n){ toast(n+' activit'+(n>1?'ies':'y')+' still use this route -- move '+(n>1?'them':'it')+' first.'); return; }
+  stage('Routes','remove',r.name,()=>{ CFG.routes=CFG.routes.filter(x=>x.id!==id); deleteRow('routes',id,r.orgId); });
+}
+window.addRoute=addRoute; window.removeRoute=removeRoute;
+
+/* ---------- Org-level naming table ----------
+   Lets an org rename the planning dimensions (e.g. Pod -> Team, Region -> Territory). Stored on
+   org_settings.naming_config (jsonb, run sheet part 2). Applied through LBL() to the Admin &
+   config tabs and the Admin/Geography table headings; other pages keep the default wording until
+   they are moved onto LBL() too. */
+const NAMING_TERMS=[
+  ['gate','Gate','Gates'],['region','Region','Regions'],['pod','Pod','Pods'],['rep','Rep','Reps'],
+  ['stream','Stream','Streams'],['segment','Segment','Segments'],['activity','Activity','Activities'],
+  ['route','Route','Routes'],['campaign','Campaign','Campaigns'],['programme','Programme','Programmes']
+];
+function LBL(key,plural){
+  const t=NAMING_TERMS.find(x=>x[0]===key); if(!t) return key;
+  const n=(CFG.naming||{})[key]||{};
+  return plural ? (n.plural||t[2]) : (n.singular||t[1]);
+}
+window.LBL=LBL;
+function adminNamingWidgetTable(){
+  const dis=canConfig()?'':'disabled';
+  let h=`<div class="card"><h3>Naming <span class="sp"></span><span class="mini">Your organisation's words for each planning dimension</span></h3>`;
+  if(!CFG.namingAvailable) h+=`<div class="note w"><strong>Not switched on yet.</strong> Run step 3 of 2026-09-28-supabase-run-sheet-part2.sql (adds org_settings.naming_config), then reload.</div>`;
+  h+=`<div class="bd flush"><table><thead><tr><th>Default term</th><th>Your singular</th><th>Your plural</th><th></th></tr></thead><tbody>`;
+  NAMING_TERMS.forEach(([k,sg,pl])=>{
+    const n=(CFG.naming||{})[k]||{};
+    const off=(!CFG.namingAvailable)?'disabled':dis;
+    h+=`<tr><td class="lb">${sg} / ${pl}</td>
+      <td><input class="cel txt" style="width:160px" placeholder="${sg}" value="${esc(n.singular||'')}" ${off} onchange="setNaming('${k}','singular',this.value)"></td>
+      <td><input class="cel txt" style="width:160px" placeholder="${pl}" value="${esc(n.plural||'')}" ${off} onchange="setNaming('${k}','plural',this.value)"></td>
+      <td>${(n.singular||n.plural)&&!off?`<a href="#" class="mini" onclick="setNaming('${k}','reset','');return false">reset</a>`:''}</td></tr>`;
+  });
+  h+=`</tbody></table></div><div class="bd"><div class="mini">Blank = default wording. Applied to Admin &amp; config tabs and table headings.</div></div></div>`;
+  return h;
+}
+async function setNaming(key,field,val){
+  if(!canConfig()){ toast('Your role cannot change configuration.'); return; }
+  if(CFG.savEnabled && typeof SAV!=='undefined' && !SAV.gateWrite('change naming')) return;
+  CFG.naming=Object.assign({},CFG.naming||{});
+  if(field==='reset'){ delete CFG.naming[key]; }
+  else { CFG.naming[key]=Object.assign({},CFG.naming[key]||{}); const v=String(val||'').trim().slice(0,40); if(v) CFG.naming[key][field]=v; else delete CFG.naming[key][field]; }
+  logAudit('edit','naming/'+key+(field==='reset'?': reset':'.'+field+' → '+val));
+  render();
+  const oid=(typeof _savOrgFilter!=='undefined'&&_savOrgFilter!==null)?_savOrgFilter:_orgId;
+  const { error } = await sb.from('org_settings').update({naming_config:CFG.naming}).eq('org_id',oid);
+  if(error){ console.error('naming save failed',error); toast('Could not save naming -- has run sheet part 2 (step 3) been run?'); }
+}
+window.setNaming=setNaming;
+
+/* ---------- Custom fields (campaigns) ----------
+   Definitions live on org_settings.custom_fields_config (jsonb array of {key,label,type,options});
+   values live on campaigns.custom_fields (jsonb). Values are written with a targeted
+   .update() per edit rather than through the bulk campaigns upsert, so the core save path is
+   untouched and nothing breaks before the columns exist. */
+const CF_TYPES=[['text','Text'],['number','Number'],['date','Date'],['select','Pick list']];
+function adminCustomFieldsWidgetDefs(){
+  const dis=(canConfig()&&CFG.customFieldDefsAvailable)?'':'disabled';
+  let h=`<div class="card"><h3>Custom fields — ${esc(LBL('campaign',true))} <span class="sp"></span>
+    <button class="btn sm pri" ${dis} onclick="addCustomField()">Add field</button></h3>`;
+  if(!CFG.customFieldDefsAvailable||!CFG.customFieldsAvailable) h+=`<div class="note w"><strong>Not switched on yet.</strong> Run steps 3–4 of 2026-09-28-supabase-run-sheet-part2.sql, then reload.</div>`;
+  h+=`<div class="bd flush"><table><thead><tr><th>Label</th><th>Type</th><th>Pick-list options (comma separated)</th><th></th></tr></thead><tbody>`;
+  (CFG.customFieldDefs||[]).forEach((d,i)=>{
+    h+=`<tr><td><input class="cel txt" style="width:180px" value="${esc(d.label)}" ${dis} onchange="editCustomField(${i},'label',this.value)"></td>
+      <td><select class="cel txt" ${dis} onchange="editCustomField(${i},'type',this.value)">${CF_TYPES.map(t=>`<option value="${t[0]}" ${t[0]===d.type?'selected':''}>${t[1]}</option>`).join('')}</select></td>
+      <td>${d.type==='select'?`<input class="cel txt" style="width:260px" value="${esc((d.options||[]).join(', '))}" ${dis} onchange="editCustomField(${i},'options',this.value)">`:'<span class="mini">—</span>'}</td>
+      <td class="n"><button class="btn sm dgr" ${dis} onclick="removeCustomField(${i})" title="Hides the field; values already entered are kept on each campaign">Remove</button></td></tr>`;
+  });
+  if(!(CFG.customFieldDefs||[]).length) h+=`<tr><td colspan="4" class="mini">No custom fields yet.</td></tr>`;
+  h+=`</tbody></table></div></div>`;
+  return h;
+}
+function adminCustomFieldsWidgetValues(){
+  const defs=CFG.customFieldDefs||[];
+  if(!defs.length) return `<div class="card"><h3>Custom field values</h3><div class="bd"><div class="empty">Add a field above to start capturing values per ${esc(LBL('campaign').toLowerCase())}.</div></div></div>`;
+  const dis=(canConfig()&&CFG.customFieldsAvailable&&!readOnly())?'':'disabled';
+  let h=`<div class="card"><h3>Custom field values <span class="sp"></span><span class="mini">${CFG.campaigns.length} ${esc(LBL('campaign',true).toLowerCase())}</span></h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr><th>${esc(LBL('campaign'))}</th>${defs.map(d=>`<th>${esc(d.label)}</th>`).join('')}</tr></thead><tbody>`;
+  CFG.campaigns.forEach(c=>{
+    const vals=(CFG.campaignCustom||{})[c.id]||{};
+    h+=`<tr><td class="lb">${esc(c.name)}</td>${defs.map(d=>{
+      const v=vals[d.key]; const on=`onchange="setCampaignCustom('${c.id}','${d.key}',this.value,'${d.type}')"`;
+      if(d.type==='select') return `<td><select class="cel txt" ${dis} ${on}><option value=""></option>${(d.options||[]).map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select></td>`;
+      if(d.type==='date') return `<td><input type="date" class="cel txt" value="${esc(v||'')}" ${dis} ${on}></td>`;
+      return `<td><input class="cel ${d.type==='number'?'w':'txt'}" style="${d.type==='number'?'':'width:150px'}" value="${esc(v==null?'':String(v))}" ${dis} ${on}></td>`;
+    }).join('')}</tr>`;
+  });
+  h+=`</tbody></table></div></div></div>`;
+  return h;
+}
+async function _saveCustomFieldDefs(){
+  const oid=(typeof _savOrgFilter!=='undefined'&&_savOrgFilter!==null)?_savOrgFilter:_orgId;
+  const { error } = await sb.from('org_settings').update({custom_fields_config:CFG.customFieldDefs}).eq('org_id',oid);
+  if(error){ console.error('custom field defs save failed',error); toast('Could not save custom fields -- has run sheet part 2 been run?'); }
+}
+function _cfGuard(){
+  if(!canConfig()){ toast('Your role cannot change configuration.'); return false; }
+  if(CFG.savEnabled && typeof SAV!=='undefined' && !SAV.gateWrite('change custom fields')) return false;
+  return true;
+}
+function addCustomField(){
+  if(!_cfGuard()) return;
+  CFG.customFieldDefs=(CFG.customFieldDefs||[]).concat([{key:'cf_'+Math.random().toString(36).slice(2,8),label:'New field',type:'text',options:[]}]);
+  logAudit('add','custom field on campaigns'); render(); _saveCustomFieldDefs();
+}
+function editCustomField(i,field,val){
+  if(!_cfGuard()) return;
+  const d=CFG.customFieldDefs[i]; if(!d) return;
+  if(field==='options') d.options=String(val).split(',').map(x=>x.trim()).filter(Boolean).slice(0,50);
+  else if(field==='type'){ if(CF_TYPES.some(t=>t[0]===val)) d.type=val; }
+  else d.label=String(val).trim().slice(0,60)||d.label;
+  logAudit('edit','custom field '+d.key+'.'+field); render(); _saveCustomFieldDefs();
+}
+function removeCustomField(i){
+  if(!_cfGuard()) return;
+  const d=CFG.customFieldDefs[i]; if(!d) return;
+  CFG.customFieldDefs=CFG.customFieldDefs.filter((_,k)=>k!==i);
+  logAudit('remove','custom field '+d.label+' (values kept on campaigns)'); render(); _saveCustomFieldDefs();
+}
+async function setCampaignCustom(campId,key,val,type){
+  if(readOnly()){ toast('Read only.'); return; }
+  if(CFG.savEnabled && typeof SAV!=='undefined' && !SAV.gateWrite('edit a custom field')) return;
+  let v=val; if(type==='number'){ v=val===''?null:parseFloat(String(val).replace(/[$,\s]/g,'')); if(v!=null&&isNaN(v)) return; }
+  const cur=Object.assign({},(CFG.campaignCustom||{})[campId]||{});
+  if(v===''||v==null) delete cur[key]; else cur[key]=v;
+  CFG.campaignCustom[campId]=cur;
+  const c=byId(CFG.campaigns,campId);
+  logAudit('edit','campaigns/'+(c?c.name:campId)+'.'+key+' → '+(v==null?'':v));
+  const { error } = await sb.from('campaigns').update({custom_fields:cur}).eq('id',campId);
+  if(error){ console.error('custom field save failed',error); toast('Could not save that value -- see console.'); }
+}
+window.addCustomField=addCustomField; window.editCustomField=editCustomField; window.removeCustomField=removeCustomField; window.setCampaignCustom=setCampaignCustom;
+
+/* ---------- Hierarchy drag-and-drop (Admin > Geography) ----------
+   Drag a pod onto another region's header row to move it there; drag a rep onto another pod's
+   header row. Uses the same setIn() path as the existing Region / Pod dropdowns, so the audit log,
+   commit-on-edit rules and autosave all behave exactly as a dropdown change would. */
+let _geoDrag=null;
+function geoDragStart(ev,kind,id){ if(!canConfig()){ ev.preventDefault(); return; } _geoDrag={kind,id}; ev.dataTransfer.effectAllowed='move'; try{ev.dataTransfer.setData('text/plain',kind+':'+id);}catch(e){} }
+function geoDragOver(ev,kind){ if(_geoDrag&&_geoDrag.kind===kind){ ev.preventDefault(); ev.currentTarget.classList.add('dropon'); } }
+function geoDragLeave(ev){ ev.currentTarget.classList.remove('dropon'); }
+function geoDrop(ev,kind,targetId){
+  ev.preventDefault(); ev.currentTarget.classList.remove('dropon');
+  const d=_geoDrag; _geoDrag=null; if(!d||d.kind!==kind) return;
+  if(kind==='pod'){ const p=pod(d.id); if(p&&p.regionId!==targetId) setIn('pods',d.id,'regionId',targetId); }
+  if(kind==='rep'){ const r=byId(CFG.reps,d.id); if(r&&r.podId!==targetId) setIn('reps',d.id,'podId',targetId); }
+}
+window.geoDragStart=geoDragStart; window.geoDragOver=geoDragOver; window.geoDragLeave=geoDragLeave; window.geoDrop=geoDrop;
 
 /* ---------- admin mutations ---------- */
 function addGate(){
@@ -3597,7 +3787,14 @@ let cwEditingId = null; // 2026-09-24: which CFG.customWidgets row the Add form 
   // Widget library) is currently editing, if any -- null means the form is in plain Add mode.
   // Ephemeral UI state only, deliberately not part of UI{} / not persisted -- there's nothing to
   // recover if a reload interrupts an in-progress edit, same as any other unsaved form on this page.
-function addCustomWidget(name,url,categoryPageId,hint,type,body){
+/* 2026-09-28: range (gsheet) and refresh seconds (api) go into the widget's config jsonb. */
+function _cwConfigFrom(range,refresh,prev){
+  const c=Object.assign({},prev||{});
+  range=String(range||'').trim(); if(range) c.range=range.slice(0,60); else delete c.range;
+  const r=parseInt(refresh,10); if(r&&r>=15) c.refreshSeconds=Math.min(r,86400); else delete c.refreshSeconds;
+  return c;
+}
+function addCustomWidget(name,url,categoryPageId,hint,type,body,range,refresh){
   if(!canConfig()){ toast('Your role cannot change configuration.'); return; }
   name=(name||'').trim(); url=(url||'').trim(); type=type||'iframe'; body=(body||'').trim();
   // 2026-09-24: a webhook widget has no embed/fetch URL at all -- it's a receiving endpoint,
@@ -3606,7 +3803,8 @@ function addCustomWidget(name,url,categoryPageId,hint,type,body){
   // type still needs a URL (it's what gets embedded or polled).
   if(!name||(!url&&type!=='webhook'&&type!=='note')){ toast((type==='webhook'||type==='note')?'Name is required.':'Name and URL are both required.'); return; }
   const w={id:uid('cw'),name:name,categoryPageId:categoryPageId||null,hint:(hint||'').trim(),type:type,url:url,body:body,
-    webhookToken:type==='webhook'?crypto.randomUUID():null, latestPayload:null};
+    webhookToken:type==='webhook'?crypto.randomUUID():null, latestPayload:null, config:_cwConfigFrom(range,refresh)};
+  if(!CFG.customWidgetsHasConfig&&(w.config.range||w.config.refreshSeconds)) toast('Saved, but the range/refresh setting needs run sheet part 3 (custom_widgets.config) before it sticks.');
   CFG.customWidgets.push(w);
   logAudit('add','Custom widgets/'+name);
   render();
@@ -3622,12 +3820,13 @@ function editCustomWidget(id){
   if(!CFG.customWidgets.find(x=>x.id===id))return;
   cwEditingId=id; render();
 }
-function updateCustomWidget(id,name,url,categoryPageId,hint,type,body){
+function updateCustomWidget(id,name,url,categoryPageId,hint,type,body,range,refresh){
   if(!canConfig()){ toast('Your role cannot change configuration.'); return; }
   const w=CFG.customWidgets.find(x=>x.id===id); if(!w)return;
   name=(name||'').trim(); url=(url||'').trim(); body=(body||'').trim();
   if(!name||(!url&&w.type!=='webhook'&&w.type!=='note')){ toast((w.type==='webhook'||w.type==='note')?'Name is required.':'Name and URL are both required.'); return; }
   w.name=name; w.url=url; w.body=body; w.categoryPageId=categoryPageId||null; w.hint=(hint||'').trim();
+  w.config=_cwConfigFrom(range,refresh,w.config);
   // type intentionally not updated from here -- see editCustomWidget()'s comment above.
   cwEditingId=null;
   logAudit('edit','Custom widgets/'+name);
@@ -3661,7 +3860,7 @@ function addPod(){ const r=R()[0]; stage('Pods','add','a new pod',()=>{
 });}
 function removePod(id){ stage('Pods','remove',pod(id).name,()=>{ CFG.pods=CFG.pods.filter(x=>x.id!==id); deleteRow('pods',id); });}
 function addRep(podId){ const p=byId(CFG.pods,podId)||P()[0]; if(!p)return;
-  stage('Reps','add','a new rep',()=>{ CFG.reps.push({id:uid('rep'),name:'New rep',podId:p.id,share:0}); });}
+  stage('Reps','add','a new rep',()=>{ CFG.reps.push({orgId:_clickOrgId(),id:uid('rep'),name:'New rep',podId:p.id,share:0}); });}
 function removeRep(id){ const rp=byId(CFG.reps,id); if(!rp)return;
   stage('Reps','remove',rp.name,()=>{ CFG.reps=CFG.reps.filter(x=>x.id!==id); deleteRow('reps',id); });}
 function addStream(){ stage('Streams','add','a new stream',()=>{
@@ -3748,14 +3947,14 @@ window.setPreStage=setPreStage;
 function addSegment(){ stage('Segments','add','a new segment',()=>{
   CFG.segments.splice(CFG.segments.length-1,0,{id:uid('sg'),name:'New segment',tier:'Tier 2',addressable:0,engaged:0,mix:0,rateMult:1,dealMult:1}); });}
 function removeSegment(id){ stage('Segments','remove',seg(id).name,()=>{ CFG.segments=CFG.segments.filter(x=>x.id!==id); deleteRow('segments',id); });}
-function addCampaign(){ CFG.campaigns.push({id:uid('c'),name:'New campaign',activityId:A()[0].id,segmentId:G()[0].id,
+function addCampaign(){ CFG.campaigns.push({orgId:_clickOrgId(),id:uid('c'),name:'New campaign',activityId:A()[0].id,segmentId:G()[0].id,
   regionId:visibleRegions()[0].id,start:'2026-08-01',end:'2026-10-31',budget:0,committed:0,actual:0,
   costBucketId:CFG.costBuckets[0].id,convOverride:null,rateSource:'manual',source:'Manual',extRef:'',
   trackingRef:nextTrackingRef('campaign')});
   logAudit('add campaign','New campaign'); render(); toast('Campaign added.'); }
 function removeCampaign(id){ CFG.campaigns=CFG.campaigns.filter(c=>c.id!==id); logAudit('remove campaign',id); render(); deleteRow('campaigns',id); }
 function addScenario(){ const n=CFG.versions.filter(v=>v.kind==='scenario').length+1;
-  CFG.versions.push({id:uid('v'),name:'Scenario '+n,kind:'scenario',locked:false});
+  CFG.versions.push({orgId:_clickOrgId(),id:uid('v'),name:'Scenario '+n,kind:'scenario',locked:false});
   logAudit('add scenario','Scenario '+n); render(); toast('Scenario created.'); }
 function toggleLock(id){ const v=byId(CFG.versions,id); v.locked=!v.locked;
   logAudit(v.locked?'lock version':'unlock version',v.name); render(); }
@@ -3806,11 +4005,18 @@ function syncNow(){
    ============================================================================ */
 function validations(){
   const v=[];
-  const st=streamMixTotal(); if(Math.abs(st-1)>0.0001) v.push({s:'bad',t:'Stream mix totals '+F.p(st,0)+', not 100%'});
-  const sg=segMixTotal();    if(Math.abs(sg-1)>0.0001) v.push({s:'bad',t:'Segment mix totals '+F.p(sg,0)+', not 100%'});
+  const st=streamMixTotal(); if(Math.abs(st-1)>0.0001) v.push({s:'bad',t:'Stream mix totals '+F.p(st,0)+', not 100%',go:['admin','streams']});
+  const sg=segMixTotal();    if(Math.abs(sg-1)>0.0001) v.push({s:'bad',t:'Segment mix totals '+F.p(sg,0)+', not 100%',go:['admin','segs']});
+  /* 2026-09-28 ("VALIDATIONS 8 blocking" banner): a region with NO pods used to be flagged as a
+     blocking "pod shares total 0%" -- but a region without pods is simply planned as one block
+     (same rule the Reps level already uses), so that case is now advisory. A region that HAS pods
+     whose shares don't total 100% is still blocking. Each item now also carries a fix link. */
   R().forEach(r=>{ const t=podShareTotal(r.id);
-    if(Math.abs(t-1)>0.0001) v.push({s:'bad',t:esc(r.name)+' pod shares total '+F.p(t,0)}); });
-  rateIssues().forEach(i=>v.push({s:'bad',t:(i.gate?i.gate.name+': ':'')+i.msg}));
+    if(!P(r.id).length){ v.push({s:'warn',t:esc(r.name)+' has no pods — planned as one block',go:['admin','geo']}); return; }
+    if(Math.abs(t-1)>0.0001) v.push({s:'bad',t:esc(r.name)+' pod shares total '+F.p(t,0),go:['admin','geo']}); });
+  const noAct=CFG.campaigns.filter(c=>!c.activityId);
+  if(noAct.length) v.push({s:'warn',t:noAct.length+' campaign'+(noAct.length>1?'s have':' has')+' no activity ('+noAct.slice(0,3).map(c=>esc(c.name)).join(', ')+(noAct.length>3?'…':'')+')',go:['admin','camps']});
+  rateIssues().forEach(i=>v.push({s:'bad',t:(i.gate?i.gate.name+': ':'')+i.msg,go:['admin','gates']}));
   CFG.campaigns.forEach(c=>{ if(c.start&&c.end&&c.end<c.start) v.push({s:'warn',t:'Campaign "'+esc(c.name)+'" ends before it starts'}); });
   const hi=CFG.feeds.filter(f=>f.unassigned>0.05);
   hi.forEach(f=>v.push({s:'warn',t:'Unassigned rate '+F.p(f.unassigned,1)+' on '+esc(f.name.split('—')[0].trim())}));
@@ -3824,7 +4030,7 @@ function vBanner(){
   const v=validations(); if(!v.length) return `<div class="note g"><strong>All validations pass.</strong> This plan can be published.</div>`;
   const bad=v.filter(x=>x.s==='bad');
   return `<div class="note ${bad.length?'b':'w'}"><strong>${bad.length?bad.length+' blocking':''}${bad.length&&v.length>bad.length?' · ':''}${v.length>bad.length?(v.length-bad.length)+' advisory':''}.</strong>
-    ${bad.length?'Publish is blocked. ':''}${v.map(x=>esc(x.t)).join(' · ')}</div>`;
+    ${bad.length?'Publish is blocked. ':''}${v.map(x=>esc(x.t)+(x.go?` <a href="#" class="mini" onclick="go('${x.go[0]}','${x.go[1]}');return false">fix →</a>`:'')).join(' · ')}</div>`;
 }
 /* A blocking rate fault makes every downstream number meaningless.
    Say so plainly instead of rendering a chart of NaN. */
@@ -4379,7 +4585,7 @@ function geoWidgetPodBreakdown(){
       <span class="pill ${Math.abs(tot-1)<0.0001?'ok':'bad'}">Allocation ${F.p(tot,0)}</span></h3>
       <div class="bd flush"><table><thead><tr><th>Pod</th><th class="n">Share</th><th></th>
         <th class="n">Wins</th>${gTh()}<th class="n">ACV</th></tr></thead><tbody>
-      ${pods.map(p=>{const v=backward(wins*p.share,m,rSel.id);
+      ${pods.map(p=>{const v=backward(wins*p.share,m,rSel.id,p.id);
         return `<tr><td class="lb">${esc(p.name)}</td>
           <td class="n"><input class="cel w" value="${(p.share*100).toFixed(0)}" ${canWriteRegion(rSel.id)&&!readOnly()?'':'disabled'} onchange="setIn('pods','${p.id}','share',this.value,'pct')"></td>
           <td><div class="bar" style="width:90px"><i style="width:${clamp(p.share*100,0,100)}%"></i></div></td>
@@ -4436,6 +4642,52 @@ function geoWidgetStreamMixOverride(){
       }).join('')}
       </tbody></table></div></div>`;
 }
+function _geoSelectedPod(){
+  const vis=visibleRegions(); const rSel=vis.find(r=>r.id===UI.regionId)||vis[0]; if(!rSel) return {};
+  const pods=P(rSel.id); const pSel=pods.find(p=>p.id===UI.repPodId)||pods[0];
+  return {rSel,pods,pSel};
+}
+function geoWidgetPodRateOverride(){
+  const {rSel,pods,pSel}=_geoSelectedPod();
+  if(!pSel) return '<div class="card"><div class="bd"><div class="empty">No pods in this region yet.</div></div></div>';
+  UI.repPodId=pSel.id;
+  const can=canWriteRegion(rSel.id)&&!readOnly();
+  return `<div class="card"><h3>Pod rate override <span class="sp"></span>
+      <select class="in" style="width:auto" onchange="UI.repPodId=this.value;render()">
+        ${pods.map(p=>`<option value="${p.id}" ${p.id===pSel.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select>
+      <span class="pill ${podHasOverrides(pSel.id)?'warn':'n'}">${podHasOverrides(pSel.id)?'Own rates':'Inherits '+esc(rSel.name)}</span></h3>
+      <div class="bd"><div class="mini">Blank = ${esc(pSel.name)} follows ${esc(rSel.name)}'s rate (which follows global unless the region overrides it).
+        Type a number to override one gate for this pod only.</div></div>
+      <div class="bd flush"><table><thead><tr><th>Gate</th><th class="n">Inherited</th><th class="n">${esc(pSel.name)}</th><th></th></tr></thead><tbody>
+      ${chain().filter(g=>!g.entry).map(g=>{
+        const inh=rateOf(g,1,rSel.id), ov=podGateRateFor(pSel.id,g.id);
+        return `<tr><td class="lb">${esc(g.name)}</td><td class="n calc">${F.p(inh,0)}</td>
+          <td class="n"><input class="cel w" placeholder="${F.p(inh,0)}" value="${ov!=null?(ov*100).toFixed(0):''}" ${can?'':'disabled'}
+            onchange="setPodGateRate('${pSel.id}','${g.id}',this.value)"></td>
+          <td>${ov!=null&&can?`<a href="#" class="mini" onclick="setPodGateRate('${pSel.id}','${g.id}','');return false;">reset</a>`:''}</td></tr>`;
+      }).join('')}
+      </tbody></table></div></div>`;
+}
+function geoWidgetPodStreamMixOverride(){
+  const {rSel,pods,pSel}=_geoSelectedPod();
+  if(!pSel) return '<div class="card"><div class="bd"><div class="empty">No pods in this region yet.</div></div></div>';
+  UI.repPodId=pSel.id;
+  const can=canWriteRegion(rSel.id)&&!readOnly(), tot=podStreamMixTotal(pSel.id,rSel.id);
+  return `<div class="card"><h3>Pod stream mix <span class="sp"></span>
+      <span class="pill ${Math.abs(tot-1)<0.0001?'ok':'warn'}">${esc(pSel.name)} totals ${F.p(tot,0)}</span></h3>
+      <div class="bd"><div class="mini">Blank = inherits ${esc(rSel.name)}'s mix. Shown, not blocked, when off 100% (same as the region override).</div></div>
+      <div class="bd flush"><table><thead><tr><th>Stream</th><th class="n">Inherited</th><th class="n">${esc(pSel.name)}</th><th></th></tr></thead><tbody>
+      ${effectivePodStreams(pSel.id,rSel.id).map(x=>{
+        const rv=regionStreamMixFor(rSel.id,x.stream.id), inh=rv!=null?rv:x.stream.mix, ov=podStreamMixFor(pSel.id,x.stream.id);
+        return `<tr><td class="lb">${esc(x.stream.name)}</td><td class="n calc">${F.p(inh,0)}</td>
+          <td class="n"><input class="cel w" placeholder="${F.p(inh,0)}" value="${ov!=null?(ov*100).toFixed(0):''}" ${can?'':'disabled'}
+            onchange="setPodStreamMix('${pSel.id}','${x.stream.id}',this.value)"></td>
+          <td>${ov!=null&&can?`<a href="#" class="mini" onclick="setPodStreamMix('${pSel.id}','${x.stream.id}','');return false;">reset</a>`:''}</td></tr>`;
+      }).join('')}
+      </tbody></table></div></div>`;
+}
+window.geoWidgetPodRateOverride=geoWidgetPodRateOverride;
+window.geoWidgetPodStreamMixOverride=geoWidgetPodStreamMixOverride;
 function geoWidgetRepBreakdown(){
   const m=verMult()*segBlend(),vis=visibleRegions(),deal=blendedDeal();
   const rSel=vis.find(r=>r.id===UI.regionId)||vis[0];
@@ -4456,14 +4708,14 @@ function geoWidgetRepBreakdown(){
   } else {
     h+=`<div class="bd flush"><table><thead><tr><th>Rep</th><th class="n">Share of pod</th><th></th>
       <th class="n">Wins</th>${gTh()}<th class="n">ACV</th></tr></thead><tbody>
-    ${reps.map(x=>{const v=backward(podWins*x.share,m,rSel.id);
+    ${reps.map(x=>{const v=backward(podWins*x.share,m,rSel.id,pSel.id);
       return `<tr><td class="lb">${esc(x.name)}</td>
         <td class="n"><input class="cel w" value="${(x.share*100).toFixed(0)}" ${canWriteRegion(rSel.id)&&!readOnly()?'':'disabled'} onchange="setIn('reps','${x.id}','share',this.value,'pct')"></td>
         <td><div class="bar" style="width:90px"><i style="width:${clamp(x.share*100,0,100)}%"></i></div></td>
         <td class="n calc">${F.n(podWins*x.share,1)}</td>${gTd(v)}
         <td class="n calc">${F.mk(podWins*x.share*deal)}</td></tr>`;}).join('')}
     <tr class="tot"><td>${esc(pSel.name)} total</td><td class="n">${F.p(repTot,0)}</td><td></td>
-      <td class="n">${F.n(podWins*repTot,1)}</td>${gTd(backward(podWins*repTot,m,rSel.id))}<td class="n">${F.mk(podWins*repTot*deal)}</td></tr>
+      <td class="n">${F.n(podWins*repTot,1)}</td>${gTd(backward(podWins*repTot,m,rSel.id,pSel.id))}<td class="n">${F.mk(podWins*repTot*deal)}</td></tr>
     </tbody></table></div>`;
     h+=`<div class="bd"><div class="mini">Rolls up: rep shares of pod → pod share of region (above) → region ACV target
       (top of page). Change any share and every level above recalculates — nothing here is a separate, disconnected number.</div></div>`;
@@ -4499,8 +4751,8 @@ function pageGeo(){
 
   const geoBoxOrder=['box1','box2','box3','box4','box5']
     .concat(rSel?['box6','box7','box8']:[])
-    .concat(pSel?['box9']:[]);
-  const geoBoxSizes={box1:12,box2:12,box3:12,box4:6,box5:6,box6:12,box7:12,box8:12,box9:12};
+    .concat(pSel?['box9','box10','box11']:[]);
+  const geoBoxSizes={box1:12,box2:12,box3:12,box4:6,box5:6,box6:12,box7:12,box8:12,box9:12,box10:6,box11:6};
   const geoWidgetFns={
     kpis:geoWidgetKpis,
     gapanalysis:geoWidgetGapAnalysis,
@@ -4510,9 +4762,11 @@ function pageGeo(){
     podbreakdown:geoWidgetPodBreakdown,
     rateoverride:geoWidgetRateOverride,
     streammixoverride:geoWidgetStreamMixOverride,
-    repbreakdown:geoWidgetRepBreakdown
+    repbreakdown:geoWidgetRepBreakdown,
+    podrateoverride:geoWidgetPodRateOverride,
+    podstreammixoverride:geoWidgetPodStreamMixOverride
   };
-  const geoDefaults={box1:'kpis',box2:'gapanalysis',box3:'streamfunnel',box4:'winschart',box5:'acvchart',box6:'podbreakdown',box7:'rateoverride',box8:'streammixoverride',box9:'repbreakdown'};
+  const geoDefaults={box1:'kpis',box2:'gapanalysis',box3:'streamfunnel',box4:'winschart',box5:'acvchart',box6:'podbreakdown',box7:'rateoverride',box8:'streammixoverride',box9:'repbreakdown',box10:'podrateoverride',box11:'podstreammixoverride'};
   const assigned=(window.northGetWidgetAssignments?window.northGetWidgetAssignments('geo'):geoDefaults);
 
   h+=`<div class="grid-stack" id="ordo-grid-geo">`;
@@ -7479,7 +7733,10 @@ async function submitFeedback(){
   try{
     const { error } = await sb.from('feedback_items').insert({
       org_id:_orgId, reporter_id:_myProfile.id, reporter_name:name,
-      page:FEEDBACK_MODULE, url:location.href, comment:comment
+      page:FEEDBACK_MODULE, url:location.href,
+      /* 2026-09-28 (feedback cross-org attribution): the item stays filed under the reporter's own org
+         (RLS requires that), but if a Super Admin was viewing ANOTHER org, say which, so triage has context. */
+      comment:comment+((typeof _savOrgFilter!=='undefined'&&_savOrgFilter&&_savOrgFilter!==_orgId)?'\n\n[Reported while viewing org '+_savOrgFilter+']':'')
     });
     if(error){ toast('Could not submit: '+error.message); return; }
     closeFeedbackModal();

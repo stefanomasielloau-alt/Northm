@@ -1529,7 +1529,11 @@
     var handle = inner.querySelector('.gs-item-handle');
     var prevDisplay = handle ? handle.style.display : null;
     if (handle) handle.style.display = 'none';
+    // 2026-09-28: tables fill their tile now (Ordo.html CSS); while measuring, cap them at their
+    // normal 420px so a fresh auto-fit doesn't make a long table's tile enormous.
+    item.classList.add('gs-measuring');
     var h = inner.getBoundingClientRect().height;
+    item.classList.remove('gs-measuring');
     if (handle) handle.style.display = prevDisplay;
     return h;
   }

@@ -471,7 +471,9 @@ async function saveToSupabase(){
       publish_date:a.publishDate||null,signed_off_by:a.signedOffBy||'',signed_off_date:a.signedOffDate||null,
       file_url:a.fileUrl||''
     })),
-    upsertRows('asset_references', CFG.references, r=>({id:r.id,client_name:r.clientName,contact_name:r.contactName||'',notes:r.notes||''})),
+    /* 2026-09-29: asset_references is no longer saved from Assets -- Reference tracking is edited in Targets
+       now (same table), and re-saving the rows loaded here on every autosave could overwrite edits made in
+       Targets while this tab was open. The rows are still loaded (read-only) and nothing is deleted. */
     upsertRows('asset_transactions', CFG.transactions, t=>({
       id:t.id,asset_id:t.assetId,date:t.date||null,type:t.type,qty:t.qty||0,before:t.before,after:t.after,
       campaign_id:t.campaignId||null,campaign_ref:t.campaignRef||'',notes:t.notes||''
@@ -645,7 +647,7 @@ function wonDealsCountFor(cid){
    Augur has no ?page= / ?q= handling today, so the Scoring link lands on Augur's default page;
    ?page=deals is included so it starts working as soon as Augur reads it. */
 function campaignLinkHtml(cid,name){ return `<a href="Cursus.html#campaign=${encodeURIComponent(cid)}" target="tool_Cursus" title="Open in Campaign Planning">${esc(name)}</a>`; }
-function wonDealsLinkHtml(cid){ const n=wonDealsCountFor(cid); return n?`<a class="mini" href="Augur.html?page=deals" target="tool_Augur" title="${n} Closed Won deal${n===1?'':'s'} linked to this campaign -- open Deals in Scoring">Won deals in Scoring &rarr;</a>`:''; }
+function wonDealsLinkHtml(cid){ const n=wonDealsCountFor(cid); return n?`<a class="mini" href="Augur.html?page=deals&q=Closed%20Won&campaign=${encodeURIComponent(cid)}" target="tool_Augur" title="${n} Closed Won deal${n===1?'':'s'} linked to this campaign -- open Deals in Scoring">Won deals in Scoring &rarr;</a>`:''; }
 
 /* Live notifications: subscribe to audit_log INSERTs for this org so an action
    taken in another tab/tool shows up here as a toast without a reload. Own

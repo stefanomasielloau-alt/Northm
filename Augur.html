@@ -899,6 +899,13 @@ async function bootApp(){
       const tnLinksEl = document.getElementById('tnLinks'); if(tnLinksEl) tnLinksEl.innerHTML = renderFilteredTnLinks();
     }
     hideAuthGate();
+    /* 2026-09-29: deep links -- Augur.html?page=deals&q=<search>&campaign=<campaign id> (used by Assets' won-deal links) */
+    try{
+      const qp=new URLSearchParams(location.search);
+      const pgq=qp.get('page'); if(pgq && PAGES.some(x=>x.id===pgq)) UI.page=pgq;
+      if(qp.get('q')) UI.dealsFilter=qp.get('q');
+      if(qp.get('campaign')) UI.dealsCampaign=qp.get('campaign');
+    }catch(e){}
     render();
     subscribeRealtime();
   }catch(e){
@@ -1241,7 +1248,9 @@ function pageDeals(){
   let dealsRows=CFG.deals.filter(d=>!dealsQ
     || (d.name||'').toLowerCase().includes(dealsQ)
     || (d.account||'').toLowerCase().includes(dealsQ)
-    || (d.stage||'').toLowerCase().includes(dealsQ));
+    || (d.stage||'').toLowerCase().includes(dealsQ))
+    /* 2026-09-29: ?campaign=<id> deep link (Assets' "Won deals in Scoring" links) narrows to one campaign */
+    .filter(d=>!UI.dealsCampaign || d.campaignId===UI.dealsCampaign);
   let dealsView=dealsRows.map(d=>({d,m:dealMetrics(d)}));
   if(UI.dealsSortBy){
     const dir=UI.dealsSortDir==='desc'?-1:1, key=UI.dealsSortBy;
@@ -1256,6 +1265,7 @@ function pageDeals(){
   }
   h+=`<div class="card"><h3>Deals <span class="sp"></span><span class="pill n">${CFG.deals.length}</span>
       <input id="dealsFilterInput" class="cel txt" style="width:200px" placeholder="Search deals…" value="${esc(UI.dealsFilter||'')}" oninput="setDealsFilter(this.value)">
+      ${UI.dealsCampaign?`<span class="pill n" title="Showing only deals linked to one campaign (from a link in another module)">Campaign filter on <a href="#" onclick="UI.dealsCampaign=null;render();return false" aria-label="Clear campaign filter">✕</a></span>`:''}
       <button class="btn sm" onclick="exportClosedWonForOrdo()">Export closed-won for Strategy</button>
       <button class="btn sm pri" onclick="addDeal()">Add deal</button></h3>
     <div class="bd flush"><div class="scroll"><!-- 2026-09-28 (Stef: "Deals list: filters + sort on columns") -- class tt: shared/tableTools.js sort + per-column filters on every column (replaces the old 4-column onclick sort, which would have double-sorted) -->

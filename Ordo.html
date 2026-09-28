@@ -357,6 +357,11 @@ tr.gate-drag-over td{box-shadow:inset 0 2px 0 var(--input)}
    .card on every non-grid page keeps its normal spacing). */
 .grid-stack-item-content .card{margin-bottom:0}
 .gs-inner{height:auto;min-height:100%;display:flex;flex-direction:column}
+/* 2026-09-28 (Stef: "make the top and bottom the same as side by side"): tile heights snap to
+   12px steps, so a card used to end up to 11px short of its tile, leaving a bigger-looking gap
+   below it than beside it. The card now stretches to fill its tile, so the visible gap between
+   cards is the same 8px vertically as horizontally. */
+.gs-inner>.card{flex:1 0 auto}
 .gs-item-handle{
   display:none;align-items:center;justify-content:space-between;gap:8px;
   padding:4px 8px;font-size:10.5px;color:var(--ink-3);background:var(--canvas-2);

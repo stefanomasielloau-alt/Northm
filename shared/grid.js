@@ -783,8 +783,12 @@
 
   var GRIDS = {}; // pageId -> live GridStack instance, kept for the swap handler to resize a box after its content changes
 
-  function gridStorageKey(pageId) { return 'northm_ordo_grid_' + pageId; }
-  function widgetStorageKey(pageId) { return 'northm_ordo_widgets_' + pageId; }
+  /* 2026-09-28: storage prefix is per module -- Strategy keeps 'northm_ordo_', Reporting
+     switches it to 'northm_reportus_' via northGridUseModule() below, so the two modules'
+     saved layouts never collide even where page ids overlap (both have a 'dashboard(s)'). */
+  var _storePrefix = 'northm_ordo_';
+  function gridStorageKey(pageId) { return _storePrefix + 'grid_' + pageId; }
+  function widgetStorageKey(pageId) { return _storePrefix + 'widgets_' + pageId; }
 
   function getWidgetAssignments(pageId) {
     var lib = WIDGET_LIBRARIES[pageId];
@@ -816,7 +820,7 @@
      exist on this page; their position comes from the normal grid-layout key
      like any other box, and their widget comes from the normal widget-assignment
      key like any other box. */
-  function customBoxStorageKey(pageId) { return 'northm_ordo_customboxes_' + pageId; }
+  function customBoxStorageKey(pageId) { return _storePrefix + 'customboxes_' + pageId; }
   function getCustomBoxIds(pageId) {
     try {
       var saved = JSON.parse(localStorage.getItem(customBoxStorageKey(pageId)) || 'null');
@@ -1079,8 +1083,8 @@
         var h = initialGuess(targetPx);
         for (var guard = 0; guard < 10; guard++) {
           grid.update(el, { h: Math.min(h, 400) });
-          var got = measureRealContentHeight(el);
-          if (got >= targetPx - 1) break;
+          var got = tileContentHeight(el);
+          if (got >= targetPx - 0.5) break;
           h += Math.max(1, Math.ceil((targetPx - got) / unitPx));
         }
         return Math.min(h, 400);
@@ -1523,6 +1527,15 @@
   // -- it just sits there as a gap. Hiding the handle for the instant of measurement (put
   // back exactly as it was straight after) makes every fit match how the tile actually
   // looks day to day, whether or not editing happened to be on when it ran.
+  /* 2026-09-28 (found while applying the grid to Reporting): the fit loops used to re-measure
+     the CONTENT (.gs-inner) to decide whether the tile was tall enough -- but since cards now
+     stretch to fill their tile (min-height:100%), content that overflows the tile still reports
+     its own full height, so the loop stopped one step early and clipped the last ~4-10px (the
+     card's bottom border / last row). This measures the space the tile actually gives instead. */
+  function tileContentHeight(item) {
+    var c = item.querySelector('.grid-stack-item-content');
+    return c ? c.getBoundingClientRect().height : 0;
+  }
   function measureRealContentHeight(item) {
     var inner = item.querySelector('.gs-inner');
     if (!inner) return 0;
@@ -1554,8 +1567,8 @@
     var h = Math.max(1, Math.ceil(targetPx / unitPx));
     for (var guard = 0; guard < 10; guard++) {
       grid.update(item, { h: Math.min(h, 400) });
-      var got = measureRealContentHeight(item);
-      if (got >= targetPx - 1) break;
+      var got = tileContentHeight(item);
+      if (got >= targetPx - 0.5) break;
       h += Math.max(1, Math.ceil((targetPx - got) / unitPx));
     }
   }
@@ -1695,11 +1708,33 @@
         // for every custom tile on every page at once. A custom tile has no default
         // to reset TO, so leaving its id behind here meant it came back everywhere
         // as an empty, unrecoverable placeholder the next time each page rendered.
-        if (k.indexOf('northm_ordo_grid_') === 0 || k.indexOf('northm_ordo_widgets_') === 0 || k.indexOf('northm_ordo_customboxes_') === 0) {
+        if (k.indexOf(_storePrefix + 'grid_') === 0 || k.indexOf(_storePrefix + 'widgets_') === 0 || k.indexOf(_storePrefix + 'customboxes_') === 0) {
           localStorage.removeItem(k);
         }
       });
     } catch (e) {}
     if (typeof window.render === 'function') { window.render(); }
+  };
+
+  /* 2026-09-28 (Stef: "apply the screen layout and reformatting we did in strategy" to
+     Reporting): lets another module reuse this whole grid system with its OWN pages instead
+     of Strategy's. Replaces the page registry in place (the pickers and initGrid all read
+     these same objects) so Reporting's "+ Add tile" library only ever offers Reporting
+     widgets -- Strategy's widget functions don't exist on that page. Strategy never calls
+     this, so nothing changes there. cfg = { storePrefix, pages: { pageId: { label,
+     container, lib: { defaults, boxSizes, widgets } } } } */
+  window.northGridUseModule = function (cfg) {
+    if (!cfg || !cfg.pages) return;
+    if (cfg.storePrefix) _storePrefix = cfg.storePrefix;
+    [WIDGET_LIBRARIES, PAGE_LABELS, PAGE_GRID_CONTAINERS].forEach(function (o) { Object.keys(o).forEach(function (k) { delete o[k]; }); });
+    ALL_WIDGETS.length = 0;
+    Object.keys(cfg.pages).forEach(function (pid) {
+      var pg = cfg.pages[pid];
+      WIDGET_LIBRARIES[pid] = pg.lib; PAGE_LABELS[pid] = pg.label; PAGE_GRID_CONTAINERS[pid] = pg.container;
+      Object.keys(pg.lib.widgets).forEach(function (wid) {
+        var w = pg.lib.widgets[wid];
+        ALL_WIDGETS.push({ key: pid + '.' + wid, pageId: pid, category: pg.label, label: w.label, hint: w.hint, fn: w.fn });
+      });
+    });
   };
 })();

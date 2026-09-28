@@ -7277,7 +7277,18 @@ function relationshipsWidgetGraph(){
   </div></div>`;
 }
 window.relationshipsWidgetGraph=relationshipsWidgetGraph;
+/* 2026-09-28 (Stef): the Relationship map moved to Reporting. This page is now a link to it.
+   The old graph is kept below (pageRelationshipsLegacy / relationshipsWidgetGraph) so any tile
+   someone already placed with it keeps working -- nothing removed. */
 function pageRelationships(){
+  return `<div class="phead"><div><h1>Relationships</h1>
+    <p>The Relationship map now lives in Reporting: start from any programme, campaign, activity, event, task, asset, deal or company and follow its links up and down.</p></div></div>
+  <div class="card"><div class="bd">
+    <p style="margin:0 0 10px;font-size:12.5px;color:var(--ink-2)">Covers programmes, campaigns, activities, events, tasks, assets, deals and companies, plus regions, pods, reps, segments and partners — with missing-link and duplicate-company checks.</p>
+    <a class="btn pri" href="Reportus.html?page=relmap" target="tool_Reportus">Open the Relationship map in Reporting &rarr;</a>
+  </div></div>`;
+}
+function pageRelationshipsLegacy(){
   const gCheck=computeRelGraph();
 
   let h=`<div class="phead"><div><h1>Relationships</h1>

@@ -345,6 +345,46 @@ tr.gate-drag-over td{box-shadow:inset 0 2px 0 var(--input)}
   body{background:#fff !important}
 }
 
+/* 2026-09-28 (Stef: "a slide-in panel from the right, pinnable, hosting an LLM assistant you can
+   ask about what's on screen and for advice"): the Ask panel. Lives OUTSIDE #main/#layer (render()
+   rewrites both), fixed below the top nav. Unpinned it overlays the page; pinned, body.asst-pinned
+   pushes .wrap left by the panel width so nothing is covered. --asst-top is set from the top nav's
+   real bottom edge in JS (the nav can wrap to two lines / the Super Admin bar can sit above it). */
+:root{--asst-w:380px;--asst-top:56px}
+.asst{position:fixed;top:var(--asst-top);right:0;width:var(--asst-w);max-width:100vw;height:calc(100vh - var(--asst-top));
+  background:var(--surface);border-left:1px solid var(--line);box-shadow:-6px 0 24px rgba(16,24,43,.12);z-index:60;
+  display:flex;flex-direction:column;transform:translateX(105%);transition:transform .24s cubic-bezier(.4,0,.2,1);visibility:hidden}
+.asst.open{transform:none;visibility:visible}
+body.asst-pinned .asst{box-shadow:none}
+body.asst-pinned .wrap,body.asst-pinned .ctxbar{margin-right:var(--asst-w)}
+body.asst-open #fbTrigger{right:min(calc(var(--asst-w) + 20px), calc(100vw - 68px)) !important}
+.asst-hd{display:flex;align-items:center;gap:6px;padding:10px 12px;border-bottom:1px solid var(--line);flex:0 0 auto}
+.asst-hd b{font-size:13.5px;color:var(--ink)}
+.asst-hd .pg{font-size:11px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
+.asst-hd .sp{flex:1}
+.asst-ib{border:1px solid var(--line);background:#fff;border-radius:var(--r-sm);width:28px;height:26px;display:inline-flex;align-items:center;justify-content:center;color:var(--ink-2);font-size:13px;padding:0}
+.asst-ib:hover{background:var(--canvas);color:var(--ink)}
+.asst-ib[aria-pressed="true"]{background:var(--nav);border-color:var(--nav);color:#fff}
+.asst-log{flex:1 1 auto;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:9px;background:var(--canvas)}
+.asst-msg{max-width:88%;padding:8px 11px;border-radius:10px;font-size:12.5px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word}
+.asst-msg.u{align-self:flex-end;background:var(--nav);color:#fff;border-bottom-right-radius:3px}
+.asst-msg.a{align-self:flex-start;background:#fff;border:1px solid var(--line);color:var(--ink);border-bottom-left-radius:3px}
+.asst-msg.w{align-self:stretch;max-width:none;background:var(--warn-bg);border-left:3px solid var(--warn);color:var(--ink-2);border-radius:var(--r-sm)}
+.asst-msg.e{align-self:stretch;max-width:none;background:var(--bad-bg);border-left:3px solid var(--bad);color:var(--ink-2);border-radius:var(--r-sm)}
+.asst-msg.typing{color:var(--ink-3);font-style:italic}
+.asst-intro{font-size:12px;color:var(--ink-2);line-height:1.5}
+.asst-sugg{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.asst-sugg button{text-align:left;border:1px solid var(--line);background:#fff;border-radius:16px;padding:6px 11px;font-size:12px;color:var(--ink-2)}
+.asst-sugg button:hover{border-color:var(--nav);color:var(--nav)}
+.asst-ft{flex:0 0 auto;border-top:1px solid var(--line);padding:9px 10px;background:var(--surface)}
+.asst-ft textarea{width:100%;resize:none;min-height:40px;max-height:140px;border:1px solid var(--line);border-radius:var(--r-sm);padding:7px 9px;font:inherit;font-size:12.5px;box-sizing:border-box}
+.asst-ft textarea:disabled{background:var(--canvas)}
+.asst-ft .row2{display:flex;align-items:center;gap:8px;margin-top:6px}
+.asst-ft .hint{font-size:10.5px;color:var(--ink-3);flex:1}
+#tnAsstBtn[aria-expanded="true"]{background:var(--nav);border-color:var(--nav);color:#fff}
+@media(max-width:860px){body.asst-pinned .wrap,body.asst-pinned .ctxbar{margin-right:0}}
+@media print{.asst{display:none !important}body.asst-pinned .wrap,body.asst-pinned .ctxbar{margin-right:0 !important}}
+
 /* --- Editable grid layout + widget swap, live across all 33 Strategy grid pages/tabs --- */
 .grid-stack{position:relative}
 .grid-stack-item-content{overflow:hidden}
@@ -552,6 +592,8 @@ window.closeFieldGuide=closeFieldGuide;
     <div class="bx"><input id="tnSearchInput" placeholder="Search modules..." oninput="tnSearch(this.value)" onkeydown="tnSearchKey(event)"><span class="tn-kbd">/</span></div>
     <div id="tnResults"></div>
   </div>
+  <!-- 2026-09-28 (Stef: "slide-in panel from the right ... LLM assistant"): toggles the Ask panel (asstToggle below). -->
+  <button class="btn sm" id="tnAsstBtn" type="button" onclick="asstToggle()" aria-label="Ask the assistant about this screen" aria-expanded="false" aria-controls="asstPanel" title="Ask the assistant about what's on this screen" style="margin-right:6px">&#10022; Ask</button>
   <button class="btn sm" id="tnHelpBtn" onclick="openHelpPanel()" title="Help &amp; FAQ" style="margin-right:8px">?</button>
   <a class="btn sm" href="#" onclick="openFieldGuide();return false;" title="North &amp; Hub Field Guide — full how-to, overviews and FAQ" style="margin-right:8px;text-decoration:none">📘</a>
   <div class="tn-acct" id="tnAcct"></div>
@@ -2378,6 +2420,10 @@ function renderFilteredTnLinks(){
   return MODULES.map(m=>{
     if(!navVisible(m.id)) return '';
     const t = (m.desc||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+    /* 2026-09-28 (Stef: Board report dead end): on the Board report, the Strategy chip is a
+       working link back into Strategy rather than an inert "you are here" label. */
+    if(m.id===THIS_MODULE && UI.page==='boardreport')
+      return `<a class="tn-link on" href="#" onclick="leaveBoardReport();return false" title="Back to Strategy"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
     return m.id===THIS_MODULE
       ? `<span class="tn-link on" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</span>`
       : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
@@ -5808,6 +5854,231 @@ window.askAlex=askAlex;
 function closeAskAlex(){ UI.askAlexOpen=false; render(); }
 window.closeAskAlex=closeAskAlex;
 
+/* ---------- Ask panel: right-hand, pinnable screen assistant (2026-09-28) ----------
+   2026-09-28 (Stef: "a slide-in panel from the right, pinnable, hosting an LLM assistant you can
+   ask about what's on screen and for advice"). Built on the SAME pipe as Ask Alec above:
+   CFG.aiScreenInterpreterEnabled gate (Configuration -> Integrations), Hub-Backend's
+   /admin/ai-generate with the caller's own North JWT, provider/model from
+   activeLlmProviderOverride() with its own Agent Registry task id. Ask Alec's one-shot
+   "explain this dashboard" button is left exactly as it was (its skill file whitelists a fixed
+   set of summary fields) -- this is the free-form, multi-turn sibling.
+   What gets sent: page id/label, pageContextForAI()'s structured summary on the Dashboard (the
+   Board report's own computed UI._brCtx on that page), a compact text snapshot of what's
+   visible in #main (headings, KPI tiles, table headers + first 15 rows, visible field values --
+   never password fields), capped at ~6000 chars, plus the last 6 chat turns.
+   The panel's DOM is created once and appended to <body>, outside #main and #layer, so
+   render() never wipes it or the conversation. */
+const ASST_TASK_ID = 'reg_strategy_assistant_task';
+const ASST_LS_OPEN = 'ordo_asst_open', ASST_LS_PIN = 'ordo_asst_pinned';
+const ASST_SYSTEM_PROMPT = "You are a helpful GTM and marketing-planning analyst built into North's Strategy "+
+  "module (funnel planning, targets, regions/pods, activities, campaigns, budgets and actuals). The user is "+
+  "looking at one screen of the app; you are given the page name, a structured summary where available, a "+
+  "text snapshot of what is visible on screen, and the recent conversation. Answer ONLY from that context -- "+
+  "never invent numbers, names or records. If the answer depends on data that isn't in the context, say it "+
+  "isn't visible on this screen and suggest where in Strategy they could look. Give practical, specific advice "+
+  "when asked. Be concise: plain text or a few short bullet points, no markdown headings, no tables.";
+const ASST = { open:false, pinned:false, msgs:[], busy:false, built:false, lastQ:'' };
+try{ ASST.pinned = localStorage.getItem(ASST_LS_PIN)==='1'; ASST.open = localStorage.getItem(ASST_LS_OPEN)==='1'; }catch(e){}
+
+function asstPageInfo(){
+  const p = PAGES.find(x=>x.id===UI.page);
+  const label = UI.page==='simple' ? 'Simple flow \u2014 '+(SIMPLE_STEP_LABELS[UI.simpleStep]||'') : (p ? p.label : UI.page);
+  return { id: UI.page, label };
+}
+function asstStarters(){
+  const base = ['What stands out on this page?','Where are the biggest gaps?','What should I do next?'];
+  const extra = {
+    dashboard:'Are we on track against plan?', boardreport:'Summarise this for a board audience',
+    campaign:'Which campaigns look over budget or at risk?', activity:'Which activities carry the most pipeline?',
+    geo:'Which regions or pods are furthest from target?', drivers:'Do any conversion rates look unrealistic?',
+    actuals:'How do actuals compare to plan?', insight:'What are the key insights here?',
+    admin:"What's configured here and what looks incomplete?", segment:'Which segments matter most to the plan?'
+  }[UI.page];
+  return extra ? base.concat([extra]) : base;
+}
+
+/* Compact, visible-only text snapshot of #main. Password fields are never read. */
+function asstScreenSnapshot(limit){
+  limit = limit || 6000;
+  const main = document.getElementById('main'); if(!main) return '';
+  const lines = []; let total = 0;
+  const clean = t => String(t||'').replace(/\s+/g,' ').trim();
+  const push = t => { t = clean(t); if(!t) return; if(t.length>300) t=t.slice(0,297)+'...'; if(lines[lines.length-1]===t) return; lines.push(t); total += t.length+1; };
+  const visible = el => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+  const sel = 'h1,h2,h3,h4,h5,.kpi,table,.note,.imp>header,.pill,p,label,input,select,textarea';
+  const els = main.querySelectorAll(sel);
+  for(const el of els){
+    if(total >= limit) break;
+    if(!visible(el)) continue;
+    if(el.closest('.asst')) continue;
+    const tag = el.tagName;
+    if(tag!=='TABLE' && el.closest('table')) continue;
+    if(!el.classList.contains('kpi') && el.closest('.kpi')) continue;
+    if(/^H[1-5]$/.test(tag)){ push('## '+el.textContent); continue; }
+    if(el.classList.contains('kpi')){
+      const k=el.querySelector('.k'), v=el.querySelector('.kpi-v'), sub=el.querySelector('.sub');
+      push('KPI: '+(k?clean(k.textContent):'')+' = '+(v?clean(v.textContent):clean(el.textContent))+(sub?' ('+clean(sub.textContent)+')':''));
+      continue;
+    }
+    if(tag==='TABLE'){
+      const cellTxt = c => { const f=c.querySelector('input:not([type=password]):not([type=hidden]),select'); return clean(f ? (f.tagName==='SELECT' ? (f.options[f.selectedIndex]||{}).text : (f.type==='checkbox'?(f.checked?'yes':'no'):f.value)) : c.textContent); };
+      const heads = [...el.querySelectorAll('thead th')].map(cellTxt);
+      let rows = [...(el.tBodies[0] ? el.tBodies[0].rows : el.rows)];
+      if(!heads.length && rows.length){ heads.push(...[...rows[0].cells].map(cellTxt)); rows = rows.slice(1); }
+      push('TABLE: '+heads.join(' | '));
+      rows.slice(0,15).forEach(r=>{ if(total<limit) push('  '+[...r.cells].map(cellTxt).join(' | ')); });
+      if(rows.length>15) push('  ...('+(rows.length-15)+' more rows not shown)');
+      continue;
+    }
+    if(tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA'){
+      if(tag==='INPUT' && /^(password|hidden|file|button|submit)$/i.test(el.type)) continue;
+      const lab = el.getAttribute('aria-label') || el.title || el.placeholder || (el.labels&&el.labels[0]?el.labels[0].textContent:'') || el.name || '';
+      const val = tag==='SELECT' ? ((el.options[el.selectedIndex]||{}).text||'') : (el.type==='checkbox'||el.type==='radio' ? (el.checked?'on':'off') : el.value);
+      if(clean(val)) push('Field '+clean(lab||'(unlabelled)')+': '+val);
+      continue;
+    }
+    if(tag==='LABEL' && el.querySelector('input,select,textarea')) continue;
+    push(el.textContent);
+  }
+  let out = lines.join('\n');
+  if(out.length > limit) out = out.slice(0, limit) + '\n...(snapshot trimmed)';
+  return out;
+}
+window.asstScreenSnapshot=asstScreenSnapshot;
+
+function asstBuildContext(question){
+  const pi = asstPageInfo();
+  const parts = [];
+  parts.push('MODULE: Strategy (North) | PAGE: '+pi.label+' ['+pi.id+'] | FY: '+UI.fy+' | Version: '+((typeof version==='function'&&version())?version().name:'-')+' | Mode: '+UI.mode);
+  try{
+    if(UI.page==='dashboard') parts.push('STRUCTURED SUMMARY (dashboard KPIs):\n'+JSON.stringify(pageContextForAI()));
+    else if(UI.page==='boardreport' && UI._brCtx) parts.push('STRUCTURED SUMMARY (board report):\n'+UI._brCtx);
+  }catch(e){ /* summary unavailable (e.g. calc blocked) -- the screen snapshot still goes */ }
+  parts.push('VISIBLE ON SCREEN:\n'+(asstScreenSnapshot(6000)||'(nothing readable on screen)'));
+  const turns = ASST.msgs.filter(m=>m.role==='user'||m.role==='assistant');
+  const hist = turns.slice(-7, -1).map(m=>(m.role==='user'?'User: ':'Assistant: ')+m.text).join('\n');
+  if(hist) parts.push('CONVERSATION SO FAR:\n'+hist);
+  parts.push('CURRENT QUESTION: '+question);
+  return parts.join('\n\n');
+}
+
+function asstBuild(){
+  if(ASST.built) return;
+  ASST.built = true;
+  const el = document.createElement('aside');
+  el.id = 'asstPanel'; el.className = 'asst no-print';
+  el.setAttribute('role','complementary'); el.setAttribute('aria-label','Ask assistant');
+  el.innerHTML = `<div class="asst-hd">
+      <b>&#10022; Ask</b><span class="pg" id="asstPg"></span><span class="sp"></span>
+      <button class="asst-ib" id="asstClear" type="button" onclick="asstClear()" aria-label="Clear conversation" title="Clear conversation">&#8634;</button>
+      <button class="asst-ib" id="asstPin" type="button" onclick="asstTogglePin()" aria-pressed="false" aria-label="Pin panel open" title="Pin: keep the panel docked open">&#128204;</button>
+      <button class="asst-ib" id="asstClose" type="button" onclick="asstClose()" aria-label="Close assistant panel" title="Close (Esc)">&times;</button>
+    </div>
+    <div class="asst-log" id="asstLog" aria-live="polite"></div>
+    <div class="asst-ft">
+      <label for="asstInput" class="mini" style="position:absolute;left:-9999px">Ask about this screen</label>
+      <textarea id="asstInput" rows="2" placeholder="Ask about this screen..." aria-label="Ask about this screen"
+        onkeydown="asstKey(event)"></textarea>
+      <div class="row2"><span class="hint">Enter to send &middot; Shift+Enter for a new line</span>
+        <button class="btn sm pri" id="asstSendBtn" type="button" onclick="asstSendFromInput()" aria-label="Send question">Send</button></div>
+    </div>`;
+  document.body.appendChild(el);
+  document.addEventListener('keydown', e=>{
+    if(e.key==='Escape' && ASST.open && !ASST.pinned && !document.querySelector('#layer .mask')){ asstClose(); }
+  });
+  const fixTop = ()=>{ const tn=document.getElementById('topnav'); const b = tn && tn.offsetParent!==null ? Math.max(0, tn.getBoundingClientRect().bottom) : 0; document.documentElement.style.setProperty('--asst-top', Math.round(b)+'px'); };
+  window.addEventListener('resize', fixTop); window.addEventListener('scroll', fixTop, {passive:true});
+  ASST._fixTop = fixTop;
+}
+function asstApply(){
+  asstBuild();
+  const el = document.getElementById('asstPanel');
+  if(ASST._fixTop) ASST._fixTop();
+  el.classList.toggle('open', ASST.open);
+  el.setAttribute('aria-hidden', ASST.open?'false':'true');
+  document.body.classList.toggle('asst-open', ASST.open);
+  document.body.classList.toggle('asst-pinned', ASST.open && ASST.pinned);
+  const pin = document.getElementById('asstPin');
+  pin.setAttribute('aria-pressed', ASST.pinned?'true':'false');
+  pin.title = ASST.pinned ? 'Unpin: panel will overlay and close on Esc' : 'Pin: keep the panel docked open';
+  const tb = document.getElementById('tnAsstBtn'); if(tb) tb.setAttribute('aria-expanded', ASST.open?'true':'false');
+  try{ localStorage.setItem(ASST_LS_OPEN, ASST.open?'1':'0'); localStorage.setItem(ASST_LS_PIN, ASST.pinned?'1':'0'); }catch(e){}
+}
+function asstRenderLog(){
+  const log = document.getElementById('asstLog'); if(!log) return;
+  const enabled = !!CFG.aiScreenInterpreterEnabled;
+  let h = '';
+  if(!enabled){
+    h += `<div class="asst-msg w" role="note"><strong>The assistant is turned off for this organization.</strong> An admin can turn it on in <a href="Norma.html" target="tool_Norma">Configuration &rarr; Integrations</a> (the AI screen interpreter / Ask Alec setting). Nothing is sent to an AI provider while it's off.</div>`;
+  }
+  if(!ASST.msgs.length){
+    h += `<div class="asst-intro">Ask about what's on this screen, or for advice on what to do next. I only see what's visible on <b>${esc(asstPageInfo().label)}</b> plus a summary of its numbers &mdash; not individual contact or deal records.</div>`;
+    if(enabled) h += `<div class="asst-sugg" aria-label="Suggested questions">${asstStarters().map(q=>`<button type="button" data-q="${esc(q)}" onclick="asstSend(this.dataset.q)">${esc(q)}</button>`).join('')}</div>`;
+  }
+  ASST.msgs.forEach((m,i)=>{
+    const cls = m.role==='user'?'u':m.role==='assistant'?'a':m.role==='warn'?'w':'e';
+    h += `<div class="asst-msg ${cls}"${m.role==='user'?' aria-label="You said"':''}>${esc(m.text)}${m.role==='error'&&i===ASST.msgs.length-1&&ASST.lastQ?`<br><button class="btn sm" style="margin-top:6px" type="button" onclick="asstRetry()">Try again</button>`:''}</div>`;
+  });
+  if(ASST.busy) h += `<div class="asst-msg a typing">Reading the screen&hellip;</div>`;
+  log.innerHTML = h;
+  log.scrollTop = log.scrollHeight;
+  const inp = document.getElementById('asstInput'), btn = document.getElementById('asstSendBtn');
+  if(inp){ inp.disabled = !enabled; inp.placeholder = enabled ? 'Ask about this screen...' : 'Assistant is off -- see note above'; }
+  if(btn) btn.disabled = !enabled || ASST.busy;
+}
+function asstSync(){
+  asstBuild();
+  const pg = document.getElementById('asstPg'); if(pg) pg.textContent = '· '+asstPageInfo().label;
+  asstApply();
+  asstRenderLog();
+}
+window.asstSync=asstSync;
+function asstOpen(){ ASST.open=true; asstApply(); asstRenderLog(); setTimeout(()=>{ const i=document.getElementById('asstInput'); if(i&&!i.disabled) i.focus(); else { const c=document.getElementById('asstClose'); if(c) c.focus(); } }, 60); }
+function asstClose(){ ASST.open=false; asstApply(); const tb=document.getElementById('tnAsstBtn'); if(tb) tb.focus(); }
+function asstToggle(){ ASST.open ? asstClose() : asstOpen(); }
+function asstTogglePin(){ ASST.pinned=!ASST.pinned; asstApply(); /* grid tiles re-measure on resize */ try{ window.dispatchEvent(new Event('resize')); }catch(e){} }
+function asstClear(){ ASST.msgs=[]; ASST.lastQ=''; asstRenderLog(); }
+function asstKey(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); asstSendFromInput(); } }
+function asstSendFromInput(){ const i=document.getElementById('asstInput'); if(!i) return; const t=i.value; if(!t.trim()||ASST.busy) return; i.value=''; asstSend(t); }
+function asstRetry(){ if(!ASST.lastQ||ASST.busy) return; if(ASST.msgs.length && ASST.msgs[ASST.msgs.length-1].role==='error') ASST.msgs.pop(); asstSend(ASST.lastQ, true); }
+async function asstSend(text, isRetry){
+  text = String(text||'').trim();
+  if(!text || ASST.busy) return;
+  if(!ASST.open) asstOpen();
+  if(!CFG.aiScreenInterpreterEnabled){ asstRenderLog(); return; }
+  if(!isRetry) ASST.msgs.push({role:'user', text});
+  ASST.lastQ = text; ASST.busy = true; asstRenderLog();
+  try{
+    const context = asstBuildContext(text);
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if(!token) throw new Error('Your own North session has expired -- sign in again.');
+    const { provider, model } = await activeLlmProviderOverride(ASST_TASK_ID, token);
+    const resp = await fetch(CONTACT_URL+'/admin/ai-generate', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token, prompt: ASST_SYSTEM_PROMPT+'\n\nQuestion: '+text, context, provider, model })
+    });
+    const j = await resp.json().catch(()=>({}));
+    if(resp.status===501){
+      ASST.msgs.push({role:'warn', text:'The AI provider isn’t configured yet ('+(typeof j.error==='string'?j.error:'not configured')+'). An admin can set one up under Configuration → LLM providers.'});
+      ASST.lastQ='';
+    } else {
+      if(!resp.ok || !j.ok){ const er=j.error; throw new Error(typeof er==='string'?er:(er?JSON.stringify(er):('AI request failed ('+resp.status+')'))); }
+      const out = String(j.raw||'').trim();
+      if(!out) throw new Error('The AI returned nothing usable.');
+      ASST.msgs.push({role:'assistant', text: out});
+      ASST.lastQ='';
+    }
+  }catch(e){
+    const raw = (e&&e.message)!=null ? e.message : e;
+    ASST.msgs.push({role:'error', text:'Couldn’t get an answer: '+(typeof raw==='string'?raw:(()=>{ try{ return JSON.stringify(raw); }catch(_e){ return String(raw); } })())});
+  }finally{
+    ASST.busy = false;
+    asstRenderLog();
+  }
+}
+Object.assign(window, {asstOpen, asstClose, asstToggle, asstTogglePin, asstClear, asstKey, asstSend, asstSendFromInput, asstRetry});
+
 function askAlexPanel(){
   if(!UI.askAlexOpen) return '';
   return `<div class="mask"><div class="modal" style="width:min(560px,100%)">
@@ -6169,7 +6440,7 @@ function pageBoardReport(){
   const brSorted=(CFG.boardReportSnapshots||[]).slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   const brViewing=UI.brViewSnapId?byId(brSorted,UI.brViewSnapId):null;
 
-  let h=`<div class="crumb no-print" style="font-size:12px;color:var(--ink-2);margin-bottom:6px"><a href="Reportus.html" target="tool_Reportus" style="color:inherit">Reporting</a> &rsaquo; Board report</div>
+  let h=`<div class="crumb no-print" style="font-size:12px;color:var(--ink-2);margin-bottom:6px"><a href="Reportus.html" target="tool_Reportus" style="color:inherit">Reporting</a> &rsaquo; Board report <span style="margin-left:10px"><a href="#" onclick="leaveBoardReport();return false" style="color:var(--nav)">&larr; Back to Strategy</a></span></div>
   <div class="phead"><div><h1>Board report</h1>
     <p>One page for a board or exec audience -- headline numbers, what changed, and what needs a decision. Generated on demand from the live plan.</p></div>
     <div class="sp"></div>
@@ -7395,6 +7666,13 @@ function go(page,tab){
      who looked at it and when, not how many times the DOM redrew. Reportus (the
      Reporting module) reads these same audit_log rows to show a report activity
      log alongside the Board report tile. */
+  /* 2026-09-28 (Stef: "If you select Board report you can't get back to other strategy pages"):
+     remember where we came from so "Back to Strategy" returns there, and drop the
+     ?page=boardreport deep-link param once we leave, so a reload doesn't snap back to the report. */
+  if(page!=='boardreport' && UI.page==='boardreport'){
+    try{ const u=new URL(location.href); if(u.searchParams.get('page')==='boardreport'){ u.searchParams.delete('page'); history.replaceState(null,'',u.pathname+(u.search||'')+u.hash); } }catch(e){}
+  }
+  if(page==='boardreport' && UI.page!=='boardreport') UI.brReturnPage = UI.page;
   if(page==='boardreport' && UI.page!=='boardreport'){
     logAudit('report viewed','Board Report · FY '+UI.fy+' · '+(version()?version().name:'—'));
   }
@@ -7406,9 +7684,30 @@ function go(page,tab){
 }
 window.go=go;
 
+/* 2026-09-28 (Stef: "If you select Board report you can't get back to other strategy pages"):
+   the Board report's own sidebar (item 50) only offered "Back to Reporting", which opens another
+   tab -- there was no way back into Strategy from here. leaveBoardReport() returns to the page
+   you came from (or Home / the Simple flow on a ?page=boardreport deep link), and the sidebar
+   below now also lists Strategy's pages directly. */
+function leaveBoardReport(){
+  let target = UI.brReturnPage;
+  if(!target || target==='boardreport' || !PAGES.find(p=>p.id===target)) target = (UI.mode==='simple' ? 'simple' : 'home');
+  if(UI.mode==='simple' && !SIMPLE_PAGES.includes(target)) target = 'simple';
+  go(target);
+}
+window.leaveBoardReport=leaveBoardReport;
 function renderBoardReportSide(){
   const brSorted = (CFG.boardReportSnapshots||[]).slice().sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
-  let h = `<div style="padding:14px 14px 4px">
+  let navH = '', grp = null;
+  PAGES.filter(p=>!p.hidden).forEach(p=>{
+    if(UI.mode==='simple' && !SIMPLE_PAGES.includes(p.id)) return;
+    if(p.grp!==grp){ grp=p.grp; navH+=`<h4>${esc(grp)}</h4>`; }
+    navH+=`<a class="navi" href="#" onclick="go('${p.id}');return false"><span class="ix">${p.ix}</span><span>${esc(p.label)}</span></a>`;
+  });
+  let h = `<div style="padding:10px 10px 4px">
+    <button class="btn sm pri" style="width:100%" onclick="leaveBoardReport()" title="Back to the Strategy page you were on">&larr; Back to Strategy</button>
+  </div>
+  <div style="padding:4px 14px 4px">
     <a href="Reportus.html" target="tool_Reportus" style="font-size:12px;color:var(--ink-2);text-decoration:none">&larr; Back to Reporting</a>
   </div>
   <h4>Board report</h4>
@@ -7420,6 +7719,7 @@ function renderBoardReportSide(){
     });
     h += `</div>`;
   }
+  h += `<h4 style="margin-top:18px">Strategy pages</h4>` + navH;
   h += moduleVersionFooterHtml('Board report','v0.2708.15');
   return h;
 }
@@ -7701,6 +8001,9 @@ function render(){
   if(typeof window.northGridAfterRender==='function'){ try{ window.northGridAfterRender(p.id); }catch(e){ console.error('grid layout hook failed',e); } }
   document.getElementById('layer').innerHTML=impactPanel()+overlayPanel()+pendingEditPanel()+askAlexPanel();
   renderCtx();
+  /* 2026-09-28 (Stef: Ask panel): the panel lives outside #main so render() never wipes it --
+     this only refreshes its page label / starter questions for whatever page is now showing. */
+  if(typeof asstSync==='function'){ try{ asstSync(); }catch(e){ console.error('assistant panel sync failed', e); } }
   saveLocal();
   scheduleSupabaseSave();
 }

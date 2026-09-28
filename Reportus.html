@@ -250,6 +250,14 @@ input.cel.gs-swap-filter{width:150px}
 .rm-chip.off{opacity:.5}
 .rm-canvas{overflow:auto;max-height:680px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--canvas)}
 .rm-node:hover rect:first-of-type{stroke:#10182B}
+.rm-tip{position:fixed;z-index:9500;display:none;width:280px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-2);padding:10px 12px;font-size:12px}
+.rm-tip-type{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.rm-tip-code{font-family:ui-monospace,Menlo,Consolas,monospace;text-transform:none;letter-spacing:0;color:var(--ink-2)}
+.rm-tip-name{font-weight:700;font-size:13.5px;margin:2px 0 6px;color:var(--ink)}
+.rm-tip-row{display:flex;justify-content:space-between;gap:10px;padding:2px 0;border-top:1px solid var(--line-2)}
+.rm-tip-row span{color:var(--ink-3)}
+.rm-tip-row b{font-weight:600;text-align:right;overflow-wrap:anywhere}
+.rm-tip-acts{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
 </style>
 </head>
 <body>
@@ -1064,7 +1072,8 @@ function computeDrilldownGraph(){
   const startType=UI.ddStartType, startId=UI.ddStartId;
   let camps=CFG.campaigns.slice();
 
-  if(startType && startId){
+  if(startType==='all'){ /* 2026-09-28 v2: see the whole web at once */ }
+  else if(startType && startId){
     if(startType==='programme') camps=camps.filter(c=>c.programmeId===startId);
     else if(startType==='campaign') camps=camps.filter(c=>c.id===startId);
     else if(startType==='region') camps=camps.filter(c=>c.regionId===startId);
@@ -1200,7 +1209,7 @@ function ddSvgHtml(nodes,edges){
   const connected=new Set();
   if(focus){ connected.add(focus); edges.forEach(e=>{ if(e.a===focus) connected.add(e.b); if(e.b===focus) connected.add(e.a); }); }
   const dim=n=>focus && !connected.has(n.id);
-  const idx={}; nodes.forEach(n=>idx[n.id]=n);
+  const idx={}; nodes.forEach(n=>idx[n.id]=n); _ddNodeIdx=idx;
   const m=ddMetricDef();
 
   const lines=edges.map(e=>{
@@ -1214,7 +1223,7 @@ function ddSvgHtml(nodes,edges){
     const label=n.label.length>22?n.label.slice(0,21)+'…':n.label;
     const v=m.get(n);
     const title=esc(DD_TYPE_LABEL[n.type]+': '+n.label+(v!=null?' — '+esc(m.label)+': '+m.fmt(v):''));
-    return `<g class="grab" data-node="${n.id}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})" style="opacity:${opacity}" onmousedown="ddNodeMouseDown(event,'${n.id}',${n.x.toFixed(2)},${n.y.toFixed(2)})"><title>${title}</title><circle r="${r}" fill="${color}" stroke="#fff" stroke-width="1.5"></circle><text x="${r+5}" y="4" font-size="10.5" fill="#45506B">${esc(label)}</text></g>`;
+    return `<g class="grab" data-node="${n.id}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})" style="opacity:${opacity}" onmousedown="ddNodeMouseDown(event,'${n.id}',${n.x.toFixed(2)},${n.y.toFixed(2)})" onmouseenter="ddTip(event,'${n.id}')" onmouseleave="rmTipHideSoon()"><circle r="${r}" fill="${color}" stroke="#fff" stroke-width="1.5"></circle><text x="${r+5}" y="4" font-size="10.5" fill="#45506B">${esc(label)}</text></g>`;
   }).join('');
 
   return `<svg viewBox="0 0 ${DD_W} ${DD_H}" width="100%" height="560" style="background:#fff;border-radius:10px">
@@ -1309,6 +1318,7 @@ function rpDrilldownParts(){
       <span class="mini" style="font-weight:600">Start from:</span>
       <select class="in" style="width:auto" onchange="const v=this.value.split('|'); setDdStart(v[0]||null,v[1]||null)">
         <option value="">— pick a start point —</option>
+        <option value="all|all" ${UI.ddStartType==='all'?'selected':''}>★ Everything — all campaigns and their links</option>
         <optgroup label="Programme">${startOptions.programme.map(p=>`<option value="programme|${p.id}" ${UI.ddStartType==='programme'&&UI.ddStartId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</optgroup>
         <optgroup label="Campaign">${startOptions.campaign.map(c=>`<option value="campaign|${c.id}" ${UI.ddStartType==='campaign'&&UI.ddStartId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</optgroup>
         <optgroup label="Region">${startOptions.region.map(r=>`<option value="region|${r.id}" ${UI.ddStartType==='region'&&UI.ddStartId===r.id?'selected':''}>${esc(r.name)}</option>`).join('')}</optgroup>
@@ -1372,7 +1382,11 @@ const RM_COLOR={programme:'#5A3E9C',region:'#0E6B8A',pod:'#1F8A6B',rep:'#3F7D5A'
 const RM_CAP=25;               /* boxes per type per column before "+N more" */
 const RM_NW=196, RM_NH=34, RM_COLW=262, RM_VG=8, RM_GG=18, RM_PAD=16;
 let RM=null, _rmLoading=false, _rmErr=null, _rmVis=[];
-UI.rmFocus=null; UI.rmDepth=2; UI.rmHidden={}; UI.rmMissing=false; UI.rmHistory=[]; UI.rmExpand={};
+UI.rmFocus=null; UI.rmDepth=99; UI.rmHidden={}; UI.rmMissing=false; UI.rmHistory=[]; UI.rmExpand={};
+/* 2026-09-28 v2 (Stef: "as you drill up or down you lose the complete view"): 'web' = every record
+   connected to the start point in ANY direction (the whole web), laid out left-to-right by
+   relationship; 'focus' = the original straight parents/children only. Web + All is the default. */
+UI.rmMode='web'; UI.rmPickType='programme';
 
 /* Pages of 1000 (Supabase's per-request cap). Filtered to the signed-in org so a Super
    Admin's RLS bypass can't blend organisations together on this map. */
@@ -1401,13 +1415,13 @@ async function rmLoad(force){
   if(RM && !force) return;
   _rmLoading=true; _rmErr=null;
   const specs={
-    programmes:'id,name', campaigns:'*', activities:'id,name,route_id', routes:'id,name',
-    regions:'id,name', pods:'*', reps:'id,name,pod_id', segments:'id,name',
-    partners:'id,name,pod_id', campaign_partner_allocations:'id,campaign_id,partner_id',
-    campaign_pod_allocations:'id,campaign_id,pod_id', eventus_events:'id,name,campaign_id',
-    tasks:'id,name,campaign_id,event_id', task_campaign_links:'id,task_id,campaign_id',
-    assets:'id,name,campaign_id,event_id,source_task_id',
-    augur_deals:'id,name,account,campaign_id,partner_id,stage,value',
+    programmes:'*', campaigns:'*', activities:'*', routes:'*',
+    regions:'*', pods:'*', reps:'*', segments:'*',
+    partners:'*', campaign_partner_allocations:'id,campaign_id,partner_id',
+    campaign_pod_allocations:'id,campaign_id,pod_id', eventus_events:'*',
+    tasks:'*', task_campaign_links:'id,task_id,campaign_id',
+    assets:'*',
+    augur_deals:'*',
     crm_contacts:'id,account', crm_activities:'id,contact_id,deal_id'
   };
   const d={}, failed=[];
@@ -1440,10 +1454,10 @@ function rmBuild(d){
   const K=(type,id)=> (id===null||id===undefined||id==='') ? null : type+':'+id;
   const link=(a,b)=>{ if(!a||!b||a===b||!nodes[a]||!nodes[b]) return; (down[a]=down[a]||new Set()).add(b); (up[b]=up[b]||new Set()).add(a); };
 
-  d.programmes.forEach(r=>add('programme',r.id,r.name));
-  d.regions.forEach(r=>add('region',r.id,r.name));
-  d.segments.forEach(r=>add('segment',r.id,r.name));
-  d.routes.forEach(r=>add('route',r.id,r.name));
+  d.programmes.forEach(r=>add('programme',r.id,r.name,{raw:r}));
+  d.regions.forEach(r=>add('region',r.id,r.name,{raw:r}));
+  d.segments.forEach(r=>add('segment',r.id,r.name,{raw:r}));
+  d.routes.forEach(r=>add('route',r.id,r.name,{raw:r}));
   d.pods.forEach(r=>add('pod',r.id,r.name,{raw:r}));
   d.reps.forEach(r=>add('rep',r.id,r.name,{raw:r}));
   d.partners.forEach(r=>add('partner',r.id,r.name,{raw:r}));
@@ -1456,7 +1470,7 @@ function rmBuild(d){
 
   /* Companies: one box per distinct name (case/space-insensitive), from deal accounts and contact accounts */
   const compContacts={};
-  const addCompany=name=>{ const ck=rmCompanyKey(name); if(!ck) return null; return add('company',ck,String(name).trim(),{contacts:0}); };
+  const addCompany=name=>{ const ck=rmCompanyKey(name); if(!ck) return null; return add('company',ck,String(name).trim(),{contacts:0,raw:{}}); };
   d.augur_deals.forEach(r=>{ addCompany(r.account); });
   d.crm_contacts.forEach(r=>{ const k=addCompany(r.account); if(k) compContacts[k]=(compContacts[k]||0)+1; });
   Object.keys(compContacts).forEach(k=>{ nodes[k].contacts=compContacts[k]; });
@@ -1524,6 +1538,19 @@ function rmTraverse(){
       frontier=next;
     }
   };
+  if(UI.rmMode==='web'){
+    let frontier=[UI.rmFocus]; let total=1;
+    for(let dd=1; dd<=UI.rmDepth && frontier.length && total<4000; dd++){
+      const next=[];
+      frontier.forEach(k=>{
+        const c0=col[k];
+        (RM.down[k]||[]).forEach(c=>{ if(col[c]!==undefined||UI.rmHidden[RM.nodes[c].type]) return; col[c]=c0+1; next.push(c); total++; });
+        (RM.up[k]||[]).forEach(c=>{ if(col[c]!==undefined||UI.rmHidden[RM.nodes[c].type]) return; col[c]=c0-1; next.push(c); total++; });
+      });
+      frontier=next;
+    }
+    return col;
+  }
   walk(RM.down,1); walk(RM.up,-1);
   return col;
 }
@@ -1596,11 +1623,11 @@ function rmSvg(col){
     if(n.dupes&&n.dupes.length) tip.push('Possible duplicate of: '+n.dupes.map(x=>RM.nodes[x].name).join(', '));
     if(RM.missing[k]) tip.push('Missing: '+RM.missing[k].join(', '));
     tip.push(isF?'This is the starting point':'Click to re-centre here');
-    return `<g class="rm-node" style="cursor:pointer" onclick="rmFocusIdx(${i})"><title>${esc(tip.join('\n'))}</title>
+    return `<g class="rm-node" style="cursor:pointer" onclick="rmFocusIdx(${i})" onmouseenter="rmTip(event,${i})" onmouseleave="rmTipHideSoon()">
       <rect x="${p.x}" y="${p.y}" width="${RM_NW}" height="${RM_NH}" rx="6" fill="#fff" stroke="${miss?'#D92D20':(isF?'#10182B':'#CBD2E0')}" stroke-width="${isF?2.2:1}" ${miss?'stroke-dasharray="4 3"':''}/>
       <rect x="${p.x}" y="${p.y}" width="5" height="${RM_NH}" rx="2" fill="${RM_COLOR[n.type]}"/>
       <text x="${p.x+12}" y="${p.y+14}" font-size="11.5" font-weight="${isF?700:600}" fill="#10182B">${esc(rmTrunc(n.name,28))}</text>
-      <text x="${p.x+12}" y="${p.y+27}" font-size="9" fill="#6B7489">${esc(RM_LABEL[n.type])}</text>${bsvg}</g>`;
+      <text x="${p.x+12}" y="${p.y+27}" font-size="9" fill="#6B7489">${esc(RM_LABEL[n.type]+(rmCode(n.raw)?' · '+rmTrunc(rmCode(n.raw),18):''))}</text>${bsvg}</g>`;
   }).join('');
   const more=L.more.map((m,i)=>`<g style="cursor:pointer" onclick="rmExpandMore('${esc(m.exKey)}')"><title>Show all</title>
     <rect x="${m.x}" y="${m.y}" width="${RM_NW}" height="${RM_NH*0.7}" rx="6" fill="#F5F7FB" stroke="#CBD2E0" stroke-dasharray="3 3"/>
@@ -1617,7 +1644,10 @@ function rmFocusIdx(i){ rmSetFocus(_rmVis[i]); }
 function rmBack(){ const k=UI.rmHistory.pop(); if(k){ UI.rmFocus=k; UI.rmExpand={}; render(); } }
 function rmExpandMore(exKey){ UI.rmExpand[exKey]=true; render(); }
 function rmToggleType(t){ UI.rmHidden[t]=!UI.rmHidden[t]; render(); }
-function rmSetDepth(v){ UI.rmDepth=clamp(parseInt(v,10)||2,1,3); render(); }
+function rmSetDepth(v){ UI.rmDepth=clamp(parseInt(v,10)||2,1,99); render(); }
+function rmSetMode(v){ UI.rmMode=v==='focus'?'focus':'web'; render(); }
+function rmSetPickType(t){ UI.rmPickType=t; render(); }
+function rmPickSelect(v){ if(v) rmSetFocus(v); }
 function rmToggleMissing(on){ UI.rmMissing=!!on; render(); }
 let _rmHits=[];
 function rmSearch(q){
@@ -1634,7 +1664,7 @@ function rmSearch(q){
     : '<div class="mini" style="padding:8px 10px">No matches.</div>';
 }
 function rmPickHit(i){ const k=_rmHits[i]; _rmHits=[]; rmSetFocus(k); }
-Object.assign(window,{rmSetFocus,rmFocusIdx,rmBack,rmExpandMore,rmToggleType,rmSetDepth,rmToggleMissing,rmSearch,rmPickHit});
+Object.assign(window,{rmSetFocus,rmFocusIdx,rmBack,rmExpandMore,rmToggleType,rmSetDepth,rmToggleMissing,rmSearch,rmPickHit,rmSetMode,rmSetPickType,rmPickSelect});
 
 function rmLoadingHtml(){
   if(_rmErr) return `<div class="card"><div class="empty">Couldn't build the relationship map: ${esc(_rmErr)} <a href="#" onclick="rmLoad(true);return false">Try again</a></div></div>`;
@@ -1651,8 +1681,21 @@ function rmWidgetMap(){
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
       <div class="rm-search"><input class="in" id="rmSearchInput" placeholder="Search programmes, campaigns, deals, companies…" autocomplete="off"
         oninput="rmSearch(this.value)" onkeydown="if(event.key==='Enter'&&_rmHits.length){rmPickHit(0)}"><div id="rmResults"></div></div>
+      <span class="mini" style="font-weight:600">or pick</span>
+      <select class="in" style="width:auto" onchange="rmSetPickType(this.value)" aria-label="Record type">${RM_TYPES.filter(t=>counts[t]).map(t=>`<option value="${t}" ${UI.rmPickType===t?'selected':''}>${esc(RM_LABEL[t])}</option>`).join('')}</select>
+      <select class="in" style="width:220px" onchange="rmPickSelect(this.value)" aria-label="Record">
+        <option value="">— choose a ${esc((RM_LABEL[UI.rmPickType]||'record').toLowerCase())} —</option>
+        ${Object.values(RM.nodes).filter(n=>n.type===UI.rmPickType).sort((a,b)=>a.name.localeCompare(b.name)).slice(0,3000).map(n=>`<option value="${esc(n.key)}" ${UI.rmFocus===n.key?'selected':''}>${esc(n.name)}${rmCode(n.raw)?' ('+esc(rmCode(n.raw))+')':''}</option>`).join('')}
+      </select>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+      <span class="mini" style="font-weight:600">Show</span>
+      <select class="in" style="width:auto" onchange="rmSetMode(this.value)">
+        <option value="web" ${UI.rmMode==='web'?'selected':''}>Whole web — everything connected</option>
+        <option value="focus" ${UI.rmMode==='focus'?'selected':''}>Direct line only — parents & children</option>
+      </select>
       <span class="mini" style="font-weight:600">Depth</span>
-      <select class="in" style="width:auto" onchange="rmSetDepth(this.value)">${[1,2,3].map(v=>`<option value="${v}" ${UI.rmDepth===v?'selected':''}>${v} step${v>1?'s':''}</option>`).join('')}</select>
+      <select class="in" style="width:auto" onchange="rmSetDepth(this.value)">${[1,2,3,4,6,99].map(v=>`<option value="${v}" ${UI.rmDepth===v?'selected':''}>${v===99?'All':v+' step'+(v>1?'s':'')}</option>`).join('')}</select>
       <label class="mini" style="display:flex;gap:5px;align-items:center;cursor:pointer"><input type="checkbox" ${UI.rmMissing?'checked':''} onchange="rmToggleMissing(this.checked)"> Show missing links</label>
       <span class="sp" style="flex:1"></span>
       <button class="btn sm" ${UI.rmHistory.length?'':'disabled'} onclick="rmBack()">← Back</button>
@@ -1667,13 +1710,13 @@ function rmWidgetMap(){
   } else {
     const inView=Object.keys(col).length;
     const missInView=UI.rmMissing?Object.keys(col).filter(k=>RM.missing[k]).length:0;
-    h+=`<div class="mini" style="margin:8px 0 6px">Starting point: <b style="color:${RM_COLOR[focus.type]}">${esc(RM_LABEL[focus.type])}</b> <b>${esc(focus.name)}</b>
-      · ${inView-1} connected record${inView===2?'':'s'} within ${UI.rmDepth} step${UI.rmDepth>1?'s':''} · parents on the left, children on the right
+    h+=`<div class="mini" style="margin:8px 0 6px">Starting point: <b style="color:${RM_COLOR[focus.type]}">${esc(RM_LABEL[focus.type])}</b> <b>${esc(focus.name)}</b>${rmCode(focus.raw)?' <span class="pill n">'+esc(rmCode(focus.raw))+'</span>':''}
+      · ${inView-1} connected record${inView===2?'':'s'}${UI.rmDepth>=99?'':' within '+UI.rmDepth+' step'+(UI.rmDepth>1?'s':'')} · ${UI.rmMode==='web'?'whole web — ':''}parents on the left, children on the right
       ${UI.rmMissing?` · <span style="color:var(--bad)">${missInView} with missing links</span>`:''}</div>`;
     h+=`<div class="rm-canvas">${rmSvg(col)}</div>`;
     if(inView===1) h+=`<div class="mini" style="margin-top:6px">Nothing is linked to this record${Object.keys(UI.rmHidden).some(t=>UI.rmHidden[t])?' among the types switched on':''}.</div>`;
   }
-  h+=`<div class="mini" style="margin-top:8px">Click a box to re-centre on it. Hover for details. Companies are matched by name from deal and contact accounts; “≈ dup?” marks names that look like the same company. Contacts show as a count. Read-only — loaded ${RM.loadedAt?esc(F.dt(RM.loadedAt.toISOString())):''}.</div>
+  h+=`<div class="mini" style="margin-top:8px">Click a box to re-centre on it. Hover for its code, details and a link to open it in its module. Companies are matched by name from deal and contact accounts; “≈ dup?” marks names that look like the same company. Contacts show as a count. Read-only — loaded ${RM.loadedAt?esc(F.dt(RM.loadedAt.toISOString())):''}.</div>
   </div></div>`;
   return h;
 }
@@ -1704,6 +1747,80 @@ function rmWidgetDupes(){
   return h+`</tbody></table></div></div><div class="bd mini" style="padding:8px 14px">Flagged only — nothing is merged. Fix names at the source (Scoring deals / Hub contacts).</div></div>`;
 }
 Object.assign(window,{rmWidgetMap,rmWidgetMissing,rmWidgetDupes});
+
+/* ---- Hover card (2026-09-28 v2, Stef: "in mouse over need to see the code and name of the item
+   .. and an option to click to the details in the relevant module"). One floating card, shared by
+   the Relationship map and the Drill-down graph. Stays open while the pointer is on it so its
+   links can be clicked. Codes come from each record's tracking/CRM reference or code field. */
+function rmCode(raw){ raw=raw||{}; return String(raw.tracking_ref||raw.code||raw.crm_ref||raw.ext_ref||raw.trackingRef||'').trim(); }
+function rmLinkFor(n){
+  const r=n.raw||{}, id=encodeURIComponent(n.id);
+  switch(n.type){
+    case 'campaign': return ['Campaign Planning','Cursus.html#campaign='+id];
+    case 'programme': return ['Campaign Planning','Cursus.html#page=planning'];
+    case 'partner': return ['Campaign Planning — Partners','Cursus.html#page=partners'];
+    case 'event': return ['Events','Eventus.html#event='+id];
+    case 'task': return r.event_id?['Events','Eventus.html#event='+encodeURIComponent(r.event_id)]:(r.campaign_id?['Campaign Planning','Cursus.html#campaign='+encodeURIComponent(r.campaign_id)]:['Campaign Planning','Cursus.html']);
+    case 'asset': return ['Assets','Custodia.html'];
+    case 'deal': case 'company': return ['Scoring','Augur.html'];
+    default: return ['Strategy','Ordo.html'];
+  }
+}
+function rmFacts(n){
+  const r=n.raw||{}, f=[];
+  const put=(k,v)=>{ if(v!==undefined&&v!==null&&v!=='') f.push([k,v]); };
+  if(n.type==='campaign'){ put('Budget',r.budget!=null?F.mk(r.budget||0):''); put('Dates',r.start_date?(r.start_date+' → '+(r.end_date||'…')):''); put('Sign-off',r.signoff_status); put('Owner',r.owner_name); }
+  else if(n.type==='programme'){ put('Owner',r.owner); put('Status',r.status); put('Focus',r.focus); }
+  else if(n.type==='deal'){ put('Stage',r.stage); put('Value',r.value!=null?F.mk(r.value||0):''); put('Account',r.account); put('Close',r.close_date); }
+  else if(n.type==='event'){ put('Type',r.type); put('Status',r.status); put('Starts',r.start_date); put('Location',r.location||r.country); }
+  else if(n.type==='task'){ put('Status',r.status); put('Due',r.due_date); put('Owner',r.owner); }
+  else if(n.type==='asset'){ put('Category',r.category); put('Stock',r.stock); }
+  else if(n.type==='partner'){ put('Type',r.type); }
+  if(n.contacts) put('Contacts',n.contacts);
+  if(RM && n.key){ const u=(RM.up[n.key]||new Set()).size, d=(RM.down[n.key]||new Set()).size; put('Links',u+' above · '+d+' below'); }
+  if(RM && RM.missing && RM.missing[n.key]) put('Missing',RM.missing[n.key].join(', '));
+  if(n.dupes && n.dupes.length && RM) put('Possible duplicate of',n.dupes.map(x=>RM.nodes[x].name).join(', '));
+  return f;
+}
+let _rmTipTimer=null, _rmTipNode=null;
+function rmTipEl(){
+  let el=document.getElementById('rmTip');
+  if(!el){ el=document.createElement('div'); el.id='rmTip'; el.className='rm-tip'; el.setAttribute('role','tooltip');
+    el.onmouseenter=()=>clearTimeout(_rmTipTimer); el.onmouseleave=()=>rmTipHideSoon(); document.body.appendChild(el); }
+  return el;
+}
+function rmTipOpen(ev,n,canRecentre){
+  clearTimeout(_rmTipTimer); _rmTipNode=n;
+  const el=rmTipEl(); const code=rmCode(n.raw); const [modName,href]=rmLinkFor(n);
+  el.innerHTML=`<div class="rm-tip-type" style="color:${RM_COLOR[n.type]||'#374151'}">${esc(RM_LABEL[n.type]||n.type)}${code?` · <span class="rm-tip-code">${esc(code)}</span>`:''}</div>
+    <div class="rm-tip-name">${esc(n.name)}</div>
+    ${rmFacts(n).map(([k,v])=>`<div class="rm-tip-row"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}
+    <div class="rm-tip-acts"><a class="btn sm pri" href="${esc(href)}" target="tool_North">Open in ${esc(modName)} →</a>
+    ${canRecentre?`<button class="btn sm" onclick="rmTipRecentre()">Re-centre here</button>`:''}</div>`;
+  el.style.display='block';
+  const w=el.offsetWidth, h=el.offsetHeight;
+  let x=ev.clientX+14, y=ev.clientY+14;
+  if(x+w>window.innerWidth-8) x=Math.max(8,ev.clientX-w-14);
+  if(y+h>window.innerHeight-8) y=Math.max(8,window.innerHeight-h-8);
+  el.style.left=x+'px'; el.style.top=y+'px';
+}
+function rmTipHideSoon(){ clearTimeout(_rmTipTimer); _rmTipTimer=setTimeout(()=>{ const el=document.getElementById('rmTip'); if(el) el.style.display='none'; },350); }
+function rmTipRecentre(){ const n=_rmTipNode; const el=document.getElementById('rmTip'); if(el) el.style.display='none';
+  if(n && n.key && RM && RM.nodes[n.key]){ if(UI.page!=='relmap'){ UI.page='relmap'; } rmSetFocus(n.key); } }
+function rmTip(ev,i){ const k=_rmVis[i]; if(!k||!RM) return; rmTipOpen(ev,RM.nodes[k],k!==UI.rmFocus); }
+/* Drill-down graph nodes ('camp:<id>' etc.) -> the same card; full record from the relationship
+   data when it's loaded (for codes), else the drill-down's own lighter record. */
+const DD_TO_RM={programme:'programme',region:'region',pod:'pod',partner:'partner',campaign:'campaign',activity:'activity',route:'route',asset:'asset'};
+let _ddNodeIdx={};
+function ddTip(ev,id){
+  const n=_ddNodeIdx[id]; if(!n) return;
+  if(!RM && !_rmLoading) setTimeout(()=>rmLoad(),0);
+  const t=DD_TO_RM[n.type]||n.type, rid=n.raw&&n.raw.id, key=t+':'+rid;
+  const rmN=RM&&RM.nodes[key];
+  rmTipOpen(ev, rmN || {key:null,type:t,id:rid,name:n.label,raw:n.raw||{}}, !!rmN);
+}
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ const el=document.getElementById('rmTip'); if(el) el.style.display='none'; } });
+Object.assign(window,{rmTip,rmTipHideSoon,rmTipRecentre,ddTip});
 
 function rpRelmapParts(){
   return {
@@ -1763,7 +1880,7 @@ function renderSide(){
   let h='<h4>Reporting</h4>';
   PAGES.forEach(p=>{ h+=`<a class="navi ${UI.page===p.id?'on':''}" href="#" onclick="go('${p.id}');return false">
     <span class="ix">${p.ix}</span><span>${p.label}</span></a>`; });
-  h+=moduleVersionFooterHtml('Reporting','v0.2809.1');
+  h+=moduleVersionFooterHtml('Reporting','v0.2809.2');
   return h;
 }
 function renderTnAcct(){

@@ -352,6 +352,7 @@ window.closeFieldGuide=closeFieldGuide;
 <script src="shared/orgSwitcher.js"></script>
 <script src="shared/convertToMain.js"></script>
 <script src="shared/charts.js"></script>
+<script src="shared/askAlec.js"></script>
 <link rel="stylesheet" href="assets/vendor/gridstack/gridstack.min.css">
 <script src="assets/vendor/gridstack/gridstack-all.js"></script>
 <script src="shared/grid.js"></script>
@@ -1911,7 +1912,11 @@ const HELP_FAQ=[
   {q:"Why can't I see a module, or can't edit something?", a:'Access is layered: your organization sets the ceiling (which modules exist for anyone there), your role sets Configure/Publish/Can edit, and you personally have a Modules toggle in the Users table. Ask an admin to check all three.'},
   {q:"What's the difference between Simple and Expert mode?", a:'In Campaign Planning, Simple mode shows the core fields; Expert mode adds business case, sign-off, partner allocation and more \u2014 toggle it from Campaign Planning if your role allows it.'},
   {q:'What does Cross-region visibility mean?', a:'"Transparent" means you see every region in your organization. "Isolated" means you only see the regions specifically checked for you.'},
-  {q:'What is Super Admin?', a:"Super Admin isn't a role in the Roles table \u2014 it's a separate flag on a login that gives full cross-organization visibility in Configuration, independent of any one organization's roles."}
+  {q:'What is Super Admin?', a:"Super Admin isn't a role in the Roles table \u2014 it's a separate flag on a login that gives full cross-organization visibility in Configuration, independent of any one organization's roles."},
+  /* 2026-09-29 */ {q:"What is Ask Alec and what does it see?", a:"Click \u2726 Ask Alec in the top bar (shown on every Reporting page) to open a panel on the right where you can ask about what\u2019s on screen or for advice. Pin it (\ud83d\udccc) to keep it docked while you move between pages; the conversation stays until you clear it or reload. Alec is sent the page name, a text snapshot of what\u2019s visible on screen (headings, KPI tiles, the first rows of tables and visible field values \u2014 never passwords) and your last few messages, and answers only from that. It\u2019s off unless an admin turns it on in Configuration \u2192 Integrations, and uses your org\u2019s AI provider."},
+  /* 2026-09-29 */ {q:"How do I use the Relationship map?", a:"Search for any record, or use the \"or pick\" dropdowns (type, then record), to choose a starting point. \"Whole web\" shows everything connected to it in any direction; \"Direct line only\" shows just its parents and children. Parents sit to the left, children to the right. Click a box to re-centre (\u2190 Back returns), switch types on or off with the chips, and tick \"Show missing links\" to flag records missing an expected parent. Hover a box for its code, key details and an \"Open in \u2026\" link to the module it lives in."},
+  /* 2026-09-29 */ {q:"How are companies and contacts shown on the map?", a:"Companies are matched by name from deal accounts and contact accounts, so \"Acme Pty Ltd\" on a deal and on a contact are one company. Names that look like the same company are flagged \"\u2248 dup?\" and listed in the Possible duplicate companies tile \u2014 nothing is merged automatically. Contacts aren\u2019t drawn as boxes; companies and deals show a \"#N contacts\" badge instead."},
+  /* 2026-09-29 */ {q:"Can I rearrange the Reporting pages?", a:"Yes. Every Reporting page is now made of tiles, the same as Strategy: Edit layout lets you drag and resize tiles, \"+ Add / unhide tile\" adds or restores one, and Reset layout puts the page back to its default. Layouts are saved in your browser."}
 ];
 function helpPanelHtml(){
   const mod = MODULES.find(m=>m.id===THIS_MODULE) || {label:THIS_MODULE, desc:''};
@@ -2030,6 +2035,15 @@ function tnSearchKey(ev){
   if(ev.key==='Escape'){ document.getElementById('tnResults').innerHTML=''; ev.target.blur(); }
 }
 window.tnSearchKey=tnSearchKey;
+/* 2026-09-29 (Stef: "ADD Ask Alec to all Dashboard / report / planning / effectiveness pages in all
+   modules"): the shared right-hand Ask Alec panel (shared/askAlec.js) -- same panel as Strategy,
+   shown on this module's dashboard/report/planning/effectiveness pages. */
+if(window.NorthAskAlec) NorthAskAlec.init({
+  moduleLabel:"Reporting", lsKey:"reportus", taskId:"reg_reporting_assistant_task", pages:null,
+  pageInfo: ()=>{ const p=PAGES.find(x=>x.id===UI.page); return { id:UI.page, label:p?p.label:UI.page }; },
+  starters:{"dashboards": "What are the headlines here?", "reports": "Which report should I look at first?", "relmap": "What looks disconnected or missing here?", "drilldown": "Where is the spend concentrated?", "organization": "Anything missing in our setup?"},
+});
+
 function render(){
   const p=PAGES.find(x=>x.id===UI.page)||PAGES[0];
   document.getElementById('side').innerHTML=renderSide();

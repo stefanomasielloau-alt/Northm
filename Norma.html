@@ -2911,17 +2911,20 @@ function pageIntegrations(){
   h += `<div class="card"><h3>Ask Alec <span class="sp"></span>
       <span class="pill ${CFG.aiScreenInterpreterEnabled?'ok':'n'}">${CFG.aiScreenInterpreterEnabled?'On':'Off'}</span></h3>
     <div class="bd">
-      <p class="mini" style="margin:0 0 9px">Phase 1 (backlog item 22): an "Ask Alec" button on Strategy's Dashboard that
-        sends a small summary of the numbers already on screen -- fiscal-year totals and counts, never individual
-        campaigns, contacts or deal records -- to this org's chosen AI provider (the same Active LLM provider
-        configured on the AI providers page) and shows back a plain-language explanation. Off by default, since this
-        sends a summary of live org data to a third-party provider -- turning it on is an explicit choice, same as
-        every other AI-touching feature in this suite.</p>
+      <p class="mini" style="margin:0 0 9px">2026-09-29: Ask Alec is a panel that opens from an "&#10022; Ask Alec" button in
+        the top bar of Strategy (every page) and of the dashboard, report, planning and effectiveness pages of Campaign
+        Planning, Events, Assets, Targets, Scoring and Reporting. People can ask about what's on screen or for advice.
+        What gets sent to this org's AI provider (the Active LLM provider on the AI providers page, or the provider
+        assigned to that module's task in the Agent Registry): the page name, a text snapshot of what's visible on
+        screen -- headings, KPI tiles, the first rows of visible tables and visible field values, never password
+        fields -- plus the last few messages. Strategy's "Explain this dashboard" action still sends only the fixed
+        summary fields in the skill file below. Off by default, since this sends live org data to a third-party
+        provider -- turning it on is an explicit choice, same as every other AI-touching feature in this suite.</p>
       <label><input type="checkbox" ${CFG.aiScreenInterpreterEnabled?'checked':''}
-        onchange="setPath('aiScreenInterpreterEnabled',this.checked)"> Enabled — show the Ask Alec button on Strategy's Dashboard</label>
+        onchange="setPath('aiScreenInterpreterEnabled',this.checked)"> Enabled — show Ask Alec in Strategy and on other modules' dashboard, report, planning and effectiveness pages</label>
       <p class="mini" style="margin-top:10px">The prompt and exactly which fields get sent live in North's own repo
-        (<code>skills/explain-strategy-dashboard.json</code>), not buried in this page's code -- edit that file to
-        change what Alec is told or shown. (2026-09-11: renamed Alex -> Alec/"Smart Alec" in the UI/prompt only --
+        (<code>skills/explain-strategy-dashboard.json</code>) for the "Explain this dashboard" action, and in
+        <code>shared/askAlec.js</code> for the chat panel -- edit those files to change what Alec is told or shown. (2026-09-11: renamed Alex -> Alec/"Smart Alec" in the UI/prompt only --
         internal function/state names (askAlex(), UI.askAlexOpen, etc.) were deliberately left alone to avoid
         touching every call site for a cosmetic rename.)</p>
     </div></div>`;
@@ -4276,7 +4279,8 @@ const HELP_FAQ=[
   {q:'Can an Admin move or copy a Hub user\'s data to another account?', a:'Hub\'s Settings \u2192 Users \u2192 Reassign data panel supports both Move (takes data off the source account) and, for accounts with the Duplicate capability, Copy (leaves the source untouched). Ask whoever holds that capability to grant it if you need Copy access.'},
   {q:'How does Hub\'s Post & Content Ideas / Talking point generation work?', a:'The Comms tab\'s Generate ideas, Brief, and Find content buttons call your organization\'s configured AI provider, grounded in your real pipeline stage counts, recent company signals, and the selected contact\'s actual title/company/signal -- never invented client names or figures. If no AI provider is configured yet (or the request fails), each falls back to example content instead of breaking.'},
   {q:'Who can use Hub\'s AI content-generation buttons?', a:'Any signed-in Hub user, not just admins -- same as document/brief AI extraction in Campaign Planning. Configure the provider once for the whole organization from Configuration \u2192 LLM providers.'},
-  {q:'Why can\'t I edit an Agent Registry entry from AH\'s Library?', a:'Because it\'s also used in North -- North is the master for anything shared with it, so AH shows it read-only with a link back here. Entries used only in Hub or Queue stay fully editable from AH.'}
+  {q:'Why can\'t I edit an Agent Registry entry from AH\'s Library?', a:'Because it\'s also used in North -- North is the master for anything shared with it, so AH shows it read-only with a link back here. Entries used only in Hub or Queue stay fully editable from AH.'},
+  /* 2026-09-29 */ {q:"How do I turn Ask Alec on or off?", a:"Configuration \u2192 Integrations \u2192 Ask Alec. When it\u2019s on, an \u2726 Ask Alec button appears in the top bar of Strategy and on the dashboard, report, planning and effectiveness pages of the other modules. Alec is sent the page name, a text snapshot of what\u2019s visible on screen (never passwords) and the recent conversation, using your org\u2019s active AI provider (or the one assigned to that task in the Agent Registry). It\u2019s off by default."}
 ];
 function helpPanelHtml(){
   const mod = MODULES.find(m=>m.id===THIS_MODULE) || {label:THIS_MODULE, desc:''};

@@ -228,6 +228,7 @@ window.closeFieldGuide=closeFieldGuide;
 <script src="shared/orgSwitcher.js"></script>
 <script src="shared/superAdminView.js"></script>
 <script src="shared/clientAdmin.js"></script>
+<script src="shared/askAlec.js"></script>
 <!-- 2026-09-28 (Stef: "filters + sort on columns") shared table sort/filter -->
 <script src="shared/tableTools.js"></script>
 <div id="authGate" style="display:none"></div>
@@ -1518,7 +1519,9 @@ const HELP_FAQ=[
   {q:"What's the difference between Simple and Expert mode?", a:'In Campaign Planning, Simple mode shows the core fields; Expert mode adds business case, sign-off, partner allocation and more \u2014 toggle it from Campaign Planning if your role allows it.'},
   {q:'What does Cross-region visibility mean?', a:'"Transparent" means you see every region in your organization. "Isolated" means you only see the regions specifically checked for you.'},
   {q:'What is Super Admin?', a:"Super Admin isn't a role in the Roles table \u2014 it's a separate flag on a login that gives full cross-organization visibility in Configuration, independent of any one organization's roles."},
-  {q:'What does the Super Admin cross-org view bar do?', a:'If you\u2019re a Super Admin, a bar appears letting you view this module as your own organization, all organizations merged, or one specific organization (and optionally one user within it). Switching to \u2018All\u2019 or another organization always starts read-only \u2014 editing is a separate, conscious click every time the view changes, and \u2018All\u2019 (merged data) can never be edited since there\u2019s no single organization to attribute a change to.'}
+  {q:'What does the Super Admin cross-org view bar do?', a:'If you\u2019re a Super Admin, a bar appears letting you view this module as your own organization, all organizations merged, or one specific organization (and optionally one user within it). Switching to \u2018All\u2019 or another organization always starts read-only \u2014 editing is a separate, conscious click every time the view changes, and \u2018All\u2019 (merged data) can never be edited since there\u2019s no single organization to attribute a change to.'},
+  /* 2026-09-29 */ {q:"What is Ask Alec and what does it see?", a:"Click \u2726 Ask Alec in the top bar (shown on Home and Forecast) to open a panel on the right where you can ask about what\u2019s on screen or for advice. Pin it (\ud83d\udccc) to keep it docked while you move between pages; the conversation stays until you clear it or reload. Alec is sent the page name, a text snapshot of what\u2019s visible on screen (headings, KPI tiles, the first rows of tables and visible field values \u2014 never passwords) and your last few messages, and answers only from that. It\u2019s off unless an admin turns it on in Configuration \u2192 Integrations, and uses your org\u2019s AI provider."},
+  /* 2026-09-29 */ {q:"How do I sort and filter a list?", a:"Click any column heading to sort (click again to reverse, a third time to clear). The row under the headings filters each column \u2014 type to match text, or pick from the dropdown when a column has only a few values. \"(x of y)\" by the first heading shows how many rows match. Sorting and filtering only change what you see; nothing is saved or reordered in the data."}
 ];
 function helpPanelHtml(){
   const mod = MODULES.find(m=>m.id===THIS_MODULE) || {label:THIS_MODULE, desc:''};
@@ -1721,6 +1724,15 @@ function tnSearchKey(ev){
   if(ev.key==='Escape'){ document.getElementById('tnResults').innerHTML=''; ev.target.blur(); }
 }
 window.tnSearchKey=tnSearchKey;
+/* 2026-09-29 (Stef: "ADD Ask Alec to all Dashboard / report / planning / effectiveness pages in all
+   modules"): the shared right-hand Ask Alec panel (shared/askAlec.js) -- same panel as Strategy,
+   shown on this module's dashboard/report/planning/effectiveness pages. */
+if(window.NorthAskAlec) NorthAskAlec.init({
+  moduleLabel:"Scoring", lsKey:"augur", taskId:"reg_scoring_assistant_task", pages:["home", "forecast"],
+  pageInfo: ()=>{ const p=PAGES.find(x=>x.id===UI.page); return { id:UI.page, label:p?p.label:UI.page }; },
+  starters:{"home": "Which deals should I focus on?", "forecast": "How realistic is this forecast?"},
+});
+
 function render(){
   /* Preserve focus + cursor position across the innerHTML replacement below -- needed so a
      live filter/search input (oninput -> render()) doesn't lose focus on every keystroke. */

@@ -256,6 +256,7 @@ window.closeFieldGuide=closeFieldGuide;
 <script src="shared/orgSwitcher.js"></script>
 <script src="shared/superAdminView.js"></script>
 <script src="shared/clientAdmin.js"></script>
+<script src="shared/aiRouter.js"></script>
 <script src="shared/askAlec.js"></script>
 <script src="shared/convertToMain.js"></script>
 <script src="shared/currencyOptions.js"></script>
@@ -1517,6 +1518,11 @@ async function wizIngestDocumentText(text){
   const w=UI.wizard; if(!w)return;
   w.docNote='Reading with AI…'; w.entryPath='form'; render();
   try{
+    let j;
+    if(window.NorthAI){   /* 2026-09-29: org AI policy + the user's choice (shared/aiRouter.js) */
+      try{ const r=await NorthAI.run({ area:'doc_extract', kind:'extract', input:text }); j={ok:true, fields:r.fields||{}}; }
+      catch(e){ if(e && (e.notConfigured||e.cancelled)){ wizParseDocumentText(text); return; } throw e; }
+    } else {
     const { data } = await sb.auth.getSession();
     const token = data && data.session && data.session.access_token;
     if(!token) throw new Error('Your own North session has expired -- sign in again.');
@@ -1524,9 +1530,10 @@ async function wizIngestDocumentText(text){
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ token, input_text:text, provider:CFG.aiProvider||undefined, model:CFG.aiModel||undefined })
     });
-    const j = await resp.json().catch(()=>({}));
+    j = await resp.json().catch(()=>({}));
     if(resp.status===501){ wizParseDocumentText(text); return; } // not configured yet -- quiet fallback
     if(!resp.ok || !j.ok) throw new Error(j.error||('AI request failed ('+resp.status+')'));
+    }
     const f=j.fields||{};
     let filled=false;
     if(f.name){ w.name=String(f.name).slice(0,120); filled=true; }
@@ -2745,6 +2752,16 @@ async function askAlecCampaign(campaignId){
     const filtered = {};
     Object.keys(fullContext).forEach(k=>{ if(allow.has(k)) filtered[k]=fullContext[k]; });
 
+    if(window.NorthAI){   /* 2026-09-29: org AI policy + the user's choice (shared/aiRouter.js) */
+      try{
+        const r = await NorthAI.run({ area:'content', prompt:skill.instructions, context:JSON.stringify(filtered), taskId:'reg_cursus_pipeline_gap_task' });
+        UI.askAlecCursus.status='done'; UI.askAlecCursus.text=r.text; render(); return;
+      }catch(e){
+        if(e && e.cancelled){ UI.askAlecCursus.open=false; render(); return; }
+        if(e && e.notConfigured){ UI.askAlecCursus.status='unavailable'; UI.askAlecCursus.error=e.message; render(); return; }
+        throw e;
+      }
+    }
     const { data } = await sb.auth.getSession();
     const token = data && data.session && data.session.access_token;
     if(!token) throw new Error('Your own North session has expired -- sign in again.');

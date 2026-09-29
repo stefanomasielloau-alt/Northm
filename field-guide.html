@@ -287,7 +287,7 @@
       <div class="faq">
         <details class="qa"><summary>What are the different ways to start a new campaign?</summary><p class="a">Fill the form, Answer a few questions, Upload a document, or Speak / dictate — all four land you in the same form to review before anything is created.</p></details>
         <details class="qa"><summary>Why can't I use Speak / dictate?</summary><p class="a">It uses your browser's own speech recognition, which works best in Chrome or Edge — Safari's support is inconsistent. Upload a document or Fill the form work everywhere.</p></details>
-        <details class="qa"><summary>Is AI document/dictation reading always available?</summary><p class="a">If your organization hasn't configured an AI provider yet (Configuration → LLM providers), upload and dictation still work — they fall back to a basic prefill (name, first two dates, a dollar amount) instead of full extraction.</p></details>
+        <details class="qa"><summary>Is AI document/dictation reading always available?</summary><p class="a">If your organization hasn't configured an AI provider yet (Configuration → AI &amp; agents), upload and dictation still work — they fall back to a basic prefill (name, first two dates, a dollar amount) instead of full extraction.</p></details>
         <details class="qa"><summary>What's the difference between Simple and Expert mode?</summary><p class="a">Simple mode shows the core fields; Expert mode adds business case, sign-off, partner allocation and more — toggle it if your role allows.</p></details>
       </div>
     </section>
@@ -466,7 +466,7 @@
         <h5>Switching one AI feature to a different provider, step by step</h5>
         <p>This is a real, previously-answered question from this org — here's the exact path:</p>
         <ol>
-          <li><b>Configure the provider first, if it isn't already.</b> Go to Configuration → LLM providers → add a row for the provider you want (say, Anthropic). Set its <b>Access type to API</b> — anything else won't show up as an assignable option in the next step.</li>
+          <li><b>Configure the provider first, if it isn't already.</b> Go to Configuration → AI &amp; agents → add a row for the provider you want (say, Anthropic). Set its <b>Access type to API</b> — anything else won't show up as an assignable option in the next step.</li>
           <li><b>Open the Agent Registry</b> — either here in Configuration, or AH's Settings → Library works identically since both write to the same catalog.</li>
           <li><b>Find and edit "Dashboard summary (Ask Alec)."</b></li>
           <li><b>Open the AI provider dropdown</b> — it now lists every <span class="mono">api</span>-type provider your org has configured. Pick Anthropic.</li>

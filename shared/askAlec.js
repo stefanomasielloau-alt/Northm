@@ -21,7 +21,7 @@
        isEnabled:()=>bool });               // optional; default reads org_settings once
      ...and call NorthAskAlec.sync() at the end of render(). */
 (function () {
-  var CSS = ":root{--asst-w:380px;--asst-top:56px}\n.asst{position:fixed;top:var(--asst-top);right:0;width:var(--asst-w);max-width:100vw;height:calc(100vh - var(--asst-top));\n  background:var(--surface);border-left:1px solid var(--line);box-shadow:-6px 0 24px rgba(16,24,43,.12);z-index:60;\n  display:flex;flex-direction:column;transform:translateX(105%);transition:transform .24s cubic-bezier(.4,0,.2,1);visibility:hidden}\n.asst.open{transform:none;visibility:visible}\nbody.asst-pinned .asst{box-shadow:none}\nbody.asst-pinned .wrap,body.asst-pinned .ctxbar{margin-right:var(--asst-w)}\nbody.asst-open #fbTrigger{right:min(calc(var(--asst-w) + 20px), calc(100vw - 68px)) !important}\n.asst-hd{display:flex;align-items:center;gap:6px;padding:10px 12px;border-bottom:1px solid var(--line);flex:0 0 auto}\n.asst-hd b{font-size:13.5px;color:var(--ink)}\n.asst-hd .pg{font-size:11px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}\n.asst-hd .sp{flex:1}\n.asst-ib{border:1px solid var(--line);background:#fff;border-radius:var(--r-sm);width:28px;height:26px;display:inline-flex;align-items:center;justify-content:center;color:var(--ink-2);font-size:13px;padding:0}\n.asst-ib:hover{background:var(--canvas);color:var(--ink)}\n.asst-ib[aria-pressed=\"true\"]{background:var(--nav);border-color:var(--nav);color:#fff}\n.asst-log{flex:1 1 auto;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:9px;background:var(--canvas)}\n.asst-msg{max-width:88%;padding:8px 11px;border-radius:10px;font-size:12.5px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word}\n.asst-msg.u{align-self:flex-end;background:var(--nav);color:#fff;border-bottom-right-radius:3px}\n.asst-msg.a{align-self:flex-start;background:#fff;border:1px solid var(--line);color:var(--ink);border-bottom-left-radius:3px}\n.asst-msg.w{align-self:stretch;max-width:none;background:var(--warn-bg);border-left:3px solid var(--warn);color:var(--ink-2);border-radius:var(--r-sm)}\n.asst-msg.e{align-self:stretch;max-width:none;background:var(--bad-bg);border-left:3px solid var(--bad);color:var(--ink-2);border-radius:var(--r-sm)}\n.asst-msg.typing{color:var(--ink-3);font-style:italic}\n.asst-intro{font-size:12px;color:var(--ink-2);line-height:1.5}\n.asst-sugg{display:flex;flex-direction:column;gap:6px;margin-top:8px}\n.asst-sugg button{text-align:left;border:1px solid var(--line);background:#fff;border-radius:16px;padding:6px 11px;font-size:12px;color:var(--ink-2)}\n.asst-sugg button:hover{border-color:var(--nav);color:var(--nav)}\n.asst-ft{flex:0 0 auto;border-top:1px solid var(--line);padding:9px 10px;background:var(--surface)}\n.asst-ft textarea{width:100%;resize:none;min-height:40px;max-height:140px;border:1px solid var(--line);border-radius:var(--r-sm);padding:7px 9px;font:inherit;font-size:12.5px;box-sizing:border-box}\n.asst-ft textarea:disabled{background:var(--canvas)}\n.asst-ft .row2{display:flex;align-items:center;gap:8px;margin-top:6px}\n.asst-ft .hint{font-size:10.5px;color:var(--ink-3);flex:1}\n#tnAsstBtn[aria-expanded=\"true\"]{background:var(--nav);border-color:var(--nav);color:#fff}\n@media(max-width:860px){body.asst-pinned .wrap,body.asst-pinned .ctxbar{margin-right:0}}\n@media print{.asst{display:none !important}body.asst-pinned .wrap,body.asst-pinned .ctxbar{margin-right:0 !important}}\n.asst-explain{display:block;width:100%;margin-top:10px;text-align:left;border:1px solid var(--nav);background:#fff;color:var(--nav);border-radius:var(--r-sm);padding:8px 11px;font-size:12.5px;font-weight:600;cursor:pointer}\n.asst-explain:hover{background:var(--nav);color:#fff}\n.asst-explain:disabled{opacity:.5;cursor:default}";
+  var CSS = ":root{--asst-w:380px;--asst-top:56px}\n.asst{position:fixed;top:var(--asst-top);right:0;width:var(--asst-w);max-width:100vw;height:calc(100vh - var(--asst-top));\n  background:var(--surface);border-left:1px solid var(--line);box-shadow:-6px 0 24px rgba(16,24,43,.12);z-index:60;\n  display:flex;flex-direction:column;transform:translateX(105%);transition:transform .24s cubic-bezier(.4,0,.2,1);visibility:hidden}\n.asst.open{transform:none;visibility:visible}\nbody.asst-pinned .asst{box-shadow:none}\nbody.asst-pinned .wrap,body.asst-pinned .ctxbar{margin-right:var(--asst-w)}\nbody.asst-open #fbTrigger{right:min(calc(var(--asst-w) + 20px), calc(100vw - 68px)) !important}\n.asst-hd{display:flex;align-items:center;gap:6px;padding:10px 12px;border-bottom:1px solid var(--line);flex:0 0 auto}\n.asst-hd b{font-size:13.5px;color:var(--ink)}\n.asst-hd .pg{font-size:11px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}\n.asst-hd .sp{flex:1}\n.asst-ib{border:1px solid var(--line);background:#fff;border-radius:var(--r-sm);width:28px;height:26px;display:inline-flex;align-items:center;justify-content:center;color:var(--ink-2);font-size:13px;padding:0}\n.asst-ib:hover{background:var(--canvas);color:var(--ink)}\n.asst-ib[aria-pressed=\"true\"]{background:var(--nav);border-color:var(--nav);color:#fff}\n.asst-using{display:flex;align-items:center;gap:8px;padding:5px 12px;font-size:11.5px;color:var(--ink-2);border-bottom:1px solid var(--line);background:var(--surface)}.asst-using:empty{display:none}.asst-using span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.asst-using button{border:none;background:none;color:var(--nav);font-size:11.5px;cursor:pointer;text-decoration:underline;padding:0}\n.asst-log{flex:1 1 auto;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:9px;background:var(--canvas)}\n.asst-msg{max-width:88%;padding:8px 11px;border-radius:10px;font-size:12.5px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word}\n.asst-msg.u{align-self:flex-end;background:var(--nav);color:#fff;border-bottom-right-radius:3px}\n.asst-msg.a{align-self:flex-start;background:#fff;border:1px solid var(--line);color:var(--ink);border-bottom-left-radius:3px}\n.asst-msg.w{align-self:stretch;max-width:none;background:var(--warn-bg);border-left:3px solid var(--warn);color:var(--ink-2);border-radius:var(--r-sm)}\n.asst-msg.e{align-self:stretch;max-width:none;background:var(--bad-bg);border-left:3px solid var(--bad);color:var(--ink-2);border-radius:var(--r-sm)}\n.asst-msg.typing{color:var(--ink-3);font-style:italic}\n.asst-intro{font-size:12px;color:var(--ink-2);line-height:1.5}\n.asst-sugg{display:flex;flex-direction:column;gap:6px;margin-top:8px}\n.asst-sugg button{text-align:left;border:1px solid var(--line);background:#fff;border-radius:16px;padding:6px 11px;font-size:12px;color:var(--ink-2)}\n.asst-sugg button:hover{border-color:var(--nav);color:var(--nav)}\n.asst-ft{flex:0 0 auto;border-top:1px solid var(--line);padding:9px 10px;background:var(--surface)}\n.asst-ft textarea{width:100%;resize:none;min-height:40px;max-height:140px;border:1px solid var(--line);border-radius:var(--r-sm);padding:7px 9px;font:inherit;font-size:12.5px;box-sizing:border-box}\n.asst-ft textarea:disabled{background:var(--canvas)}\n.asst-ft .row2{display:flex;align-items:center;gap:8px;margin-top:6px}\n.asst-ft .hint{font-size:10.5px;color:var(--ink-3);flex:1}\n#tnAsstBtn[aria-expanded=\"true\"]{background:var(--nav);border-color:var(--nav);color:#fff}\n@media(max-width:860px){body.asst-pinned .wrap,body.asst-pinned .ctxbar{margin-right:0}}\n@media print{.asst{display:none !important}body.asst-pinned .wrap,body.asst-pinned .ctxbar{margin-right:0 !important}}\n.asst-explain{display:block;width:100%;margin-top:10px;text-align:left;border:1px solid var(--nav);background:#fff;color:var(--nav);border-radius:var(--r-sm);padding:8px 11px;font-size:12.5px;font-weight:600;cursor:pointer}\n.asst-explain:hover{background:var(--nav);color:#fff}\n.asst-explain:disabled{opacity:.5;cursor:default}";
   var C = null;
   var S = { open: false, pinned: false, msgs: [], busy: false, built: false, lastQ: '', lastKind: '', enabledFlag: null, loadingFlag: false };
 
@@ -146,6 +146,10 @@
     } catch (e) { return {}; }
   }
   async function callAI(prompt, context, taskId) {
+    /* 2026-09-29 (Stef: "users choose API / desktop / web ... org mandates / approves"): shared/aiRouter.js decides
+       which AI answers (org policy + the user's pick) and runs it -- API, own key, local model, or a web/desktop
+       hand-off with paste-back. The old direct Hub call below stays as the fallback if that script isn't loaded. */
+    if (window.NorthAI) { var r = await window.NorthAI.run({ area: C.area || 'ask_alec', prompt: prompt, context: context, taskId: taskId }); return r.text; }
     var sb = g('sb'), CONTACT_URL = g('CONTACT_URL');
     var sess = await sb.auth.getSession();
     var token = sess && sess.data && sess.data.session && sess.data.session.access_token;
@@ -163,7 +167,8 @@
     return out;
   }
   function pushErr(e) {
-    if (e && e.notConfigured) { S.msgs.push({ role: 'warn', text: 'The AI provider isn’t configured yet (' + e.message + '). An admin can set one up under Configuration → LLM providers.' }); S.lastQ = ''; return; }
+    if (e && e.cancelled) { S.msgs.push({ role: 'warn', text: 'No answer added — you cancelled the hand-off. Ask again any time, or change how Alec answers with the ⚙ button.' }); S.lastQ = ''; return; }
+    if (e && e.notConfigured) { S.msgs.push({ role: 'warn', text: 'The AI provider isn’t configured yet (' + e.message + '). An admin can set one up under Configuration → AI & agents.' }); S.lastQ = ''; return; }
     var raw = (e && e.message) != null ? e.message : e;
     S.msgs.push({ role: 'error', text: 'Couldn’t get an answer: ' + (typeof raw === 'string' ? raw : (function () { try { return JSON.stringify(raw); } catch (_e) { return String(raw); } })()) });
   }
@@ -175,14 +180,17 @@
     el.id = 'asstPanel'; el.className = 'asst no-print';
     el.setAttribute('role', 'complementary'); el.setAttribute('aria-label', 'Ask Alec');
     el.innerHTML = '<div class="asst-hd"><b>&#10022; Ask Alec</b><span class="pg" id="asstPg"></span><span class="sp"></span>' +
+      '<button class="asst-ib" id="asstAiSet" type="button" onclick="NorthAskAlec.aiSettings()" aria-label="AI settings: choose which AI answers" title="Choose which AI answers (API, your own key, web or desktop app)">&#9881;</button>' +
       '<button class="asst-ib" id="asstClear" type="button" onclick="NorthAskAlec.clear()" aria-label="Clear conversation" title="Clear conversation">&#8634;</button>' +
       '<button class="asst-ib" id="asstPin" type="button" onclick="NorthAskAlec.togglePin()" aria-pressed="false" aria-label="Pin panel open" title="Pin: keep the panel docked open">&#128204;</button>' +
       '<button class="asst-ib" id="asstClose" type="button" onclick="NorthAskAlec.close()" aria-label="Close Ask Alec" title="Close (Esc)">&times;</button></div>' +
+      '<div class="asst-using" id="asstUsing"></div>' +
       '<div class="asst-log" id="asstLog" aria-live="polite"></div>' +
       '<div class="asst-ft"><textarea id="asstInput" rows="2" placeholder="Ask Alec about this screen..." aria-label="Ask Alec about this screen" onkeydown="NorthAskAlec.key(event)"></textarea>' +
       '<div class="row2"><span class="hint">Enter to send &middot; Shift+Enter for a new line</span>' +
       '<button class="btn sm pri" id="asstSendBtn" type="button" onclick="NorthAskAlec.sendFromInput()" aria-label="Send question">Send</button></div></div>';
     document.body.appendChild(el);
+    if (window.NorthAI) { window.NorthAI.onChange(renderUsing); window.NorthAI.load().then(renderUsing, function () {}); }
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && S.open && !S.pinned) close(); });
     var fixTop = function () { var tn = document.getElementById('topnav'); var b = tn && tn.offsetParent !== null ? Math.max(0, tn.getBoundingClientRect().bottom) : 0; document.documentElement.style.setProperty('--asst-top', Math.round(b) + 'px'); };
     window.addEventListener('resize', fixTop); window.addEventListener('scroll', fixTop, { passive: true });
@@ -236,11 +244,21 @@
     if (inp) { inp.disabled = !on; inp.placeholder = on ? 'Ask Alec about this screen...' : (pending ? 'Checking whether Ask Alec is on...' : 'Ask Alec is off -- see note above'); }
     if (btn) btn.disabled = !on || S.busy;
   }
+  /* "Using: ChatGPT · web app  [change]" line under the header (2026-09-29) */
+  function renderUsing() {
+    var u = document.getElementById('asstUsing'); if (!u) return;
+    if (!window.NorthAI || !window.NorthAI._state.key) { u.innerHTML = ''; return; }
+    var d = window.NorthAI.describe(C.area || 'ask_alec');
+    u.innerHTML = '<span>Answering with <b>' + esc(d.text) + '</b>' + (d.locked ? ' &#128274;' : '') + '</span>' +
+      '<button type="button" onclick="NorthAskAlec.aiSettings()">' + (d.locked ? 'Details' : 'Change') + '</button>';
+  }
+  function aiSettings() { if (window.NorthAI) window.NorthAI.openSettings(C.area || 'ask_alec'); }
   function sync() {
     if (!C) return;
     build();
     var pg = document.getElementById('asstPg'); if (pg) pg.textContent = '· ' + pageInfo().label;
     apply(); renderLog();
+    if (window.NorthAI) window.NorthAI.load().then(renderUsing, function () {});
   }
   function open() { S.open = true; apply(); renderLog(); setTimeout(function () { var i = document.getElementById('asstInput'); if (i && !i.disabled) i.focus(); else { var c = document.getElementById('asstClose'); if (c) c.focus(); } }, 60); }
   function close() { S.open = false; apply(); var tb = document.getElementById('tnAsstBtn'); if (tb && tb.style.display !== 'none') tb.focus(); }
@@ -298,5 +316,5 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hook); else hook();
   }
   window.NorthAskAlec = { init: init, sync: sync, open: open, close: close, toggle: toggle, togglePin: togglePin, clear: clear, key: key,
-    send: send, sendFromInput: sendFromInput, retry: retry, explain: explain, snapshot: snapshot, _state: S };
+    send: send, sendFromInput: sendFromInput, aiSettings: aiSettings, retry: retry, explain: explain, snapshot: snapshot, _state: S };
 })();

@@ -365,6 +365,7 @@ window.closeFieldGuide=closeFieldGuide;
 <script src="shared/orgSwitcher.js"></script>
 <script src="shared/superAdminView.js"></script>
 <script src="shared/clientAdmin.js"></script>
+<script src="shared/aiRouter.js"></script>
 <script src="shared/askAlec.js"></script>
 <!-- 2026-09-28 (Stef: "filters + sort on columns"; "Edit layout" on the report drill-down) -->
 <script src="shared/tableTools.js"></script>
@@ -1234,15 +1235,24 @@ async function icpIngestBrief(text){
   UI.icpIngest = UI.icpIngest || {open:true,status:'idle',note:''};
   UI.icpIngest.open = true; UI.icpIngest.status = 'loading'; UI.icpIngest.note = 'Reading with AI…'; render();
   try{
+    let j, resp={status:200,ok:true};
+    if(window.NorthAI){   /* 2026-09-29: org AI policy + the user's choice (shared/aiRouter.js) */
+      try{ const r=await NorthAI.run({ area:'doc_extract', kind:'extract', input:text, prompt:icpExtractPrompt() }); j={ok:true, fields:r.fields||{}}; }
+      catch(e){
+        if(e && e.cancelled){ UI.icpIngest.status='idle'; UI.icpIngest.note=''; render(); return; }
+        if(e && e.notConfigured){ resp={status:501,ok:false}; j={error:e.message}; } else throw e;
+      }
+    } else {
     const { data } = await sb.auth.getSession();
     const token = data && data.session && data.session.access_token;
     if(!token) throw new Error('Your own North session has expired -- sign in again.');
-    const resp = await fetch(CONTACT_URL+'/admin/ai-extract', {
+    resp = await fetch(CONTACT_URL+'/admin/ai-extract', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ token, input_text:text, prompt:icpExtractPrompt(), provider:icpActiveLlmProvider()||undefined })
     });
-    const j = await resp.json().catch(()=>({}));
-    if(resp.status===501){ UI.icpIngest.status='unavailable'; UI.icpIngest.note="AI isn't configured yet (Configuration -> LLM providers) -- add a filter manually below instead."; render(); return; }
+    j = await resp.json().catch(()=>({}));
+    }
+    if(resp.status===501){ UI.icpIngest.status='unavailable'; UI.icpIngest.note="AI isn't configured yet (Configuration -> AI & agents) -- add a filter manually below instead."; render(); return; }
     if(!resp.ok || !j.ok) throw new Error(j.error||('AI request failed ('+resp.status+')'));
     const f0=j.fields||{};
     const f={id:uid('flt'),name:'New filter',industry:'',whatYouSell:'',idealClient:'',dealValue:0,currency:'AUD',market:'National',country:'',companySize:'',targetTitles:'',seniority:[],updatedAt:new Date().toISOString().slice(0,10)};

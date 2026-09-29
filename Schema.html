@@ -64,7 +64,20 @@ body{font-family:var(--sans); background:var(--canvas); color:var(--ink); font-s
 .navi.on{background:var(--canvas-2);border-left-color:var(--nav);color:var(--ink);font-weight:700}
 .navi .ix{width:16px; text-align:center; font-size:11px; color:var(--ink-3);}
 .navi.on .ix{color:var(--nav)}
-.main{flex:1; padding:18px 22px; max-width:1280px;}
+.main{flex:1; padding:18px 22px; max-width:none; min-width:0;} /* 2026-09-29 (Stef: "width, editor menu, plain-English intros") */
+.scroll{overflow-x:auto;max-width:100%}
+.main .card{min-width:0} .main .card>.bd{overflow-x:auto} /* wide tables scroll inside their card, never widen the page */
+.howbox{background:#F6F8FB;border:1px solid var(--line);border-radius:var(--r);padding:4px 14px;margin-bottom:14px;font-size:12.5px;color:var(--ink-2)}
+.howbox .hb-title{font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);padding:8px 0 4px}
+.howbox .hb-row{display:grid;grid-template-columns:110px 1fr;gap:12px;padding:7px 0;border-top:1px solid var(--line-2);line-height:1.45}
+.howbox .hb-row:first-of-type{border-top:none}
+.howbox .hb-k{font-weight:700;display:flex;align-items:flex-start;gap:6px;white-space:nowrap}
+.howbox .hb-k i{width:8px;height:8px;border-radius:50%;display:inline-block;margin-top:5px;flex-shrink:0}
+.howbox .hb-live i{background:var(--ok)} .howbox .hb-can i{background:var(--nav)} .howbox .hb-next i{background:var(--warn)}
+.howbox a{color:var(--nav)}
+.side .nav-hide{display:block;margin:10px 14px 0;font-size:11.5px;color:var(--ink-3);text-decoration:none} .side .nav-hide:hover{color:var(--ink)}
+@media (max-width:760px){ .howbox .hb-row{grid-template-columns:1fr;gap:2px} }
+@media (max-width:1300px){ .fl-editor .inspector.fl-insp{width:320px} }
 .main.tight{padding:0; max-width:none;}
 .phead{display:flex; align-items:flex-start; gap:14px; margin-bottom:14px;}
 .phead h1{font-size:19px; margin:0 0 3px;}
@@ -473,6 +486,12 @@ const NODE_TYPES = {
 const CFG = {};
 
 const UI = { page:'home', helpOpen:false, workflowId:null, mode:'select', selKind:null, selId:null, connectFromId:null, zoom:1 };
+/* 2026-09-29 (Stef: "width, editor menu, plain-English intros"): the left menu stays in the flow editor unless hidden (remembered per browser) */
+const EDITOR_NAV_KEY='northm_schema_editor_nav_hidden';
+try{ UI.editorNavHidden = localStorage.getItem(EDITOR_NAV_KEY)==='1'; }catch(e){ UI.editorNavHidden=false; }
+function setEditorNav(hidden){ UI.editorNavHidden=!!hidden; try{ localStorage.setItem(EDITOR_NAV_KEY, hidden?'1':'0'); }catch(e){} render(); }
+function toggleEditorNav(){ setEditorNav(!UI.editorNavHidden); }
+window.setEditorNav=setEditorNav; window.toggleEditorNav=toggleEditorNav;
 let drag=null; /* {id,dx,dy} -- transient, not part of CFG */
 let connectDrag=null; /* {fromId} -- transient, item 49 drag-to-connect handle, not part of CFG */
 let undoStack=[]; /* {nodes,edges} snapshots for the open workflow -- transient, not persisted */
@@ -1761,8 +1780,10 @@ function pageAutomations(){
       checks" to evaluate now, or leave this page open — it also auto-checks every 5 minutes while open (see note
       by the button).</p></details></div>
     <div class="sp"></div><button class="btn pri" ${isViewer()?'disabled':''} onclick="runAutomations()">Run checks now</button></div>`;
-  h+=`<p class="mini" style="margin:-10px 0 14px;color:var(--ink-2)">Also auto-checks every 5 minutes while this page is open. For true background automation even
-    when no one has it open, ask about deploying a Supabase Edge Function + scheduled job.</p>`;
+  h+=howBoxHtml( /* 2026-09-29 (Stef: "width, editor menu, plain-English intros") */
+    'Automation rules run today: they\'re checked when someone opens this page and every 5 minutes while it stays open (not when nobody has it open), and can alert people, email, post to Slack/Teams or queue an AI agent brief.',
+    'Use any rule as a bundle in a flow, or build multi-action bundles to reuse across flows and steps. Run checks now evaluates the rules immediately.',
+    'Multi-action bundles are kept in this browser only until the next phase, when bundles will be shared with your team and run automatically inside flows — including when nobody has this page open.');
   h+=flBundlesCardHtml(); /* 2026-09-29 (Stef: follow-ups to 2a) */
   h+=`<h2 class="fl-sec">Automation rules <span class="mini" style="font-weight:400">— the legacy engine; each rule is also a bundle</span></h2>`;
 
@@ -1801,8 +1822,8 @@ function pageAutomations(){
           <div class="mini" style="margin-top:2px;color:var(--ink-2)">${esc(targetSummary(a))}</div>`;
       }
       return `<tr>
-      <td><input class="cel txt" style="width:150px" value="${esc(a.name)}" onchange="setIn('automations','${a.id}','name',this.value)"></td>
-      <td><select class="cel txt" style="width:170px" onchange="setIn('automations','${a.id}','triggerType',this.value)">
+      <td><input class="cel txt" style="width:140px" value="${esc(a.name)}" onchange="setIn('automations','${a.id}','name',this.value)"></td>
+      <td><select class="cel txt" style="width:150px" onchange="setIn('automations','${a.id}','triggerType',this.value)">
         <option value="campaign_signoff_status" ${a.triggerType==='campaign_signoff_status'?'selected':''}>Campaign sign-off status</option>
         <option value="task_overdue" ${a.triggerType==='task_overdue'?'selected':''}>Task overdue</option>
         <option value="deal_stage_reached" ${a.triggerType==='deal_stage_reached'?'selected':''}>Deal stage reached</option>
@@ -1853,7 +1874,7 @@ function pageAutomations(){
         <option value="log_note" ${a.actionType==='log_note'?'selected':''}>Log a note</option>
         <option value="alert_people" ${a.actionType==='alert_people'?'selected':''}>Alert people</option>
       </select></td>
-      <td><input class="cel txt" style="width:190px" placeholder="default message" value="${esc(a.actionMessage)}" onchange="setIn('automations','${a.id}','actionMessage',this.value)"></td>
+       <td><input class="cel txt" style="width:150px" placeholder="default message" value="${esc(a.actionMessage)}" onchange="setIn('automations','${a.id}','actionMessage',this.value)"></td>
       <td>${targetPickerHtml}</td>
       <td>${isAlert
         ? `<select class="cel txt" style="width:130px" onchange="setIn('automations','${a.id}','actionChatDestId',this.value)">
@@ -1881,7 +1902,7 @@ function pageAutomations(){
         <option value="slack_webhook" ${d.type==='slack_webhook'?'selected':''}>Slack (incoming webhook)</option>
         <option value="teams_webhook" ${d.type==='teams_webhook'?'selected':''}>Teams (incoming webhook)</option>
       </select></td>
-      <td><input class="cel txt" style="width:260px" placeholder="https://…" value="${esc(d.target)}" onchange="setIn('agentDestinations','${d.id}','target',this.value)"></td>
+       <td><input class="cel txt" style="width:200px" placeholder="https://…" value="${esc(d.target)}" onchange="setIn('agentDestinations','${d.id}','target',this.value)"></td>
       <td class="n"><button class="btn sm ${d.isOrgDefault?'pri':''}" ${canConfig()?'':'disabled'} onclick="setAgentDestinationDefault('${d.id}')">${d.isOrgDefault?'Default':'Make default'}</button></td>
       <td class="n"><button class="btn sm dgr" ${canConfig()?'':'disabled'} onclick="removeAgentDestination('${d.id}')">Remove</button></td></tr>`).join('')}
     </tbody></table></div>
@@ -2312,12 +2333,16 @@ function pageList(){
   let h=`<div class="phead"><div><h1>Flows &amp; diagrams</h1>
     <p>Custom flows are processes you build — they can branch, run in parallel, wait and loop — from triggers, conditions, waits and actions, then check and
       simulate against real records. System flows are North's built-in processes (see <a href="#" onclick="go('rules');return false">System processes</a>) opened on the same canvas.
-      Diagrams are plain drawings. Nothing in a flow runs automatically yet (phase 2b).</p></div>
+      Diagrams are plain drawings.</p></div>
     <div class="sp"></div><div class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end">
       <select class="in" id="flOpenBuiltin" onchange="if(this.value){flOpenAsFlow(this.value);}"><option value="">Open a system process as a flow…</option>
         ${PR_PROCS.map(p=>`<option value="${p.key}">${esc(p.label)}${flFindBuiltin(p.key)?' (open existing)':''}</option>`).join('')}</select>
       <button class="btn pri" id="flNewBtn" ${canNew?'':'disabled'} onclick="flNew()">+ New custom flow</button>
       <button class="btn" onclick="openWorkflow(addWorkflow())">+ New diagram</button></div></div>`;
+  h+=howBoxHtml( /* 2026-09-29 (Stef: "width, editor menu, plain-English intros") */
+    'Flows and diagrams are saved for your whole team. Checks and Simulate use your live records.',
+    'Build custom flows, open a system process as a flow, attach automation bundles and hand off between flows, then check and simulate them — simulating never sends anything.',
+    'Flows don\'t run on their own yet — that arrives in the next phase. Multi-action bundles and system-process triggers attached to a flow are kept in this browser until then.');
   const list=CFG.workflows.slice().sort((a,b)=>(flIsFlow(b)?1:0)-(flIsFlow(a)?1:0));
   h+=`<div class="card"><h3>Flows &amp; diagrams <span class="sp"></span><span class="mini" style="font-weight:400">Click a column to sort · filter under each heading</span><span class="pill n">${CFG.workflows.length}</span></h3>
     <div class="bd flush" style="overflow-x:auto"><table id="flList" class="tt"><thead><tr><th>Name</th><th>Type</th><th>Kind</th><th>System process</th><th>Status</th><th>Checks</th><th>Simulated</th><th class="n">Nodes</th><th>Updated</th><th></th></tr></thead><tbody>
@@ -2345,7 +2370,7 @@ function pageList(){
         <label class="btn sm pri">Import from Configuration…<input type="file" accept="application/json" style="display:none" onchange="handleNormaImportFile(this.files[0])"></label>
       </div></div></div></div>`;
   h+=`<div class="card"><h3>Local autosave</h3><div class="bd">
-    <p class="mini" style="margin:0 0 8px">Your diagrams save to this browser automatically. Local only — use Import/Export for anything that needs to travel.</p>
+    <p class="mini" style="margin:0 0 8px">A backup copy of your flows and diagrams is also kept in this browser. (They are saved for your team either way.)</p>
     <button class="btn sm dgr" onclick="clearLocal()">Clear local autosave</button></div></div>`;
   return h;
 }
@@ -3123,16 +3148,16 @@ function pageRules(){
   if(!PRU.step && steps.length) PRU.step=steps[0].key;
   const ruleCounts=prRuleCountsByStep(P.key);
   const rules=prRules();
-  let h=`<div class="phead"><div><h1>System processes <span class="pill pr-prev">Triggers in preview</span></h1>
+  let h=`<div class="phead"><div><h1>System processes</h1>
     <p>The processes North already runs — campaign sign-off, deals, events, tasks, asset stock and more — step by step, with live counts. Add triggers to any step
       (<b>WHEN</b> something happens there, <b>IF</b> conditions hold, <b>THEN</b> run actions) or open a process as a flow to build around it.
-      To build your own process, use <a href="#" onclick="go('list');return false">Flows &amp; diagrams</a> (custom flows).</p></div>
+</p></div>
     <div class="sp"></div><button class="btn" onclick="prTestAll()">Test all</button></div>`;
-  h+=`<div class="note pr-note"><b>Preview — nothing on this page runs.</b> Triggers you add here are drafts saved in this browser only, and “Test against live data”
-    is a dry run with no emails, alerts, webhooks or writes. What actually runs today lives on <a href="#" onclick="go('automations');return false">Automation bundles</a>;
-    a draft that maps onto an existing automation rule can be published there. Your custom flows and diagrams are listed below too.
-    ${PR_DATA.loading?'<span class="mini"> · Loading full record details…</span>':''}
-    <div style="margin-top:6px"><b>Open as flow</b> puts a system process on the flow canvas with its steps locked, so you can add branches, waits, loops, bundles and hand-offs around it, then check and simulate it.</div></div>`; /* 2026-09-29 (Stef: "Phase 2a flows") */
+  /* 2026-09-29 (Stef: "width, editor menu, plain-English intros") */
+  h+=howBoxHtml(
+    'North\'s built-in processes, with how many records are at each step right now. Click a count to see them.'+(PR_DATA.loading?' <span class="mini">Loading full record details…</span>':''),
+    'Add triggers to a step and test them against live data (nothing is sent), or open the process as a flow to build around it. To build your own process, use <a href="#" onclick="go(\'list\');return false">Flows &amp; diagrams</a>.',
+    'Triggers you add here don\'t run on their own yet, and they\'re kept in this browser only (not shared with your team) until automatic running arrives in the next phase. If you want something to run today, use <b>Publish as automation</b> — it creates a normal automation rule, switched off until you turn it on in <a href="#" onclick="go(\'automations\');return false">Automation bundles</a>.');
   h+=`<div class="pr-layout"><div class="pr-procs card"><h3>System processes</h3><div class="bd flush">
     ${all.map((p,i)=>p.isDiagram?'':`<a href="#" class="pr-proc ${p.key===P.key?'on':''}" onclick="prSelectProcIx(${i});return false"><span>${esc(p.label)}</span><span class="pr-cnt">${p.noCounts?'—':prRecords(p).length}</span></a>`).join('')}
     <div class="pr-sub">Custom flows &amp; diagrams</div>
@@ -3141,7 +3166,7 @@ function pageRules(){
   </div></div><div class="pr-body">`;
   /* stage strip */
   h+=`<div class="card"><h3>${esc(P.label)} <span class="mini" style="font-weight:400">${P.isDiagram?(flIsFlow(P.wf)?'custom flow':'diagram')+' — no live counts':P.noCounts?'counts not available here':(recs.length+' '+esc(P.obj.toLowerCase())+(recs.length===1?'':'s')+' · '+(PR_DATA.src[P.table]==='full'?'live':'basic fields'))}</span>
-    <span class="sp"></span><button class="btn sm" disabled title="Personal watches arrive in phase 2b">👁 Watch this (coming in phase 2b)</button>
+    <span class="sp"></span><button class="btn sm" disabled title="Personal watches arrive in the next phase">👁 Watch this (coming next)</button>
     ${P.isDiagram?`<button class="btn sm pri" id="prOpenCustom" onclick="openWorkflow('${esc(P.wf.id)}')">${flIsFlow(P.wf)?'Open flow':'Open in editor'}</button>`:`<button class="btn sm pri" id="prOpenFlow" onclick="flOpenAsFlow('${esc(P.key)}')">${flFindBuiltin(P.key)?'Open flow':'Open as flow'}</button>`}</h3>
     <div class="bd"><div class="pr-strip">${steps.length?steps.map((s,i)=>{
       const n=(P.isDiagram||P.noCounts)?null:recs.filter(r=>r.step===s.key).length;
@@ -3172,7 +3197,7 @@ function pageRules(){
     ${here.length?prRuleRows(here):'<div class="empty" style="padding:8px">No triggers here yet. Add one to describe what should happen when a record reaches or sits at this step.</div>'}
   </div></div>`;
   const others=rules.filter(r=>!(r.procKey===P.key && r.step===PRU.step));
-  h+=`<div class="card"><h3>All draft triggers <span class="pill n">${rules.length}</span><span class="sp"></span><span class="pr-draft">Draft — saved in this browser only, nothing runs yet</span></h3><div class="bd ${others.length?'flush':''}">
+  h+=`<div class="card"><h3>All draft triggers <span class="pill n">${rules.length}</span><span class="sp"></span><span class="pr-draft">Kept in this browser · doesn't run on its own yet</span></h3><div class="bd ${others.length?'flush':''}">
     ${others.length?prRuleRows(others,true):`<div class="mini">${rules.length?'All your draft triggers are at the step shown above.':'None yet.'}</div>`}</div></div>`;
   h+=prDryHtml();
   h+=`</div></div>`;
@@ -3429,7 +3454,7 @@ function flOpenAsFlow(pk){
   });
   logAudit('add flow','Opened built-in process as a flow: '+P.label);
   openWorkflow(id);
-  { const wid=Math.max(...w.nodes.map(n=>n.x+nodeDef(n).w))+40; UI.zoom=Math.max(0.5,Math.min(1,Math.floor(1080/wid*10)/10)); render(); } /* fit the generated flow on screen */
+  flFit(); /* fit the generated flow into the canvas width actually available (menu shown or hidden) */
   toast('Opened "'+P.label+'" as a flow'+(drafts.length?(' with '+(drafts.length-skipped)+' draft trigger'+((drafts.length-skipped)===1?'':'s')):'')+'.');
   return id;
 }
@@ -3574,7 +3599,7 @@ function flBundleToLibrary(){
   const n=flSel(), w=currentWorkflow(); if(!n||!w) return; const b=(w.flow.bundles||[]).find(x=>x.id===(n.config||{}).bundleId); if(!b) return;
   const lib=flLib(); const ex=lib.find(x=>x.name===b.name);
   if(ex){ ex.actions=JSON.parse(JSON.stringify(b.actions)); ex.savedAt=new Date().toISOString(); } else lib.push({id:uid('b'),name:b.name,actions:JSON.parse(JSON.stringify(b.actions)),savedAt:new Date().toISOString()});
-  if(flLibSave(lib)) toast('Saved to the org bundle library (this browser only until phase 2b).');
+  if(flLibSave(lib)) toast('Saved to the org bundle library (this browser only until the next phase).');
 }
 Object.assign(window,{flBundlePick,flBundleRename,flBundleToLibrary});
 /* 2026-09-29 (Stef: "follow-ups to 2a"): things attached to a node -- bundles (run when the flow reaches it), system-process
@@ -4262,7 +4287,7 @@ function flFlowSettingsHtml(w,ro){
     <div class="field"><label class="lbl">Linked from</label><div class="mini" id="flBacklinks">${(()=>{ const bl=flBacklinks(w); return bl.length?bl.map(x=>`<div><a href="#" onclick="flOpenLinked('${esc(x.f.id)}');return false">${esc(x.f.name)}</a> — ${esc(x.how)} at “${esc(flNodeTitle(x.n))}”</div>`).join(''):'No other flow hands off to this one.'; })()}</div></div>
     <div class="field"><label class="lbl">Hands off to</label><div class="mini">${(()=>{ const out=(w.nodes||[]).filter(n=>flHandoff(n)); return out.length?out.map(n=>{ const tf=byId(CFG.workflows||[],flHandoff(n).flowId); return `<div>“${esc(flNodeTitle(n))}” → ${tf?`<a href="#" onclick="flOpenLinked('${esc(tf.id)}');return false">${esc(tf.name)}</a>`:'missing flow'}</div>`; }).join(''):'None.'; })()}</div></div>
     <div class="field"><label class="lbl">Bundles in this flow</label><div class="mini">${(f.bundles||[]).length?(f.bundles||[]).map(b=>esc(b.name)+' ('+(b.actions||[]).length+')').join(', '):'None yet — add a Bundle node.'}</div></div>
-    <div class="dv"></div><p class="mini">Nothing in a flow runs yet (phase 2b). Build it, check it, and simulate it against real records here.</p>
+    <div class="dv"></div><p class="mini">Flows don't run on their own yet — that arrives in the next phase. Build, check and simulate against real records here; simulating never sends anything.</p>
     <p class="mini">Tip: select a node, then use “Add” — the new node is placed and connected after it.</p>`;
 }
 function flStatusPill(w){ const f=w.flow||{}; return f.status==='ready'?'<span class="rag rag-green">Ready</span>':'<span class="rag rag-grey">Draft</span>'; }
@@ -4316,6 +4341,7 @@ function flPageEditor(w, diagInspector){
   return `<div class="editor fl-editor">
     <div style="flex:1;display:flex;flex-direction:column;min-width:0">
       <div class="toolbar">
+        <button class="btn sm" id="navToggle" onclick="toggleEditorNav()" title="${UI.editorNavHidden?'Show the left menu':'Hide the left menu for more canvas room'}">${UI.editorNavHidden?'⟩ Show menu':'⟨ Hide menu'}</button>
         <a class="btn sm" href="#" onclick="go('list');return false">← Flows &amp; diagrams</a>
         <div class="dv"></div>
         <input class="cel" style="width:200px" value="${esc(w.name)}" ${dis} onchange="renameWorkflow('${w.id}',this.value)">
@@ -4333,7 +4359,7 @@ function flPageEditor(w, diagInspector){
         <button class="btn sm" onclick="undo()" ${undoStack.length&&!ro?'':'disabled'} title="Ctrl/Cmd+Z">Undo</button>
         <button class="btn sm dgr" onclick="deleteSelected()" ${(!UI.selId||ro)?'disabled':''}>Delete</button>
         <div class="dv"></div>
-        <button class="btn sm" onclick="setZoom(-0.1)">−</button><button class="btn sm" onclick="resetZoom()">${Math.round(zoom*100)}%</button><button class="btn sm" onclick="setZoom(0.1)">+</button>
+        <button class="btn sm" onclick="setZoom(-0.1)">−</button><button class="btn sm" onclick="resetZoom()">${Math.round(zoom*100)}%</button><button class="btn sm" onclick="setZoom(0.1)">+</button><button class="btn sm" id="fitBtn" onclick="flFit()" title="Fit the whole flow in the space available">Fit</button>
         <button class="btn sm" onclick="exportDiagramSvg()">Export SVG</button>
       </div>
       <div class="canvaswrap">
@@ -4367,6 +4393,7 @@ function flPageEditorDiagram(w, inspector){
   return `<div class="editor fl-editor">
     <div style="flex:1;display:flex;flex-direction:column;min-width:0">
       <div class="toolbar">
+        <button class="btn sm" id="navToggle" onclick="toggleEditorNav()" title="${UI.editorNavHidden?'Show the left menu':'Hide the left menu for more canvas room'}">${UI.editorNavHidden?'⟩ Show menu':'⟨ Hide menu'}</button>
         <a class="btn sm" href="#" onclick="go('list');return false">← Flows &amp; diagrams</a>
         <div class="dv"></div>
         <input class="cel" style="width:200px" value="${esc(w.name)}" ${dis} onchange="renameWorkflow('${w.id}',this.value)">
@@ -4387,7 +4414,7 @@ function flPageEditorDiagram(w, inspector){
         <button class="btn sm" onclick="undo()" ${undoStack.length&&!ro?'':'disabled'} title="Ctrl/Cmd+Z">Undo</button>
         <button class="btn sm dgr" onclick="deleteSelected()" ${(!UI.selId||ro)?'disabled':''}>Delete</button>
         <div class="dv"></div>
-        <button class="btn sm" onclick="setZoom(-0.1)">−</button><button class="btn sm" onclick="resetZoom()">${Math.round(zoom*100)}%</button><button class="btn sm" onclick="setZoom(0.1)">+</button>
+        <button class="btn sm" onclick="setZoom(-0.1)">−</button><button class="btn sm" onclick="resetZoom()">${Math.round(zoom*100)}%</button><button class="btn sm" onclick="setZoom(0.1)">+</button><button class="btn sm" id="fitBtn" onclick="flFit()" title="Fit the whole flow in the space available">Fit</button>
         <button class="btn sm" onclick="exportDiagramSvg()">Export SVG</button>
       </div>
       <div class="canvaswrap">
@@ -4410,6 +4437,30 @@ function flPageEditorDiagram(w, inspector){
         <div class="dv"></div>${inspector}</div>
     </div>
   </div>`;
+}
+
+/* 2026-09-29 (Stef: "width, editor menu, plain-English intros"): zoom so the whole flow fits the canvas area that's actually available -- measured from the
+   live .canvaswrap when it's on screen, else estimated from the window minus the menu and the right panel. */
+function flCanvasAvail(){
+  const cw=document.querySelector('.canvaswrap');
+  if(cw && cw.clientWidth>100) return {w:cw.clientWidth-24, h:cw.clientHeight-24};
+  return {w:window.innerWidth-(UI.editorNavHidden?0:210)-370-40, h:window.innerHeight-200};
+}
+function flFit(){
+  const w=currentWorkflow(); if(!w||!w.nodes.length){ UI.zoom=1; render(); return; }
+  const a=flCanvasAvail();
+  const maxX=Math.max(...w.nodes.map(n=>n.x+nodeDef(n).w))+(w.nodes.some(n=>typeof flHandoff==='function'&&flHandoff(n))?260:40);
+  const maxY=Math.max(...w.nodes.map(n=>n.y+nodeDef(n).h))+40;
+  UI.zoom=Math.max(0.4,Math.min(1,Math.floor(Math.min(a.w/maxX, a.h/maxY)*10)/10));
+  render();
+}
+window.flFit=flFit;
+/* the three-row "How this page works" box used on Flows & diagrams, System processes and Automation bundles */
+function howBoxHtml(live,can,next){
+  return `<div class="howbox"><div class="hb-title">How this page works</div>
+    <div class="hb-row hb-live"><div class="hb-k"><i></i>Live now</div><div>${live}</div></div>
+    <div class="hb-row hb-can"><div class="hb-k"><i></i>You can</div><div>${can}</div></div>
+    <div class="hb-row hb-next"><div class="hb-k"><i></i>Coming next</div><div>${next}</div></div></div>`;
 }
 
 /* ---------- Automation bundles page: the bundle library (2026-09-29 follow-ups) ---------- */
@@ -4442,7 +4493,7 @@ Object.assign(window,{lbNew,lbEdit,lbCancel,lbSave,lbDelete,lbSet,lbActSet,lbAct
 function lbEditorHtml(){
   const e=LBU.editing; if(!e) return '';
   return `<div class="mask" onclick="if(event.target===this)lbCancel()"><div class="modal pr-modal">
-    <h3 style="display:flex;align-items:center;gap:8px">${e.isNew?'New':'Edit'} multi-action bundle <span class="sp"></span><span class="pr-draft">Saved in this browser until phase 2b</span></h3>
+    <h3 style="display:flex;align-items:center;gap:8px">${e.isNew?'New':'Edit'} multi-action bundle <span class="sp"></span><span class="pr-draft">Kept in this browser until the next phase</span></h3>
     <div class="bd"><div class="pr-f wide"><label class="lbl">Name</label><input class="in" id="lbName" style="width:100%" value="${esc(e.name)}" oninput="lbSet('name',this.value)"></div>
     <div style="margin-top:10px">${e.actions.map((a,i)=>`<div class="pr-act"><div class="row" style="gap:6px;margin-bottom:8px"><span class="pr-num">${i+1}</span>
       <select class="in" onchange="lbActType(${i},this.value)">${PR_ACTION_TYPES.map(([v,l])=>`<option value="${v}" ${a.type===v?'selected':''}>${esc(l)}</option>`).join('')}</select><span class="sp"></span>
@@ -4479,13 +4530,14 @@ const NAV_PAGES=[
   {id:'automations', ix:'3', label:'Automation bundles'}
 ];
 function renderSide(){
-  if(UI.page==='editor') return '';
+  if(UI.page==='editor' && UI.editorNavHidden) return ''; /* 2026-09-29 (Stef: "width, editor menu, plain-English intros") */
   let h='<h4>Process Maps</h4>';
   NAV_PAGES.forEach(p=>{
     const on=UI.page===p.id || (p.id==='list'&&UI.page==='editor');
     h+=`<a class="navi ${on?'on':''}" href="#" onclick="go('${p.id}');return false">
       <span class="ix">${p.ix}</span><span>${p.label}</span></a>`;
   });
+  if(UI.page==='editor') h+=`<a href="#" class="nav-hide" onclick="setEditorNav(true);return false" title="Hide this menu to give the canvas more room">⟨ Hide menu</a>`;
   h+=moduleVersionFooterHtml('Process Maps','v0.2708.6');
   return h;
 }
@@ -4522,11 +4574,11 @@ const HELP_FAQ=[
   /* 2026-09-28 (Stef: "Process Maps as a rules engine") */
   {q:'What are System processes?', a:'System processes are the processes North already runs \u2014 campaign sign-off, the deal pipeline, event and task lifecycles, asset stock, campaign budget alerts, plan edits needing commit and lead to deal. The System processes page shows each one step by step with a live count of records at each step (click a count to see them). You can add draft triggers to any step (WHEN something happens there, IF conditions hold, THEN run actions) and test them against live data, or open the process as a flow on the canvas. To build your own process, use Flows & diagrams.'},
   /* 2026-09-29 (Stef: "Phase 2a flows") */
-  {q:'What is a flow? (custom vs system)', a:'A flow is a process on the Flows & diagrams canvas that can branch, run steps in parallel, wait and loop. A custom flow is one you build; a system flow is one of North\u2019s system processes opened on the canvas, with its steps locked. Both can be checked and simulated. It starts from one or more triggers (for example a campaign entering Submitted), routes records through conditions, waits and actions, and finishes at an End. In this phase flows are designed, checked and simulated \u2014 nothing in a flow runs automatically yet (that is phase 2b). Plain diagrams still work exactly as before.'},
+  {q:'What is a flow? (custom vs system)', a:'A flow is a process on the Flows & diagrams canvas that can branch, run steps in parallel, wait and loop. A custom flow is one you build; a system flow is one of North\u2019s system processes opened on the canvas, with its steps locked. Both can be checked and simulated. It starts from one or more triggers (for example a campaign entering Submitted), routes records through conditions, waits and actions, and finishes at an End. In this phase flows are designed, checked and simulated \u2014 nothing in a flow runs automatically yet (that arrives in the next phase). Plain diagrams still work exactly as before.'},
   {q:'What node types can a flow have?', a:'Trigger (when to start), Condition (named paths plus Else), Wait (a duration, until a date, or until an event, with a timeout path), Action (note, alert, email, task, escalation, calculation, webhook, AI agent or chat message), Bundle (an automation bundle \u2014 a saved set of actions; every automation rule is one), Split and Join (parallel branches; join on all, any or the first N), Subflow (start another flow), Step (a process step) and End (an outcome). A connector back to an earlier node is a loop and needs a max repeats setting.'},
   {q:'How does Simulate work?', a:'Open a flow, go to the Simulate tab, pick a real record and click Step or Run to end. The canvas highlights the path taken (parallel branches too), each condition shows why it went that way, and each action shows exactly what it would send with placeholders filled in. Turn on Fast-forward waits to pretend days have passed so timeouts and escalations can be tested. Simulate all records runs every record and counts where they end up. Nothing is sent or written.'},
   {q:'What are built-in steps?', a:'When you open a system process (campaign sign-off, deals, events, tasks, asset stock, budget alerts, plan commits or lead to deal) as a flow, its real steps appear as locked built-in steps. You can add triggers, conditions and actions around them, but you cannot rename or delete them, because they mirror how the process works in North. Checks on the Checks tab make sure every path reaches an End, conditions have an Else, waits have a timeout and loops have a limit.'},
-  {q:'What are Automation bundles?', a:'An automation bundle packages up a set of actions \u2014 a note, alerts, emails, tasks, webhooks, AI agent briefs, chat messages \u2014 so you can reuse it in any flow: drop it in as a Bundle node, or attach it to a step so it runs when the flow reaches that step. Every automation rule is a bundle (and still runs as today on the legacy engine); multi-action bundles you build are saved in this browser until phase 2b. The library shows how many flows use each bundle.'},
+  {q:'What are Automation bundles?', a:'An automation bundle packages up a set of actions \u2014 a note, alerts, emails, tasks, webhooks, AI agent briefs, chat messages \u2014 so you can reuse it in any flow: drop it in as a Bundle node, or attach it to a step so it runs when the flow reaches that step. Every automation rule is a bundle (and still runs as today on the legacy engine); multi-action bundles you build are saved in this browser until the next phase. The library shows how many flows use each bundle.'},
   {q:'How do I link one flow to another?', a:'Select any node or step and, under Attached, choose Continue in flow to hand off to another custom or system flow (optionally at a specific step). A \u201c\u21aa Flow name\u201d chip appears on the canvas \u2014 click it to open that flow \u2014 and the other flow lists this one under Linked from. Simulate follows the record into the linked flow (up to 5 hand-offs), and Checks flag any chain that loops back on itself. A Subflow node is different: it calls another flow and then carries on.'},
   {q:'Do system-process triggers run?', a:'No. Triggers on System processes are drafts saved in your browser only \u2014 other people cannot see them and nothing is sent, written or called. \u201cTest against live data\u201d is a dry run that shows which current records would match and exactly what each action would do, with placeholders filled in. If a trigger maps onto an existing automation (for example a campaign entering Submitted with alert/email/chat actions), an admin can use \u201cPublish as automation\u201d to create it, disabled, on the Automations page \u2014 that is what actually runs.'}
 ];
@@ -4676,7 +4728,7 @@ function render(){
   document.getElementById('tnLinks').innerHTML=renderFilteredTnLinks();
   document.getElementById('tnAcct').innerHTML=renderTnAcct();
   side.innerHTML=renderSide();
-  side.style.display=UI.page==='editor'?'none':'';
+  side.style.display=(UI.page==='editor' && UI.editorNavHidden)?'none':''; /* 2026-09-29 (Stef: "width, editor menu, plain-English intros") */
   /* 2026-09-10 (live incident fix, applied fleet-wide after Ordo/Strategy's crash-loop
      -- see running-log): wrap page-specific render so a bug/data gap in ONE page shows a
      clear in-page message instead of breaking navigation (or looping sign-out during

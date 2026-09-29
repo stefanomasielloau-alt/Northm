@@ -136,8 +136,12 @@
     }
     try {
       var map = { 'Anthropic': 'anthropic', 'OpenAI': 'openai', 'Google Gemini': 'gemini' };
-      var res = await sb.from('llm_providers').select('kind,model').eq('org_id', orgId()).eq('enabled', true).limit(1).maybeSingle();
+      /* 2026-09-29 (Stef: "test the AI"): only an Active row whose access type is API can be called; a Desktop/Web app row
+         just records manual use, so it falls back to Hub-Backend's own default instead of naming a provider with no key. */
+      var res = await sb.from('llm_providers').select('kind,model,access_type').eq('org_id', orgId()).eq('enabled', true).limit(1).maybeSingle();
+      if (res.error) res = await sb.from('llm_providers').select('kind,model').eq('org_id', orgId()).eq('enabled', true).limit(1).maybeSingle();
       if (res.error || !res.data || !map[res.data.kind]) return {};
+      if (res.data.access_type && res.data.access_type !== 'api') return {};
       return { provider: map[res.data.kind], model: res.data.model || undefined };
     } catch (e) { return {}; }
   }

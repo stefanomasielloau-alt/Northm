@@ -5731,8 +5731,11 @@ async function activeLlmProviderOverride(taskId, token){
   }
   try{
     const ambientOrgId = (typeof _savOrgFilter!=='undefined' && _savOrgFilter!==null) ? _savOrgFilter : _orgId;
-    const { data, error } = await sb.from('llm_providers').select('kind,model').eq('org_id',ambientOrgId).eq('enabled',true).limit(1).maybeSingle();
+    /* 2026-09-29: only an API-access Active row names a provider (a Desktop/Web app row falls back to Hub-Backend's default) */
+    let { data, error } = await sb.from('llm_providers').select('kind,model,access_type').eq('org_id',ambientOrgId).eq('enabled',true).limit(1).maybeSingle();
+    if(error) ({ data, error } = await sb.from('llm_providers').select('kind,model').eq('org_id',ambientOrgId).eq('enabled',true).limit(1).maybeSingle());
     if(error || !data) return {};
+    if(data.access_type && data.access_type!=='api') return {};
     const provider = LLM_KIND_TO_PROVIDER[data.kind];
     if(!provider) return {};
     return { provider, model: data.model || undefined };

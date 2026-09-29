@@ -884,9 +884,13 @@ async function loadFromSupabase(){
      just falls back to its own env-var default in that case. */
   CFG.aiProvider = null; CFG.aiModel = null;
   try{
-    const { data: activeLlm, error: llmErr } = await sb.from('llm_providers')
-      .select('kind,model').eq('org_id',_orgId).eq('enabled',true).limit(1).maybeSingle();
+    /* 2026-09-29: only an API-access Active row names a provider (a Desktop/Web app row falls back to Hub-Backend's default) */
+    let { data: activeLlm, error: llmErr } = await sb.from('llm_providers')
+      .select('kind,model,access_type').eq('org_id',_orgId).eq('enabled',true).limit(1).maybeSingle();
+    if(llmErr) ({ data: activeLlm, error: llmErr } = await sb.from('llm_providers')
+      .select('kind,model').eq('org_id',_orgId).eq('enabled',true).limit(1).maybeSingle());
     if(llmErr) throw llmErr;
+    if(activeLlm && activeLlm.access_type && activeLlm.access_type!=='api') activeLlm=null;
     if(activeLlm){
       const kindMap = {'Google Gemini':'gemini','Anthropic':'anthropic','OpenAI':'openai'};
       CFG.aiProvider = kindMap[activeLlm.kind] || null;

@@ -141,7 +141,7 @@ export async function tick(env, deps) {
     const body = JSON.stringify({ org_id: o.id, hub_org_slug: o.slug || '', run_id: run.id, node_id: nodeId, idempotency_key: run.id + ':' + nodeId + ':' + attempt,
       record: rec ? { type: rec.type || 'none', id: rec.id == null ? null : String(rec.id), name: rec.name || '', fields: rec.fields || {} } : { type: 'none', id: null, name: '', fields: {} }, action });
     const ts = String(Math.floor(now / 1000));
-    const sig = await hmacHex(crypto, env.FLOW_DISPATCH_SECRET, ts + '.' + body);
+    const sig = await hmacHex(crypto, String(env.FLOW_DISPATCH_SECRET).trim(), ts + '.' + body); /* 2026-09-29: trimmed, same as Hub's _secret() */
     stats.dispatched++;
     try {
       const res = await deps.fetch(HUB + '/flows/dispatch', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Flow-Timestamp': ts, 'X-Flow-Signature': sig }, body });

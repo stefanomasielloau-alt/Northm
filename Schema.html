@@ -196,6 +196,76 @@ svg.canvas{display:block; cursor:default;}
 .pr-mname{font-weight:600;font-size:12.5px}
 .pr-match ol{margin:3px 0 4px;padding-left:20px;font-size:12px;color:var(--ink-2)}
 .pr-match li{margin:2px 0;word-break:break-word}
+/* 2026-09-29 (Stef: "Phase 2a flows"): flow canvas */
+.main.tight{min-width:0}
+.node .fl-hitbox,.fl-node .fl-hitbox{stroke:none!important;fill:transparent!important}
+.fl-editor .inspector.fl-insp{width:370px;padding:0;display:flex;flex-direction:column}
+.fl-tabs{display:flex;border-bottom:1px solid var(--line);background:var(--canvas);flex-shrink:0}
+.fl-tabs a{flex:1;text-align:center;padding:10px 6px;font-size:12.5px;font-weight:600;color:var(--ink-2);text-decoration:none;border-bottom:2px solid transparent}
+.fl-tabs a.on{color:var(--ink);border-bottom-color:var(--nav);background:var(--surface)}
+.fl-badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;font-size:10.5px;font-weight:800;line-height:17px;margin-left:3px}
+.fl-badge.bad{background:var(--bad-bg);color:var(--bad)} .fl-badge.ok{background:var(--ok-bg);color:var(--ok)}
+.fl-panel{padding:14px;overflow-y:auto;flex:1}
+.fl-panel .dv{height:1px;background:var(--line-2);margin:12px 0}
+.fl-palette{background:var(--canvas);padding:6px 12px}
+.fl-palette .fl-add{padding:3px 8px}
+.fl-flowpill{background:#E3E8FD;color:#1F3AC7}
+.fl-kindhead{display:flex;align-items:center;gap:6px;margin-bottom:10px}
+.fl-kchip{font-size:11px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;background:var(--canvas-2);color:var(--ink-2);padding:3px 9px;border-radius:12px}
+.fl-kchip.fl-k-trigger{background:#E3E8FD;color:#1F3AC7} .fl-kchip.fl-k-condition{background:var(--warn-bg);color:var(--warn)}
+.fl-kchip.fl-k-action{background:var(--ok-bg);color:var(--ok)} .fl-kchip.fl-k-bundle{background:var(--input-bg);color:var(--input)}
+.fl-kchip.fl-k-end{background:#E7EAF0;color:#5B6472}
+.fl-path{border:1px solid var(--line);border-radius:var(--r);padding:8px;margin-bottom:8px;background:var(--canvas)}
+.fl-group{border:1px dashed var(--line);border-radius:6px;padding:6px;margin-top:6px;background:#fff}
+.fl-join{font-size:10px;font-weight:800;color:var(--ink-3);text-align:center;margin-top:4px}
+.fl-rule select.in{max-width:118px}
+.fl-erow{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:5px}
+.fl-erow .mini{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fl-act{background:#fff;max-width:100%;overflow:hidden} .fl-act .row>select.in{flex:1;min-width:0} .fl-fs{border:none;padding:0;margin:0;min-width:0}
+.fl-fs .pr-f{flex-basis:100%}
+.fl-ok{background:var(--ok-bg);color:var(--ok);font-weight:700;padding:10px 12px;border-radius:var(--r);margin-bottom:8px}
+.fl-checklist{margin:6px 0 0;padding-left:18px}
+.fl-issue{display:flex;gap:8px;padding:8px 10px;border:1px solid var(--line);border-left:3px solid var(--bad);border-radius:6px;margin-bottom:6px;color:var(--ink);text-decoration:none;font-size:12px;background:#fff}
+.fl-issue.warn{border-left-color:var(--warn)} .fl-issue span{font-weight:800;color:var(--bad)} .fl-issue.warn span{color:var(--warn)}
+.fl-issue:hover{background:var(--canvas-2)}
+.fl-result{padding:9px 11px;border-radius:var(--r);background:var(--canvas-2);font-size:12px;margin-bottom:8px}
+.fl-result.wait{background:#EEF2F8;color:var(--ink-2)} .fl-result.ok{background:var(--ok-bg);color:#0B6B4A} .fl-result.bad{background:var(--warn-bg);color:#8A5310}
+.fl-log{margin:0;padding-left:18px;font-size:11.5px;color:var(--ink-2)}
+.fl-log li{margin-bottom:7px} .fl-log li a{font-weight:700;color:var(--ink);text-decoration:none}
+.fl-log li div{margin-top:2px;word-break:break-word}
+.fl-log li.bad a{color:var(--bad)} .fl-log li.wait a{color:var(--warn)} .fl-log li.end a{color:var(--ok)} .fl-log li.muted{opacity:.6}
+.fl-alltab td,.fl-alltab th{font-size:11.5px}
+/* canvas shapes */
+.fl-node text{font-size:12px;font-weight:600}
+.fl-node .fl-cap{font-size:9.5px;font-weight:800;letter-spacing:.06em;fill:var(--ink-3)}
+.fl-node .fl-sub{font-size:10.5px;font-weight:400;fill:var(--ink-2)}
+.fl-node .fl-lock{font-size:11px}
+.fl-trigger rect{fill:#EEF2FD;stroke:#1F3AC7} .fl-trigger .fl-accent{fill:#1F3AC7;stroke:none}
+.fl-trigger .fl-cap{fill:#1F3AC7}
+.fl-condition polygon{fill:#FFF8EC;stroke:var(--warn)} .fl-condition .fl-cap{fill:var(--warn)}
+.fl-wait rect{fill:#fff;stroke:#7C879E;stroke-dasharray:6,4}
+.fl-action rect{fill:#fff;stroke:var(--ok)} .fl-action .fl-cap{fill:var(--ok)}
+.fl-bundle rect{fill:#FBF8FF;stroke:var(--input)} .fl-bundle .fl-inner{fill:none;stroke:var(--input);stroke-width:1;opacity:.5} .fl-bundle .fl-cap{fill:var(--input)}
+.fl-subflow rect{fill:#fff;stroke:#0E7C6B} .fl-subflow .fl-inner{stroke:#0E7C6B;stroke-width:1.2} .fl-subflow .fl-cap{fill:#0E7C6B}
+.fl-split rect,.fl-join rect{fill:var(--ink);stroke:var(--ink)} .fl-node .fl-bar-t{fill:#fff;font-size:9.5px;font-weight:800;letter-spacing:.05em}
+.fl-end circle{fill:#fff;stroke:var(--ink-2);stroke-width:2} .fl-end .fl-end-inner{fill:#F2F4F8;stroke:var(--ink-2);stroke-width:1}
+.fl-end text{font-size:10.5px}
+.fl-step rect{fill:#fff;stroke:var(--nav)}
+.fl-builtin rect{fill:#E9EDF4;stroke:#7C879E}
+.fl-node.sel rect,.fl-node.sel polygon,.fl-node.sel circle{stroke:var(--bad);stroke-width:2.4}
+.fl-node.sim-hit rect,.fl-node.sim-hit polygon,.fl-node.sim-hit circle:first-of-type{stroke:#1F9D6B;stroke-width:3}
+.fl-node.sim-hit{filter:drop-shadow(0 0 4px rgba(31,157,107,.35))}
+.fl-node.sim-cur rect,.fl-node.sim-cur polygon,.fl-node.sim-cur circle:first-of-type{stroke:#1F3AC7;stroke-width:3;stroke-dasharray:5,3}
+.fl-node.sim-wait rect,.fl-node.sim-wait polygon{stroke:var(--warn);stroke-width:3}
+.fl-node.sim-stuck rect,.fl-node.sim-stuck polygon,.fl-node.sim-stuck circle:first-of-type{stroke:var(--bad);stroke-width:3}
+.fl-node.sim-end circle:first-of-type{fill:var(--ok-bg);stroke:#1F9D6B}
+.fl-edge .fl-hit{stroke:transparent;stroke-width:12;fill:none}
+.fl-edge.fl-timeout path:not(.fl-hit){stroke-dasharray:6,4;stroke:var(--warn)}
+.fl-edge.fl-loop path:not(.fl-hit){stroke-dasharray:3,3}
+.fl-edge.fl-else path:not(.fl-hit){stroke:var(--ink-3)}
+.fl-edge.sim-edge path:not(.fl-hit){stroke:#1F9D6B;stroke-width:3;stroke-dasharray:none}
+.fl-edge .fl-elab{font-size:10.5px;font-weight:700;fill:var(--ink-2);paint-order:stroke;stroke:#F2F4F8;stroke-width:4px;stroke-linejoin:round}
+.fl-anchor{stroke:#7C879E;stroke-width:1.2;stroke-dasharray:2,4}
 @media (max-width:860px){
   .pr-layout{flex-direction:column}
   .pr-procs{width:100%;position:static}
@@ -463,10 +533,7 @@ async function deleteRow(table, id, rowOrgId){
 async function saveToSupabase(){
   if(!_orgId) return;
   await Promise.all([
-    upsertRows('schema_workflows', CFG.workflows, w=>({
-      id:w.id,name:w.name,description:w.description||'',updated_at:w.updatedAt||null,
-      tracking_ref:w.trackingRef||null,lanes:w.lanes||[],nodes:w.nodes||[],edges:w.edges||[]
-    })),
+    upsertRows('schema_workflows', CFG.workflows, w=>flRowForSave(w)), /* 2026-09-29 (Stef: "Phase 2a flows"): flow meta -- column when present, else hidden meta node */
     upsertRows('schema_automations', CFG.automations, a=>({
       id:a.id,name:a.name||'',trigger_type:a.triggerType||'campaign_signoff_status',trigger_value:a.triggerValue||'',
       action_type:a.actionType||'log_note',action_message:a.actionMessage||'',enabled:!!a.enabled,
@@ -608,6 +675,8 @@ async function loadFromSupabase(){
     id:w.id,orgId:w.org_id,name:w.name,description:w.description||'',updatedAt:w.updated_at||'',
     trackingRef:w.tracking_ref||null,lanes:w.lanes||[],nodes:w.nodes||[],edges:w.edges||[]
   }));
+  /* 2026-09-29 (Stef: "Phase 2a flows"): probe schema_workflows.flow once (fail-soft); flow meta comes from the column or the hidden meta node */
+  await flProbeAndHydrate(orgScoped);
   CFG.automations = (automationsR.data||[]).map(a=>({
     id:a.id,orgId:a.org_id,name:a.name||'',triggerType:a.trigger_type||'campaign_signoff_status',triggerValue:a.trigger_value||'',
     actionType:a.action_type||'log_note',actionMessage:a.action_message||'',actionTargetAgent:!!a.action_target_agent,enabled:a.enabled!==false,
@@ -1012,7 +1081,7 @@ window.exportDiagramSvg=exportDiagramSvg;
 
 /* ---------- swimlanes ---------- */
 function addLane(){
-  if(isViewer()){ toast('Your role is read-only — diagram editing is disabled.'); return; }
+  if(wfEditBlocked()) return; /* 2026-09-29 (Stef: "Phase 2a flows") */
   const w=currentWorkflow(); if(!w) return;
   w.lanes=w.lanes||[];
   const y=w.lanes.length?Math.max(...w.lanes.map(l=>l.y+l.height)):0;
@@ -1021,7 +1090,7 @@ function addLane(){
 }
 window.addLane=addLane;
 function removeLane(id){
-  if(isViewer()){ toast('Your role is read-only — diagram editing is disabled.'); return; }
+  if(wfEditBlocked()) return; /* 2026-09-29 (Stef: "Phase 2a flows") */
   const w=currentWorkflow(); if(!w) return;
   w.lanes=(w.lanes||[]).filter(l=>l.id!==id);
   w.nodes.forEach(n=>{ if(n.laneId===id) n.laneId=null; });
@@ -1029,7 +1098,7 @@ function removeLane(id){
 }
 window.removeLane=removeLane;
 function setLane(id,key,val){
-  if(isViewer()){ toast('Your role is read-only — diagram editing is disabled.'); return; }
+  if(wfEditBlocked()) return; /* 2026-09-29 (Stef: "Phase 2a flows") */
   const w=currentWorkflow(); if(!w) return;
   const l=byId(w.lanes||[],id); if(!l) return;
   l[key]=(key==='y'||key==='height')?(parseFloat(val)||0):val;
@@ -1037,7 +1106,7 @@ function setLane(id,key,val){
 }
 window.setLane=setLane;
 function setNodeLane(nodeId,laneId){
-  if(isViewer()){ toast('Your role is read-only — diagram editing is disabled.'); return; }
+  if(wfEditBlocked()) return; /* 2026-09-29 (Stef: "Phase 2a flows") */
   const w=currentWorkflow(); if(!w) return;
   const n=byId(w.nodes,nodeId); if(!n) return;
   n.laneId=laneId||null;
@@ -1085,6 +1154,7 @@ function addWorkflow(){
 }
 window.addWorkflow=addWorkflow;
 function removeWorkflow(id){
+  { const _w=byId(CFG.workflows,id); if(_w && wfEditBlocked(_w)) return; } /* 2026-09-29 (Stef: "Phase 2a flows") */
   if(!confirm('Delete this workflow diagram? This cannot be undone.'))return;
   CFG.workflows=CFG.workflows.filter(w=>w.id!==id);
   if(UI.workflowId===id){ UI.workflowId=null; UI.page='list'; }
@@ -1093,12 +1163,12 @@ function removeWorkflow(id){
 }
 window.removeWorkflow=removeWorkflow;
 function renameWorkflow(id,name){
-  if(isViewer()){ toast('Your role is read-only — diagram editing is disabled.'); return; }
+  if(wfEditBlocked(byId(CFG.workflows,id))) return; /* 2026-09-29 (Stef: "Phase 2a flows") */
   const w=byId(CFG.workflows,id); if(!w)return; w.name=name; w.updatedAt=new Date().toISOString().slice(0,10); render();
 }
 window.renameWorkflow=renameWorkflow;
 function setWorkflowDescription(id,desc){
-  if(isViewer()){ toast('Your role is read-only — diagram editing is disabled.'); return; }
+  if(wfEditBlocked(byId(CFG.workflows,id))) return; /* 2026-09-29 (Stef: "Phase 2a flows") */
   const w=byId(CFG.workflows,id); if(!w)return; w.description=desc; render();
 }
 window.setWorkflowDescription=setWorkflowDescription;
@@ -1650,7 +1720,8 @@ async function pushAgentDispatch(dispatchId){
 window.pushAgentDispatch=pushAgentDispatch;
 
 function pageAutomations(){
-  let h=`<div class="phead"><div><h1>Automations</h1>
+  let h=`<div class="phead"><div><h1>Automations <span class="pill">legacy — use as bundles</span></h1>
+    <p style="margin-bottom:6px"><b>Flows are the new home for automation.</b> “Use as bundle” saves a rule's action to the bundle library so a flow's Bundle node can reuse it.</p>
     <p>Simple rules that either log a quiet note or raise an alert when their trigger fires — both write to the
       shared audit log, which (as of phase12) also toasts live to anyone with this org open right now. Triggers:
       a campaign reaching a sign-off status, a task going overdue, a deal reaching a stage, an event reaching a
@@ -1769,7 +1840,7 @@ function pageAutomations(){
       <td><input type="checkbox" ${a.enabled?'checked':''} onchange="setIn('automations','${a.id}','enabled',this.checked,'bool')"></td>
       <td class="mini">${a.lastRunAt?F.dt(a.lastRunAt):'never'}</td>
       <td class="n calc">${(a.firedIds||[]).length}</td>
-      <td class="n"><button class="btn sm dgr" ${canConfig()?'':'disabled'} onclick="removeAutomation('${a.id}')">Remove</button></td></tr>`;
+      <td class="n"><div class="row" style="gap:4px;justify-content:flex-end"><button class="btn sm" onclick="flAutomationToLibrary('${a.id}')" title="Save this rule's action to the org bundle library for use in flows">Use as bundle</button><button class="btn sm dgr" ${canConfig()?'':'disabled'} onclick="removeAutomation('${a.id}')">Remove</button></div></td></tr>`;
     }).join('')}
     </tbody></table></div></div></div>`;
 
@@ -1823,7 +1894,7 @@ window.openWorkflow=openWorkflow;
 
 /* ---------- node/edge editing (plain, independently testable functions) ---------- */
 function addNode(type){
-  if(isViewer()){ toast('Your role is read-only — diagram editing is disabled.'); return; }
+  if(wfEditBlocked()) return; /* 2026-09-29 (Stef: "Phase 2a flows") */
   const w=currentWorkflow(); if(!w)return;
   pushUndo();
   const def=NODE_TYPES[type]||NODE_TYPES.process;
@@ -1834,8 +1905,9 @@ function addNode(type){
 }
 window.addNode=addNode;
 function removeNode(id){
-  if(isViewer()){ toast('Your role is read-only — diagram editing is disabled.'); return; }
+  if(wfEditBlocked()) return; /* 2026-09-29 (Stef: "Phase 2a flows") */
   const w=currentWorkflow(); if(!w)return;
+  { const _n=byId(w.nodes,id); if(_n&&_n.builtin){ toast('Built-in step — add actions around it.'); return; } } /* 2026-09-29 (Stef: "Phase 2a flows") */
   pushUndo();
   w.nodes=w.nodes.filter(n=>n.id!==id);
   w.edges=w.edges.filter(e=>e.fromId!==id && e.toId!==id);
@@ -1844,7 +1916,7 @@ function removeNode(id){
 }
 window.removeNode=removeNode;
 function moveNodeTo(id,x,y){
-  if(isViewer())return; /* dragging is never initiated for a Viewer (see nodeMouseDown), but
+  if(wfReadOnly())return; /* 2026-09-29 (Stef: "Phase 2a flows") */ /* dragging is never initiated for a Viewer (see nodeMouseDown), but
     guard here too since this is exported on window and reachable from the mousemove handler. */
   const w=currentWorkflow(); if(!w)return;
   const n=byId(w.nodes,id); if(!n)return;
@@ -1852,9 +1924,9 @@ function moveNodeTo(id,x,y){
 }
 window.moveNodeTo=moveNodeTo;
 function setNodeLabel(id,label){
-  if(isViewer()){ toast('Your role is read-only — diagram editing is disabled.'); return; }
+  if(wfEditBlocked()) return; /* 2026-09-29 (Stef: "Phase 2a flows") */
   const w=currentWorkflow(); if(!w)return;
-  const n=byId(w.nodes,id); if(!n)return; pushUndo(); n.label=label; render();
+  const n=byId(w.nodes,id); if(!n)return; if(n.builtin){ toast('Built-in step — add actions around it.'); render(); return; } pushUndo(); n.label=label; render(); /* 2026-09-29 (Stef: "Phase 2a flows") */
 }
 window.setNodeLabel=setNodeLabel;
 
@@ -1870,35 +1942,35 @@ window.setNodeLabel=setNodeLabel;
    no natural trigger for "someone clicked a shape"), so node action config lives entirely
    inside the workflow's own nodes jsonb blob -- no new SQL migration needed for this. */
 function setNodeActionType(id,type){
-  if(isViewer()){ toast('Your role is read-only — diagram editing is disabled.'); return; }
+  if(wfEditBlocked()) return; /* 2026-09-29 (Stef: "Phase 2a flows") */
   const w=currentWorkflow(); if(!w)return;
   const n=byId(w.nodes,id); if(!n)return;
   pushUndo(); n.actionType=type; if(type!=='alert_people') n.actionTargetAgent=false; render();
 }
 window.setNodeActionType=setNodeActionType;
 function setNodeActionMessage(id,msg){
-  if(isViewer()){ toast('Your role is read-only — diagram editing is disabled.'); return; }
+  if(wfEditBlocked()) return; /* 2026-09-29 (Stef: "Phase 2a flows") */
   const w=currentWorkflow(); if(!w)return;
   const n=byId(w.nodes,id); if(!n)return;
   n.actionMessage=msg; render();
 }
 window.setNodeActionMessage=setNodeActionMessage;
 function setNodeActionTargetAgent(id,val){
-  if(isViewer()){ toast('Your role is read-only — diagram editing is disabled.'); return; }
+  if(wfEditBlocked()) return; /* 2026-09-29 (Stef: "Phase 2a flows") */
   const w=currentWorkflow(); if(!w)return;
   const n=byId(w.nodes,id); if(!n)return;
   n.actionTargetAgent=!!val; render();
 }
 window.setNodeActionTargetAgent=setNodeActionTargetAgent;
 function setNodeActionTargetType(id,type){
-  if(isViewer()){ toast('Your role is read-only — diagram editing is disabled.'); return; }
+  if(wfEditBlocked()) return; /* 2026-09-29 (Stef: "Phase 2a flows") */
   const w=currentWorkflow(); if(!w)return;
   const n=byId(w.nodes,id); if(!n)return;
   n.actionTargetType=type; n.actionTargetIds=[]; render();
 }
 window.setNodeActionTargetType=setNodeActionTargetType;
 function toggleNodeActionTargetId(id,targetId){
-  if(isViewer()){ toast('Your role is read-only — diagram editing is disabled.'); return; }
+  if(wfEditBlocked()) return; /* 2026-09-29 (Stef: "Phase 2a flows") */
   const w=currentWorkflow(); if(!w)return;
   const n=byId(w.nodes,id); if(!n)return;
   n.actionTargetIds=n.actionTargetIds||[];
@@ -1943,7 +2015,7 @@ function runNodeAction(id){
 }
 window.runNodeAction=runNodeAction;
 function addEdge(fromId,toId,label){
-  if(isViewer())return null;
+  if(wfReadOnly())return null; /* 2026-09-29 (Stef: "Phase 2a flows") */
   const w=currentWorkflow(); if(!w)return null;
   if(fromId===toId) return null;
   const exists=w.edges.some(e=>e.fromId===fromId&&e.toId===toId);
@@ -1954,7 +2026,7 @@ function addEdge(fromId,toId,label){
 }
 window.addEdge=addEdge;
 function removeEdge(id){
-  if(isViewer()){ toast('Your role is read-only — diagram editing is disabled.'); return; }
+  if(wfEditBlocked()) return; /* 2026-09-29 (Stef: "Phase 2a flows") */
   const w=currentWorkflow(); if(!w)return;
   pushUndo();
   w.edges=w.edges.filter(e=>e.id!==id);
@@ -1963,7 +2035,7 @@ function removeEdge(id){
 }
 window.removeEdge=removeEdge;
 function setEdgeLabel(id,label){
-  if(isViewer()){ toast('Your role is read-only — diagram editing is disabled.'); return; }
+  if(wfEditBlocked()) return; /* 2026-09-29 (Stef: "Phase 2a flows") */
   const w=currentWorkflow(); if(!w)return;
   const e=byId(w.edges,id); if(!e)return; pushUndo(); e.label=label; render();
 }
@@ -1986,10 +2058,11 @@ function svgPoint(svg,ctmEl,evt){
 }
 function nodeMouseDown(evt,id){
   evt.preventDefault();
+  if(evt.stopPropagation) evt.stopPropagation(); /* 2026-09-29 (Stef: "Phase 2a flows"): bugfix -- the mousedown also bubbled to the canvas's canvasBackgroundClicked(), which immediately cleared the selection, so clicking a node never selected it */
   if(UI.mode==='connect'){ nodeClickedForConnect(id); return; }
   UI.selKind='node'; UI.selId=id;
   /* Viewer can still select a node to inspect it (read-only) -- just never starts a drag. */
-  if(isViewer()){ render(); return; }
+  if(wfReadOnly()){ render(); return; } /* 2026-09-29 (Stef: "Phase 2a flows") */
   const svg=document.getElementById('schemaCanvas');
   const zg=document.getElementById('zoomLayer')||svg;
   const w=currentWorkflow(); const n=byId(w.nodes,id);
@@ -2005,7 +2078,7 @@ window.nodeMouseDown=nodeMouseDown;
    handle-drag pattern (Visio/Miro-style) is what was expected, not a toggled mode. */
 function startConnectHandle(evt,id){
   evt.preventDefault(); evt.stopPropagation();
-  if(isViewer()){ toast('Your role is read-only — diagram editing is disabled.'); return; }
+  if(wfEditBlocked()) return; /* 2026-09-29 (Stef: "Phase 2a flows") */
   connectDrag={fromId:id};
   UI.connectFromId=id; /* reuses the existing .pending highlight style */
   render();
@@ -2064,7 +2137,7 @@ document.addEventListener('mouseup', evt=>{
       const pt=svgPoint(svg,zg,evt);
       let targetId=null;
       for(const n of w.nodes){
-        const def=NODE_TYPES[n.type]||NODE_TYPES.process;
+        const def=nodeDef(n); /* 2026-09-29 (Stef: "Phase 2a flows") */
         if(pt.x>=n.x && pt.x<=n.x+def.w && pt.y>=n.y && pt.y<=n.y+def.h){ targetId=n.id; break; }
       }
       if(targetId && targetId!==fromId){
@@ -2085,12 +2158,15 @@ document.addEventListener('keydown', evt=>{
 function edgePath(w,e){
   const a=byId(w.nodes,e.fromId), b=byId(w.nodes,e.toId);
   if(!a||!b) return {d:'',mx:0,my:0};
-  const defA=NODE_TYPES[a.type]||NODE_TYPES.process, defB=NODE_TYPES[b.type]||NODE_TYPES.process;
+  const defA=nodeDef(a), defB=nodeDef(b);
   const ax=a.x+defA.w/2, ay=a.y+defA.h/2, bx=b.x+defB.w/2, by=b.y+defB.h/2;
   const mx=(ax+bx)/2, my=(ay+by)/2;
-  return {d:`M ${ax} ${ay} L ${bx} ${by}`, mx, my};
+  /* 2026-09-29 (Stef: "Phase 2a flows"): end the line at the target's outline so the arrowhead is visible */
+  const s0=nodeClip(a,bx-ax,by-ay), t0=nodeClip(b,ax-bx,ay-by);
+  return {d:`M ${s0.x} ${s0.y} L ${t0.x} ${t0.y}`, mx, my};
 }
 function renderNode(w,n){
+  if(flIsFlow(w)) return flRenderNode(w,n); /* 2026-09-29 (Stef: "Phase 2a flows") */
   const def=NODE_TYPES[n.type]||NODE_TYPES.process;
   const cls='node'+(UI.selKind==='node'&&UI.selId===n.id?' sel':'')+(UI.connectFromId===n.id?' pending':'');
   let shape;
@@ -2100,7 +2176,7 @@ function renderNode(w,n){
     // own fill area, so clicking near a corner (still inside the node's box) used to miss
     // the shape entirely and fall through to the canvas. This gives the whole box the same
     // click precision as the rect/ellipse node types, without changing how it looks.
-    shape=`<rect width="${def.w}" height="${def.h}" fill="transparent" style="pointer-events:all"></rect><polygon points="${cx},0 ${def.w},${cy} ${cx},${def.h} 0,${cy}"></polygon>`;
+    shape=`<rect class="fl-hitbox" width="${def.w}" height="${def.h}" fill="transparent" style="pointer-events:all"></rect><polygon points="${cx},0 ${def.w},${cy} ${cx},${def.h} 0,${cy}"></polygon>`;
   } else if(n.type==='start-end'){
     shape=`<ellipse cx="${def.w/2}" cy="${def.h/2}" rx="${def.w/2}" ry="${def.h/2}"></ellipse>`;
   } else {
@@ -2115,9 +2191,10 @@ function renderNode(w,n){
   </g>`;
 }
 function renderEdge(w,e){
+  if(flIsFlow(w)) return flRenderEdge(w,e,flBackEdges(w)); /* 2026-09-29 (Stef: "Phase 2a flows") */
   const p=edgePath(w,e);
   const cls='edge'+(UI.selKind==='edge'&&UI.selId===e.id?' sel':'');
-  return `<g class="${cls}" onmousedown="edgeClicked('${e.id}')">
+  return `<g class="${cls}" onmousedown="event.stopPropagation();edgeClicked('${e.id}')">
     <path d="${p.d}" marker-end="url(#arrow)"></path>
     ${e.label?`<text x="${p.mx}" y="${p.my-6}" text-anchor="middle">${esc(e.label)}</text>`:''}
   </g>`;
@@ -2126,7 +2203,7 @@ function renderConnectPreviewLine(w){
   /* item 49: dashed rubber-band line shown while dragging from a node's connect-handle. */
   if(!connectDrag) return '';
   const a=byId(w.nodes,connectDrag.fromId); if(!a) return '';
-  const def=NODE_TYPES[a.type]||NODE_TYPES.process;
+  const def=nodeDef(a);
   const ax=a.x+def.w/2, ay=a.y+def.h/2;
   return `<line id="connectPreviewLine" x1="${ax}" y1="${ay}" x2="${ax}" y2="${ay}" stroke="var(--nav)" stroke-width="2" stroke-dasharray="5,4"></line>`;
 }
@@ -2202,20 +2279,34 @@ function ragPillHtml(rag){
 }
 
 function pageList(){
-  let h=`<div class="phead"><div><h1>Diagrams</h1>
-    <p>Boxes, decisions, arrows — drag to arrange, click one node then another to connect them.</p></div></div>`;
-  h+=`<div class="card"><h3>Workflows <span class="sp"></span><span class="pill n">${CFG.workflows.length}</span>
-      <button class="btn sm pri" onclick="openWorkflow(addWorkflow())">New diagram</button></h3>
-    <div class="bd flush"><table><thead><tr><th>Name</th><th>Status</th><th>Description</th><th class="n">Nodes</th><th class="n">Connectors</th><th>Updated</th><th></th></tr></thead><tbody>
-    ${!CFG.workflows.length?`<tr><td colspan="7" class="empty">No diagrams yet.</td></tr>`:CFG.workflows.map(w=>`<tr>
+  /* 2026-09-29 (Stef: "Phase 2a flows"): Diagrams list becomes "Flows & diagrams". */
+  const canNew=canConfig()&&!isViewer();
+  if(!PR_DATA.loaded && !PR_DATA.loading) setTimeout(prEnsureData,0);
+  let h=`<div class="phead"><div><h1>Flows &amp; diagrams</h1>
+    <p>Flows are processes that can branch, run in parallel, wait and loop — built from triggers, conditions, waits and actions, then checked and
+      simulated against real records. Diagrams are plain drawings. Nothing in a flow runs automatically yet (phase 2b).</p></div>
+    <div class="sp"></div><div class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end">
+      <select class="in" id="flOpenBuiltin" onchange="if(this.value){flOpenAsFlow(this.value);}"><option value="">Open a live process as a flow…</option>
+        ${PR_PROCS.map(p=>`<option value="${p.key}">${esc(p.label)}${flFindBuiltin(p.key)?' (open existing)':''}</option>`).join('')}</select>
+      <button class="btn pri" id="flNewBtn" ${canNew?'':'disabled'} onclick="flNew()">+ New flow</button>
+      <button class="btn" onclick="openWorkflow(addWorkflow())">+ New diagram</button></div></div>`;
+  const list=CFG.workflows.slice().sort((a,b)=>(flIsFlow(b)?1:0)-(flIsFlow(a)?1:0));
+  h+=`<div class="card"><h3>Flows &amp; diagrams <span class="sp"></span><span class="pill n">${CFG.workflows.length}</span></h3>
+    <div class="bd flush" style="overflow-x:auto"><table id="flList"><thead><tr><th>Name</th><th>Kind</th><th>Bound process</th><th>Status</th><th>Checks</th><th>Simulated</th><th class="n">Nodes</th><th>Updated</th><th></th></tr></thead><tbody>
+    ${!list.length?`<tr><td colspan="9" class="empty">Nothing yet — start a new flow, open a live process as a flow, or draw a diagram.</td></tr>`:list.map(w=>{
+      const isF=flIsFlow(w), P=isF?prProc(flBoundProcKey(w)):null, iss=isF?flChecks(w).length:null;
+      return `<tr>
       <td class="lb"><a href="#" onclick="openWorkflow('${w.id}');return false">${esc(w.name)}</a>${w.trackingRef?`<div class="mini">${esc(w.trackingRef)}</div>`:''}</td>
-      <td>${ragPillHtml(ragForWorkflow(w))}</td>
-      <td class="mini">${esc(w.description||'—')}</td>
-      <td class="n">${w.nodes.length}</td><td class="n">${w.edges.length}</td>
+      <td>${isF?`<span class="pill fl-flowpill">Flow</span>${w.flow.builtin?' <span class="mini">built-in</span>':''}${w.flow.locked?' 🔒':''}`:'<span class="pill n">Diagram</span>'}</td>
+      <td class="mini">${P?esc(P.label):'—'}</td>
+      <td>${isF?flStatusPill(w):ragPillHtml(ragForWorkflow(w))}</td>
+      <td>${isF?(iss?`<span class="rag rag-red">${iss} issue${iss===1?'':'s'}</span>`:'<span class="rag rag-green">✓ clean</span>'):'<span class="mini">—</span>'}</td>
+      <td>${isF?flSimPill(w):'<span class="mini">—</span>'}</td>
+      <td class="n">${w.nodes.length}</td>
       <td class="mini">${esc(w.updatedAt||'—')}</td>
-      <td class="n"><div class="row">
+      <td class="n"><div class="row" style="justify-content:flex-end;gap:4px">
         <button class="btn sm" onclick="openWorkflow('${w.id}')">Open</button>
-        <button class="btn sm dgr" onclick="removeWorkflow('${w.id}')">Delete</button></div></td></tr>`).join('')}
+        <button class="btn sm dgr" ${wfReadOnly(w)?'disabled':''} onclick="removeWorkflow('${w.id}')">Delete</button></div></td></tr>`; }).join('')}
     </tbody></table></div></div>`;
   h+=`<div class="card"><h3>Shared configuration</h3><div class="bd">
     <div class="row" style="justify-content:space-between">
@@ -2238,7 +2329,8 @@ function renderLanes(w){
 }
 function pageEditor(){
   const w=currentWorkflow();
-  if(!w) return `<div class="empty">Diagram not found.</div><a class="btn" href="#" onclick="go('list');return false">← Back to diagrams</a>`;
+  if(!w) return `<div class="empty">Diagram not found.</div><a class="btn" href="#" onclick="go('list');return false">← Back to flows &amp; diagrams</a>`;
+  if(flIsFlow(w)) return flPageEditor(w); /* 2026-09-29 (Stef: "Phase 2a flows") */
   const sel = UI.selKind==='node' ? byId(w.nodes,UI.selId) : (UI.selKind==='edge' ? byId(w.edges,UI.selId) : null);
   const lanes=w.lanes||[];
   let inspector='';
@@ -2268,7 +2360,7 @@ function pageEditor(){
     }
     inspector=`<h4>Node</h4>
       <div class="field"><label class="lbl">Label</label><input class="cel txt" value="${esc(sel.label)}" onchange="setNodeLabel('${sel.id}',this.value)"></div>
-      <div class="field"><label class="lbl">Type</label><div class="mini">${esc(NODE_TYPES[sel.type].label)}</div></div>
+      <div class="field"><label class="lbl">Type</label><div class="mini">${esc((NODE_TYPES[sel.type]||NODE_TYPES.process).label)}</div></div>
       <div class="field"><label class="lbl">Position</label><div class="mini">x ${sel.x}, y ${sel.y}</div></div>
       <div class="field"><label class="lbl">Lane</label><select class="cel txt" onchange="setNodeLane('${sel.id}',this.value)">
         <option value="">— none —</option>
@@ -2285,21 +2377,21 @@ function pageEditor(){
       ${nTargetHtml}
       ${nType!=='none'?`<button class="btn sm pri" onclick="runNodeAction('${sel.id}')">▶ Run action</button>`:''}
       <div class="dv"></div>
-      <button class="btn sm dgr" ${isViewer()?'disabled':''} onclick="deleteSelected()">Delete node</button>`;
+      <button class="btn sm dgr" ${wfReadOnly()?'disabled':''} onclick="deleteSelected()">Delete node</button>`;
   } else if(UI.selKind==='edge' && sel){
     inspector=`<h4>Connector</h4>
       <div class="field"><label class="lbl">Label</label><input class="cel txt" placeholder="e.g. Yes / No" value="${esc(sel.label)}" onchange="setEdgeLabel('${sel.id}',this.value)"></div>
-      <button class="btn sm dgr" ${isViewer()?'disabled':''} onclick="deleteSelected()">Delete connector</button>`;
+      <button class="btn sm dgr" ${wfReadOnly()?'disabled':''} onclick="deleteSelected()">Delete connector</button>`;
   } else {
     inspector=`<h4>Nothing selected</h4><p class="mini">Click a node or connector to edit it. To connect two nodes, hover a node and drag from the small dot on its edge to another node -- or use Connect mode (click one node, then another) if you prefer.</p>
       <div class="dv"></div>
       <h4>Lanes</h4>
       ${lanes.length?lanes.map(l=>`<div class="field"><div class="row">
         <input class="cel txt" style="width:130px" value="${esc(l.name)}" onchange="setLane('${l.id}','name',this.value)">
-        <button class="btn sm dgr" ${isViewer()?'disabled':''} onclick="removeLane('${l.id}')">✕</button></div>
+        <button class="btn sm dgr" ${wfReadOnly()?'disabled':''} onclick="removeLane('${l.id}')">✕</button></div>
         <div class="mini row" style="margin-top:4px">y <input class="cel" style="width:50px" value="${l.y}" onchange="setLane('${l.id}','y',this.value)">
         h <input class="cel" style="width:50px" value="${l.height}" onchange="setLane('${l.id}','height',this.value)"></div></div>`).join(''):'<p class="mini">No lanes yet.</p>'}
-      <button class="btn sm" ${isViewer()?'disabled':''} onclick="addLane()">Add lane</button>`;
+      <button class="btn sm" ${wfReadOnly()?'disabled':''} onclick="addLane()">Add lane</button>`;
   }
   const w0=Math.max(900, ...w.nodes.map(n=>n.x+220), ...lanes.map(()=>0));
   const h0=Math.max(500, ...w.nodes.map(n=>n.y+180), ...lanes.map(l=>l.y+l.height+20));
@@ -2307,26 +2399,27 @@ function pageEditor(){
   let html=`<div class="editor">
     <div style="flex:1;display:flex;flex-direction:column;min-width:0">
       <div class="toolbar">
-        <a class="btn sm" href="#" onclick="go('list');return false">← Diagrams</a>
+        <a class="btn sm" href="#" onclick="go('list');return false">← Flows &amp; diagrams</a>
         <div class="dv"></div>
-        <input class="cel" style="width:200px" value="${esc(w.name)}" ${isViewer()?'disabled':''} onchange="renameWorkflow('${w.id}',this.value)">
+        <input class="cel" style="width:200px" value="${esc(w.name)}" ${wfReadOnly()?'disabled':''} onchange="renameWorkflow('${w.id}',this.value)">
         <div class="dv"></div>
-        <button class="btn sm" ${isViewer()?'disabled':''} onclick="addNode('start-end')">+ Start/End</button>
-        <button class="btn sm" ${isViewer()?'disabled':''} onclick="addNode('process')">+ Process</button>
-        <button class="btn sm" ${isViewer()?'disabled':''} onclick="addNode('decision')">+ Decision</button>
-        <button class="btn sm" ${isViewer()?'disabled':''} onclick="addLane()">+ Lane</button>
+        <button class="btn sm" ${wfReadOnly()?'disabled':''} onclick="addNode('start-end')">+ Start/End</button>
+        <button class="btn sm" ${wfReadOnly()?'disabled':''} onclick="addNode('process')">+ Process</button>
+        <button class="btn sm" ${wfReadOnly()?'disabled':''} onclick="addNode('decision')">+ Decision</button>
+        <button class="btn sm" ${wfReadOnly()?'disabled':''} onclick="addLane()">+ Lane</button>
         <div class="dv"></div>
         <button class="btn sm ${UI.mode==='select'?'on':''}" onclick="setMode('select')">Select</button>
-        <button class="btn sm ${UI.mode==='connect'?'on':''}" ${isViewer()?'disabled':''} onclick="setMode('connect')">Connect${UI.mode==='connect'&&UI.connectFromId?' (pick target)':''}</button>
+        <button class="btn sm ${UI.mode==='connect'?'on':''}" ${wfReadOnly()?'disabled':''} onclick="setMode('connect')">Connect${UI.mode==='connect'&&UI.connectFromId?' (pick target)':''}</button>
         <div class="dv"></div>
         <button class="btn sm" onclick="undo()" ${undoStack.length?'':'disabled'} title="Ctrl/Cmd+Z">Undo</button>
-        <button class="btn sm dgr" onclick="deleteSelected()" ${(!UI.selId||isViewer())?'disabled':''}>Delete selected</button>
+        <button class="btn sm dgr" onclick="deleteSelected()" ${(!UI.selId||wfReadOnly())?'disabled':''}>Delete selected</button>
         <div class="dv"></div>
         <button class="btn sm" onclick="setZoom(-0.1)">−</button>
         <button class="btn sm" onclick="resetZoom()">${Math.round(zoom*100)}%</button>
         <button class="btn sm" onclick="setZoom(0.1)">+</button>
         <div class="dv"></div>
         <button class="btn sm" onclick="exportDiagramSvg()">Export SVG</button>
+        <button class="btn sm" ${(canConfig()&&!isViewer())?'':'disabled'} onclick="flConvertDiagram()" title="Turn this diagram into a flow you can check and simulate">Make this a flow</button>
         <div class="sp"></div>
         <span class="mini">${w.nodes.length} nodes · ${w.edges.length} connectors</span>
       </div>
@@ -2393,7 +2486,33 @@ const PR_PROCS=[
     canon:['OK','Low','Out'], last:[], valueField:'stock',
     dateTry:['updated_at','created_at'],
     keyCols:[['stock','Stock'],['low_stock_at','Low at'],['location','Location'],['category','Category']],
-    good:['OK'], bad:['Out'], warn:['Low']}
+    good:['OK'], bad:['Out'], warn:['Low']},
+  /* 2026-09-29 (Stef: "Phase 2a flows"): three more built-in processes */
+  {key:'campaign_budget', label:'Campaign budget alert', obj:'Campaign', table:'campaigns', page:'Cursus.html', stepField:null,
+    canon:['Within budget','At alert threshold','Over budget'], last:[], valueField:'budget',
+    dateTry:['updated_at','created_at','start_date'],
+    keyCols:[['budget','Budget'],['committed','Committed'],['actual','Actual'],['alert_threshold_pct','Alert %'],['owner_name','Owner']],
+    good:['Within budget'], bad:['Over budget'], warn:['At alert threshold'],
+    /* Same definitions as automationMatches(): over budget = actual > 110% of budget (campaign_over_budget);
+       at threshold = committed >= alert_threshold_pct% of budget, default 100% (campaign_off_target). */
+    stepOf:r=>{ const b=Number(r.budget)||0; if(!b) return '(not set)';
+      if((Number(r.actual)||0)>b*1.1) return 'Over budget';
+      const pct=(r.alert_threshold_pct==null||r.alert_threshold_pct==='')?100:Number(r.alert_threshold_pct);
+      if((Number(r.committed)||0)>=b*pct/100) return 'At alert threshold';
+      return 'Within budget'; }},
+  {key:'plan_commit', label:'Plan edits needing commit', obj:'Plan edit', table:null, page:'Ordo.html', stepField:null, noCounts:true,
+    canon:['Edit made','Submitted','Approved','Rejected'], last:['Approved','Rejected'], valueField:null, dateTry:[], keyCols:[],
+    good:['Approved'], bad:['Rejected']},
+  {key:'lead', label:'Lead to deal', obj:'Lead', table:'prospectus_leads', page:'Prospectus.html', stepField:'status',
+    canon:['New','Contacted','Qualified','Deal created','Disqualified'], last:['Deal created','Disqualified'], valueField:null,
+    dateTry:['updated_at','created_at'],
+    keyCols:[['company','Company'],['contact_name','Contact'],['domain','Domain'],['status','Status']],
+    good:['Deal created'], bad:['Disqualified'],
+    /* "Deal created" = a deal exists whose account/name matches the lead's company (read-only match on augur_deals). */
+    stepOf:r=>{ const norm=x=>String(x||'').toLowerCase().replace(/\b(pty|ltd|limited|inc|llc|co)\b/g,'').replace(/[^a-z0-9]/g,'');
+      const c=norm(r.company);
+      if(c && r.status!=='Disqualified' && prRows('augur_deals').some(d=>{ const a=norm(d.account), nm=norm(d.name); return (a && (a===c || a.startsWith(c) || c.startsWith(a))) || (nm && nm.startsWith(c)); })) return 'Deal created';
+      return (r.status==null||r.status==='')?'(not set)':String(r.status); }}
 ];
 /* Read-only data cache for this page (NOT in CFG, so it never lands in saveLocal()'s
    autosave blob or any upsert). Before the lazy select('*') lands -- or if it fails --
@@ -2401,7 +2520,8 @@ const PR_PROCS=[
 const PR_DATA={loaded:false, loading:false, rows:{}, src:{}};
 const PR_FALLBACK={
   campaigns:()=>(CFG.evalCampaigns||[]).map(c=>({id:c.id,name:c.name,signoff_status:c.signoffStatus,budget:c.budget,actual:c.actual,committed:c.committed,
-    start_date:c.start||null,end_date:c.end||null,owner_id:c.ownerId,owner_name:c.ownerName,owner_email:c.ownerEmail})),
+    start_date:c.start||null,end_date:c.end||null,owner_id:c.ownerId,owner_name:c.ownerName,owner_email:c.ownerEmail,alert_threshold_pct:c.alertThresholdPct})),
+  prospectus_leads:()=>[], /* 2026-09-29 (Stef: "Phase 2a flows") */
   tasks:()=>(CFG.evalTasks||[]).map(t=>({id:t.id,name:t.name,campaign_id:t.campaignId,due_date:t.dueDate||null,status:t.status})),
   augur_deals:()=>(CFG.evalDeals||[]).map(d=>({id:d.id,name:d.name,stage:d.stage})),
   eventus_events:()=>(CFG.evalEvents||[]).map(e=>({id:e.id,name:e.name,status:e.status})),
@@ -2423,10 +2543,10 @@ async function prEnsureData(){
     }
   }));
   PR_DATA.loaded=true; PR_DATA.loading=false;
-  if(UI.page==='rules') render();
+  if(UI.page==='rules'||UI.page==='editor'||UI.page==='list') render(); /* 2026-09-29: flows use the same data */
 }
 window.prEnsureData=prEnsureData;
-function prRows(table){ return PR_DATA.rows[table] || (PR_FALLBACK[table]?PR_FALLBACK[table]():[]); }
+function prRows(table){ if(!table) return []; return PR_DATA.rows[table] || (PR_FALLBACK[table]?PR_FALLBACK[table]():[]); }
 
 function prIsOverdue(t){ return !!(t.due_date && String(t.due_date).slice(0,10)<PR_TODAY() && t.status!=='Completed'); } /* same definition as automationMatches('task_overdue') */
 function prAssetStep(a){
@@ -2453,14 +2573,15 @@ function prProc(key){
 }
 /* One normalised record list per process: {id,name,step,fields,value,owner,link}. */
 function prRecords(P){
-  if(!P || P.isDiagram) return [];
+  if(!P || P.isDiagram || P.noCounts) return [];
   const rows=prRows(P.table);
   return rows.map(r=>{
     let step;
-    if(P.key==='asset') step=prAssetStep(r);
+    if(P.stepOf) step=P.stepOf(r); /* 2026-09-29 (Stef: "Phase 2a flows") */
+    else if(P.key==='asset') step=prAssetStep(r);
     else if(P.key==='task' && prIsOverdue(r)) step='Overdue';
     else step=(r[P.stepField]==null||r[P.stepField]==='')?'(not set)':String(r[P.stepField]);
-    return {id:r.id, name:r.name||r.title||'(unnamed)', step:step, fields:r,
+    return {id:r.id, name:r.name||r.title||r.company||r.contact_name||'(unnamed)', step:step, fields:r,
       value:(P.valueField && r[P.valueField]!=null)?r[P.valueField]:'', owner:prOwnerOf(r), link:prLink(P.page)};
   });
 }
@@ -2670,6 +2791,7 @@ function prWhenText(r){
   if(w.type==='schedule') return 'Every '+({daily:'day',weekly:'week',hourly:'hour'}[w.freq]||w.freq)+(w.freq==='hourly'?'':' at '+(w.time||'—'))+' for records at "'+st+'"';
   if(w.type==='external') return 'External event "'+(w.key||'?')+'"';
   if(w.type==='manual') return 'Manual (Run now) at "'+st+'"';
+  if(w.type==='flow_finished'){ const f=byId(CFG.workflows||[],w.flowId); return 'Flow “'+(f?f.name:'?')+'” finishes'; }
   return w.type||'—';
 }
 function prStepLabel(r){
@@ -2870,51 +2992,75 @@ function prFmt(v){
   if(typeof v==='object') return JSON.stringify(v).slice(0,60);
   return String(v);
 }
-function prTargetPicker(i, a, typeKey, idsKey){
+function prTargetPicker(i, a, typeKey, idsKey, pfx){
+  pfx=pfx||'pr'; /* 2026-09-29 (Stef: "Phase 2a flows") */
   const t=a[typeKey]||'org';
   const src=t==='users'?(CFG.orgUsers||[]):t==='regions'?(CFG.orgRegions||[]):t==='teams'?(CFG.teams||[]):[];
-  return `<select class="in" onchange="prActTargetType(${i},this.value)">
+  return `<select class="in" onchange="${pfx}ActTargetType(${i},this.value)">
       <option value="org" ${t==='org'?'selected':''}>Everyone</option>
       <option value="users" ${t==='users'?'selected':''}>Specific people</option>
       <option value="regions" ${t==='regions'?'selected':''}>A region</option>
       <option value="teams" ${t==='teams'?'selected':''}>An alert group</option></select>
-    ${t==='org'?'':`<div class="pr-picks">${src.length?src.map((x,ix)=>`<label><input type="checkbox" ${(a[idsKey]||[]).includes(x.id)?'checked':''} onchange="prActToggleIx(${i},'${idsKey}','${t}',${ix})"> ${esc(x.name||'—')}</label>`).join(''):'<span class="mini">none configured</span>'}</div>`}
+    ${t==='org'?'':`<div class="pr-picks">${src.length?src.map((x,ix)=>`<label><input type="checkbox" ${(a[idsKey]||[]).includes(x.id)?'checked':''} onchange="${pfx}ActToggleIx(${i},'${idsKey}','${t}',${ix})"> ${esc(x.name||'—')}</label>`).join(''):'<span class="mini">none configured</span>'}</div>`}
     <div class="mini" style="margin-top:3px">${esc(prTargetText(t,a[idsKey]))}</div>`;
 }
-function prActionFields(a,i,P){
+function prActionFields(a,i,P,pfx){
+  pfx=pfx||'pr'; /* 2026-09-29 (Stef: "Phase 2a flows") */
   const fld=(label,html,wide)=>`<div class="pr-f${wide?' wide':''}"><label class="lbl">${label}</label>${html}</div>`;
-  const txt=(k,ph)=>`<input class="in" value="${esc(a[k]||'')}" placeholder="${esc(ph||'')}" oninput="prActSet(${i},'${k}',this.value)">`;
-  const area=(k,rows)=>`<textarea class="in" rows="${rows||3}" oninput="prActSet(${i},'${k}',this.value)">${esc(a[k]||'')}</textarea>`;
+  const txt=(k,ph)=>`<input class="in" value="${esc(a[k]||'')}" placeholder="${esc(ph||'')}" oninput="${pfx}ActSet(${i},'${k}',this.value)">`;
+  const area=(k,rows)=>`<textarea class="in" rows="${rows||3}" oninput="${pfx}ActSet(${i},'${k}',this.value)">${esc(a[k]||'')}</textarea>`;
   const users=(CFG.orgUsers||[]);
   const dests=(CFG.agentDestinations||[]);
   if(a.type==='note') return fld('Note',txt('message','{{name}} is now at {{step}}'),true);
-  if(a.type==='alert') return fld('Who',prTargetPicker(i,a,'targetType','targetIds'))+fld('Message',area('message',2));
-  if(a.type==='email') return fld('Recipients',`<div class="pr-picks">${users.length?users.map((u,ix)=>`<label><input type="checkbox" ${(a.recipientIds||[]).includes(u.id)?'checked':''} onchange="prActToggleIx(${i},'recipientIds','users',${ix})"> ${esc(u.name||'—')}${u.email?'':' <span class="mini">(no email)</span>'}</label>`).join(''):'<span class="mini">no people loaded</span>'}</div>`)
+  if(a.type==='alert') return fld('Who',prTargetPicker(i,a,'targetType','targetIds',pfx))+fld('Message',area('message',2));
+  if(a.type==='email') return fld('Recipients',`<div class="pr-picks">${users.length?users.map((u,ix)=>`<label><input type="checkbox" ${(a.recipientIds||[]).includes(u.id)?'checked':''} onchange="${pfx}ActToggleIx(${i},'recipientIds','users',${ix})"> ${esc(u.name||'—')}${u.email?'':' <span class="mini">(no email)</span>'}</label>`).join(''):'<span class="mini">no people loaded</span>'}</div>`)
     +`<div class="pr-f"><label class="lbl">Subject</label>${txt('subject')}<label class="lbl" style="margin-top:6px">Body</label>${area('body',4)}</div>`;
-  if(a.type==='task') return fld('Task title',txt('title'))+fld('Owner',`<select class="in" onchange="prActSet(${i},'ownerId',this.value)">
+  if(a.type==='task') return fld('Task title',txt('title'))+fld('Owner',`<select class="in" onchange="${pfx}ActSet(${i},'ownerId',this.value)">
       <option value="{{owner}}" ${a.ownerId==='{{owner}}'?'selected':''}>Record owner ({{owner}})</option>
       <option value="" ${!a.ownerId?'selected':''}>Unassigned</option>
       ${users.map(u=>`<option value="${esc(u.id)}" ${a.ownerId===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}</select>`)
-    +fld('Due in (days)',`<input class="in" type="number" min="0" style="width:90px" value="${esc(a.dueDays)}" oninput="prActSet(${i},'dueDays',this.value)">`);
-  if(a.type==='escalate') return fld('If still here after (days)',`<input class="in" type="number" min="0" style="width:90px" value="${esc(a.days)}" oninput="prActSet(${i},'days',this.value)">`)
-    +fld('Alert',prTargetPicker(i,a,'targetType','targetIds'))+fld('Message',area('message',2),true);
+    +fld('Due in (days)',`<input class="in" type="number" min="0" style="width:90px" value="${esc(a.dueDays)}" oninput="${pfx}ActSet(${i},'dueDays',this.value)">`);
+  if(a.type==='escalate') return fld('If still here after (days)',`<input class="in" type="number" min="0" style="width:90px" value="${esc(a.days)}" oninput="${pfx}ActSet(${i},'days',this.value)">`)
+    +fld('Alert',prTargetPicker(i,a,'targetType','targetIds',pfx))+fld('Message',area('message',2),true);
   if(a.type==='calc'){
     const keys=prNumericKeys(P).concat(prFieldKeys(P).filter(k=>!prNumericKeys(P).includes(k)));
-    return fld('Target field',`<select class="in" onchange="prActSet(${i},'field',this.value)"><option value="">— pick —</option>${keys.map(k=>`<option ${a.field===k?'selected':''}>${esc(k)}</option>`).join('')}</select>`)
+    return fld('Target field',`<select class="in" onchange="${pfx}ActSet(${i},'field',this.value)"><option value="">— pick —</option>${keys.map(k=>`<option ${a.field===k?'selected':''}>${esc(k)}</option>`).join('')}</select>`)
       +fld('Expression',txt('expr','=value*0.2')+`<div class="mini">Use field names or <code>value</code>; + − * / and brackets. Preview only — nothing is written.</div>`);
   }
-  if(a.type==='webhook') return fld('Method',`<select class="in" onchange="prActSet(${i},'method',this.value,true)"><option ${a.method==='POST'?'selected':''}>POST</option><option ${a.method==='GET'?'selected':''}>GET</option></select>`)
+  if(a.type==='webhook') return fld('Method',`<select class="in" onchange="${pfx}ActSet(${i},'method',this.value,true)"><option ${a.method==='POST'?'selected':''}>POST</option><option ${a.method==='GET'?'selected':''}>GET</option></select>`)
     +fld('URL',txt('url','https://…'),true)+(a.method==='GET'?'':fld('JSON body template',area('body',3),true));
-  if(a.type==='agent') return fld('Mode',`<select class="in" onchange="prActSet(${i},'mode',this.value,true)"><option value="push" ${a.mode!=='pull'?'selected':''}>Push a brief</option><option value="pull" ${a.mode==='pull'?'selected':''}>Pull a result into a field</option></select>`)
-    +fld('Agent destination',`<select class="in" onchange="prActSet(${i},'destId',this.value)"><option value="">— pick —</option>${dests.filter(d=>d.type!=='slack_webhook'&&d.type!=='teams_webhook').map(d=>`<option value="${esc(d.id)}" ${a.destId===d.id?'selected':''}>${esc(d.name)}${d.isOrgDefault?' (org default)':''}</option>`).join('')}</select>`)
-    +(a.mode==='pull'?fld('Write result into',`<select class="in" onchange="prActSet(${i},'intoField',this.value)"><option value="">— pick —</option>${prFieldKeys(P).map(k=>`<option ${a.intoField===k?'selected':''}>${esc(k)}</option>`).join('')}</select>`):'')
+  if(a.type==='agent') return fld('Mode',`<select class="in" onchange="${pfx}ActSet(${i},'mode',this.value,true)"><option value="push" ${a.mode!=='pull'?'selected':''}>Push a brief</option><option value="pull" ${a.mode==='pull'?'selected':''}>Pull a result into a field</option></select>`)
+    +fld('Agent destination',`<select class="in" onchange="${pfx}ActSet(${i},'destId',this.value)"><option value="">— pick —</option>${dests.filter(d=>d.type!=='slack_webhook'&&d.type!=='teams_webhook').map(d=>`<option value="${esc(d.id)}" ${a.destId===d.id?'selected':''}>${esc(d.name)}${d.isOrgDefault?' (org default)':''}</option>`).join('')}</select>`)
+    +(a.mode==='pull'?fld('Write result into',`<select class="in" onchange="${pfx}ActSet(${i},'intoField',this.value)"><option value="">— pick —</option>${prFieldKeys(P).map(k=>`<option ${a.intoField===k?'selected':''}>${esc(k)}</option>`).join('')}</select>`):'')
     +fld('Brief',area('brief',3),true);
   if(a.type==='chat'){
     const cd=dests.filter(d=>d.type==='slack_webhook'||d.type==='teams_webhook');
-    return fld('Channel',`<select class="in" onchange="prActSet(${i},'destId',this.value)"><option value="">— pick —</option>${cd.map(d=>`<option value="${esc(d.id)}" ${a.destId===d.id?'selected':''}>${esc(d.name)} (${d.type==='slack_webhook'?'Slack':'Teams'})</option>`).join('')}</select>${cd.length?'':'<div class="mini">No Slack/Teams destinations yet — add one on Automations.</div>'}`)
+    return fld('Channel',`<select class="in" onchange="${pfx}ActSet(${i},'destId',this.value)"><option value="">— pick —</option>${cd.map(d=>`<option value="${esc(d.id)}" ${a.destId===d.id?'selected':''}>${esc(d.name)} (${d.type==='slack_webhook'?'Slack':'Teams'})</option>`).join('')}</select>${cd.length?'':'<div class="mini">No Slack/Teams destinations yet — add one on Automations.</div>'}`)
       +fld('Message',area('message',2));
   }
   return '';
+}
+/* 2026-09-29 (Stef: "Phase 2a flows"): WHEN detail fields, shared by the preview's rule builder (fn='prSet')
+   and the flow canvas's trigger config panel (fn='flSet'). */
+function prWhenExtraHtml(w,P,fn,stuckDisabled,threshDisabled,curWf){
+  const dateKeys=prDateKeys(P), numKeys=prNumericKeys(P);
+  let whenExtra='';
+  if(w.type==='stuck') whenExtra=stuckDisabled?'<div class="mini">No date field on these records, so time-in-step can\'t be measured.</div>':
+    `<div class="row" style="flex-wrap:wrap;gap:8px"><span class="mini">after</span><input class="in" type="number" min="0" style="width:70px" value="${esc(w.days)}" oninput="${fn}('when.days',this.value)"><span class="mini">days, measured from</span>
+     <select class="in" onchange="${fn}('when.dateField',this.value)">${dateKeys.map(k=>`<option ${w.dateField===k?'selected':''}>${esc(k)}</option>`).join('')}</select></div>`;
+  if(w.type==='threshold') whenExtra=threshDisabled?'<div class="mini">No numeric fields on these records.</div>':
+    `<div class="row" style="flex-wrap:wrap;gap:8px">
+      <select class="in" onchange="${fn}('when.field',this.value)"><option value="">— field —</option>${numKeys.map(k=>`<option ${w.field===k?'selected':''}>${esc(k)}</option>`).join('')}</select>
+      <select class="in" onchange="${fn}('when.pctOf',this.value,true)"><option value="">(raw value)</option>${numKeys.map(k=>`<option value="${esc(k)}" ${w.pctOf===k?'selected':''}>as % of ${esc(k)}</option>`).join('')}</select>
+      <select class="in" onchange="${fn}('when.op',this.value)">${[['gt','>'],['ge','≥'],['lt','<'],['le','≤']].map(([v,l])=>`<option value="${v}" ${w.op===v?'selected':''}>${l}</option>`).join('')}</select>
+      <input class="in" style="width:90px" value="${esc(w.value)}" placeholder="${w.pctOf?'e.g. 90':'e.g. 50000'}" oninput="${fn}('when.value',this.value)">${w.pctOf?'<span class="mini">%</span>':''}</div>`;
+  if(w.type==='schedule') whenExtra=`<div class="row" style="gap:8px"><select class="in" onchange="${fn}('when.freq',this.value,true)">${[['daily','Daily'],['weekly','Weekly'],['hourly','Hourly']].map(([v,l])=>`<option value="${v}" ${w.freq===v?'selected':''}>${l}</option>`).join('')}</select>
+      ${w.freq==='hourly'?'':`<span class="mini">at</span><input class="in" type="time" value="${esc(w.time)}" oninput="${fn}('when.time',this.value)">`}</div>`;
+  if(w.type==='external') whenExtra=`<input class="in" style="width:220px" placeholder="trigger key, e.g. crm_stage_change" value="${esc(w.key)}" oninput="${fn}('when.key',this.value)">
+      <div class="mini">Same trigger keys external systems POST to Hub (see Automations → External trigger).</div>`;
+  if(w.type==='manual') whenExtra='<div class="mini">Fires only when someone clicks Run now.</div>';
+  if(w.type==='flow_finished') whenExtra=`<select class="in" onchange="${fn}('when.flowId',this.value,true)"><option value="">— pick a flow —</option>${(CFG.workflows||[]).filter(f=>flIsFlow(f)&&(!curWf||f.id!==curWf.id)).map(f=>`<option value="${esc(f.id)}" ${w.flowId===f.id?'selected':''}>${esc(f.name)}</option>`).join('')}</select>`;
+  return whenExtra;
 }
 function prEditorHtml(){
   const e=PRU.editing; if(!e) return '';
@@ -2922,21 +3068,7 @@ function prEditorHtml(){
   const dateKeys=prDateKeys(P), numKeys=prNumericKeys(P), fieldKeys=prFieldKeys(P);
   const stuckDisabled=!P||P.isDiagram||!dateKeys.length;
   const threshDisabled=!P||P.isDiagram||!numKeys.length;
-  let whenExtra='';
-  if(w.type==='stuck') whenExtra=stuckDisabled?'<div class="mini">No date field on these records, so time-in-step can\'t be measured.</div>':
-    `<div class="row" style="flex-wrap:wrap;gap:8px"><span class="mini">after</span><input class="in" type="number" min="0" style="width:70px" value="${esc(w.days)}" oninput="prSet('when.days',this.value)"><span class="mini">days, measured from</span>
-     <select class="in" onchange="prSet('when.dateField',this.value)">${dateKeys.map(k=>`<option ${w.dateField===k?'selected':''}>${esc(k)}</option>`).join('')}</select></div>`;
-  if(w.type==='threshold') whenExtra=threshDisabled?'<div class="mini">No numeric fields on these records.</div>':
-    `<div class="row" style="flex-wrap:wrap;gap:8px">
-      <select class="in" onchange="prSet('when.field',this.value)"><option value="">— field —</option>${numKeys.map(k=>`<option ${w.field===k?'selected':''}>${esc(k)}</option>`).join('')}</select>
-      <select class="in" onchange="prSet('when.pctOf',this.value,true)"><option value="">(raw value)</option>${numKeys.map(k=>`<option value="${esc(k)}" ${w.pctOf===k?'selected':''}>as % of ${esc(k)}</option>`).join('')}</select>
-      <select class="in" onchange="prSet('when.op',this.value)">${[['gt','>'],['ge','≥'],['lt','<'],['le','≤']].map(([v,l])=>`<option value="${v}" ${w.op===v?'selected':''}>${l}</option>`).join('')}</select>
-      <input class="in" style="width:90px" value="${esc(w.value)}" placeholder="${w.pctOf?'e.g. 90':'e.g. 50000'}" oninput="prSet('when.value',this.value)">${w.pctOf?'<span class="mini">%</span>':''}</div>`;
-  if(w.type==='schedule') whenExtra=`<div class="row" style="gap:8px"><select class="in" onchange="prSet('when.freq',this.value,true)">${[['daily','Daily'],['weekly','Weekly'],['hourly','Hourly']].map(([v,l])=>`<option value="${v}" ${w.freq===v?'selected':''}>${l}</option>`).join('')}</select>
-      ${w.freq==='hourly'?'':`<span class="mini">at</span><input class="in" type="time" value="${esc(w.time)}" oninput="prSet('when.time',this.value)">`}</div>`;
-  if(w.type==='external') whenExtra=`<input class="in" style="width:220px" placeholder="trigger key, e.g. crm_stage_change" value="${esc(w.key)}" oninput="prSet('when.key',this.value)">
-      <div class="mini">Same trigger keys external systems POST to Hub (see Automations → External trigger).</div>`;
-  if(w.type==='manual') whenExtra='<div class="mini">Fires only when someone clicks Run now.</div>';
+  const whenExtra=prWhenExtraHtml(w,P,'prSet',stuckDisabled,threshDisabled,null); /* 2026-09-29 (Stef: "Phase 2a flows") */
   const stepLabel=prStepLabel(e);
   const plan=prPublishPlan(e);
   return `<div class="mask" onclick="if(event.target===this)prCloseEditor()"><div class="modal pr-modal">
@@ -3014,23 +3146,26 @@ function pageRules(){
   h+=`<div class="note pr-note"><b>Preview — nothing on this page runs.</b> Triggers you add here are drafts saved in this browser only, and “Test against live data”
     is a dry run with no emails, alerts, webhooks or writes. What actually runs today lives on <a href="#" onclick="go('automations');return false">Automations</a>;
     a draft that maps onto an existing automation can be published there. To draw your own process, use <a href="#" onclick="go('list');return false">Diagrams</a> — it then appears below under “Your diagrams”.
-    ${PR_DATA.loading?'<span class="mini"> · Loading full record details…</span>':''}</div>`;
+    ${PR_DATA.loading?'<span class="mini"> · Loading full record details…</span>':''}
+    <div style="margin-top:6px"><b>Flows are the new home for process rules</b> — open any process below as a flow to add branches, waits, loops and parallel steps, then check and simulate it.</div></div>`; /* 2026-09-29 (Stef: "Phase 2a flows") */
   h+=`<div class="pr-layout"><div class="pr-procs card"><h3>Live processes</h3><div class="bd flush">
-    ${all.map((p,i)=>p.isDiagram?'':`<a href="#" class="pr-proc ${p.key===P.key?'on':''}" onclick="prSelectProcIx(${i});return false"><span>${esc(p.label)}</span><span class="pr-cnt">${prRecords(p).length}</span></a>`).join('')}
+    ${all.map((p,i)=>p.isDiagram?'':`<a href="#" class="pr-proc ${p.key===P.key?'on':''}" onclick="prSelectProcIx(${i});return false"><span>${esc(p.label)}</span><span class="pr-cnt">${p.noCounts?'—':prRecords(p).length}</span></a>`).join('')}
     <div class="pr-sub">Your diagrams</div>
     ${all.some(p=>p.isDiagram)?all.map((p,i)=>!p.isDiagram?'':`<a href="#" class="pr-proc ${p.key===P.key?'on':''}" onclick="prSelectProcIx(${i});return false"><span>${esc(p.label)}</span><span class="pr-cnt mini">${(p.wf.nodes||[]).length} steps</span></a>`).join('')
       :'<div class="mini" style="padding:6px 14px 12px">No diagrams yet — <a href="#" onclick="go(\'list\');return false">draw one</a>.</div>'}
   </div></div><div class="pr-body">`;
   /* stage strip */
-  h+=`<div class="card"><h3>${esc(P.label)} <span class="mini" style="font-weight:400">${P.isDiagram?'your diagram — no live counts':(recs.length+' '+esc(P.obj.toLowerCase())+(recs.length===1?'':'s')+' · '+(PR_DATA.src[P.table]==='full'?'live':'basic fields'))}</span></h3>
+  h+=`<div class="card"><h3>${esc(P.label)} <span class="mini" style="font-weight:400">${P.isDiagram?'your diagram — no live counts':P.noCounts?'counts not available here':(recs.length+' '+esc(P.obj.toLowerCase())+(recs.length===1?'':'s')+' · '+(PR_DATA.src[P.table]==='full'?'live':'basic fields'))}</span>
+    <span class="sp"></span><button class="btn sm" disabled title="Personal watches arrive in phase 2b">👁 Watch this (coming in phase 2b)</button>
+    ${P.isDiagram?`<button class="btn sm pri" onclick="openWorkflow('${esc(P.wf.id)}')">${flIsFlow(P.wf)?'Open flow':'Open diagram'}</button>`:`<button class="btn sm pri" id="prOpenFlow" onclick="flOpenAsFlow('${esc(P.key)}')">${flFindBuiltin(P.key)?'Open flow':'Open as flow'}</button>`}</h3>
     <div class="bd"><div class="pr-strip">${steps.length?steps.map((s,i)=>{
-      const n=P.isDiagram?null:recs.filter(r=>r.step===s.key).length;
+      const n=(P.isDiagram||P.noCounts)?null:recs.filter(r=>r.step===s.key).length;
       const rc=ruleCounts[s.key]||0;
       return `${i?'<div class="pr-arrow" aria-hidden="true"><svg width="22" height="14" viewBox="0 0 22 14"><path d="M1 7h17M13 2l6 5-6 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>':''}
       <div class="pr-step ${s.tone?'t-'+s.tone:''} ${PRU.step===s.key?'sel':''}" onclick="prSelectStep(${i})" role="button" tabindex="0">
         <div class="pr-sname" title="${esc(s.label)}">${esc(s.label)}</div>
         ${s.lane?`<div class="mini">${esc(s.lane)}</div>`:''}
-        ${n==null?'<div class="pr-n mini">—</div>':`<button class="pr-n ${PRU.listStep===s.key?'on':''}" title="Show these records" onclick="event.stopPropagation();prToggleList(${i})">${n}</button>`}
+        ${(n==null||P.noCounts)?'<div class="pr-n mini">—</div>':`<button class="pr-n ${PRU.listStep===s.key?'on':''}" title="Show these records" onclick="event.stopPropagation();prToggleList(${i})">${n}</button>`}
         <div>${rc?`<span class="pill pr-chip">${rc} trigger${rc===1?'':'s'}</span>`:'<span class="mini">no triggers</span>'}</div>
       </div>`; }).join(''):'<div class="empty" style="width:100%">This diagram has no steps yet.</div>'}</div></div></div>`;
   /* records at a step */
@@ -3084,10 +3219,1029 @@ function prGoRule(id){ const r=prRules().find(x=>x.id===id); if(!r) return; PRU.
 window.prGoRule=prGoRule;
 /* 2026-09-28 end of Process rules (preview) block */
 
+/* ============================================================================
+   2026-09-29 (Stef: "Phase 2a -- merge Diagrams and Process rules into one FLOW
+   CANVAS. Flows aren't linear: they branch, run in parallel, wait and loop.
+   Nothing runs automatically in 2a").
+   FLOWS. A flow is an ordinary schema_workflows row (lanes/nodes/edges jsonb) plus flow
+   meta: {kind:'flow'|'diagram', builtin, scope, locked, owner_id, version, status,
+   lastSimulation, bundles}. The meta lives in the new schema_workflows.flow jsonb column
+   (Claude outputs/2026-09-29-migration-schema-workflows-flow-column.sql) when that column
+   exists -- probed once at boot (FL_COL). Until the migration runs, it rides inside the
+   nodes jsonb as a hidden meta node {id:'__flow__',kind:'meta',config:{...}} that is
+   stripped on load and re-added on save, so nothing is lost either way.
+   Typed nodes (node.kind): trigger, condition, wait, action, bundle, split, join, subflow,
+   end, step. Old diagram nodes have no kind and render exactly as before.
+   Simulate walks a real loaded record through the flow with ZERO side effects -- it only
+   calls the preview's pure helpers (prActionPreview/prFill/prCondHolds...), never
+   sendAutomation... / createAgentDispatch / fetch / insert.
+   ============================================================================ */
+let FL_COL=null; /* true = schema_workflows.flow column exists; false = use the hidden meta node */
+const FL_META_ID='__flow__';
+async function flProbeAndHydrate(scoper){
+  const colFlows={};
+  try{
+    const r=await scoper(sb.from('schema_workflows').select('id,flow'));
+    if(r.error) throw r.error;
+    FL_COL=true;
+    (r.data||[]).forEach(x=>{ if(x && x.flow && typeof x.flow==='object') colFlows[x.id]=x.flow; });
+  }catch(e){
+    FL_COL=false;
+    console.warn('schema_workflows.flow not available yet (run Claude outputs/2026-09-29-migration-schema-workflows-flow-column.sql) -- flow settings are kept inside the nodes jsonb meanwhile.', e);
+  }
+  (CFG.workflows||[]).forEach(w=>flHydrateOne(w, colFlows[w.id]||null));
+}
+function flHydrateOne(w, colFlow){
+  const nodes=w.nodes||[];
+  const ix=nodes.findIndex(n=>n && n.id===FL_META_ID);
+  let metaCfg=null;
+  if(ix>=0){ metaCfg=nodes[ix].config||null; w.nodes=nodes.filter((n,i)=>i!==ix); }
+  w.flow=colFlow||metaCfg||null;
+  if(w.flow){ w.flow.bundles=w.flow.bundles||[]; }
+}
+/* Row mapper for saveToSupabase(): only sends `flow` when the column exists. */
+function flRowForSave(w){
+  const row={id:w.id,name:w.name,description:w.description||'',updated_at:w.updatedAt||null,
+    tracking_ref:w.trackingRef||null,lanes:w.lanes||[],nodes:w.nodes||[],edges:w.edges||[]};
+  if(FL_COL===true) row.flow=w.flow||null;
+  else if(w.flow) row.nodes=(w.nodes||[]).concat([{id:FL_META_ID,kind:'meta',type:'process',x:-10000,y:-10000,label:'',config:w.flow}]);
+  return row;
+}
+function flIsFlow(w){ return !!(w && w.flow && w.flow.kind==='flow'); }
+function flNewMeta(extra){
+  return Object.assign({kind:'flow', builtin:null, scope:'org', locked:false, owner_id:_myProfile?_myProfile.id:null,
+    version:1, status:'draft', lastSimulation:null, bundles:[]}, extra||{});
+}
+/* ---------- edit gating (shared with the plain diagram editor) ---------- */
+function wfReadOnly(w){
+  w=w||currentWorkflow();
+  if(isViewer()) return 'Your role is read-only — diagram editing is disabled.';
+  if(w && flIsFlow(w) && !canConfig()) return 'Your role can open and simulate flows, but not edit them.';
+  if(w && w.flow && w.flow.locked) return 'This flow is locked — unlock it to edit.';
+  return '';
+}
+function wfEditBlocked(w){ const m=wfReadOnly(w); if(m){ toast(m); return true; } return false; }
+window.wfReadOnly=wfReadOnly; window.wfEditBlocked=wfEditBlocked;
+
+/* ---------- node kinds ---------- */
+const FL_KINDS={
+  trigger:  {label:'Trigger',   icon:'⚡', w:196, h:62},
+  condition:{label:'Condition', icon:'◆', w:184, h:100},
+  wait:     {label:'Wait',      icon:'⏳', w:172, h:62},
+  action:   {label:'Action',    icon:'▶', w:180, h:62},
+  bundle:   {label:'Bundle',    icon:'▦', w:180, h:62},
+  split:    {label:'Split',     icon:'⑂', w:170, h:22},
+  join:     {label:'Join',      icon:'⑃', w:170, h:22},
+  subflow:  {label:'Subflow',   icon:'↪', w:180, h:62},
+  end:      {label:'End',       icon:'■', w:76,  h:76},
+  step:     {label:'Step',      icon:'●', w:156, h:58}
+};
+function nodeKind(n){ return (n && n.kind && FL_KINDS[n.kind]) ? n.kind : 'step'; }
+/* Size lookup used by edges/hit-testing for BOTH diagrams and flows. Old diagram nodes
+   (no kind) keep their NODE_TYPES size, so existing diagrams render unchanged. */
+function nodeDef(n){
+  if(n && n.kind && FL_KINDS[n.kind]){
+    if(n.kind==='step' && !n._fl && !n.builtin) return NODE_TYPES[n.type]||NODE_TYPES.process; /* converted diagram shape keeps its size */
+    return FL_KINDS[n.kind];
+  }
+  return NODE_TYPES[(n&&n.type)]||NODE_TYPES.process;
+}
+function nodeShape(n){
+  if(n && n.kind){ if(n.kind==='condition') return 'diamond'; if(n.kind==='end') return 'ellipse'; return 'rect'; }
+  if(n && n.type==='decision') return 'diamond';
+  if(n && n.type==='start-end') return 'ellipse';
+  return 'rect';
+}
+/* Clip a line from the node centre to its outline (so arrowheads are visible). */
+function nodeClip(n, dx, dy){
+  const d=nodeDef(n), a=d.w/2, b=d.h/2, s=nodeShape(n);
+  if(!dx && !dy) return {x:n.x+a, y:n.y+b};
+  let t;
+  if(s==='diamond') t=1/((Math.abs(dx)/a)+(Math.abs(dy)/b));
+  else if(s==='ellipse') t=1/Math.sqrt((dx*dx)/(a*a)+(dy*dy)/(b*b));
+  else t=Math.min(dx?a/Math.abs(dx):Infinity, dy?b/Math.abs(dy):Infinity);
+  return {x:n.x+a+dx*t, y:n.y+b+dy*t};
+}
+
+/* ---------- graph helpers ---------- */
+function flOut(w,id){ return (w.edges||[]).filter(e=>e.fromId===id); }
+function flIn(w,id){ return (w.edges||[]).filter(e=>e.toId===id); }
+function flTriggers(w){ return (w.nodes||[]).filter(n=>n.kind==='trigger'); }
+/* Back edges (loops) via DFS from every trigger (then any unvisited node), in edge order. */
+function flBackEdges(w){
+  const back=new Set(), state={};
+  const visit=id=>{
+    state[id]=1;
+    flOut(w,id).forEach(e=>{
+      if(state[e.toId]===1) back.add(e.id);
+      else if(!state[e.toId]) visit(e.toId);
+    });
+    state[id]=2;
+  };
+  flTriggers(w).forEach(t=>{ if(!state[t.id]) visit(t.id); });
+  (w.nodes||[]).forEach(n=>{ if(!state[n.id]) visit(n.id); });
+  return back;
+}
+function flReach(w, fromIds, edgeFilter){
+  const seen=new Set(), st=fromIds.slice();
+  while(st.length){ const id=st.pop(); if(seen.has(id)) continue; seen.add(id); flOut(w,id).filter(e=>!edgeFilter||edgeFilter(e)).forEach(e=>st.push(e.toId)); }
+  return seen;
+}
+function flBoundProcKey(w){
+  if(!w) return null;
+  if(w.flow && w.flow.builtin) return w.flow.builtin;
+  const t=flTriggers(w).find(t=>t.config && t.config.procKey);
+  return t?t.config.procKey:null;
+}
+function flNodeTitle(n){ return (n.label||FL_KINDS[nodeKind(n)].label); }
+
+/* ---------- defaults ---------- */
+function flDefaultConfig(kind, w){
+  const pk=flBoundProcKey(w)||'campaign';
+  const P=prProc(pk), steps=prSteps(P);
+  if(kind==='trigger') return {procKey:pk, step:(steps[0]||{}).key||'', when:{type:'enters', days:7, dateField:prDefaultDateField(P,(steps[0]||{}).key), field:'', op:'gt', value:'', pctOf:'', freq:'daily', time:'09:00', key:'', flowId:''}};
+  if(kind==='condition') return {paths:[{id:uid('p'), name:'Yes', join:'and', groups:[{join:'and', rules:[{field:(prNumericKeys(P)[0]||prFieldKeys(P)[0]||''), op:'gt', value:''}]}]}]};
+  if(kind==='wait') return {mode:'until_event', amount:3, unit:'days', dateField:'', dateOffset:0, event:'approval', eventValue:'', timeoutAmount:3, timeoutUnit:'days'};
+  if(kind==='action') return {actions:[prNewAction('note')]};
+  if(kind==='bundle') return {bundleId:''};
+  if(kind==='join') return {rule:'all', n:2};
+  if(kind==='subflow') return {flowId:''};
+  if(kind==='end') return {outcome:'Done'};
+  return {};
+}
+const FL_ACTION_LABELS={note:'Log a note',alert:'Alert people',email:'Send email',task:'Create a task',escalate:'Escalate',calc:'Calculate a field',webhook:'Call webhook',agent:'AI agent',chat:'Chat message'};
+function flAutoLabel(n){
+  const c=n.config||{};
+  if(n.kind==='action') return FL_ACTION_LABELS[((c.actions||[])[0]||{}).type]||'Action';
+  if(n.kind==='end') return c.outcome||'End';
+  return FL_KINDS[nodeKind(n)].label;
+}
+
+/* ---------- create / generate flows ---------- */
+function flNew(){
+  if(isViewer()||!canConfig()){ toast('Your role cannot create flows.'); return null; }
+  const id=addWorkflow(); const w=byId(CFG.workflows,id); if(!w) return null;
+  w.name='New flow'; w.lanes=[]; w.flow=flNewMeta();
+  const t={id:uid('n'),kind:'trigger',_fl:1,type:'process',x:60,y:180,label:'Trigger',laneId:null,config:flDefaultConfig('trigger',w)};
+  const e={id:uid('n'),kind:'end',_fl:1,type:'process',x:360,y:173,label:'Done',laneId:null,config:{outcome:'Done'}};
+  w.nodes.push(t,e); w.edges.push({id:uid('e'),fromId:t.id,toId:e.id,label:''});
+  openWorkflow(id); return id;
+}
+window.flNew=flNew;
+function flFindBuiltin(pk){ return (CFG.workflows||[]).find(w=>flIsFlow(w) && w.flow.builtin===pk); }
+function flOpenAsFlow(pk){
+  const ex=flFindBuiltin(pk);
+  if(ex){ openWorkflow(ex.id); return ex.id; }
+  if(isViewer()||!canConfig()){ toast('There is no flow for this process yet, and your role cannot create one.'); return null; }
+  const P=prProc(pk); if(!P || P.isDiagram){ toast('Not a built-in process.'); return null; }
+  const id=addWorkflow(); const w=byId(CFG.workflows,id);
+  w.name=P.label; w.description='Built-in process, opened as a flow.'; w.lanes=[]; w.nodes=[]; w.edges=[];
+  w.flow=flNewMeta({builtin:pk});
+  const mk=(kind,x,y,label,extra)=>{ const n=Object.assign({id:uid('n'),kind:kind,_fl:1,type:'process',x:x,y:y,label:label,laneId:null,config:flDefaultConfig(kind,w)},extra||{}); w.nodes.push(n); return n; };
+  const link=(a,b,label,extra)=>{ const e=Object.assign({id:uid('e'),fromId:a.id,toId:b.id,label:label||''},extra||{}); w.edges.push(e); return e; };
+  const steps=prSteps(P).filter(s=>s.key!=='(not set)' && s.key!=='Untracked');
+  const lastSet=new Set(P.last||[]);
+  let main=steps.filter(s=>!lastSet.has(s.key)), term=steps.filter(s=>lastSet.has(s.key));
+  /* a "good" final step (e.g. Approved) is an outcome alongside the terminal ones, not a stage before them */
+  if(term.length && main.length>1 && (P.good||[]).includes(main[main.length-1].key)){ term=[main[main.length-1]].concat(term); main=main.slice(0,-1); }
+  const Y=240;
+  const trig=mk('trigger',40,Y-2,'Enters '+(steps[0]?steps[0].label:'first step'));
+  trig.config.step=(steps[0]||{}).key||''; trig.config.procKey=pk;
+  let prev=trig; const nodeByStep={};
+  main.forEach((s,i)=>{ const n=mk('step',270+i*200,Y,s.label,{builtin:true,stepKey:s.key}); n.config={}; nodeByStep[s.key]=n; link(prev,n,''); prev=n; });
+  const lastMain=prev, bx=lastMain.x+(lastMain===trig?230:210);
+  if(term.length){
+    term.forEach((s,j)=>{
+      const y=Y+(j-(term.length-1)/2)*130;
+      const n=mk('step',bx,y,s.label,{builtin:true,stepKey:s.key}); n.config={}; nodeByStep[s.key]=n;
+      link(lastMain,n,s.label.toLowerCase());
+      const en=mk('end',bx+210,y-9,s.label); en.config={outcome:s.label}; link(n,en,'');
+    });
+  } else {
+    const en=mk('end',bx,Y-9,'Done'); en.config={outcome:(main.length?main[main.length-1].label:'Done')}; en.label=en.config.outcome; link(lastMain,en,'');
+  }
+  /* The preview's draft triggers for this process become trigger -> (condition) -> actions -> end chains. */
+  const drafts=prRules().filter(r=>r.procKey===pk);
+  let row=0, skipped=0;
+  drafts.forEach(r=>{
+    const anchor=nodeByStep[r.step];
+    if(!anchor){ skipped++; return; }
+    const y=Y+(term.length?Math.ceil(term.length/2)*130+80:150)+row*120; row++;
+    let x=anchor.x-10;
+    const t=mk('trigger',x,y,r.name||'Draft trigger'); t.config={procKey:pk, step:r.step, when:JSON.parse(JSON.stringify(r.when||{type:'enters'}))};
+    let prevN=t;
+    const conds=(r.conds||[]).filter(c=>c.field);
+    if(conds.length){
+      x+=210; const c=mk('condition',x,y-19,'Conditions'); c.config={paths:[{id:uid('p'),name:'Match',join:'and',groups:[{join:'and',rules:JSON.parse(JSON.stringify(conds))}]}]};
+      link(prevN,c,''); prevN=c;
+      const sk=mk('end',x+40,y+110,'Skipped'); sk.config={outcome:'Skipped'}; link(c,sk,'else');
+    }
+    (r.actions||[]).forEach((a,i)=>{
+      x+=210; const an=mk('action',x,y,FL_ACTION_LABELS[a.type]||'Action'); an.config={actions:[JSON.parse(JSON.stringify(a))]};
+      link(prevN,an,(i===0&&conds.length)?'Match':''); prevN=an;
+    });
+    x+=210; const en=mk('end',x,y-7,'Done'); en.config={outcome:'Done'}; link(prevN,en,'');
+  });
+  logAudit('add flow','Opened built-in process as a flow: '+P.label);
+  openWorkflow(id);
+  { const wid=Math.max(...w.nodes.map(n=>n.x+nodeDef(n).w))+40; UI.zoom=Math.max(0.5,Math.min(1,Math.floor(1080/wid*10)/10)); render(); } /* fit the generated flow on screen */
+  toast('Opened "'+P.label+'" as a flow'+(drafts.length?(' with '+(drafts.length-skipped)+' draft trigger'+((drafts.length-skipped)===1?'':'s')):'')+'.');
+  return id;
+}
+window.flOpenAsFlow=flOpenAsFlow;
+function flConvertDiagram(){
+  const w=currentWorkflow(); if(!w) return;
+  if(isViewer()||!canConfig()){ toast('Your role cannot create flows.'); return; }
+  if(!confirm('Turn "'+w.name+'" into a flow? Its shapes become plain steps; you can then add triggers, conditions, waits and actions around them.')) return;
+  w.flow=Object.assign(flNewMeta(), w.flow||{}, {kind:'flow'});
+  w.nodes.forEach(n=>{ if(!n.kind){ n.kind=n.type==='decision'?'condition':'step'; if(n.kind==='condition') n.config={paths:[{id:uid('p'),name:'Yes',join:'and',groups:[{join:'and',rules:[]}]}]}; } });
+  logAudit('convert diagram to flow',w.name); render();
+}
+window.flConvertDiagram=flConvertDiagram;
+
+/* ---------- editing ---------- */
+const FLU={wfId:null, tab:'config', sim:null, simRecord:'', ff:false, ffDays:7, simAll:null};
+function flSyncUI(w){ if(FLU.wfId!==w.id){ FLU.wfId=w.id; FLU.tab='config'; FLU.sim=null; FLU.simAll=null; FLU.simRecord=''; } }
+function flSel(){ const w=currentWorkflow(); return (w && UI.selKind==='node') ? byId(w.nodes,UI.selId) : null; }
+function flTouch(){ const w=currentWorkflow(); if(w) w.updatedAt=new Date().toISOString().slice(0,10); saveLocal(); scheduleSupabaseSave(); }
+function flAddNode(kind){
+  const w=currentWorkflow(); if(!w || wfEditBlocked(w)) return null;
+  pushUndo();
+  const d=FL_KINDS[kind]||FL_KINDS.step;
+  const sel=flSel();
+  let x=80, y=w.nodes.length?Math.max(...w.nodes.map(m=>m.y+nodeDef(m).h))+50:80;
+  if(sel){ const sd=nodeDef(sel); x=sel.x+sd.w+70; y=sel.y+sd.h/2-d.h/2;
+    /* don't drop the new node on top of an existing one */
+    const hits=yy=>w.nodes.some(m=>{ const md=nodeDef(m); return x<m.x+md.w+20 && x+d.w+20>m.x && yy<m.y+md.h+20 && yy+d.h+20>m.y; });
+    let g=0; while(hits(y) && g++<12) y+=d.h+50; }
+  const n={id:uid('n'),kind:kind,_fl:1,type:'process',x:Math.round(x),y:Math.round(y),label:'',laneId:null,config:flDefaultConfig(kind,w)};
+  n.label=flAutoLabel(n);
+  w.nodes.push(n);
+  if(sel && sel.kind!=='end' && kind!=='trigger'){ w.edges.push({id:uid('e'),fromId:sel.id,toId:n.id,label:''}); }
+  UI.selKind='node'; UI.selId=n.id; FLU.tab='config'; render();
+  return n.id;
+}
+window.flAddNode=flAddNode;
+function flNodeSet(k,v,rr){
+  const n=flSel(); if(!n || wfEditBlocked()) return;
+  if(n.builtin && k==='label'){ toast('Built-in step — add actions around it.'); render(); return; }
+  n[k]=v; flTouch(); if(rr) render();
+}
+function flSet(path,val,rr){
+  const n=flSel(); if(!n || wfEditBlocked()) return;
+  n.config=n.config||{};
+  const parts=path.split('.'); let o=n.config;
+  for(let i=0;i<parts.length-1;i++){ if(o[parts[i]]==null||typeof o[parts[i]]!=='object') o[parts[i]]={}; o=o[parts[i]]; }
+  o[parts[parts.length-1]]=val;
+  if(n.kind==='trigger' && path==='procKey'){ const P=prProc(val); const s=prSteps(P); n.config.step=(s[0]||{}).key||''; n.config.when.dateField=prDefaultDateField(P,n.config.step); }
+  if(n.kind==='end' && path==='outcome') n.label=val||'End';
+  flTouch(); if(rr) render();
+}
+Object.assign(window,{flNodeSet,flSet});
+/* condition paths / groups / rules */
+function flCond(){ const n=flSel(); return (n && n.kind==='condition') ? (n.config=n.config||{paths:[]}) : null; }
+function flPathAdd(){ const c=flCond(); if(!c||wfEditBlocked()) return; c.paths.push({id:uid('p'),name:'Path '+(c.paths.length+1),join:'and',groups:[{join:'and',rules:[]}]}); flTouch(); render(); }
+function flPathSet(pi,k,v,rr){ const c=flCond(); if(!c||wfEditBlocked()) return; const p=c.paths[pi]; if(!p) return;
+  if(k==='name'){ const w=currentWorkflow(); const old=p.name; flOut(w,UI.selId).forEach(e=>{ if((e.label||'').trim().toLowerCase()===String(old||'').trim().toLowerCase()) e.label=v; }); }
+  p[k]=v; flTouch(); if(rr) render(); }
+function flPathDel(pi){ const c=flCond(); if(!c||wfEditBlocked()) return; c.paths.splice(pi,1); flTouch(); render(); }
+function flGroupAdd(pi){ const c=flCond(); if(!c||wfEditBlocked()) return; c.paths[pi].groups.push({join:'and',rules:[]}); flTouch(); render(); }
+function flGroupSet(pi,gi,k,v,rr){ const c=flCond(); if(!c||wfEditBlocked()) return; c.paths[pi].groups[gi][k]=v; flTouch(); if(rr) render(); }
+function flGroupDel(pi,gi){ const c=flCond(); if(!c||wfEditBlocked()) return; c.paths[pi].groups.splice(gi,1); flTouch(); render(); }
+function flRuleAdd(pi,gi){ const c=flCond(); if(!c||wfEditBlocked()) return; const P=prProc(flBoundProcKey(currentWorkflow()));
+  c.paths[pi].groups[gi].rules.push({field:(prFieldKeys(P)[0]||''),op:'eq',value:''}); flTouch(); render(); }
+function flRuleSet(pi,gi,ri,k,v,rr){ const c=flCond(); if(!c||wfEditBlocked()) return; c.paths[pi].groups[gi].rules[ri][k]=v; flTouch(); if(rr) render(); }
+function flRuleDel(pi,gi,ri){ const c=flCond(); if(!c||wfEditBlocked()) return; c.paths[pi].groups[gi].rules.splice(ri,1); flTouch(); render(); }
+Object.assign(window,{flPathAdd,flPathSet,flPathDel,flGroupAdd,flGroupSet,flGroupDel,flRuleAdd,flRuleSet,flRuleDel});
+/* actions: an action node holds exactly one; a bundle node edits its bundle's list */
+function flActList(){
+  const n=flSel(), w=currentWorkflow(); if(!n||!w) return null;
+  if(n.kind==='action'){ n.config=n.config||{}; n.config.actions=n.config.actions||[prNewAction('note')]; return n.config.actions; }
+  if(n.kind==='bundle'){ const b=(w.flow.bundles||[]).find(x=>x.id===(n.config||{}).bundleId); return b?b.actions:null; }
+  return null;
+}
+function flActSet(i,k,v,rr){ const L=flActList(); if(!L||!L[i]||wfEditBlocked()) return; L[i][k]=v; flTouch(); if(rr) render(); }
+function flActType(i,t){ const L=flActList(); if(!L||wfEditBlocked()) return; L[i]=prNewAction(t); const n=flSel(); if(n.kind==='action') n.label=FL_ACTION_LABELS[t]||'Action'; flTouch(); render(); }
+function flActTargetType(i,t){ const L=flActList(); if(!L||!L[i]||wfEditBlocked()) return; L[i].targetType=t; L[i].targetIds=[]; flTouch(); render(); }
+function flActToggleIx(i,listKey,srcKind,ix){
+  const L=flActList(); if(!L||!L[i]||wfEditBlocked()) return;
+  const src=srcKind==='users'?(CFG.orgUsers||[]):srcKind==='regions'?(CFG.orgRegions||[]):(CFG.teams||[]);
+  const item=src[ix]; if(!item) return; const a=L[i]; a[listKey]=a[listKey]||[];
+  if(a[listKey].includes(item.id)) a[listKey]=a[listKey].filter(x=>x!==item.id); else a[listKey].push(item.id);
+  flTouch(); render();
+}
+function flActAdd(t){ const L=flActList(); if(!L||!t||wfEditBlocked()) return; L.push(prNewAction(t)); flTouch(); render(); }
+function flActDel(i){ const L=flActList(); if(!L||wfEditBlocked()) return; L.splice(i,1); flTouch(); render(); }
+function flActMove(i,d){ const L=flActList(); if(!L||wfEditBlocked()) return; const j=i+d; if(j<0||j>=L.length) return; const t=L[i]; L[i]=L[j]; L[j]=t; flTouch(); render(); }
+Object.assign(window,{flActSet,flActType,flActTargetType,flActToggleIx,flActAdd,flActDel,flActMove});
+/* edges */
+function flEdgeSet(id,k,v,rr){
+  const w=currentWorkflow(); if(!w||wfEditBlocked()) return; const e=byId(w.edges,id); if(!e) return;
+  if(k==='maxRepeats'){ v=Math.max(0,parseInt(v,10)||0); }
+  e[k]=v; flTouch(); if(rr) render();
+}
+window.flEdgeSet=flEdgeSet;
+/* bundles: flow-level list (w.flow.bundles) + org library in localStorage until 2b */
+function flLibKey(){ const o=(typeof _savOrgFilter!=='undefined' && _savOrgFilter) ? _savOrgFilter : (_orgId||'none'); return 'northm_schema_bundles_'+o; }
+function flLib(){ try{ const r=localStorage.getItem(flLibKey()); const p=r?JSON.parse(r):[]; return Array.isArray(p)?p:[]; }catch(e){ return []; } }
+function flLibSave(list){ try{ localStorage.setItem(flLibKey(), JSON.stringify(list)); return true; }catch(e){ toast('Could not save the bundle library in this browser.'); return false; } }
+function flAutomationActions(a){
+  const acts=[];
+  if(a.actionType!=='alert_people'){ acts.push(Object.assign(prNewAction('note'),{message:a.actionMessage||('"'+a.name+'" matched: {{name}}')})); return acts; }
+  const tt=a.actionTargetType||'org';
+  acts.push(Object.assign(prNewAction('alert'),{targetType:tt==='manager'?'org':tt,targetIds:(a.actionTargetIds||[]).slice(),message:a.actionMessage||('"'+a.name+'" matched: {{name}}')}));
+  if(tt!=='org' && tt!=='manager'){ const ids=resolveTargetUserIds(a)||[]; if(ids.length) acts.push(Object.assign(prNewAction('email'),{recipientIds:ids,subject:a.name,body:a.actionMessage||('"'+a.name+'" matched: {{name}}')})); }
+  if(a.actionChatDestId) acts.push(Object.assign(prNewAction('chat'),{destId:a.actionChatDestId,message:a.actionMessage||('"'+a.name+'" matched: {{name}}')}));
+  if(a.actionTargetAgent) acts.push(prNewAction('agent'));
+  return acts;
+}
+function flAutomationToLibrary(autoId){
+  const a=byId(CFG.automations||[],autoId); if(!a) return;
+  const lib=flLib(); const b={id:uid('b'),name:a.name||'Automation',actions:flAutomationActions(a),source:'automation:'+a.id,savedAt:new Date().toISOString()};
+  lib.push(b); if(flLibSave(lib)) toast('Saved "'+b.name+'" to the bundle library (this browser) — add a Bundle node in a flow to use it.');
+}
+window.flAutomationToLibrary=flAutomationToLibrary;
+function flBundlePick(v){
+  const n=flSel(), w=currentWorkflow(); if(!n||!w||wfEditBlocked()) return;
+  w.flow.bundles=w.flow.bundles||[];
+  let b=null;
+  if(v==='__new'){ b={id:uid('b'),name:'New bundle',actions:[prNewAction('note')]}; w.flow.bundles.push(b); }
+  else if(v.startsWith('lib:')){ const L=flLib().find(x=>x.id===v.slice(4)); if(L){ b={id:uid('b'),name:L.name,actions:JSON.parse(JSON.stringify(L.actions||[])),from:'library'}; w.flow.bundles.push(b); } }
+  else if(v.startsWith('auto:')){ const a=byId(CFG.automations||[],v.slice(5)); if(a){ b={id:uid('b'),name:a.name||'Automation',actions:flAutomationActions(a),from:'automation:'+a.id}; w.flow.bundles.push(b); } }
+  else b=w.flow.bundles.find(x=>x.id===v)||null;
+  n.config=n.config||{}; n.config.bundleId=b?b.id:''; if(b) n.label=b.name;
+  flTouch(); render();
+}
+function flBundleRename(v){ const n=flSel(), w=currentWorkflow(); if(!n||!w||wfEditBlocked()) return; const b=(w.flow.bundles||[]).find(x=>x.id===(n.config||{}).bundleId); if(!b) return; b.name=v; n.label=v; flTouch(); render(); }
+function flBundleToLibrary(){
+  const n=flSel(), w=currentWorkflow(); if(!n||!w) return; const b=(w.flow.bundles||[]).find(x=>x.id===(n.config||{}).bundleId); if(!b) return;
+  const lib=flLib(); const ex=lib.find(x=>x.name===b.name);
+  if(ex){ ex.actions=JSON.parse(JSON.stringify(b.actions)); ex.savedAt=new Date().toISOString(); } else lib.push({id:uid('b'),name:b.name,actions:JSON.parse(JSON.stringify(b.actions)),savedAt:new Date().toISOString()});
+  if(flLibSave(lib)) toast('Saved to the org bundle library (this browser only until phase 2b).');
+}
+Object.assign(window,{flBundlePick,flBundleRename,flBundleToLibrary});
+/* flow-level settings */
+function flToggleLock(){
+  const w=currentWorkflow(); if(!w||!w.flow) return;
+  if(isViewer()||!canConfig()){ toast('Only people who can configure Process Maps can lock or unlock a flow.'); return; }
+  if(w.flow.locked){ if(!confirm('Unlock "'+w.name+'" for editing?')) return; w.flow.locked=false; logAudit('unlock flow',w.name); }
+  else { w.flow.locked=true; logAudit('lock flow',w.name); }
+  render();
+}
+function flSaveAndCheck(){
+  const w=currentWorkflow(); if(!w||!w.flow) return;
+  if(wfEditBlocked(w)) return;
+  const issues=flChecks(w);
+  w.flow.version=(w.flow.version||0)+1;
+  if(issues.length && w.flow.status==='ready') w.flow.status='draft';
+  w.updatedAt=new Date().toISOString().slice(0,10);
+  logAudit('save flow',w.name+' v'+w.flow.version+(issues.length?(' — '+issues.length+' check issue'+(issues.length===1?'':'s')):' — checks clean'));
+  if(issues.length){ FLU.tab='checks'; toast('Saved v'+w.flow.version+' — '+issues.length+' check issue'+(issues.length===1?'':'s')+' to fix.'); }
+  else toast('Saved v'+w.flow.version+' — all checks pass.');
+  render();
+}
+function flSetStatus(st){
+  const w=currentWorkflow(); if(!w||!w.flow||wfEditBlocked(w)) return;
+  if(st==='ready'){ const n=flChecks(w).length; if(n){ FLU.tab='checks'; render(); toast('Fix the '+n+' check issue'+(n===1?'':'s')+' before marking this flow ready.'); return; } }
+  w.flow.status=st; logAudit('flow status',w.name+' → '+st); render();
+}
+function flTab(t){ FLU.tab=t; render(); }
+function flSelect(kind,id){ UI.selKind=kind; UI.selId=id; FLU.tab='config'; render(); }
+Object.assign(window,{flToggleLock,flSaveAndCheck,flSetStatus,flTab,flSelect});
+
+/* ---------- structure checks ---------- */
+function flActionIssues(a){
+  const t=a.type, out=[];
+  const hasT=(tt,ids)=>(tt||'org')==='org' || (ids||[]).length>0;
+  if(t==='alert' && !hasT(a.targetType,a.targetIds)) out.push('alert has nobody selected');
+  if(t==='email' && !(a.recipientIds||[]).length) out.push('email has no recipients');
+  if(t==='task' && !String(a.title||'').trim()) out.push('task has no title');
+  if(t==='escalate' && !hasT(a.targetType,a.targetIds)) out.push('escalation has nobody selected');
+  if(t==='calc' && (!a.field || !String(a.expr||'').replace(/^=/,'').trim())) out.push('calculation needs a field and an expression');
+  if(t==='webhook' && !/^https?:\/\/[^\s/]+\.[^\s]+/.test(String(a.url||''))) out.push('webhook needs a URL');
+  if(t==='agent' && !a.destId) out.push('AI agent has no destination');
+  if(t==='agent' && a.mode==='pull' && !a.intoField) out.push('AI agent pull has no target field');
+  if(t==='chat' && !a.destId) out.push('chat message has no channel');
+  return out;
+}
+function flSubflowCycle(w){
+  /* returns the flow chain if w reaches itself through subflow nodes */
+  const target=w.id;
+  const walk=(fid,path,seen)=>{
+    const f=byId(CFG.workflows||[],fid); if(!f) return null;
+    for(const n of (f.nodes||[])){
+      if(n.kind!=='subflow') continue; const to=(n.config||{}).flowId; if(!to) continue;
+      if(to===target) return path.concat([f.name]);
+      if(seen.has(to)) continue; seen.add(to);
+      const r=walk(to,path.concat([f.name]),seen); if(r) return r;
+    }
+    return null;
+  };
+  return walk(target,[],new Set([target]));
+}
+function flChecks(w){
+  const issues=[], add=(sev,nodeId,msg,edgeId)=>issues.push({sev,nodeId:nodeId||null,edgeId:edgeId||null,msg});
+  if(!w || !flIsFlow(w)) return issues;
+  const nodes=w.nodes||[], trig=flTriggers(w), back=flBackEdges(w);
+  if(!trig.length) add('error',null,'This flow has no trigger — add one so it knows when to start.');
+  const reach=flReach(w,trig.map(t=>t.id));
+  const ends=nodes.filter(n=>n.kind==='end').map(n=>n.id);
+  /* nodes from which an End can be reached (reverse reachability) */
+  const canEnd=new Set(ends); let grew=true;
+  while(grew){ grew=false; (w.edges||[]).forEach(e=>{ if(canEnd.has(e.toId) && !canEnd.has(e.fromId)){ canEnd.add(e.fromId); grew=true; } }); }
+  nodes.forEach(n=>{
+    const k=nodeKind(n), out=flOut(w,n.id), inc=flIn(w,n.id), nm='“'+flNodeTitle(n)+'”';
+    if(k==='trigger'){
+      if(inc.length) add('warn',n.id,nm+' is a trigger but has incoming connectors — triggers only start a flow.');
+      const c=n.config||{}, wh=c.when||{};
+      if(['enters','stuck','threshold','manual','schedule'].includes(wh.type) && (!c.procKey || !c.step)) add('error',n.id,nm+' needs a process and a step.');
+      if(wh.type==='external' && !wh.key) add('error',n.id,nm+' needs an external trigger key.');
+      if(wh.type==='flow_finished' && !wh.flowId) add('error',n.id,nm+' needs the flow it waits for.');
+      if(wh.type==='threshold' && (!wh.field || wh.value==='')) add('error',n.id,nm+' needs a threshold field and value.');
+      if(wh.type==='stuck' && !wh.dateField) add('error',n.id,nm+' needs a date field to measure time in step.');
+    } else if(trig.length && !reach.has(n.id)){
+      add('error',n.id,nm+' is not connected to any trigger (orphan).'); return;
+    }
+    if(k!=='end' && !out.length){ add('error',n.id,'Path stops at '+nm+' — connect it on to an End.'); }
+    else if(k!=='end' && reach.has(n.id) && !canEnd.has(n.id)){ add('error',n.id,'No path from '+nm+' reaches an End.'); }
+    if(k==='condition'){
+      const c=n.config||{}, paths=c.paths||[];
+      if(!paths.length) add('error',n.id,nm+' has no paths.');
+      const labels=out.map(e=>(e.label||'').trim().toLowerCase());
+      if(!labels.includes('else')) add('error',n.id,nm+' has no Else path.');
+      paths.forEach(p=>{
+        const rules=(p.groups||[]).reduce((s,g)=>s+(g.rules||[]).filter(r=>r.field).length,0);
+        if(!rules) add('warn',n.id,nm+': path “'+(p.name||'?')+'” has no rules.');
+        if(!labels.includes(String(p.name||'').trim().toLowerCase())) add('error',n.id,nm+': no connector labelled “'+(p.name||'?')+'”.');
+      });
+      const known=paths.map(p=>String(p.name||'').trim().toLowerCase()).concat(['else']);
+      out.forEach(e=>{ if(!back.has(e.id) && !known.includes((e.label||'').trim().toLowerCase())) add('warn',n.id,nm+': connector “'+(e.label||'(unlabelled)')+'” doesn\'t match any path.',e.id); });
+    }
+    if(k==='wait'){
+      const c=n.config||{};
+      const tOut=out.filter(e=>(e.label||'').trim().toLowerCase()==='timeout'), cOut=out.filter(e=>(e.label||'').trim().toLowerCase()!=='timeout');
+      if(!cOut.length) add('error',n.id,nm+' has no path to continue on.');
+      if(c.mode!=='duration'){
+        if(!tOut.length) add('error',n.id,nm+' has no timeout path (label a connector “timeout”).');
+        if(!(Number(c.timeoutAmount)>0)) add('error',n.id,nm+' needs a timeout duration.');
+      }
+      if(c.mode==='duration' && !(Number(c.amount)>0)) add('error',n.id,nm+' needs a duration.');
+      if(c.mode==='until_date' && !c.dateField) add('error',n.id,nm+' needs a date field.');
+    }
+    if(k==='action'){ ((n.config||{}).actions||[]).forEach(a=>flActionIssues(a).forEach(m=>add('error',n.id,nm+': '+m+'.'))); if(!((n.config||{}).actions||[]).length) add('error',n.id,nm+' has no action.'); }
+    if(k==='bundle'){
+      const b=(w.flow.bundles||[]).find(x=>x.id===(n.config||{}).bundleId);
+      if(!b) add('error',n.id,nm+' has no bundle selected.');
+      else { if(!(b.actions||[]).length) add('error',n.id,nm+': bundle is empty.'); (b.actions||[]).forEach(a=>flActionIssues(a).forEach(m=>add('error',n.id,nm+': '+m+'.'))); }
+    }
+    if(k==='split' && out.length<2) add('warn',n.id,nm+' should have at least two outgoing branches.');
+    if(k==='join'){
+      const incN=inc.filter(e=>!back.has(e.id)).length, c=n.config||{};
+      if(incN<2) add('warn',n.id,nm+' should have at least two incoming branches.');
+      if(c.rule==='first' && !(Number(c.n)>=1 && Number(c.n)<=incN)) add('error',n.id,nm+': “first N” must be between 1 and '+incN+'.');
+    }
+    if(k==='subflow'){
+      const fid=(n.config||{}).flowId;
+      if(!fid || !byId(CFG.workflows||[],fid)) add('error',n.id,nm+' has no target flow.');
+      else if(fid===w.id) add('error',n.id,nm+' calls this same flow.');
+    }
+    if(k==='end' && !String((n.config||{}).outcome||'').trim()) add('warn',n.id,nm+' has no outcome label.');
+  });
+  (w.edges||[]).forEach(e=>{ if(back.has(e.id) && !(Number(e.maxRepeats)>0)){ const a=byId(nodes,e.fromId); add('error',e.fromId,'Loop from “'+(a?flNodeTitle(a):'?')+'” back to “'+((byId(nodes,e.toId)||{}).label||'?')+'” needs a max repeats setting.',e.id); } });
+  const cyc=flSubflowCycle(w); if(cyc && !issues.some(i=>/calls this same flow/.test(i.msg))) add('error',null,'Subflows loop back to this flow ('+cyc.concat([w.name]).join(' → ')+').');
+  return issues;
+}
+
+/* ---------- simulate (ZERO side effects) ---------- */
+function flRecords(w){
+  const P=prProc(flBoundProcKey(w)); if(!P) return [];
+  const steps=prSteps(P);
+  return prRecords(P).map(r=>Object.assign(r,{stepLabel:(steps.find(s=>s.key===r.step)||{}).label||r.step}));
+}
+function flDaysToCal(amount,unit){
+  const a=Number(amount)||0;
+  if(unit==='minutes') return a/1440; if(unit==='hours') return a/24;
+  if(unit==='bdays'){ let d=0, left=a, dt=new Date(); while(left>0){ dt.setDate(dt.getDate()+1); d++; const wd=dt.getDay(); if(wd!==0&&wd!==6) left--; } return d; }
+  return a;
+}
+function flUnitText(a,u){ return a+' '+({minutes:'minute',hours:'hour',days:'day',bdays:'business day'}[u]||u)+(Number(a)===1?'':'s'); }
+function flTriggerFires(n,m,w){
+  const c=n.config||{}, wh=c.when||{}, P=prProc(c.procKey);
+  if(!m) return {ok:false, why:'no record'};
+  if(c.procKey && c.procKey!==flBoundProcKey(w)) return {ok:false, why:'bound to a different process ('+(P?P.label:c.procKey)+')'};
+  const stepL=(prSteps(P).find(s=>s.key===c.step)||{}).label||c.step;
+  const at=!c.step || m.step===c.step;
+  if(wh.type==='external') return {ok:false, why:'fires on an external event — can\'t be tested against a record'};
+  if(wh.type==='flow_finished') return {ok:false, why:'fires when another flow finishes'};
+  if(!at) return {ok:false, why:'record is at “'+m.stepLabel+'”, not “'+stepL+'”'};
+  if(wh.type==='stuck'){ const d=wh.dateField?prDaysSince(m.fields[wh.dateField]):null; if(d==null) return {ok:false, why:'no '+(wh.dateField||'date')+' on this record'}; return d>=(Number(wh.days)||0)?{ok:true, why:'at “'+stepL+'” for '+d+' days (≥ '+wh.days+')'}:{ok:false, why:'only '+d+' days at “'+stepL+'” (needs '+wh.days+')'}; }
+  if(wh.type==='threshold'){ const ok=prThresholdHolds(wh,m); return {ok, why:(wh.field||'?')+' '+(ok?'crosses':'does not cross')+' the threshold'}; }
+  return {ok:true, why:'record is at “'+stepL+'”'+(wh.type==='schedule'?' (on the next scheduled run)':wh.type==='manual'?' (when someone clicks Run now)':'')};
+}
+function flRuleText(r,m){
+  const v=m.fields?m.fields[r.field]:undefined, op=(PR_OPS.find(o=>o[0]===r.op)||[0,r.op])[1];
+  const ok=prCondHolds(r,m);
+  return {ok, text:(r.field||'?')+' ('+(v==null||v===''?'empty':prFmt(v))+') '+op+(r.op==='empty'?'':' '+r.value)+' → '+(ok?'✓':'✗')};
+}
+function flEvalCondition(n,m){
+  const paths=(n.config||{}).paths||[], lines=[];
+  for(const p of paths){
+    const gRes=(p.groups||[]).map(g=>{
+      const rs=(g.rules||[]).filter(r=>r.field).map(r=>flRuleText(r,m));
+      const ok=rs.length?(g.join==='or'?rs.some(x=>x.ok):rs.every(x=>x.ok)):false;
+      return {ok, rs, join:g.join};
+    });
+    const ok=gRes.length?(p.join==='or'?gRes.some(g=>g.ok):gRes.every(g=>g.ok)):false;
+    lines.push('Path “'+p.name+'”: '+(ok?'matches':'no match')+' — '+(gRes.map(g=>'('+g.rs.map(x=>x.text).join(g.join==='or'?' OR ':' AND ')+')').join(p.join==='or'?' OR ':' AND ')||'no rules'));
+    if(ok) return {path:p.name, lines};
+  }
+  return {path:'else', lines:lines.concat(['No path matched → Else'])};
+}
+function flEventHappened(c,m,P){
+  if(c.event==='reply') return {ok:false, note:'replies aren\'t tracked yet'};
+  const target=c.eventValue || (c.event==='approval' ? ((P&&P.key==='deal')?'Closed Won':'Approved') : '');
+  if(!target) return {ok:false, note:'no status picked'};
+  return {ok:m.step===target, note:'record is '+(m.step===target?'':'not ')+'at “'+target+'”', target};
+}
+function flSimInit(w, m, opts){
+  opts=opts||{};
+  const S={wfId:w.id, recordId:m?m.id:null, m:m, ff:opts.ff||0, tokens:[], log:[], hit:{}, edges:{}, loops:{}, joins:{}, joinFired:{}, ends:[], stuck:[], atStep:[], steps:0, done:false, back:flBackEdges(w), noFire:null};
+  const trig=flTriggers(w);
+  if(!trig.length){ S.stuck.push({nodeId:null, reason:'The flow has no trigger.'}); S.done=true; return S; }
+  const res=trig.map(t=>({t, r:flTriggerFires(t,m,w)}));
+  let start=res.filter(x=>x.r.ok);
+  if(!start.length){
+    S.noFire=res.map(x=>'“'+flNodeTitle(x.t)+'”: '+x.r.why).join('; ');
+    if(!opts.assume){ S.done=true; return S; }
+    const b=flBoundProcKey(w);
+    start=[res.find(x=>(x.t.config||{}).procKey===b)||res[0]];
+    S.log.push({nodeId:null, title:'No trigger fires for this record', lines:[S.noFire, 'Simulating as if “'+flNodeTitle(start[0].t)+'” fired.'], cls:'warn'});
+  }
+  start.forEach(x=>S.tokens.push({nodeId:x.t.id, t:0, via:null, why:x.r.why}));
+  return S;
+}
+function flFollow(S,w,n,edges,t,lines){
+  const out=[];
+  edges.forEach(e=>{
+    if(S.back.has(e.id)){
+      const cnt=S.loops[e.id]||0, max=Number(e.maxRepeats)||0;
+      if(!max){ if(cnt>=10){ lines.push('Loop has no max repeats — stopped after 10.'); return; } }
+      else if(cnt>=max){ lines.push('Loop limit reached ('+max+'×) — not looping again.'); return; }
+      S.loops[e.id]=cnt+1; lines.push('Loop back ('+(cnt+1)+' of '+(max||'∞')+').');
+    }
+    S.edges[e.id]=true; out.push({nodeId:e.toId, t:t, via:e.id});
+  });
+  return out;
+}
+function flSimStep(S){
+  const w=byId(CFG.workflows||[],S.wfId); if(!w){ S.done=true; return; }
+  if(!S.tokens.length){ flSimFinish(S,w); return; }
+  if(++S.steps>400){ S.stuck.push({nodeId:null, reason:'Stopped after 400 steps (runaway loop?).'}); S.tokens=[]; flSimFinish(S,w); return; }
+  const tok=S.tokens.shift(); const n=byId(w.nodes,tok.nodeId);
+  if(!n){ return; }
+  S.hit[n.id]=true;
+  const k=nodeKind(n), c=n.config||{}, m=S.m, P=prProc(flBoundProcKey(w));
+  const out=flOut(w,n.id), lines=[]; let next=[]; const day=t=>t?(' (day '+(Math.round(t*10)/10)+')'):'';
+  const entry={nodeId:n.id, title:FL_KINDS[k].icon+' '+flNodeTitle(n)+day(tok.t), lines, cls:''};
+  const pseudo={name:w.name, procKey:flBoundProcKey(w), step:m?m.step:'', when:{}};
+  if(k==='trigger'){ lines.push('WHEN '+prWhenText({procKey:c.procKey, step:c.step, when:c.when||{}})); if(tok.why) lines.push('Fires: '+tok.why+'.'); next=flFollow(S,w,n,out,tok.t,lines); }
+  else if(k==='step'){
+    if(n.builtin && m){
+      if(m.step===n.stepKey){
+        lines.push('Record is at this step now.');
+        const extra=out.filter(e=>{ const tn=byId(w.nodes,e.toId); return !(tn && tn.builtin); });
+        if(extra.length) next=flFollow(S,w,n,extra,tok.t,lines);
+        else { S.atStep.push({nodeId:n.id, reason:'record is at “'+n.label+'” now'}); entry.cls='end'; }
+      } else {
+        const curNode=w.nodes.find(x=>x.builtin && x.stepKey===m.step);
+        const bOut=out.filter(e=>{ const tn=byId(w.nodes,e.toId); return tn && tn.builtin; });
+        const via=curNode?bOut.find(e=>flReach(w,[e.toId],ed=>{ const tn=byId(w.nodes,ed.toId); return tn&&tn.builtin; }).has(curNode.id)):null;
+        if(via){ lines.push('Record already passed this step.'); next=flFollow(S,w,n,[via],tok.t,lines); }
+        else { lines.push('Record isn\'t on this branch'+(curNode?'':' (its step “'+m.stepLabel+'” isn\'t in this flow)')+'.'); entry.cls='muted'; }
+      }
+    } else { lines.push('Process step.'); next=flFollow(S,w,n,out,tok.t,lines); }
+  }
+  else if(k==='condition'){
+    const r=flEvalCondition(n,m||{fields:{}}); r.lines.forEach(l=>lines.push(l));
+    const es=out.filter(e=>(e.label||'').trim().toLowerCase()===String(r.path).trim().toLowerCase());
+    if(!es.length){ S.stuck.push({nodeId:n.id, reason:'no connector labelled “'+r.path+'”'}); entry.cls='bad'; }
+    else next=flFollow(S,w,n,es,tok.t,lines);
+  }
+  else if(k==='wait'){
+    const cont=out.filter(e=>(e.label||'').trim().toLowerCase()!=='timeout'), tmo=out.filter(e=>(e.label||'').trim().toLowerCase()==='timeout');
+    const T=c.mode==='duration'?0:flDaysToCal(c.timeoutAmount,c.timeoutUnit);
+    const timeoutOr=(reason)=>{
+      if(T>0 && tok.t+T<=S.ff && tmo.length){ lines.push(reason+' — timed out after '+flUnitText(c.timeoutAmount,c.timeoutUnit)+' (fast-forwarded).'); next=flFollow(S,w,n,tmo,tok.t+T,lines); entry.cls='warn'; }
+      else { S.stuck.push({nodeId:n.id, waiting:true, reason:reason+(T>0?('; times out on day '+(Math.round((tok.t+T)*10)/10)+(S.ff?'':' — turn on fast-forward to test it')):'')}); lines.push(reason+'.'); entry.cls='wait'; }
+    };
+    if(c.mode==='duration'){
+      const D=flDaysToCal(c.amount,c.unit);
+      if(tok.t+D<=S.ff){ lines.push('Waited '+flUnitText(c.amount,c.unit)+' (fast-forwarded).'); next=flFollow(S,w,n,cont,tok.t+D,lines); }
+      else { S.stuck.push({nodeId:n.id, waiting:true, reason:'waiting '+flUnitText(c.amount,c.unit)+' — resumes on day '+(Math.round((tok.t+D)*10)/10)}); lines.push('Waiting '+flUnitText(c.amount,c.unit)+'.'); entry.cls='wait'; }
+    } else if(c.mode==='until_date'){
+      const v=m&&m.fields?m.fields[c.dateField]:null, ds=v?-prDaysSince(v)+(Number(c.dateOffset)||0):null;
+      if(ds==null){ lines.push('No '+(c.dateField||'date')+' on this record.'); timeoutOr('Waiting for a date that isn\'t set'); }
+      else if(ds<=tok.t){ lines.push((c.dateField)+' ('+prFmt(v)+') has passed.'); next=flFollow(S,w,n,cont,tok.t,lines); }
+      else if(ds<=S.ff && !(T>0 && tok.t+T<ds)){ lines.push('Reached '+c.dateField+' on day '+ds+' (fast-forwarded).'); next=flFollow(S,w,n,cont,ds,lines); }
+      else timeoutOr('Waiting until '+c.dateField+' ('+prFmt(v)+')');
+    } else {
+      const ev=flEventHappened(c,m||{},P);
+      if(ev.ok){ lines.push('Already happened: '+ev.note+'.'); next=flFollow(S,w,n,cont,tok.t,lines); }
+      else timeoutOr('Waiting for '+({approval:'approval',status_change:'a status change',reply:'a reply'}[c.event]||c.event)+(ev.target?(' (“'+ev.target+'”)'):'')+' — '+ev.note);
+    }
+  }
+  else if(k==='action'||k==='bundle'){
+    let acts=c.actions||[];
+    if(k==='bundle'){ const b=(w.flow.bundles||[]).find(x=>x.id===c.bundleId); acts=b?b.actions:[]; lines.push('Bundle “'+(b?b.name:'?')+'”:'); }
+    acts.forEach(a=>lines.push('Would run — '+(m?prActionPreview(a,m,pseudo):FL_ACTION_LABELS[a.type])));
+    entry.cls='act';
+    next=flFollow(S,w,n,out,tok.t,lines);
+  }
+  else if(k==='split'){ lines.push('Splits into '+out.length+' parallel branch'+(out.length===1?'':'es')+'.'); next=flFollow(S,w,n,out,tok.t,lines); }
+  else if(k==='join'){
+    const incN=flIn(w,n.id).filter(e=>!S.back.has(e.id)).length, need=c.rule==='any'?1:c.rule==='first'?(Number(c.n)||1):incN;
+    const arr=S.joins[n.id]=(S.joins[n.id]||[]); arr.push(tok.t);
+    if(S.joinFired[n.id]){ lines.push('Branch arrived after the join already continued — ignored.'); entry.cls='muted'; }
+    else if(arr.length>=need){ S.joinFired[n.id]=true; lines.push('Joined ('+arr.length+' of '+incN+', rule: '+(c.rule==='first'?'first '+need:c.rule)+').'); next=flFollow(S,w,n,out,Math.max(...arr),lines); }
+    else { lines.push('Waiting for branches ('+arr.length+' of '+need+').'); entry.cls='wait'; }
+  }
+  else if(k==='subflow'){ const f=byId(CFG.workflows||[],c.flowId); lines.push('Would start subflow “'+(f?f.name:'?')+'” (not simulated inside this run).'); next=flFollow(S,w,n,out,tok.t,lines); }
+  else if(k==='end'){ S.ends.push({nodeId:n.id, outcome:c.outcome||n.label||'End', t:tok.t}); lines.push('Outcome: '+(c.outcome||n.label||'End')+'.'); entry.cls='end'; }
+  if(k!=='end' && k!=='join' && k!=='wait' && !next.length && !lines.some(l=>/Loop limit|no max repeats/.test(l)) && entry.cls!=='muted' && entry.cls!=='bad' && !(k==='step'&&n.builtin)){
+    S.stuck.push({nodeId:n.id, reason:'nowhere to go from here'}); entry.cls='bad';
+  } else if(!next.length && lines.some(l=>/Loop limit|no max repeats/.test(l))){ S.stuck.push({nodeId:n.id, reason:'loop limit reached'}); entry.cls='bad'; }
+  S.log.push(entry);
+  next.forEach(x=>S.tokens.push(x));
+  if(!S.tokens.length) flSimFinish(S,w);
+}
+function flSimFinish(S,w){
+  if(S.done) return;
+  Object.keys(S.joins).forEach(id=>{ if(!S.joinFired[id]){ const n=byId(w.nodes,id), c=(n&&n.config)||{}; const incN=flIn(w,id).filter(e=>!S.back.has(e.id)).length;
+    S.stuck.push({nodeId:id, waiting:true, reason:'join waiting for '+(c.rule==='any'?1:c.rule==='first'?c.n:incN)+' branch(es), got '+S.joins[id].length}); } });
+  S.done=true;
+}
+function flSimRun(S){ let g=0; while(!S.done && g++<2000) flSimStep(S); return S; }
+function flSimSummary(S,w){
+  if(S.noFire && !S.log.length) return {ok:false, text:'Trigger would not fire — '+S.noFire};
+  const nm=id=>{ const n=id&&byId(w.nodes,id); return n?flNodeTitle(n):'flow'; };
+  const parts=[];
+  if(S.ends.length) parts.push('Ended at '+Array.from(new Set(S.ends.map(e=>'“'+e.outcome+'”'))).join(' + '));
+  S.atStep.forEach(a=>parts.push('Waiting at step “'+nm(a.nodeId)+'” ('+a.reason+')'));
+  S.stuck.forEach(s=>parts.push((s.waiting?'Waiting at “':'Stuck at “')+nm(s.nodeId)+'” — '+s.reason));
+  if(!S.done) parts.push('In progress…');
+  const waiting=S.stuck.some(s=>s.waiting)||S.atStep.length>0;
+  return {ok:S.done && !S.stuck.some(s=>!s.waiting), waiting, text:parts.join(' · ')||'Nothing ran.'};
+}
+function flSimCategory(S,w){
+  if(S.noFire && !S.log.length) return 'Trigger would not fire';
+  const nm=id=>{ const n=id&&byId(w.nodes,id); return n?flNodeTitle(n):'flow'; };
+  const keys=[];
+  S.ends.forEach(e=>keys.push('Ended: '+e.outcome));
+  S.atStep.forEach(a=>keys.push('At step: '+nm(a.nodeId)));
+  S.stuck.forEach(s=>keys.push((s.waiting?'Waiting at: ':'Stuck at: ')+nm(s.nodeId)));
+  return Array.from(new Set(keys)).join(' + ')||'Nothing ran';
+}
+function flSimRecordObj(w){ return flRecords(w).find(r=>String(r.id)===String(FLU.simRecord))||null; }
+function flSimReset(){ FLU.sim=null; render(); }
+function flSimEnsure(){
+  const w=currentWorkflow(); if(!w) return null;
+  if(!FLU.sim || FLU.sim.wfId!==w.id){
+    const m=flSimRecordObj(w);
+    const recs=flRecords(w);
+    if(!m && recs.length){ toast('Pick a record to simulate.'); return null; }
+    FLU.sim=flSimInit(w,m,{ff:FLU.ff?Number(FLU.ffDays)||0:0, assume:true});
+  }
+  return FLU.sim;
+}
+function flSimStepBtn(){ const S=flSimEnsure(); if(!S) return; if(!S.done) flSimStep(S); flSimStore(S); render(); }
+function flSimRunBtn(){ const S=flSimEnsure(); if(!S) return; flSimRun(S); flSimStore(S); render(); }
+function flSimStore(S){
+  if(!S.done) return;
+  const w=currentWorkflow(); if(!w||!w.flow) return;
+  const sum=flSimSummary(S,w);
+  const ls={at:new Date().toISOString(), result:sum.text, ok:sum.ok, record:S.m?S.m.name:null, ff:S.ff, issues:S.stuck.map(s=>s.reason)};
+  if(!wfReadOnly(w)) { w.flow.lastSimulation=ls; } else FLU.sessionLastSim=ls; /* viewers/locked: session only, nothing saved */
+}
+function flSimSetRecord(v){ FLU.simRecord=v; FLU.sim=null; render(); }
+function flSimSetFF(on){ FLU.ff=!!on; FLU.sim=null; render(); }
+function flSimSetFFDays(v){ FLU.ffDays=Math.max(0,Number(v)||0); FLU.sim=null; render(); }
+function flSimAll(){
+  const w=currentWorkflow(); if(!w) return;
+  const recs=flRecords(w); const counts={}, ex={};
+  recs.forEach(m=>{ const S=flSimRun(flSimInit(w,m,{ff:FLU.ff?Number(FLU.ffDays)||0:0, assume:false})); const k=flSimCategory(S,w); counts[k]=(counts[k]||0)+1; (ex[k]=ex[k]||[]).push(m.name); });
+  FLU.simAll={at:new Date().toISOString(), total:recs.length, rows:Object.keys(counts).sort((a,b)=>counts[b]-counts[a]).map(k=>({k, n:counts[k], ex:ex[k].slice(0,4)}))};
+  render();
+}
+Object.assign(window,{flSimReset,flSimStepBtn,flSimRunBtn,flSimSetRecord,flSimSetFF,flSimSetFFDays,flSimAll});
+
+/* ---------- rendering ---------- */
+function flRenderNode(w,n){
+  const k=nodeKind(n), d=FL_KINDS[k], c=n.config||{};
+  const S=FLU.sim && FLU.sim.wfId===w.id ? FLU.sim : null;
+  let cls='node fl-node fl-'+k+(n.builtin?' fl-builtin':'')+(UI.selKind==='node'&&UI.selId===n.id?' sel':'')+(UI.connectFromId===n.id?' pending':'');
+  if(S){ if(S.hit[n.id]) cls+=' sim-hit'; if(S.tokens.some(t=>t.nodeId===n.id)) cls+=' sim-cur';
+    if(S.stuck.some(s=>s.nodeId===n.id && !s.waiting)) cls+=' sim-stuck'; else if(S.stuck.some(s=>s.nodeId===n.id)||S.atStep.some(s=>s.nodeId===n.id)) cls+=' sim-wait';
+    if(S.ends.some(e=>e.nodeId===n.id)) cls+=' sim-end'; }
+  const W=nodeDef(n).w, H=nodeDef(n).h;
+  let shape='', text='';
+  const clip=(t,n)=>{ t=String(t||''); return t.length>n?t.slice(0,n-1)+'…':t; };
+  const lbl=esc(clip(flNodeTitle(n),k==='step'?20:24));
+  const cap=(t)=>`<text class="fl-cap" x="12" y="17">${esc(t)}</text>`;
+  if(k==='condition'){
+    shape=`<rect class="fl-hitbox" width="${W}" height="${H}" fill="transparent" style="pointer-events:all"></rect><polygon points="${W/2},0 ${W},${H/2} ${W/2},${H} 0,${H/2}"></polygon>`;
+    text=`<text class="fl-cap" x="${W/2}" y="${H/2-10}" text-anchor="middle">${d.icon} IF</text><text x="${W/2}" y="${H/2+8}" text-anchor="middle">${esc(clip(flNodeTitle(n),20))}</text>`;
+  } else if(k==='end'){
+    shape=`<circle cx="${W/2}" cy="${H/2}" r="${W/2-2}"></circle><circle class="fl-end-inner" cx="${W/2}" cy="${H/2}" r="${W/2-7}"></circle>`;
+    text=`<text x="${W/2}" y="${H/2}" text-anchor="middle" dominant-baseline="middle">${esc(clip(c.outcome||n.label||'End',11))}</text>`;
+  } else if(k==='split'||k==='join'){
+    shape=`<rect width="${W}" height="${H}" rx="4"></rect>`;
+    text=`<text class="fl-bar-t" x="${W/2}" y="${H/2+1}" text-anchor="middle" dominant-baseline="middle">${d.icon} ${esc(k==='join'?('JOIN · '+(c.rule==='first'?'first '+(c.n||1):(c.rule||'all'))):'SPLIT')}</text>`;
+  } else {
+    shape=`<rect width="${W}" height="${H}" rx="${k==='step'?6:9}"></rect>`+
+      (k==='trigger'?`<rect class="fl-accent" width="6" height="${H}" rx="3"></rect>`:'')+
+      (k==='bundle'?`<rect class="fl-inner" x="4" y="4" width="${W-8}" height="${H-8}" rx="6"></rect>`:'')+
+      (k==='subflow'?`<line class="fl-inner" x1="12" y1="0" x2="12" y2="${H}"></line><line class="fl-inner" x1="${W-12}" y1="0" x2="${W-12}" y2="${H}"></line>`:'');
+    const capT=k==='step'?(n.builtin?'BUILT-IN STEP':'STEP'):k==='action'?'ACTION':k==='trigger'?'WHEN':k==='wait'?'WAIT':k==='bundle'?'BUNDLE':'SUBFLOW';
+    let sub='';
+    if(k==='wait') sub=c.mode==='duration'?flUnitText(c.amount,c.unit):c.mode==='until_date'?('until '+(c.dateField||'?')):('until '+({approval:'approved',status_change:'status change',reply:'reply'}[c.event]||c.event)+(c.timeoutAmount?' · ≤'+flUnitText(c.timeoutAmount,c.timeoutUnit):''));
+    if(k==='trigger'){ const P=prProc(c.procKey); sub=(P?P.label:'—'); }
+    if(k==='subflow'){ const f=byId(CFG.workflows||[],c.flowId); sub=f?f.name:'pick a flow'; }
+    if(k==='bundle'){ const b=(w.flow.bundles||[]).find(x=>x.id===c.bundleId); sub=b?((b.actions||[]).length+' actions'):'pick a bundle'; }
+    const x0=k==='subflow'?20:12;
+    text=`<text class="fl-cap" x="${x0}" y="16">${d.icon} ${capT}</text><text x="${x0}" y="${sub?35:39}">${lbl}</text>`+(sub?`<text class="fl-sub" x="${x0}" y="51">${esc(clip(sub,30))}</text>`:'');
+    if(n.builtin) text+=`<text x="${W-10}" y="17" text-anchor="end" class="fl-lock">🔒</text>`;
+  }
+  const tip=n.builtin?'Built-in step — add actions around it':(FL_KINDS[k].label+': '+flNodeTitle(n));
+  return `<g class="${cls}" data-id="${esc(n.id)}" transform="translate(${n.x},${n.y})" onmousedown="if(FLU.tab==='checks')FLU.tab='config';nodeMouseDown(event,'${n.id}')"><title>${esc(tip)}</title>
+    ${shape}${text}
+    <circle class="connect-handle" cx="${W}" cy="${H/2}" r="6" onmousedown="startConnectHandle(event,'${n.id}')"><title>Drag to another node to connect</title></circle>
+  </g>`;
+}
+function flRenderEdge(w,e,back){
+  const a=byId(w.nodes,e.fromId), b=byId(w.nodes,e.toId); if(!a||!b) return '';
+  const da=nodeDef(a), db=nodeDef(b);
+  const ax=a.x+da.w/2, ay=a.y+da.h/2, bx=b.x+db.w/2, by=b.y+db.h/2;
+  const isBack=back && back.has(e.id);
+  let d, mx, my;
+  if(isBack){
+    /* loop edges: curve out to the side so they don't sit on top of the forward path */
+    const dx=bx-ax, dy=by-ay, len=Math.max(1,Math.hypot(dx,dy)), off=Math.max(70,len*0.35);
+    const px=-dy/len*off, py=dx/len*off;
+    const c1x=ax+dx*0.25+px, c1y=ay+dy*0.25+py, c2x=ax+dx*0.75+px, c2y=ay+dy*0.75+py;
+    const s=nodeClip(a,c1x-ax,c1y-ay), t=nodeClip(b,c2x-bx,c2y-by);
+    d=`M ${s.x} ${s.y} C ${c1x} ${c1y} ${c2x} ${c2y} ${t.x} ${t.y}`; mx=(s.x+3*c1x+3*c2x+t.x)/8; my=(s.y+3*c1y+3*c2y+t.y)/8;
+  } else {
+    const s=nodeClip(a,bx-ax,by-ay), t=nodeClip(b,ax-bx,ay-by);
+    d=`M ${s.x} ${s.y} L ${t.x} ${t.y}`; mx=(s.x+t.x)/2; my=(s.y+t.y)/2;
+  }
+  const S=FLU.sim && FLU.sim.wfId===w.id ? FLU.sim : null;
+  const lab=(e.label||'').trim().toLowerCase();
+  const cls='edge fl-edge'+(UI.selKind==='edge'&&UI.selId===e.id?' sel':'')+(S&&S.edges[e.id]?' sim-edge':'')+(lab==='timeout'?' fl-timeout':'')+(isBack?' fl-loop':'')+(lab==='else'||lab==='no'?' fl-else':'');
+  const labTxt=(e.label||'')+(isBack?((e.label?' · ':'')+'↻ '+(Number(e.maxRepeats)>0?'max '+e.maxRepeats:'no max')):'');
+  return `<g class="${cls}" onmousedown="event.stopPropagation();if(FLU.tab==='checks')FLU.tab='config';edgeClicked('${e.id}')">
+    <path class="fl-hit" d="${d}"></path><path d="${d}" marker-end="url(#${S&&S.edges[e.id]?'arrowSim':'arrow'})"></path>
+    ${labTxt?`<text class="fl-elab" x="${mx}" y="${my-5}" text-anchor="middle">${esc(labTxt)}</text>`:''}
+  </g>`;
+}
+function flAnchorLines(w){
+  /* dotted association from a built-in step to the triggers bound to it (visual only, not an edge) */
+  return flTriggers(w).map(t=>{
+    const s=w.nodes.find(n=>n.builtin && n.stepKey===(t.config||{}).step && (t.config||{}).procKey===(w.flow||{}).builtin);
+    if(!s || flOut(w,s.id).some(e=>e.toId===t.id)) return '';
+    const dt=nodeDef(t), ds=nodeDef(s);
+    if(Math.abs((t.y)-(s.y))<5 && Math.abs(t.x-s.x)<5) return '';
+    return `<line class="fl-anchor" x1="${s.x+ds.w/2}" y1="${s.y+ds.h}" x2="${t.x+dt.w/2}" y2="${t.y}"></line>`;
+  }).join('');
+}
+function flEdgeListHtml(w,n,ro){
+  const out=flOut(w,n.id); if(!out.length) return '<div class="mini">No outgoing connectors yet — drag from the dot on the node\'s right edge.</div>';
+  const back=flBackEdges(w);
+  let opts=['','yes','no','else','timeout'];
+  if(n.kind==='condition') opts=((n.config||{}).paths||[]).map(p=>p.name).concat(['else']);
+  if(n.kind==='wait') opts=['','timeout'];
+  return out.map(e=>{ const t=byId(w.nodes,e.toId);
+    const cur=e.label||''; const list=opts.includes(cur)?opts:opts.concat([cur]);
+    return `<div class="fl-erow"><span class="mini">→ ${esc(t?flNodeTitle(t):'?')}${back.has(e.id)?' ↻':''}</span>
+      <select class="in" ${ro?'disabled':''} onchange="flEdgeSet('${e.id}','label',this.value,true)">${list.map(o=>`<option value="${esc(o)}" ${o===cur?'selected':''}>${esc(o||'(no label)')}</option>`).join('')}</select></div>`; }).join('');
+}
+function flConfigHtml(w,n,ro){
+  const k=nodeKind(n), c=n.config||{}, dis=ro?'disabled':'';
+  const P=prProc(flBoundProcKey(w));
+  let h=`<div class="fl-kindhead"><span class="fl-kchip fl-k-${k}">${FL_KINDS[k].icon} ${FL_KINDS[k].label}</span>${n.builtin?'<span class="pill" title="Built-in step — add actions around it">🔒 Built-in</span>':''}</div>`;
+  if(n.builtin) h+=`<div class="field"><label class="lbl">Step</label><div><b>${esc(n.label)}</b></div><div class="mini">Built-in step — add actions around it. It can't be renamed or deleted.</div>`+
+    (P&&!P.noCounts?`<div class="mini" style="margin-top:4px">${prRecords(P).filter(r=>r.step===n.stepKey).length} ${esc(P.obj.toLowerCase())}(s) here now.</div>`:'')+`</div>`;
+  else if(k!=='end') h+=`<div class="field"><label class="lbl">Label</label><input class="cel txt" ${dis} value="${esc(n.label||'')}" onchange="flNodeSet('label',this.value,true)"></div>`;
+  if(k==='trigger'){
+    const TP=prProc(c.procKey), steps=prSteps(TP), wh=c.when||{};
+    const dk=prDateKeys(TP), nk=prNumericKeys(TP);
+    const types=PR_WHEN_TYPES.concat([['flow_finished','Another flow finished']]);
+    h+=`<div class="field"><label class="lbl">Process</label><select class="cel txt" ${dis} onchange="flSet('procKey',this.value,true)">
+      ${PR_PROCS.map(p=>`<option value="${p.key}" ${p.key===c.procKey?'selected':''}>${esc(p.label)}</option>`).join('')}</select></div>
+      <div class="field"><label class="lbl">Step</label><select class="cel txt" ${dis} onchange="flSet('step',this.value,true)">
+      ${steps.map(s=>`<option value="${esc(s.key)}" ${s.key===c.step?'selected':''}>${esc(s.label)}</option>`).join('')}</select></div>
+      <div class="field"><label class="lbl">When</label><select class="cel txt" ${dis} onchange="flSet('when.type',this.value,true)">
+      ${types.map(([v,l])=>`<option value="${v}" ${wh.type===v?'selected':''} ${(v==='stuck'&&!dk.length)||(v==='threshold'&&!nk.length)?'disabled':''}>${esc(l)}</option>`).join('')}</select>
+      <div style="margin-top:6px" class="fl-when">${prWhenExtraHtml(wh,TP,'flSet',!dk.length,!nk.length,w)}</div></div>`;
+    if(TP && !TP.noCounts){ const recs=prRecords(TP); const fires=recs.filter(m=>flTriggerFires(n,m,w).ok).length; h+=`<div class="mini">Would fire for <b>${fires}</b> of ${recs.length} ${esc(TP.obj.toLowerCase())}s right now.</div>`; }
+  }
+  if(k==='condition'){
+    const fk=prFieldKeys(P);
+    h+=`<div class="lbl" style="margin:4px 0">Paths (checked top to bottom)</div>`;
+    (c.paths||[]).forEach((p,pi)=>{
+      h+=`<div class="fl-path"><div class="row" style="gap:6px"><input class="in" style="flex:1;min-width:0" ${dis} value="${esc(p.name)}" onchange="flPathSet(${pi},'name',this.value,true)">
+        <select class="in" ${dis} onchange="flPathSet(${pi},'join',this.value,true)" title="How groups combine"><option value="and" ${p.join!=='or'?'selected':''}>all groups</option><option value="or" ${p.join==='or'?'selected':''}>any group</option></select>
+        <button class="btn sm" ${dis} title="Remove path" onclick="flPathDel(${pi})">✕</button></div>`;
+      (p.groups||[]).forEach((g,gi)=>{
+        h+=`${gi?`<div class="fl-join">${p.join==='or'?'OR':'AND'}</div>`:''}<div class="fl-group"><div class="row" style="gap:6px;margin-bottom:4px"><span class="mini">Group — match</span>
+          <select class="in" ${dis} onchange="flGroupSet(${pi},${gi},'join',this.value,true)"><option value="and" ${g.join!=='or'?'selected':''}>all rules (AND)</option><option value="or" ${g.join==='or'?'selected':''}>any rule (OR)</option></select><span class="sp"></span>
+          <button class="btn sm" ${dis} title="Remove group" onclick="flGroupDel(${pi},${gi})">✕</button></div>
+          ${(g.rules||[]).map((r,ri)=>`<div class="row fl-rule" style="gap:4px;margin-bottom:4px">
+            <select class="in" ${dis} onchange="flRuleSet(${pi},${gi},${ri},'field',this.value)">${fk.concat(fk.includes(r.field)||!r.field?[]:[r.field]).map(f=>`<option ${f===r.field?'selected':''}>${esc(f)}</option>`).join('')}</select>
+            <select class="in" ${dis} onchange="flRuleSet(${pi},${gi},${ri},'op',this.value,true)">${PR_OPS.map(([v,l])=>`<option value="${v}" ${r.op===v?'selected':''}>${esc(l)}</option>`).join('')}</select>
+            ${r.op==='empty'?'':`<input class="in" style="width:80px" ${dis} value="${esc(r.value)}" oninput="flRuleSet(${pi},${gi},${ri},'value',this.value)">`}
+            <button class="btn sm" ${dis} onclick="flRuleDel(${pi},${gi},${ri})">✕</button></div>`).join('')}
+          <button class="btn sm" ${dis} onclick="flRuleAdd(${pi},${gi})">+ Rule</button></div>`;
+      });
+      h+=`<button class="btn sm" style="margin-top:4px" ${dis} onclick="flGroupAdd(${pi})">+ Group</button></div>`;
+    });
+    h+=`<button class="btn sm" ${dis} onclick="flPathAdd()">+ Path</button><div class="mini" style="margin:6px 0 10px">Records matching no path follow the <b>else</b> connector. Label each outgoing connector with its path name.</div>`;
+  }
+  if(k==='wait'){
+    const dk=prDateKeys(P), units=[['minutes','minutes'],['hours','hours'],['days','days'],['bdays','business days']];
+    const unitSel=(key,v)=>`<select class="in" ${dis} onchange="flSet('${key}',this.value,true)">${units.map(([u,l])=>`<option value="${u}" ${v===u?'selected':''}>${l}</option>`).join('')}</select>`;
+    h+=`<div class="field"><label class="lbl">Wait</label><select class="cel txt" ${dis} onchange="flSet('mode',this.value,true)">
+      <option value="duration" ${c.mode==='duration'?'selected':''}>For a duration</option>
+      <option value="until_date" ${c.mode==='until_date'?'selected':''}>Until a date field</option>
+      <option value="until_event" ${c.mode==='until_event'?'selected':''}>Until an event</option></select></div>`;
+    if(c.mode==='duration') h+=`<div class="field row" style="gap:6px"><input class="in" type="number" min="0" style="width:70px" ${dis} value="${esc(c.amount)}" oninput="flSet('amount',this.value)">${unitSel('unit',c.unit)}</div>`;
+    if(c.mode==='until_date') h+=`<div class="field"><select class="cel txt" ${dis} onchange="flSet('dateField',this.value,true)"><option value="">— date field —</option>${dk.map(f=>`<option ${f===c.dateField?'selected':''}>${esc(f)}</option>`).join('')}</select>
+      <div class="row mini" style="gap:6px;margin-top:4px">offset <input class="in" type="number" style="width:60px" ${dis} value="${esc(c.dateOffset||0)}" oninput="flSet('dateOffset',this.value)"> days</div></div>`;
+    if(c.mode==='until_event'){
+      const steps=prSteps(P);
+      h+=`<div class="field"><select class="cel txt" ${dis} onchange="flSet('event',this.value,true)">
+        <option value="approval" ${c.event==='approval'?'selected':''}>Approval</option><option value="status_change" ${c.event==='status_change'?'selected':''}>Status changes to…</option><option value="reply" ${c.event==='reply'?'selected':''}>A reply</option></select>
+        ${c.event==='reply'?'<div class="mini">Replies aren\'t tracked yet — in simulation this always waits for the timeout.</div>':`<select class="cel txt" style="margin-top:4px" ${dis} onchange="flSet('eventValue',this.value,true)"><option value="">${c.event==='approval'?'(default: Approved)':'— status —'}</option>${steps.map(s=>`<option value="${esc(s.key)}" ${s.key===c.eventValue?'selected':''}>${esc(s.label)}</option>`).join('')}</select>`}</div>`;
+    }
+    if(c.mode!=='duration') h+=`<div class="field"><label class="lbl">Timeout after</label><div class="row" style="gap:6px"><input class="in" type="number" min="0" style="width:70px" ${dis} value="${esc(c.timeoutAmount)}" oninput="flSet('timeoutAmount',this.value)">${unitSel('timeoutUnit',c.timeoutUnit)}</div>
+      <div class="mini">Label the connector to follow on timeout “timeout”.</div></div>`;
+  }
+  if(k==='action'||k==='bundle'){
+    let L=null;
+    if(k==='bundle'){
+      const bs=w.flow.bundles||[], lib=flLib(), autos=CFG.automations||[], cur=bs.find(x=>x.id===c.bundleId);
+      h+=`<div class="field"><label class="lbl">Bundle</label><select class="cel txt" ${dis} onchange="flBundlePick(this.value)">
+        <option value="">— pick —</option>${bs.map(b=>`<option value="${esc(b.id)}" ${b.id===c.bundleId?'selected':''}>${esc(b.name)}</option>`).join('')}
+        <option value="__new">+ New bundle</option>
+        ${lib.length?`<optgroup label="Org library (this browser)">${lib.map(b=>`<option value="lib:${esc(b.id)}">${esc(b.name)}</option>`).join('')}</optgroup>`:''}
+        ${autos.length?`<optgroup label="Use an automation as a bundle">${autos.map(a=>`<option value="auto:${esc(a.id)}">${esc(a.name||'Automation')}</option>`).join('')}</optgroup>`:''}
+      </select></div>`;
+      if(cur){ h+=`<div class="field"><label class="lbl">Bundle name</label><input class="cel txt" ${dis} value="${esc(cur.name)}" onchange="flBundleRename(this.value)"></div>`; L=cur.actions; }
+    } else L=c.actions||[];
+    if(L){
+      h+=L.map((a,i)=>`<div class="pr-act fl-act"><div class="row" style="gap:6px;margin-bottom:6px">${k==='bundle'?`<span class="pr-num">${i+1}</span>`:''}
+          <select class="in" ${dis} onchange="flActType(${i},this.value)">${PR_ACTION_TYPES.map(([v,l])=>`<option value="${v}" ${a.type===v?'selected':''}>${esc(l)}</option>`).join('')}</select><span class="sp"></span>
+          ${k==='bundle'?`<button class="btn sm" ${dis||i===0?'disabled':''} onclick="flActMove(${i},-1)">↑</button><button class="btn sm" ${dis||i===L.length-1?'disabled':''} onclick="flActMove(${i},1)">↓</button><button class="btn sm dgr" ${dis} onclick="flActDel(${i})">✕</button>`:''}</div>
+        <fieldset class="fl-fs" ${dis}><div class="pr-fields">${prActionFields(a,i,P,'fl')}</div></fieldset></div>`).join('');
+      if(k==='bundle') h+=`<div class="row" style="gap:6px"><select class="in" ${dis} onchange="flActAdd(this.value)"><option value="">+ Add action…</option>${PR_ACTION_TYPES.map(([v,l])=>`<option value="${v}">${esc(l)}</option>`).join('')}</select>
+        <button class="btn sm" onclick="flBundleToLibrary()">Save to org library</button></div>`;
+      h+=`<div class="mini" style="margin-top:6px">Placeholders: {{name}} {{step}} {{owner}} {{value}} {{link}}</div>`;
+    }
+  }
+  if(k==='join') h+=`<div class="field"><label class="lbl">Continue when</label><div class="row" style="gap:6px"><select class="in" ${dis} onchange="flSet('rule',this.value,true)">
+      <option value="all" ${c.rule==='all'?'selected':''}>all branches arrive</option><option value="any" ${c.rule==='any'?'selected':''}>any branch arrives</option><option value="first" ${c.rule==='first'?'selected':''}>the first N arrive</option></select>
+      ${c.rule==='first'?`<input class="in" type="number" min="1" style="width:60px" ${dis} value="${esc(c.n)}" oninput="flSet('n',this.value)">`:''}</div></div>`;
+  if(k==='split') h+=`<div class="mini" style="margin-bottom:8px">Every outgoing connector runs in parallel. Bring branches back together with a Join.</div>`;
+  if(k==='subflow') h+=`<div class="field"><label class="lbl">Start this flow</label><select class="cel txt" ${dis} onchange="flSet('flowId',this.value,true)"><option value="">— pick a flow —</option>
+      ${(CFG.workflows||[]).filter(f=>flIsFlow(f)&&f.id!==w.id).map(f=>`<option value="${esc(f.id)}" ${f.id===c.flowId?'selected':''}>${esc(f.name)}</option>`).join('')}</select></div>`;
+  if(k==='end') h+=`<div class="field"><label class="lbl">Outcome</label><input class="cel txt" ${dis} value="${esc(c.outcome||'')}" placeholder="e.g. Approved, Escalated" onchange="flSet('outcome',this.value,true)"></div>`;
+  if(k!=='end') h+=`<div class="dv"></div><div class="lbl" style="margin-bottom:4px">Outgoing connectors</div>${flEdgeListHtml(w,n,ro)}`;
+  h+=`<div class="dv"></div><button class="btn sm dgr" ${ro||n.builtin?'disabled':''} title="${n.builtin?'Built-in step — add actions around it':''}" onclick="deleteSelected()">Delete node</button>`;
+  return h;
+}
+function flEdgeSugList(w,e){ const a=byId(w.nodes,e.fromId); return Array.from(new Set(['yes','no','else','timeout'].concat(a&&a.kind==='condition'?((a.config||{}).paths||[]).map(p=>p.name):[]))); }
+function flEdgeSug(id,i){ const w=currentWorkflow(); const e=w&&byId(w.edges,id); if(!e) return; const v=flEdgeSugList(w,e)[i]; if(v!=null) flEdgeSet(id,'label',v,true); }
+window.flEdgeSug=flEdgeSug;
+function flEdgeConfigHtml(w,e,ro){
+  const a=byId(w.nodes,e.fromId), b=byId(w.nodes,e.toId), back=flBackEdges(w), dis=ro?'disabled':'';
+  const sug=flEdgeSugList(w,e);
+  return `<div class="fl-kindhead"><span class="fl-kchip">→ Connector</span>${back.has(e.id)?'<span class="pill">↻ Loop</span>':''}</div>
+    <div class="mini" style="margin-bottom:8px">${esc(a?flNodeTitle(a):'?')} → ${esc(b?flNodeTitle(b):'?')}</div>
+    <div class="field"><label class="lbl">Label</label><input class="cel txt" list="flEdgeSug" ${dis} value="${esc(e.label||'')}" onchange="flEdgeSet('${e.id}','label',this.value,true)">
+      <datalist id="flEdgeSug">${Array.from(new Set(sug)).map(s=>`<option value="${esc(s)}">`).join('')}</datalist>
+      <div class="row" style="gap:4px;margin-top:6px;flex-wrap:wrap">${Array.from(new Set(sug)).map((s,i)=>`<button class="btn sm" ${dis} onclick="flEdgeSug('${e.id}',${i})">${esc(s)}</button>`).join('')}</div></div>
+    ${back.has(e.id)?`<div class="field"><label class="lbl">Max repeats</label><input class="in" type="number" min="1" style="width:80px" ${dis} value="${esc(e.maxRepeats||'')}" onchange="flEdgeSet('${e.id}','maxRepeats',this.value,true)">
+      <div class="mini">This connector goes back to an earlier node. After this many loops it stops looping.</div></div>`:''}
+    <button class="btn sm dgr" ${dis} onclick="deleteSelected()">Delete connector</button>`;
+}
+function flFlowSettingsHtml(w,ro){
+  const f=w.flow, P=prProc(flBoundProcKey(w)), ls=f.lastSimulation||FLU.sessionLastSim;
+  return `<div class="fl-kindhead"><span class="fl-kchip">Flow</span></div>
+    <div class="field"><label class="lbl">Name</label><input class="cel txt" ${ro?'disabled':''} value="${esc(w.name)}" onchange="renameWorkflow('${w.id}',this.value)"></div>
+    <div class="field"><label class="lbl">Bound process</label><div>${esc(P?P.label:'— set by the first trigger —')}${f.builtin?' <span class="pill">built-in</span>':''}</div></div>
+    <div class="field"><label class="lbl">Status</label><div class="row" style="gap:6px">${flStatusPill(w)} <span class="mini">v${esc(f.version||1)}</span><span class="sp"></span>
+      ${f.status==='ready'?`<button class="btn sm" ${ro?'disabled':''} onclick="flSetStatus('draft')">Back to draft</button>`:`<button class="btn sm" ${ro?'disabled':''} onclick="flSetStatus('ready')">Mark ready</button>`}</div></div>
+    <div class="field"><label class="lbl">Last simulation</label><div class="mini">${ls?(esc(F.dt(ls.at))+(ls.record?' · '+esc(ls.record):'')+'<br>'+esc(ls.result)):'Not simulated yet.'}</div></div>
+    <div class="field"><label class="lbl">Bundles in this flow</label><div class="mini">${(f.bundles||[]).length?(f.bundles||[]).map(b=>esc(b.name)+' ('+(b.actions||[]).length+')').join(', '):'None yet — add a Bundle node.'}</div></div>
+    <div class="dv"></div><p class="mini">Nothing in a flow runs yet (phase 2b). Build it, check it, and simulate it against real records here.</p>
+    <p class="mini">Tip: select a node, then use “Add” — the new node is placed and connected after it.</p>`;
+}
+function flStatusPill(w){ const f=w.flow||{}; return f.status==='ready'?'<span class="rag rag-green">Ready</span>':'<span class="rag rag-grey">Draft</span>'; }
+function flSimPill(w){ const ls=(w.flow||{}).lastSimulation; if(!ls) return '<span class="mini">—</span>'; return ls.ok?'<span class="rag rag-green" title="'+esc(ls.result)+'">Simulated ✓</span>':'<span class="rag rag-amber" title="'+esc(ls.result)+'">Simulated ✗</span>'; }
+function flChecksHtml(w){
+  const iss=flChecks(w);
+  if(!iss.length) return `<div class="fl-ok">✓ All checks pass</div><ul class="mini fl-checklist"><li>Every path from a trigger reaches an End</li><li>No orphan nodes</li><li>Conditions have an Else path</li><li>Waits have a timeout path</li><li>Loops have max repeats</li><li>Required settings are filled in</li><li>No subflow calls itself</li></ul>`;
+  return `<div class="mini" style="margin-bottom:6px">${iss.length} issue${iss.length===1?'':'s'} — click one to jump to it.</div>`+iss.map(i=>`<a href="#" class="fl-issue ${i.sev}" onclick="${i.edgeId?`flSelect('edge','${i.edgeId}')`:i.nodeId?`flSelect('node','${i.nodeId}')`:'return false'};return false"><span>${i.sev==='error'?'✕':'!'}</span>${esc(i.msg)}</a>`).join('');
+}
+function flSimHtml(w){
+  const P=prProc(flBoundProcKey(w)), recs=flRecords(w), S=FLU.sim&&FLU.sim.wfId===w.id?FLU.sim:null;
+  if(!FLU.simRecord && recs.length) FLU.simRecord=String(recs[0].id);
+  let h=`<div class="note" style="margin-bottom:10px;font-size:11.5px">Dry run — no emails, alerts, webhooks or writes. ${P?'Walks a real '+esc(P.obj.toLowerCase())+' through this flow.':''}</div>`;
+  if(!P) return h+'<div class="mini">Bind a trigger to a process first.</div>';
+  if(P.noCounts) h+=`<div class="mini" style="margin-bottom:8px">${esc(P.label)}: records aren't available here, so only structure can be walked.</div>`;
+  h+=`<div class="field"><label class="lbl">Record</label><select class="cel txt" id="flSimRecord" onchange="flSimSetRecord(this.value)">${recs.map(r=>`<option value="${esc(r.id)}" ${String(r.id)===String(FLU.simRecord)?'selected':''}>${esc(r.name)} · ${esc(r.stepLabel||r.step)}${(r.value!==''&&r.value!=null)?' · '+esc(prFmt(r.value)):''}</option>`).join('')||'<option value="">(no records)</option>'}</select></div>
+    <div class="field row" style="gap:6px;flex-wrap:wrap"><label style="white-space:nowrap"><input type="checkbox" id="flFF" ${FLU.ff?'checked':''} onchange="flSimSetFF(this.checked)"> Fast-forward waits</label>
+      ${FLU.ff?`<input class="in" id="flFFDays" type="number" min="0" style="width:64px" value="${esc(FLU.ffDays)}" onchange="flSimSetFFDays(this.value)"><span class="mini">days</span>`:''}</div>
+    <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px"><button class="btn sm" id="flStep" ${S&&S.done?'disabled':''} onclick="flSimStepBtn()">Step</button><button class="btn sm pri" id="flRun" onclick="flSimRunBtn()">Run to end</button><button class="btn sm" onclick="flSimReset()">Reset</button><span class="sp"></span><button class="btn sm" id="flSimAll" onclick="flSimAll()">Simulate all records</button></div>`;
+  if(S){
+    const sum=flSimSummary(S,w);
+    h+=`<div class="fl-result ${S.done?(!sum.ok?'bad':sum.waiting?'wait':'ok'):''}" id="flSimResult"><b>${S.done?'Result':'Running'}:</b> ${esc(sum.text)}</div>`;
+    h+=`<ol class="fl-log">${S.log.map(l=>`<li class="${l.cls||''}">${l.nodeId?`<a href="#" onclick="flSelect('node','${l.nodeId}');FLU.tab='sim';render();return false">${esc(l.title)}</a>`:`<b>${esc(l.title)}</b>`}${l.lines.length?'<div>'+l.lines.map(x=>esc(x)).join('<br>')+'</div>':''}</li>`).join('')}</ol>`;
+    if(S.tokens.length) h+=`<div class="mini">Next: ${S.tokens.map(t=>esc(flNodeTitle(byId(w.nodes,t.nodeId)||{}))).join(', ')}</div>`;
+  }
+  if(FLU.simAll){
+    h+=`<div class="dv"></div><div class="lbl" style="margin-bottom:4px">All ${FLU.simAll.total} records${FLU.ff?' (fast-forward '+esc(FLU.ffDays)+' days)':''}</div>
+    <table class="no-tt fl-alltab" id="flSimAllTable"><thead><tr><th>Outcome</th><th class="n">Records</th></tr></thead><tbody>${FLU.simAll.rows.map(r=>`<tr><td>${esc(r.k)}<div class="mini">${esc(r.ex.join(', '))}${r.n>r.ex.length?'…':''}</div></td><td class="n">${r.n}</td></tr>`).join('')||'<tr><td colspan="2" class="empty">No records.</td></tr>'}</tbody></table>`;
+  }
+  return h;
+}
+function flPageEditor(w){
+  flSyncUI(w);
+  if(!PR_DATA.loaded && !PR_DATA.loading) setTimeout(prEnsureData,0); /* full record fields for conditions/simulation */
+  const ro=wfReadOnly(w), dis=ro?'disabled':'';
+  const sel = UI.selKind==='node' ? byId(w.nodes,UI.selId) : (UI.selKind==='edge' ? byId(w.edges,UI.selId) : null);
+  const issues=flChecks(w), back=flBackEdges(w);
+  const lanes=w.lanes||[];
+  const w0=Math.max(1000, ...w.nodes.map(n=>n.x+nodeDef(n).w+160));
+  const h0=Math.max(560, ...w.nodes.map(n=>n.y+nodeDef(n).h+140), ...lanes.map(l=>l.y+l.height+20));
+  const zoom=UI.zoom||1, P=prProc(flBoundProcKey(w));
+  let panel='';
+  if(FLU.tab==='checks') panel=flChecksHtml(w);
+  else if(FLU.tab==='sim') panel=flSimHtml(w);
+  else if(sel && UI.selKind==='node') panel=flConfigHtml(w,sel,!!ro);
+  else if(sel && UI.selKind==='edge') panel=flEdgeConfigHtml(w,sel,!!ro);
+  else panel=flFlowSettingsHtml(w,!!ro);
+  const kinds=['trigger','condition','wait','action','bundle','split','join','subflow','end','step'];
+  return `<div class="editor fl-editor">
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+      <div class="toolbar">
+        <a class="btn sm" href="#" onclick="go('list');return false">← Flows &amp; diagrams</a>
+        <div class="dv"></div>
+        <input class="cel" style="width:200px" value="${esc(w.name)}" ${dis} onchange="renameWorkflow('${w.id}',this.value)">
+        <span class="pill fl-flowpill">Flow</span>${P?`<span class="pill n">${esc(P.label)}</span>`:''}${flStatusPill(w)}<span class="mini">v${esc(w.flow.version||1)}</span>
+        <div class="sp"></div>
+        ${ro?`<span class="mini" style="color:var(--warn)">${esc(ro)}</span>`:''}
+        <button class="btn sm ${w.flow.locked?'on':''}" id="flLockBtn" ${(!canConfig()||isViewer())?'disabled':''} onclick="flToggleLock()" title="${w.flow.locked?'Locked — click to unlock for editing':'Lock this flow against edits'}">${w.flow.locked?'🔒 Locked':'🔓 Lock'}</button>
+        <button class="btn sm pri" id="flSaveBtn" ${dis} onclick="flSaveAndCheck()">Save &amp; check</button>
+      </div>
+      <div class="toolbar fl-palette"><span class="lbl">Add</span>
+        ${kinds.map(k=>`<button class="btn sm fl-add fl-k-${k}" ${dis} onclick="flAddNode('${k}')" title="Add a ${FL_KINDS[k].label} node${UI.selKind==='node'?' after the selected node':''}">${FL_KINDS[k].icon} ${FL_KINDS[k].label}</button>`).join('')}
+        <div class="dv"></div>
+        <button class="btn sm ${UI.mode==='select'?'on':''}" onclick="setMode('select')">Select</button>
+        <button class="btn sm ${UI.mode==='connect'?'on':''}" ${dis} onclick="setMode('connect')">Connect${UI.mode==='connect'&&UI.connectFromId?' (pick target)':''}</button>
+        <button class="btn sm" onclick="undo()" ${undoStack.length&&!ro?'':'disabled'} title="Ctrl/Cmd+Z">Undo</button>
+        <button class="btn sm dgr" onclick="deleteSelected()" ${(!UI.selId||ro)?'disabled':''}>Delete</button>
+        <div class="dv"></div>
+        <button class="btn sm" onclick="setZoom(-0.1)">−</button><button class="btn sm" onclick="resetZoom()">${Math.round(zoom*100)}%</button><button class="btn sm" onclick="setZoom(0.1)">+</button>
+        <button class="btn sm" onclick="exportDiagramSvg()">Export SVG</button>
+      </div>
+      <div class="canvaswrap">
+        <svg class="canvas" id="schemaCanvas" xmlns="http://www.w3.org/2000/svg" width="${w0*zoom}" height="${h0*zoom}" onmousedown="canvasBackgroundClicked()">
+          <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="var(--ink-2)"></path></marker>
+            <marker id="arrowSim" markerWidth="12" markerHeight="12" refX="11" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L0,9 L12,4.5 z" fill="#1F9D6B"></path></marker></defs>
+          <g id="zoomLayer" transform="scale(${zoom})">
+            <g id="lanesLayer">${renderLanes(w)}</g>
+            <g id="anchorLayer">${flAnchorLines(w)}</g>
+            <g id="edgesLayer">${w.edges.map(e=>renderEdge(w,e)).join('')}</g>
+            <g id="nodesLayer">${w.nodes.map(n=>renderNode(w,n)).join('')}</g>
+            <g id="connectPreviewLayer">${renderConnectPreviewLine(w)}</g>
+          </g>
+        </svg>
+      </div>
+    </div>
+    <div class="inspector fl-insp">
+      <div class="fl-tabs"><a href="#" class="${FLU.tab==='config'?'on':''}" onclick="flTab('config');return false">Configure</a>
+        <a href="#" id="flChecksTab" class="${FLU.tab==='checks'?'on':''}" onclick="flTab('checks');return false">Checks <span class="fl-badge ${issues.length?'bad':'ok'}">${issues.length||'✓'}</span></a>
+        <a href="#" id="flSimTab" class="${FLU.tab==='sim'?'on':''}" onclick="flTab('sim');return false">Simulate</a></div>
+      <div class="fl-panel">${panel}</div>
+    </div>
+  </div>`;
+}
+/* 2026-09-29 end of Flows (phase 2a) block */
+
 const NAV_PAGES=[
   {id:'home',        ix:'0', label:'Home'},
-  {id:'list',        ix:'1', label:'Diagrams'},
-  {id:'automations', ix:'2', label:'Automations'},
+  {id:'list',        ix:'1', label:'Flows & diagrams'}, /* 2026-09-29 (Stef: "Phase 2a flows") */
+  {id:'automations', ix:'2', label:'Automations (legacy — use as bundles)'},
   /* 2026-09-28 (Stef: "Process Maps as a rules engine") -- preview page, see the Process rules block above */
   {id:'rules',       ix:'3', label:'Process rules (preview)', fn:pageRules}
 ];
@@ -3134,6 +4288,11 @@ const HELP_FAQ=[
   {q:'What does the Super Admin cross-org view bar do?', a:'If you\u2019re a Super Admin, a bar appears letting you view this module as your own organization, all organizations merged, or one specific organization (and optionally one user within it). Switching to \u2018All\u2019 or another organization always starts read-only \u2014 editing is a separate, conscious click every time the view changes, and \u2018All\u2019 (merged data) can never be edited since there\u2019s no single organization to attribute a change to.'},
   /* 2026-09-28 (Stef: "Process Maps as a rules engine") */
   {q:'What is Process rules (preview)?', a:'A new page in Process Maps that shows your live processes step by step (campaign sign-off, deal pipeline, event lifecycle, task lifecycle, asset stock, plus any diagram you have drawn), with a live count of records at each step. At any step you can add a trigger: WHEN something happens (enters the step, sits there for N days, a field crosses a threshold, a schedule, an external event, or manual), IF optional conditions hold, THEN an ordered list of actions (note, alert, email, task, escalation, calculation, webhook, AI agent, Slack/Teams message). Click a count to see the records behind it.'},
+  /* 2026-09-29 (Stef: "Phase 2a flows") */
+  {q:'What is a flow?', a:'A flow is a process drawn on the Flows & diagrams canvas that can branch, run steps in parallel, wait and loop. It starts from one or more triggers (for example a campaign entering Submitted), routes records through conditions, waits and actions, and finishes at an End. In this phase flows are designed, checked and simulated \u2014 nothing in a flow runs automatically yet (that is phase 2b). Plain diagrams still work exactly as before.'},
+  {q:'What node types can a flow have?', a:'Trigger (when to start), Condition (named paths plus Else), Wait (a duration, until a date, or until an event, with a timeout path), Action (note, alert, email, task, escalation, calculation, webhook, AI agent or chat message), Bundle (a saved list of actions \u2014 existing Automations can be used as bundles), Split and Join (parallel branches; join on all, any or the first N), Subflow (start another flow), Step (a process step) and End (an outcome). A connector back to an earlier node is a loop and needs a max repeats setting.'},
+  {q:'How does Simulate work?', a:'Open a flow, go to the Simulate tab, pick a real record and click Step or Run to end. The canvas highlights the path taken (parallel branches too), each condition shows why it went that way, and each action shows exactly what it would send with placeholders filled in. Turn on Fast-forward waits to pretend days have passed so timeouts and escalations can be tested. Simulate all records runs every record and counts where they end up. Nothing is sent or written.'},
+  {q:'What are built-in steps?', a:'When you open a live process (campaign sign-off, deals, events, tasks, asset stock, budget alerts, plan commits or lead to deal) as a flow, its real steps appear as locked built-in steps. You can add triggers, conditions and actions around them, but you cannot rename or delete them, because they mirror how the process works in North. Checks on the Checks tab make sure every path reaches an End, conditions have an Else, waits have a timeout and loops have a limit.'},
   {q:'Do preview rules run?', a:'No. Triggers on Process rules (preview) are drafts saved in your browser only \u2014 other people cannot see them and nothing is sent, written or called. \u201cTest against live data\u201d is a dry run that shows which current records would match and exactly what each action would do, with placeholders filled in. If a trigger maps onto an existing automation (for example a campaign entering Submitted with alert/email/chat actions), an admin can use \u201cPublish as automation\u201d to create it, disabled, on the Automations page \u2014 that is what actually runs.'}
 ];
 function helpPanelHtml(){

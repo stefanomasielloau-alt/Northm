@@ -2707,7 +2707,9 @@ function prNewAction(type){
 }
 function prBlankRule(procKey, stepKey){
   const P=prProc(procKey);
-  return {id:uid('prule'), name:'', procKey:procKey, step:stepKey, enabled:true,
+  /* 2026-09-29 (live test): once triggers are shared and run on the server, a new one starts switched OFF -- saving it must not start it on real records */
+  const live=(typeof RT!=='undefined' && rtRulesInDb());
+  return {id:uid('prule'), name:'', procKey:procKey, step:stepKey, enabled:!live,
     when:{type:'enters', days:7, dateField:prDefaultDateField(P,stepKey), field:'', op:'gt', value:'', pctOf:'', freq:'daily', time:'09:00', key:''},
     conds:[], actions:[prNewAction('note')], createdAt:new Date().toISOString(), updatedAt:'', publishedAutomationId:null};
 }
@@ -2756,7 +2758,9 @@ function prSaveEditor(){
   e.updatedAt=new Date().toISOString();
   const ix=rules.findIndex(x=>x.id===e.id);
   if(ix>=0) rules[ix]=e; else rules.push(e);
-  if(prSaveRules()) toast('Draft saved in this browser — nothing runs yet.');
+  if(prSaveRules()) toast((typeof RT!=='undefined' && rtRulesInDb())
+    ? (e.enabled?'Saved — it\'s switched on and runs on the server for real records.':'Saved, switched off. Tick its checkbox when you want it to run for real records.')
+    : 'Draft saved in this browser — nothing runs yet.');
   PRU.editing=null; delete PRU.dry[e.id]; render();
 }
 window.prSaveEditor=prSaveEditor;
@@ -2767,7 +2771,7 @@ function prDuplicate(id){
 }
 function prDelete(id){
   const r=prRules().find(x=>x.id===id); if(!r) return;
-  if(!confirm('Delete the draft trigger "'+(r.name||'Untitled')+'"? This only removes it from this browser.')) return;
+  if(!confirm('Delete the trigger "'+(r.name||'Untitled')+'"?'+((typeof RT!=='undefined' && rtRulesInDb())?' It\'s removed for your whole team.':' This only removes it from this browser.'))) return;
   { const arr=prRules(); const ix=arr.findIndex(x=>x.id===id); if(ix>=0) arr.splice(ix,1); } prSaveRules(); delete PRU.dry[id]; render(); /* 2026-09-29 (Stef: "complete phases 2b and 3") */
 }
 function prToggleEnabled(id){ const r=prRules().find(x=>x.id===id); if(!r) return; r.enabled=!r.enabled; prSaveRules(); render(); }
@@ -3126,7 +3130,7 @@ function prEditorHtml(){
       <div class="mini" style="margin-top:4px">${plan.ok?'✓ This trigger maps onto an existing automation and can be published after saving.':esc(plan.reason)}</div>
       <div class="row" style="margin-top:14px;gap:8px"><span class="sp"></span>
         <button class="btn" onclick="prCloseEditor()">Cancel</button>
-        <button class="btn pri" id="prSaveBtn" onclick="prSaveEditor()">Save draft</button></div>
+        <button class="btn pri" id="prSaveBtn" onclick="prSaveEditor()">${(typeof RT!=='undefined' && rtRulesInDb())?(e.enabled?'Save (on)':'Save (off)'):'Save draft'}</button></div>
     </div></div></div>`;
 }
 function prDryHtml(){
@@ -4287,6 +4291,8 @@ function flFit(){
 window.flFit=flFit;
 /* the three-row "How this page works" box used on Flows & diagrams, System processes and Automation bundles */
 function howBoxHtml(live,can,next){
+  /* 2026-09-29 (live test): while the runtime check is still running, don't show the "not installed" wording */
+  if(typeof RT!=='undefined' && !RT.probed) next=rtStatusLine();
   return `<div class="howbox"><div class="hb-title">How this page works</div>
     <div class="hb-row hb-live"><div class="hb-k"><i></i>Live now</div><div>${live}</div></div>
     <div class="hb-row hb-can"><div class="hb-k"><i></i>You can</div><div>${can}</div></div>

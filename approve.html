@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>North · Approve a flow action</title>
+<!-- 2026-09-29 (Stef: "remove all the Coming next items"): the confirm page behind a flow's Approve / Reject email links.
+     Supabase serves Edge Function HTML as plain text, so flow-approve redirects here and this page talks to it as JSON.
+     No sign-in needed: the one-time token in the link is the permission; nothing is decided until the button is pressed. -->
+<style>
+body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#F2F4F8;color:#10182B;margin:0;padding:40px 16px}
+.c{max-width:480px;margin:0 auto;background:#fff;border:1px solid #DFE3EB;border-radius:10px;padding:24px}
+.brand{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#45506B;margin-bottom:14px}
+h1{font-size:18px;margin:0 0 10px} p{font-size:14px;color:#45506B;line-height:1.5}
+button{font-size:14px;padding:10px 18px;border-radius:6px;border:none;cursor:pointer;color:#fff}
+button[disabled]{opacity:.6;cursor:default} .ok{background:#0E8A5F} .no{background:#D0342C}
+pre{background:#F6F8FB;padding:10px;border-radius:6px;font-size:12px;white-space:pre-wrap;max-height:260px;overflow:auto}
+a{color:#1F4FD1}
+</style></head>
+<body><div class="c"><div class="brand">North · Process Maps</div><div id="box"><p>Loading…</p></div></div>
+<script>
+(function(){
+  var FN='https://rcmocuubeajnqjltuwdv.supabase.co/functions/v1/flow-approve';
+  var q=new URLSearchParams(location.search), id=q.get('id')||'', token=q.get('token')||'', decision=q.get('decision')==='reject'?'reject':'approve';
+  var box=document.getElementById('box');
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  var runs='<p>Open <a href="Schema.html">Process Maps</a> → Runs &amp; approvals in North to see it.</p>';
+  function show(h){ box.innerHTML=h; }
+  var api=FN+'?format=json&id='+encodeURIComponent(id)+'&token='+encodeURIComponent(token)+'&decision='+decision;
+  if(!id||!token){ show('<h1>This link is not valid</h1><p>It\'s missing part of the address.</p>'+runs); return; }
+  fetch(api).then(function(r){return r.json();}).then(function(j){
+    if(!j.ok){ show('<h1>'+(j.state==='decided'?'Already decided':'This link can\'t be used')+'</h1><p>'+esc(j.message||'')+'</p>'+runs); return; }
+    var verb=decision==='approve'?'Approve':'Reject';
+    show('<h1>'+verb+' this flow action?</h1><p>Action: <b>'+esc(j.what)+'</b>'+(j.record?' for <b>'+esc(j.record)+'</b>':'')+'</p>'+
+      '<pre>'+esc(JSON.stringify(j.preview||{},null,2)).slice(0,1500)+'</pre>'+
+      '<button id="go" class="'+(decision==='approve'?'ok':'no')+'">'+verb+'</button>');
+    document.getElementById('go').onclick=function(){
+      this.disabled=true; this.textContent='Saving…';
+      fetch(api,{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+        if(d.ok) show('<h1>'+(decision==='approve'?'Approved':'Rejected')+'</h1><p>The flow carries on within a minute. You can close this tab.</p>');
+        else show('<h1>Already decided</h1><p>'+esc(d.message||'')+'</p>'+runs);
+      }).catch(function(){ show('<h1>Couldn\'t save that</h1><p>Check your connection and try the link again.</p>'); });
+    };
+  }).catch(function(){ show('<h1>Couldn\'t load this request</h1><p>Check your connection and try the link again.</p>'+runs); });
+})();
+</script></body></html>

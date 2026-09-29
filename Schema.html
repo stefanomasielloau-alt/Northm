@@ -77,7 +77,7 @@ tr.rt-sel td{background:#EEF2FD}
 .howbox .hb-row:first-of-type{border-top:none}
 .howbox .hb-k{font-weight:700;display:flex;align-items:flex-start;gap:6px;white-space:nowrap}
 .howbox .hb-k i{width:8px;height:8px;border-radius:50%;display:inline-block;margin-top:5px;flex-shrink:0}
-.howbox .hb-live i{background:var(--ok)} .howbox .hb-can i{background:var(--nav)} .howbox .hb-next i{background:var(--warn)}
+.howbox .hb-live i{background:var(--ok)} .howbox .hb-can i{background:var(--nav)} .howbox .hb-next i{background:var(--warn)} .howbox .hb-info i{background:var(--muted,#8A94A8)}
 .howbox a{color:var(--nav)}
 .side .nav-hide{display:block;margin:10px 14px 0;font-size:11.5px;color:var(--ink-3);text-decoration:none} .side .nav-hide:hover{color:var(--ink)}
 @media (max-width:760px){ .howbox .hb-row{grid-template-columns:1fr;gap:2px} }
@@ -3549,7 +3549,7 @@ function flEdgeSet(id,k,v,rr){
   e[k]=v; flTouch(); if(rr) render();
 }
 window.flEdgeSet=flEdgeSet;
-/* bundles: flow-level list (w.flow.bundles) + org library in localStorage until 2b */
+/* bundles: flow-level list (w.flow.bundles) + org library (automation_bundles once the runtime is installed; localStorage fallback) */
 function flLibKey(){ const o=(typeof _savOrgFilter!=='undefined' && _savOrgFilter) ? _savOrgFilter : (_orgId||'none'); return 'northm_schema_bundles_'+o; }
 function flLib(){ try{ const r=localStorage.getItem(flLibKey()); const p=r?JSON.parse(r):[]; return Array.isArray(p)?p:[]; }catch(e){ return []; } }
 function flLibSave(list){ try{ localStorage.setItem(flLibKey(), JSON.stringify(list)); return true; }catch(e){ toast('Could not save the bundle library in this browser.'); return false; } }
@@ -3608,7 +3608,7 @@ function flBundleToLibrary(){
   if(typeof RT!=='undefined' && rtBundlesInDb()){ const ex0=RT.dbBundles.find(x=>x.name===b.name); rtSaveBundle({id:ex0?ex0.id:uid('b'),name:b.name,actions:JSON.parse(JSON.stringify(b.actions))}).then(ok=>{ if(ok) toast('Saved to the shared bundle library.'); }); return; } /* 2026-09-29 (Stef: "complete phases 2b and 3") */
   const lib=flLib(); const ex=lib.find(x=>x.name===b.name);
   if(ex){ ex.actions=JSON.parse(JSON.stringify(b.actions)); ex.savedAt=new Date().toISOString(); } else lib.push({id:uid('b'),name:b.name,actions:JSON.parse(JSON.stringify(b.actions)),savedAt:new Date().toISOString()});
-  if(flLibSave(lib)) toast('Saved to the org bundle library (this browser only until the next phase).');
+  if(flLibSave(lib)) toast('Saved to the bundle library in this browser. It becomes shared with your team once the flows runtime is installed.');
 }
 Object.assign(window,{flBundlePick,flBundleRename,flBundleToLibrary});
 /* 2026-09-29 (Stef: "follow-ups to 2a"): things attached to a node -- bundles (run when the flow reaches it), system-process
@@ -4290,7 +4290,7 @@ function howBoxHtml(live,can,next){
   return `<div class="howbox"><div class="hb-title">How this page works</div>
     <div class="hb-row hb-live"><div class="hb-k"><i></i>Live now</div><div>${live}</div></div>
     <div class="hb-row hb-can"><div class="hb-k"><i></i>You can</div><div>${can}</div></div>
-    <div class="hb-row hb-next"><div class="hb-k"><i></i>Coming next</div><div>${next}</div></div></div>`;
+    <div class="hb-row ${(typeof RT!=='undefined'&&RT.installed)?'hb-info':'hb-next'}"><div class="hb-k"><i></i>${(typeof RT!=='undefined'&&RT.installed)?'Good to know':(typeof RT!=='undefined'&&!RT.probed)?'Checking setup':'Needs setup'}</div><div>${next}</div></div></div>`;
 }
 
 /* ---------- Automation bundles page: the bundle library (2026-09-29 follow-ups) ---------- */

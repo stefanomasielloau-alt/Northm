@@ -726,7 +726,13 @@ const UI = {
   // greyed-out Remove button next to it just read as broken. "OK so can we just hide?" --
   // these default it out of the admin tables entirely; a small link brings it back into view
   // for the rare time someone needs to check what's landed on it.
-  showSystemRegion:false, showSystemActivity:false
+  showSystemRegion:false, showSystemActivity:false,
+  // 2026-10-06 (Stef: Seasonality -- "option to do half, quarter or Month .. some quarters
+  // the first month may be strongest"): display-only granularity for the new Seasonality
+  // editor below. The underlying storage is always CFG.seasonality's 12 monthly multipliers
+  // -- this just decides whether Admin shows 12, 4 or 2 input cells. Not persisted; always
+  // starts back on 'month' next visit, same as every other UI-only toggle here.
+  seasonalityGrain:'month'
 };
 
 /* lookups */
@@ -3126,6 +3132,66 @@ function adminTimeWidgetPeriodMap(){
       <td class="n calc">${fyPos(m)+1}</td><td class="n calc">${(CFG.seasonality[fyPos(m)]??1).toFixed(2)}</td></tr>`).join('')}
     </tbody></table></div></div></div>`;
 }
+/* 2026-10-06 (Stef: "we need to add or confirm we have ability in the strategy model to have
+   Seasonality (By month Half or quarter .. percentage based) ... Id like the option to do
+   half, quarter or Month .. eg some quarters the first month may be strongest"): there was no
+   editor for CFG.seasonality at all before this -- it only ever showed up read-only (Insight's
+   chart, the Period map above). This is that editor. Storage never changes: always the same 12
+   fiscal-month multipliers (org_settings.seasonality, already wired end to end -- see
+   saveToSupabase()/loadFromSupabase() above). Only the number of input cells shown changes:
+   - Month: all 12, edited directly.
+   - Quarter: 4 cells, one per fiscal quarter. Shows the average of that quarter's 3 months;
+     editing it overwrites all 3 evenly, which is exactly how "switching up a level just
+     averages, switching back down just un-collapses" was scoped -- nothing is lost, a quarter
+     cell just can't show "the first month is stronger" while you're looking at it that way.
+     Switch to Month to set that unevenness.
+   - Half: 2 cells, same idea over 6 months each.
+   Percentage-based as asked: 1.00 in storage reads/writes as 100%. */
+function seasonalityGroups(grain){
+  if(grain==='half')    return [0,1].map(h=>({label:h===0?'H1':'H2', months:[0,1,2,3,4,5].map(i=>h*6+i)}));
+  if(grain==='quarter')  return [0,1,2,3].map(q=>({label:'Q'+(q+1), months:[0,1,2].map(i=>q*3+i)}));
+  return Array.from({length:12},(_,i)=>({label:new Date(2000,(CFG.time.fyStartMonth-1+i)%12,1).toLocaleDateString('en-AU',{month:'short'}), months:[i]}));
+}
+function setSeasonalityGroup(months,val){
+  let v=parseFloat(String(val).replace(/[%\s]/g,'')); if(isNaN(v))return; v=v/100;
+  months.forEach(i=>{ CFG.seasonality[i]=v; });
+  logAudit('edit','seasonality['+months.join(',')+'] → '+F.p(v));
+  render();
+}
+window.setSeasonalityGroup=setSeasonalityGroup;
+function setSeasonalityGrain(g){ UI.seasonalityGrain=g; render(); }
+window.setSeasonalityGrain=setSeasonalityGrain;
+function adminTimeWidgetSeasonality(){
+  const dis=canConfig()?'':'disabled';
+  const grain=UI.seasonalityGrain||'month';
+  const groups=seasonalityGroups(grain);
+  const peakIx=CFG.seasonality.indexOf(Math.max.apply(null,CFG.seasonality));
+  const troughIx=CFG.seasonality.indexOf(Math.min.apply(null,CFG.seasonality));
+  const monthLabel=i=>new Date(2000,(CFG.time.fyStartMonth-1+i)%12,1).toLocaleDateString('en-AU',{month:'short'});
+  return `<div class="card"><h3>Seasonality <span class="sp"></span>
+      <select class="in" style="width:120px" onchange="setSeasonalityGrain(this.value)">
+        <option value="month" ${grain==='month'?'selected':''}>By month</option>
+        <option value="quarter" ${grain==='quarter'?'selected':''}>By quarter</option>
+        <option value="half" ${grain==='half'?'selected':''}>By half</option>
+      </select></h3>
+    <div class="bd">
+    <p class="mini" style="margin:0 0 10px">A percentage multiplier applied to that period's plan — 100% is even, above/below shifts volume
+      without changing the full-year total. Peak <b>${esc(monthLabel(peakIx))}</b> at ${(CFG.seasonality[peakIx]*100).toFixed(0)}%,
+      trough <b>${esc(monthLabel(troughIx))}</b> at ${(CFG.seasonality[troughIx]*100).toFixed(0)}%.
+      ${grain!=='month'?'Editing a '+(grain==='half'?'half':'quarter')+' here sets every month inside it to the same value — switch to "By month" for finer control (e.g. one quarter with a stronger first month).':''}</p>
+    <div class="grid" style="grid-template-columns:repeat(${groups.length},1fr);gap:8px">
+      ${groups.map(g=>{
+        const avg=g.months.reduce((s,i)=>s+(CFG.seasonality[i]??1),0)/g.months.length;
+        return `<div class="f"><label>${esc(g.label)}</label>
+          <input class="in" ${dis} style="width:100%;box-sizing:border-box" value="${(avg*100).toFixed(0)}"
+            onchange="setSeasonalityGroup([${g.months.join(',')}],this.value)">
+          <span class="hint">%</span></div>`;
+      }).join('')}
+    </div>
+    </div></div>`;
+}
+window.adminTimeWidgetSeasonality=adminTimeWidgetSeasonality;
+
 function adminVerWidgetTable(){
   const dis=canConfig()?'':'disabled';
   return `<div class="card"><h3>Versions &amp; scenarios <span class="sp"></span>
@@ -3247,7 +3313,7 @@ const ADMIN_TAB_WIDGETS={
   segs:{boxSizes:{box1:12},defaults:{box1:'table'},fns:{table:adminSegsWidgetTable}},
   camps:{boxSizes:{box1:12,box2:12,box3:12},defaults:{box1:'cursuslink',box2:'programmes',box3:'table'},fns:{cursuslink:adminCampsWidgetCursusLink,programmes:adminCampsWidgetProgrammes,table:adminCampsWidgetTable}},
   buckets:{boxSizes:{box1:6,box2:6,box3:12},defaults:{box1:'sharedconfig',box2:'localautosave',box3:'costbuckets'},fns:{sharedconfig:adminBucketsWidgetSharedConfig,localautosave:adminBucketsWidgetLocalAutosave,costbuckets:adminBucketsWidgetCostBuckets}},
-  time:{boxSizes:{box1:12,box2:12},defaults:{box1:'fiscalcalendar',box2:'periodmap'},fns:{fiscalcalendar:adminTimeWidgetFiscalCalendar,periodmap:adminTimeWidgetPeriodMap}},
+  time:{boxSizes:{box1:12,box2:12,box3:12},defaults:{box1:'fiscalcalendar',box2:'seasonality',box3:'periodmap'},fns:{fiscalcalendar:adminTimeWidgetFiscalCalendar,seasonality:adminTimeWidgetSeasonality,periodmap:adminTimeWidgetPeriodMap}},
   ver:{boxSizes:{box1:12},defaults:{box1:'table'},fns:{table:adminVerWidgetTable}},
   users:{boxSizes:{box1:12,box2:12},defaults:{box1:'moved',box2:'requirecommit'},fns:{moved:adminUsersWidgetMoved,requirecommit:adminUsersWidgetRequireCommit}},
   feeds:{boxSizes:{box1:12,box2:6,box3:6},defaults:{box1:'connections',box2:'loadrules',box3:'adjacencies'},fns:{connections:adminFeedsWidgetConnections,loadrules:adminFeedsWidgetLoadRules,adjacencies:adminFeedsWidgetAdjacencies}},

@@ -2738,7 +2738,7 @@ Object.assign(window,{aiSetPolicy,aiAreaSet});
 /* the org-side options (built-in + approved rows) with the same ids aiRouter uses */
 function aiOrgOptionList(){
   const out=[];
-  if(!CFG.aiPolicy || CFG.aiPolicy.allow_builtin!==false) out.push({id:'builtin',label:'North built-in AI',mode:'api'});
+  if(!CFG.aiPolicy || CFG.aiPolicy.allow_builtin!==false) out.push({id:'builtin',label:'Org Default AI',mode:'api'});
   (CFG.llmProviders||[]).filter(p=>p.approved!==false).forEach(p=>{
     const mode=(p.kind==='Ollama'&&(p.accessType||'api')==='api')?'local':(p.accessType||'api');
     out.push({id:String(p.id),label:p.name||p.kind,mode});
@@ -2769,7 +2769,7 @@ function pageLLM(){
       <label style="display:block;margin-bottom:6px"><input type="radio" name="aiMode" ${P.choice_mode!=='mandate'?'checked':''} ${can?'':'disabled'} onchange="aiSetPolicy('choice_mode','choose')"> <b>People choose</b> from the approved list below (each area starts on its default)</label>
       <label style="display:block;margin-bottom:10px"><input type="radio" name="aiMode" ${P.choice_mode==='mandate'?'checked':''} ${can?'':'disabled'} onchange="aiSetPolicy('choice_mode','mandate')"> <b>The organisation decides</b> — everyone uses each area’s default; nobody can change it</label>
       <label style="display:block;margin-bottom:4px"><input type="checkbox" ${P.allow_own_keys?'checked':''} ${can?'':'disabled'} onchange="aiSetPolicy('allow_own_keys',this.checked)"> Let people connect <b>their own API key</b> (Claude, ChatGPT, Gemini, Perplexity, DeepSeek) — stored encrypted in Hub, only for them</label>
-      <label style="display:block"><input type="checkbox" ${P.allow_builtin!==false?'checked':''} ${can?'':'disabled'} onchange="aiSetPolicy('allow_builtin',this.checked)"> Offer <b>North built-in AI</b> (Hub-Backend’s own key — Gemini today)</label>
+      <label style="display:block"><input type="checkbox" ${P.allow_builtin!==false?'checked':''} ${can?'':'disabled'} onchange="aiSetPolicy('allow_builtin',this.checked)"> Offer <b>Org Default AI</b> (Hub-Backend’s own key — Gemini today)</label>
     </div></div>`;
     const opts=aiOrgOptionList(), areas=(window.NorthAI?NorthAI.AREAS:{});
     h+=`<div class="card"><h3>Where each AI can be used</h3><div class="bd flush" style="overflow-x:auto"><table><thead><tr><th>Area</th><th>Default</th><th>Allowed options</th><th>Lock</th></tr></thead><tbody>

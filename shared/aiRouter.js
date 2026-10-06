@@ -110,7 +110,7 @@
   }
   function allOrgOptions() {
     var out = [];
-    if (policy().allow_builtin) out.push({ id: 'builtin', label: 'North built-in AI', mode: 'api', provider: null, name: 'North built-in AI', usable: true, builtin: true });
+    if (policy().allow_builtin) out.push({ id: 'builtin', label: 'Org Default AI', mode: 'api', provider: null, name: 'Org Default AI', usable: true, builtin: true });
     st.providers.forEach(function (p) { if (p.approved !== false) out.push(rowOption(p)); });
     return out;
   }

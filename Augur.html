@@ -438,6 +438,12 @@ async function saveToSupabase(){
     upsertRows('augur_scoring_factors', CFG.scoringFactors.filter(f=>f.type!=='fit'||f.autoComputed), f=>({
       id:f.id,type:f.type||'fit',auto_computed:!!f.autoComputed
     })),
+    /* 2026-10-06: per-factor behavioral config (which activity types feed it, its own decay
+       window) -- own upsert, same fail-soft reasoning, so a database that hasn't run
+       2026-10-06-migration-augur-scoring-factors-behavior-config.sql yet only loses this call. */
+    (CFG._behaviorConfigLoaded ? upsertRows('augur_scoring_factors', CFG.scoringFactors.filter(f=>f.autoComputed), f=>({
+      id:f.id, behavior_config:{behaviorTypes:f.behaviorTypes||DEFAULT_BEHAVIOR_TYPES, decayDays:f.decayDays||BEHAVIORAL_DECAY_DAYS}
+    })) : Promise.resolve()),
     upsertRows('augur_tiers', CFG.tiers, t=>({id:t.id,name:t.name,min_score:t.minScore||0,probability:t.probability||0})),
     upsertRows('augur_deals', CFG.deals, d=>({
       id:d.id,name:d.name,account:d.account||'',value:d.value||0,currency:d.currency||'AUD',
@@ -554,6 +560,17 @@ async function loadFromSupabase(){
     (ffR.data||[]).forEach(row=>{ CFG._factorFieldsById[row.id] = row; });
   }catch(e){ console.warn('augur_scoring_factors.type/auto_computed not available yet (migration pending?)', e); }
 
+  /* 2026-10-06: per-factor behavior_config (jsonb) -- own fail-soft probe, same pattern as the
+     type/auto_computed one just above. CFG._behaviorConfigLoaded gates saveToSupabase so we
+     never try to write a column that isn't there yet. */
+  CFG._behaviorConfigLoaded = false;
+  try{
+    const bcR = await orgScoped(sb.from('augur_scoring_factors').select('id,behavior_config'));
+    if(bcR.error) throw bcR.error;
+    (bcR.data||[]).forEach(row=>{ CFG._factorFieldsById[row.id] = Object.assign(CFG._factorFieldsById[row.id]||{}, {behavior_config:row.behavior_config}); });
+    CFG._behaviorConfigLoaded = true;
+  }catch(e){ console.warn('augur_scoring_factors.behavior_config not available yet (migration pending?)', e); }
+
   /* 2026-09-09 (item 41, commission/attribution): partners live in Cursus's own table --
      Augur never loaded it before. Kept isolated/fail-soft, same reasoning as every other
      migration-pending addition this project makes: the shared Promise.all batch below does
@@ -614,13 +631,22 @@ async function loadFromSupabase(){
   const [factorsR,tiersR,dealsR,campaignsR,contactsR,activitiesR,auditR,profilesR] = results;
   for(const r of results){ if(r.error) throw r.error; }
 
-  CFG.scoringFactors = (factorsR.data||[]).map(f=>({
-    id:f.id,orgId:f.org_id,name:f.name,weight:f.weight,
-    /* backlog item 13 phase 1 -- 'fit' / autoComputed:false until the migration is run, same
-       fail-soft pattern as everything else new this session. */
-    type:(CFG._factorFieldsById[f.id]||{}).type||'fit',
-    autoComputed:!!(CFG._factorFieldsById[f.id]||{}).auto_computed
-  }));
+  CFG.scoringFactors = (factorsR.data||[]).map(f=>{
+    const extra=CFG._factorFieldsById[f.id]||{};
+    const bc=extra.behavior_config||{};
+    return {
+      id:f.id,orgId:f.org_id,name:f.name,weight:f.weight,
+      /* backlog item 13 phase 1 -- 'fit' / autoComputed:false until the migration is run, same
+         fail-soft pattern as everything else new this session. */
+      type:extra.type||'fit',
+      autoComputed:!!extra.auto_computed,
+      /* 2026-10-06: per-factor behavioral config -- undefined (not a default array/number)
+         when not yet set, so computeBehavioralScore's own fallback to DEFAULT_BEHAVIOR_TYPES/
+         BEHAVIORAL_DECAY_DAYS applies cleanly rather than this mapping duplicating it. */
+      behaviorTypes:(bc.behaviorTypes&&bc.behaviorTypes.length)?bc.behaviorTypes:undefined,
+      decayDays:bc.decayDays||undefined
+    };
+  });
   CFG.tiers = (tiersR.data||[]).map(t=>({id:t.id,orgId:t.org_id,name:t.name,minScore:t.min_score,probability:t.probability}));
   CFG.deals = (dealsR.data||[]).map(d=>({
     id:d.id,orgId:d.org_id,name:d.name,account:d.account||'',value:d.value,currency:d.currency||'AUD',
@@ -1108,16 +1134,32 @@ function addFactor(){
   render(); toast('Factor added.');
 }
 window.addFactor=addFactor;
-/* backlog item 13 phase 1: adds ONE auto-computed factor, scored automatically from crm_activities
-   (see computeBehavioralScore above) instead of a per-deal input. Deliberately a separate, explicit
-   button rather than something added silently -- a manual "behavioral" factor is still just a
-   regular typed-and-scored-by-hand factor via the type dropdown below. */
+/* backlog item 13 phase 1, extended 2026-10-06 (Stef: "let me/anyone add more than one
+   auto-computed behavioral factor"): each auto-computed factor now carries its own config --
+   which activity types feed it (behaviorTypes) and its own decay window (decayDays), both
+   editable from the Type column, defaulting to the original all-three-types/60-day behaviour.
+   No cap any more -- add as many as you like, e.g. one scored only from Meetings with a short
+   decay (recent momentum) and another from all activity types over a longer window (sustained
+   engagement). A manual "behavioral" factor (the type dropdown's "Behavioral" option) is
+   unrelated -- still just a regular typed-and-scored-by-hand factor, same as Fit/Decay. */
 function addBehavioralFactor(){
-  if(CFG.scoringFactors.some(f=>f.autoComputed)){ toast('You already have an auto-computed behavioral factor.'); return; }
-  CFG.scoringFactors.push({orgId:_clickOrgId(),id:uid('f'),name:'Recent engagement (auto)',weight:15,type:'behavioral',autoComputed:true});
-  render(); toast('Auto-computed behavioral factor added — scored from logged Calls/Emails/Meetings, see tooltip.');
+  const n=CFG.scoringFactors.filter(f=>f.autoComputed).length;
+  const name = n===0 ? 'Recent engagement (auto)' : 'Recent engagement (auto) '+(n+1);
+  CFG.scoringFactors.push({orgId:_clickOrgId(),id:uid('f'),name:name,weight:15,type:'behavioral',autoComputed:true,behaviorTypes:DEFAULT_BEHAVIOR_TYPES.slice(),decayDays:BEHAVIORAL_DECAY_DAYS});
+  render(); toast('Auto-computed behavioral factor added — tick which activity types feed it, and set its own decay window, in the Type column.');
 }
 window.addBehavioralFactor=addBehavioralFactor;
+/* 2026-10-06: which logged activity types feed a given auto-computed factor -- lets multiple
+   auto-computed factors coexist meaningfully (e.g. one scored from Meetings only with a short
+   decay for "recent momentum", another from everything over a longer window). */
+function toggleBehaviorType(id,type,checked){
+  const f=byId(CFG.scoringFactors,id); if(!f)return;
+  const set=new Set((f.behaviorTypes&&f.behaviorTypes.length?f.behaviorTypes:DEFAULT_BEHAVIOR_TYPES));
+  if(checked) set.add(type); else set.delete(type);
+  f.behaviorTypes=[...set];
+  render();
+}
+window.toggleBehaviorType=toggleBehaviorType;
 
 /* 2026-10-06 (Stef: Decay -- "its own factor in score AS WELL AS by deal, make a manual
    entry .. like a confidence level"): a 'decay' type factor is just a normal manually-scored
@@ -1169,7 +1211,7 @@ function removeFactor(id){
 window.removeFactor=removeFactor;
 function setFactor(id,key,val){
   const f=byId(CFG.scoringFactors,id); if(!f)return;
-  f[key]= key==='weight' ? (parseFloat(val)||0) : val;
+  f[key]= (key==='weight'||key==='decayDays') ? (parseFloat(val)||0) : val;
   render();
 }
 window.setFactor=setFactor;
@@ -1197,24 +1239,33 @@ window.setTier=setTier;
    Stef: these are a defensible starting point from real-world benchmarks, not a policy you
    signed off on line by line -- revisit any of the three constants below any time. */
 const BEHAVIORAL_POINTS = { Meeting:30, Call:20, Email:8, Note:0 };
-const BEHAVIORAL_DECAY_DAYS = 60;   // a touchpoint's contribution fades to zero linearly over this many days
+const BEHAVIORAL_DECAY_DAYS = 60;   // default: a touchpoint's contribution fades to zero linearly over this many days
 const BEHAVIORAL_HOT_DAYS = 14;     // informational threshold shown in the UI tooltip; not used in the math itself
-function computeBehavioralScore(dealId){
-  const acts=(CFG.activities||[]).filter(a=>a.dealId===dealId && a.type!=='Note');
+const DEFAULT_BEHAVIOR_TYPES = ['Call','Email','Meeting'];  // 2026-10-06: an auto-computed factor with no behaviorTypes set yet (pre-migration, or just added) falls back to all three, matching the original single-factor behaviour
+/* 2026-10-06 (Stef: "let me/anyone add more than one auto-computed behavioral factor"): now
+   takes the factor itself so each one can be scored from its own subset of activity types and
+   its own decay window -- e.g. a short-decay "recent momentum" factor from Meetings only,
+   alongside a longer-decay "sustained engagement" factor from everything. Falls back to the
+   original all-types/60-day behaviour when no factor (or an un-configured one) is passed, so
+   nothing changes for anyone with just the one auto-computed factor from before. */
+function computeBehavioralScore(dealId, factor){
+  const types = (factor && factor.behaviorTypes && factor.behaviorTypes.length) ? factor.behaviorTypes : DEFAULT_BEHAVIOR_TYPES;
+  const decayDays = (factor && factor.decayDays) ? factor.decayDays : BEHAVIORAL_DECAY_DAYS;
+  const acts=(CFG.activities||[]).filter(a=>a.dealId===dealId && types.includes(a.type));
   if(!acts.length) return 0;
   const now=Date.now();
   let raw=0;
   acts.forEach(a=>{
     if(!a.occurredAt) return;
     const days=(now-new Date(a.occurredAt).getTime())/86400000;
-    if(days<0||days>BEHAVIORAL_DECAY_DAYS) return;
-    const decay=1-(days/BEHAVIORAL_DECAY_DAYS);
+    if(days<0||days>decayDays) return;
+    const decay=1-(days/decayDays);
     raw += (BEHAVIORAL_POINTS[a.type]||0)*decay;
   });
   return Math.max(0,Math.min(100,raw));
 }
 function factorScoreFor(deal,factor){
-  return factor.autoComputed ? computeBehavioralScore(deal.id) : ((deal.factorScores&&deal.factorScores[factor.id])||0);
+  return factor.autoComputed ? computeBehavioralScore(deal.id,factor) : ((deal.factorScores&&deal.factorScores[factor.id])||0);
 }
 function weightedScore(deal){
   const totalW=sum(CFG.scoringFactors.map(f=>f.weight));
@@ -1408,13 +1459,15 @@ function pageScoring(){
       <span class="pill ${totalW===100?'ok':'n'}">${totalW}% total</span>
       <button class="btn sm" onclick="addStarterFactorSet()" title="Adds a starter set of common factors (Budget fit, Decision-maker engagement, Timeline urgency, Competitive position, Technical fit, Deal confidence/decay) with weights summing to 100 — edit or remove any of them afterwards.">+ Add starter factor set</button>
       <button class="btn sm" onclick="addDecayFactor()" title="Adds a manually-scored factor representing how a deal's strength or confidence is trending — score it up or down yourself over time, just like any other factor.">+ Add decay/confidence factor</button>
-      <button class="btn sm" onclick="addBehavioralFactor()" title="Adds one factor auto-scored from logged Calls/Emails/Meetings — recency-weighted, decays over ${BEHAVIORAL_DECAY_DAYS} days. Point values adapted from a 2026 B2B engagement-scoring benchmark, see code comments.">+ Add auto-computed (engagement)</button>
+      <button class="btn sm" onclick="addBehavioralFactor()" title="Adds a factor auto-scored from logged activity — recency-weighted, decays over ${BEHAVIORAL_DECAY_DAYS} days by default. Add more than one and configure each with its own activity types + decay window right in the Type column. Point values adapted from a 2026 B2B engagement-scoring benchmark, see code comments.">+ Add auto-computed (engagement)</button>
       <button class="btn sm pri" onclick="addFactor()">Add factor</button></h3>
     <div class="bd flush"><!-- 2026-09-28 (Stef: "Scoring factors table: filters + sort on columns") -->
     <table class="tt"><thead><tr><th>Factor</th><th>Type</th><th class="n">Weight %</th><th></th></tr></thead><tbody>
     ${CFG.scoringFactors.map(f=>`<tr>
-      <td><input class="cel txt" style="width:220px" value="${esc(f.name)}" onchange="setFactor('${f.id}','name',this.value)" ${f.autoComputed?'disabled title="Auto-computed factors keep a fixed name."':''}></td>
-      <td>${f.autoComputed?'<span class="pill n" title="Scored automatically from logged activities, not a manual input.">Auto (behavioral)</span>':`<select class="cel txt" style="width:140px" onchange="setFactor('${f.id}','type',this.value)">
+      <td><input class="cel txt" style="width:220px" value="${esc(f.name)}" onchange="setFactor('${f.id}','name',this.value)" ${f.autoComputed?'title="Rename to tell multiple auto-computed factors apart."':''}></td>
+      <td>${f.autoComputed?`<span class="pill n" title="Scored automatically from logged activities, not a manual input.">Auto (behavioral)</span>
+        <div class="mini" style="margin-top:4px">${['Call','Email','Meeting'].map(t=>`<label style="margin-right:8px"><input type="checkbox" ${(f.behaviorTypes&&f.behaviorTypes.length?f.behaviorTypes:DEFAULT_BEHAVIOR_TYPES).includes(t)?'checked':''} onchange="toggleBehaviorType('${f.id}','${t}',this.checked)">${t}</label>`).join('')}</div>
+        <div class="mini">Decay <input class="cel w" style="width:48px" value="${f.decayDays||BEHAVIORAL_DECAY_DAYS}" onchange="setFactor('${f.id}','decayDays',this.value)"> days</div>`:`<select class="cel txt" style="width:140px" onchange="setFactor('${f.id}','type',this.value)">
           <option value="fit" ${(!f.type||f.type==='fit')?'selected':''}>Fit</option>
           <option value="decay" ${f.type==='decay'?'selected':''}>Decay / confidence</option>
           <option value="behavioral" ${f.type==='behavioral'?'selected':''}>Behavioral</option>
@@ -1423,8 +1476,9 @@ function pageScoring(){
       <td class="n"><button class="btn sm dgr" onclick="removeFactor('${f.id}')">Remove</button></td></tr>`).join('')}
     </tbody></table></div>
     <div class="bd" style="border-top:1px solid var(--line-2)"><p class="mini" style="margin:0">Weights can be negative — a factor can pull the score down as easily as up. "Behavioral" is
-      just a label for organizing factors; the one factor marked "Auto (behavioral)" is scored automatically from logged Call/Email/Meeting
-      activity (recency-weighted, decays to 0 after ${BEHAVIORAL_DECAY_DAYS} days) instead of a manual per-deal input. "Decay / confidence" is
+      just a label for organizing factors; any factor marked "Auto (behavioral)" is scored automatically from logged activity — tick which
+      of Call/Email/Meeting feed it and set its own decay window right there in the Type column (default: all three, ${BEHAVIORAL_DECAY_DAYS} days).
+      Add as many auto-computed factors as you like, each configured separately — rename them to tell them apart. "Decay / confidence" is
       also a manual, per-deal score — use it to track a deal getting stronger or more fragile over time, your own call, no formula attached.
       Every factor's per-deal score is now entered from a deal's <b>Details</b> link on the Deals table, not a column there.</p></div></div>`;
   h+=`<div class="card"><h3>Tiers &amp; win probability</h3><div class="bd flush"><table><thead><tr>
@@ -1618,7 +1672,8 @@ const HELP_FAQ=[
   /* 2026-09-29 */ {q:"What is Ask Alec and what does it see?", a:"Click \u2726 Ask Alec in the top bar (shown on Home and Forecast) to open a panel on the right where you can ask about what\u2019s on screen or for advice. Pin it (\ud83d\udccc) to keep it docked while you move between pages; the conversation stays until you clear it or reload. Alec is sent the page name, a text snapshot of what\u2019s visible on screen (headings, KPI tiles, the first rows of tables and visible field values \u2014 never passwords) and your last few messages, and answers only from that. It\u2019s off unless an admin turns it on in Configuration \u2192 Integrations, and uses your org\u2019s AI provider."},
   /* 2026-09-29 */ {q:"How do I sort and filter a list?", a:"Click any column heading to sort (click again to reverse, a third time to clear). The row under the headings filters each column \u2014 type to match text, or pick from the dropdown when a column has only a few values. \"(x of y)\" by the first heading shows how many rows match. Sorting and filtering only change what you see; nothing is saved or reordered in the data."},
   /* 2026-10-06 */ {q:"Where did the per-factor columns on the Deals table go?", a:"Click Details on a deal's row \u2014 you can score every factor there, plus see an audit log of when each score changed, add multiple notes, and see (or link) that deal's references, with a done/not-done toggle. Nothing was removed, it's just one click away instead of a wall of columns."},
-  /* 2026-10-06 */ {q:"What does a \"Decay / confidence\" factor do?", a:"It's a manually-scored factor, same as Fit \u2014 use it to represent how a deal's strength is trending over time. There's no automatic formula: you decide the number (and whether it goes up or down) whenever you update it, from the deal's Details panel."}
+  /* 2026-10-06 */ {q:"What does a \"Decay / confidence\" factor do?", a:"It's a manually-scored factor, same as Fit \u2014 use it to represent how a deal's strength is trending over time. There's no automatic formula: you decide the number (and whether it goes up or down) whenever you update it, from the deal's Details panel."},
+  /* 2026-10-06 */ {q:"Can I have more than one auto-computed (behavioral) factor?", a:"Yes \u2014 click \u201c+ Add auto-computed (engagement)\u201d as many times as you like. Each one gets its own checkboxes for which activity types (Call/Email/Meeting) feed it and its own decay-window field, right in the Type column, so you can set up e.g. a short-decay \u201crecent momentum\u201d factor from Meetings only alongside a longer-decay \u201csustained engagement\u201d factor from everything. Rename each one so they're easy to tell apart."}
 ];
 function helpPanelHtml(){
   const mod = MODULES.find(m=>m.id===THIS_MODULE) || {label:THIS_MODULE, desc:''};
@@ -1703,7 +1758,7 @@ function dealDetailsPanelHtml(dealId){
         <td>${f.autoComputed?'<span class="pill n">Auto (behavioral)</span>':f.type==='decay'?'<span class="pill n">Decay / confidence</span>':'<span class="pill n">Fit</span>'}</td>
         <td class="n">${F.n(f.weight,0)}%</td>
         <td class="n">${f.autoComputed
-          ?`<span title="Auto-computed from logged Calls/Emails/Meetings, decays over ${BEHAVIORAL_DECAY_DAYS} days. Not editable.">${F.n(computeBehavioralScore(d.id),0)}</span>`
+          ?`<span title="Auto-computed from logged ${(f.behaviorTypes&&f.behaviorTypes.length?f.behaviorTypes:DEFAULT_BEHAVIOR_TYPES).join('/')}, decays over ${f.decayDays||BEHAVIORAL_DECAY_DAYS} days. Not editable — configure on the Scoring model page.">${F.n(computeBehavioralScore(d.id,f),0)}</span>`
           :`<input class="cel w" value="${(d.factorScores&&d.factorScores[f.id])||0}" onchange="setFactorScore('${d.id}','${f.id}',this.value)">`}</td>
       </tr>`).join('')}
       </tbody></table>

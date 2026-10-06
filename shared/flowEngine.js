@@ -410,7 +410,7 @@
       var list = c.actions || [], bname = null;
       if (k === 'bundle') { var bb = ((w.flow || {}).bundles || []).filter(function (x) { return x.id === c.bundleId; })[0]; list = bb ? bb.actions : []; bname = bb ? bb.name : null; lines.push('Bundle “' + (bb ? bb.name : '?') + '”:'); }
       var needAppr = false;
-      if (!revisit) list.forEach(function (a) { var need = emit(a, k, { bundle: bname }); needAppr = needAppr || need; lines.push('Would run — ' + (m ? describe(ctx, a, m, pseudo) : (ACTION_LABELS[a.type] || a.type)) + (need ? ' (needs approval)' : '')); });
+      if (!revisit) list.forEach(function (a) { var need = emit(a, k, { bundle: bname }); needAppr = needAppr || need; lines.push((sim ? 'Would run — ' : 'Runs — ') + (m ? describe(ctx, a, m, pseudo) : (ACTION_LABELS[a.type] || a.type)) + (need ? ' (needs approval)' : '')); });
       entry.cls = 'act';
       if (needAppr && !sim) {
         /* runtime: hold the token until the approval is decided; continuation is precomputed */
@@ -441,13 +441,13 @@
       (att.bundles || []).forEach(function (ref) {
         var b = ctx.bundleByRef ? ctx.bundleByRef(ref) : null; if (!b) { lines.push('Attached bundle missing.'); return; }
         lines.push('Attached bundle “' + b.name + '”:');
-        (b.actions || []).forEach(function (a) { var need = emit(a, 'attached', { bundle: b.name, bundleRef: ref }); lines.push('  Would run — ' + (m ? describe(ctx, a, m, pseudo) : (ACTION_LABELS[a.type] || a.type)) + (need ? ' (needs approval)' : '')); });
+        (b.actions || []).forEach(function (a) { var need = emit(a, 'attached', { bundle: b.name, bundleRef: ref }); lines.push('  ' + (sim ? 'Would run — ' : 'Runs — ') + (m ? describe(ctx, a, m, pseudo) : (ACTION_LABELS[a.type] || a.type)) + (need ? ' (needs approval)' : '')); });
       });
       (att.triggers || []).forEach(function (id) {
         var rr = ctx.ruleById ? ctx.ruleById(id) : null; if (!rr) { lines.push('Attached system-process trigger not found in this browser.'); return; }
         var fr = m ? ruleFires(rr, m, ctx) : { ok: false, why: 'no record' };
         lines.push('System trigger “' + (rr.name || 'Untitled') + '”: ' + (fr.ok ? 'fires' : 'doesn\'t fire') + ' — ' + fr.why + '.');
-        if (fr.ok) (rr.actions || []).forEach(function (a) { var need = emit(a, 'rule', { ruleId: id }); lines.push('  Would run — ' + describe(ctx, a, m, rr) + (need ? ' (needs approval)' : '')); });
+        if (fr.ok) (rr.actions || []).forEach(function (a) { var need = emit(a, 'rule', { ruleId: id }); lines.push('  ' + (sim ? 'Would run — ' : 'Runs — ') + describe(ctx, a, m, rr) + (need ? ' (needs approval)' : '')); });
       });
       var ho = handoffOf(n);
       if (ho) {

@@ -3173,10 +3173,12 @@ function pageRules(){
     'North\'s built-in processes, with how many records are at each step right now. Click a count to see them.'+(PR_DATA.loading?' <span class="mini">Loading full record details…</span>':'')+(RT.installed?' Enabled triggers on this page run automatically on the server.':''),
     'Add triggers to a step and test them against live data (nothing is sent), watch a step to be told when records reach it, or open the process as a flow to build around it. To build your own process, use <a href="#" onclick="go(\'list\');return false">Flows &amp; diagrams</a>.',
     (RT.installed&&rtRulesInDb())?'Triggers are shared with your team; switch one off with its checkbox. Anything that writes a field waits for an approval first.':('Triggers you add here don\'t run on their own yet, and they\'re kept in this browser only until the flows runtime is installed (see the run sheet). If you want something to run today, use <b>Publish as automation</b> — it creates a normal automation rule, switched off until you turn it on in <a href="#" onclick="go(\'automations\');return false">Automation bundles</a>.'));
+  const prIsSysFlow=p=>p.isDiagram && p.wf && p.wf.flow && p.wf.flow.builtin; /* 2026-10-06 (Stef backlog: system flows were lumped into "Custom flows & diagrams") */
   h+=`<div class="pr-layout"><div class="pr-procs card"><h3>System processes</h3><div class="bd flush">
     ${all.map((p,i)=>p.isDiagram?'':`<a href="#" class="pr-proc ${p.key===P.key?'on':''}" onclick="prSelectProcIx(${i});return false"><span>${esc(p.label)}</span><span class="pr-cnt">${p.noCounts?'—':prRecords(p).length}</span></a>`).join('')}
+    ${all.some(prIsSysFlow)?`<div class="pr-sub">System flows</div>${all.map((p,i)=>!prIsSysFlow(p)?'':`<a href="#" class="pr-proc ${p.key===P.key?'on':''}" onclick="prSelectProcIx(${i});return false"><span>${esc(p.label)}</span><span class="pr-cnt mini">${(p.wf.nodes||[]).length} steps</span></a>`).join('')}`:''}
     <div class="pr-sub">Custom flows &amp; diagrams</div>
-    ${all.some(p=>p.isDiagram)?all.map((p,i)=>!p.isDiagram?'':`<a href="#" class="pr-proc ${p.key===P.key?'on':''}" onclick="prSelectProcIx(${i});return false"><span>${esc(p.label)}</span><span class="pr-cnt mini">${(p.wf.nodes||[]).length} steps</span></a>`).join('')
+    ${all.some(p=>p.isDiagram && !prIsSysFlow(p))?all.map((p,i)=>(!p.isDiagram||prIsSysFlow(p))?'':`<a href="#" class="pr-proc ${p.key===P.key?'on':''}" onclick="prSelectProcIx(${i});return false"><span>${esc(p.label)}</span><span class="pr-cnt mini">${(p.wf.nodes||[]).length} steps</span></a>`).join('')
       :'<div class="mini" style="padding:6px 14px 12px">None yet — <a href="#" onclick="go(\'list\');return false">build one</a>.</div>'}
   </div></div><div class="pr-body">`;
   /* stage strip */
@@ -3472,7 +3474,7 @@ function flConvertDiagram(){
 window.flConvertDiagram=flConvertDiagram;
 
 /* ---------- editing ---------- */
-const FLU={wfId:null, tab:'config', sim:null, simRecord:'', ff:false, ffDays:7, simAll:null};
+const FLU={wfId:null, tab:'config', sim:null, simRecord:'', ff:false, ffDays:7, simAll:null, simInboundJson:''};
 function flSyncUI(w){ if(FLU.wfId!==w.id){ FLU.wfId=w.id; FLU.tab='config'; FLU.sim=null; FLU.simAll=null; FLU.simRecord=''; } }
 function flSel(){ const w=currentWorkflow(); return (w && UI.selKind==='node') ? byId(w.nodes,UI.selId) : null; }
 function flTouch(){ const w=currentWorkflow(); if(w) w.updatedAt=new Date().toISOString().slice(0,10); saveLocal(); scheduleSupabaseSave(); }
@@ -3807,14 +3809,18 @@ function flSimRun(S){ FlowEngine.run(S,flCtx()); return S; }
 function flSimNm(S,x){ const f=byId(CFG.workflows||[],x.wfId||S.wfId); const n=f&&x.nodeId&&byId(f.nodes,x.nodeId); return '“'+(n?flNodeTitle(n):'flow')+'”'+((f&&f.id!==S.wfId)?' in “'+f.name+'”':''); }
 function flSimSummary(S,w){ return FlowEngine.summary(S,flCtx()); }
 function flSimCategory(S,w){ return FlowEngine.category(S,flCtx()); }
-function flSimRecordObj(w){ return flRecords(w).find(r=>String(r.id)===String(FLU.simRecord))||null; }
+function flIsInboundFlow(w){ const trs=flTriggers(w); return !!trs.length && trs.every(t=>((t.config||{}).when||{}).type==='inbound'); } /* 2026-10-06 (Stef backlog: Simulate on inbound flows should use pasted JSON, not a real campaign) */
+function flSimInboundJsonParsed(){ const raw=(FLU.simInboundJson||'').trim(); if(!raw) return {ok:true, val:{}}; try{ const v=JSON.parse(raw); if(!v||typeof v!=='object'||Array.isArray(v)) return {ok:false, err:'Must be a JSON object, e.g. {"order_id":"123"}'}; return {ok:true, val:v}; }catch(e){ return {ok:false, err:'Not valid JSON — '+e.message}; } }
+function flSimInboundRecord(w){ const p=flSimInboundJsonParsed(); if(!p.ok) return null; return {id:'inbound:sim', type:'inbound', name:'Inbound webhook (simulated)', step:'', stepLabel:'', fields:p.val, value:'', owner:'', link:''}; }
+function flSimRecordObj(w){ if(flIsInboundFlow(w)) return flSimInboundRecord(w); return flRecords(w).find(r=>String(r.id)===String(FLU.simRecord))||null; }
 function flSimReset(){ FLU.sim=null; render(); }
 function flSimEnsure(){
   const w=currentWorkflow(); if(!w) return null;
   if(!FLU.sim || FLU.sim.wfId!==w.id){
+    const inbound=flIsInboundFlow(w);
     const m=flSimRecordObj(w);
-    const recs=flRecords(w);
-    if(!m && recs.length){ toast('Pick a record to simulate.'); return null; }
+    if(inbound){ if(!m){ toast('Paste a valid JSON object to simulate.'); return null; } }
+    else { const recs=flRecords(w); if(!m && recs.length){ toast('Pick a record to simulate.'); return null; } }
     FLU.sim=flSimInit(w,m,{ff:FLU.ff?Number(FLU.ffDays)||0:0, assume:true});
   }
   return FLU.sim;
@@ -3829,6 +3835,7 @@ function flSimStore(S){
   if(!wfReadOnly(w)) { w.flow.lastSimulation=ls; } else FLU.sessionLastSim=ls; /* viewers/locked: session only, nothing saved */
 }
 function flSimSetRecord(v){ FLU.simRecord=v; FLU.sim=null; render(); }
+function flSimSetInboundJson(v){ FLU.simInboundJson=v; FLU.sim=null; render(); }
 function flSimSetFF(on){ FLU.ff=!!on; FLU.sim=null; render(); }
 function flSimSetFFDays(v){ FLU.ffDays=Math.max(0,Number(v)||0); FLU.sim=null; render(); }
 function flSimAll(){
@@ -3838,7 +3845,7 @@ function flSimAll(){
   FLU.simAll={at:new Date().toISOString(), total:recs.length, rows:Object.keys(counts).sort((a,b)=>counts[b]-counts[a]).map(k=>({k, n:counts[k], ex:ex[k].slice(0,4)}))};
   render();
 }
-Object.assign(window,{flSimReset,flSimStepBtn,flSimRunBtn,flSimSetRecord,flSimSetFF,flSimSetFFDays,flSimAll});
+Object.assign(window,{flSimReset,flSimStepBtn,flSimRunBtn,flSimSetRecord,flSimSetInboundJson,flSimSetFF,flSimSetFFDays,flSimAll});
 
 /* ---------- rendering ---------- */
 function flRenderNode(w,n){
@@ -3975,14 +3982,14 @@ function flConfigHtml(w,n,ro){
     const TP=prProc(c.procKey), steps=prSteps(TP), wh=c.when||{}; /* labels: "System process" (2026-09-29 follow-ups) */
     const dk=prDateKeys(TP), nk=prNumericKeys(TP);
     const types=PR_WHEN_TYPES.concat([['flow_finished','Another flow finished'],['inbound','Inbound webhook (an outside app calls this flow)']]); /* 2026-09-29 (Stef: "complete phases 2b and 3") */
-    h+=`<div class="field"><label class="lbl">System process</label><select class="cel txt" ${dis} onchange="flSet('procKey',this.value,true)">
+    h+=`<div class="field"><label class="lbl">When</label><select class="cel txt" ${dis} onchange="flSet('when.type',this.value,true)">
+      ${types.map(([v,l])=>`<option value="${v}" ${wh.type===v?'selected':''} ${(v==='stuck'&&!dk.length)||(v==='threshold'&&!nk.length)?'disabled':''}>${esc(l)}</option>`).join('')}</select></div>`; /* 2026-10-06 (Stef backlog: inbound showed unrelated process/step fields) */
+    if(wh.type!=='inbound') h+=`<div class="field"><label class="lbl">System process</label><select class="cel txt" ${dis} onchange="flSet('procKey',this.value,true)">
       ${PR_PROCS.map(p=>`<option value="${p.key}" ${p.key===c.procKey?'selected':''}>${esc(p.label)}</option>`).join('')}</select></div>
       <div class="field"><label class="lbl">Step</label><select class="cel txt" ${dis} onchange="flSet('step',this.value,true)">
-      ${steps.map(s=>`<option value="${esc(s.key)}" ${s.key===c.step?'selected':''}>${esc(s.label)}</option>`).join('')}</select></div>
-      <div class="field"><label class="lbl">When</label><select class="cel txt" ${dis} onchange="flSet('when.type',this.value,true)">
-      ${types.map(([v,l])=>`<option value="${v}" ${wh.type===v?'selected':''} ${(v==='stuck'&&!dk.length)||(v==='threshold'&&!nk.length)?'disabled':''}>${esc(l)}</option>`).join('')}</select>
-      <div style="margin-top:6px" class="fl-when">${wh.type==='inbound'?flInboundHtml(w,!!ro):prWhenExtraHtml(wh,TP,'flSet',!dk.length,!nk.length,w)}</div></div>`;
-    if(TP && !TP.noCounts){ const recs=prRecords(TP); const fires=recs.filter(m=>flTriggerFires(n,m,w).ok).length; h+=`<div class="mini">Would fire for <b>${fires}</b> of ${recs.length} ${esc(TP.obj.toLowerCase())}s right now.</div>`; }
+      ${steps.map(s=>`<option value="${esc(s.key)}" ${s.key===c.step?'selected':''}>${esc(s.label)}</option>`).join('')}</select></div>`;
+    h+=`<div class="field"><div style="margin-top:6px" class="fl-when">${wh.type==='inbound'?flInboundHtml(w,!!ro):prWhenExtraHtml(wh,TP,'flSet',!dk.length,!nk.length,w)}</div></div>`;
+    if(TP && !TP.noCounts && wh.type!=='inbound'){ const recs=prRecords(TP); const fires=recs.filter(m=>flTriggerFires(n,m,w).ok).length; h+=`<div class="mini">Would fire for <b>${fires}</b> of ${recs.length} ${esc(TP.obj.toLowerCase())}s right now.</div>`; }
   }
   if(k==='condition'){
     const fk=prFieldKeys(P);
@@ -4128,15 +4135,22 @@ function flChecksHtml(w){
   return `<div class="mini" style="margin-bottom:6px">${iss.length} issue${iss.length===1?'':'s'} — click one to jump to it.</div>`+iss.map(i=>`<a href="#" class="fl-issue ${i.sev}" onclick="${i.edgeId?`flSelect('edge','${i.edgeId}')`:i.nodeId?`flSelect('node','${i.nodeId}')`:'return false'};return false"><span>${i.sev==='error'?'✕':'!'}</span>${esc(i.msg)}</a>`).join('');
 }
 function flSimHtml(w){
-  const P=prProc(flBoundProcKey(w)), recs=flRecords(w), S=FLU.sim&&FLU.sim.wfId===w.id?FLU.sim:null;
-  if(!FLU.simRecord && recs.length) FLU.simRecord=String(recs[0].id);
-  let h=`<div class="note" style="margin-bottom:10px;font-size:11.5px">Dry run — no emails, alerts, webhooks or writes. ${P?'Walks a real '+esc(P.obj.toLowerCase())+' through this flow.':''}</div>`;
-  if(!P) return h+'<div class="mini">Bind a trigger to a process first.</div>';
-  if(P.noCounts) h+=`<div class="mini" style="margin-bottom:8px">${esc(P.label)}: records aren't available here, so only structure can be walked.</div>`;
-  h+=`<div class="field"><label class="lbl">Record</label><select class="cel txt" id="flSimRecord" onchange="flSimSetRecord(this.value)">${recs.map(r=>`<option value="${esc(r.id)}" ${String(r.id)===String(FLU.simRecord)?'selected':''}>${esc(r.name)} · ${esc(r.stepLabel||r.step)}${(r.value!==''&&r.value!=null)?' · '+esc(prFmt(r.value)):''}</option>`).join('')||'<option value="">(no records)</option>'}</select></div>
-    <div class="field row" style="gap:6px;flex-wrap:wrap"><label style="white-space:nowrap"><input type="checkbox" id="flFF" ${FLU.ff?'checked':''} onchange="flSimSetFF(this.checked)"> Fast-forward waits</label>
+  const isInbound=flIsInboundFlow(w); /* 2026-10-06 (Stef backlog: inbound Simulate used pasted JSON, not a real campaign) */
+  const P=isInbound?null:prProc(flBoundProcKey(w)), recs=isInbound?[]:flRecords(w), S=FLU.sim&&FLU.sim.wfId===w.id?FLU.sim:null;
+  if(!isInbound && !FLU.simRecord && recs.length) FLU.simRecord=String(recs[0].id);
+  let h=`<div class="note" style="margin-bottom:10px;font-size:11.5px">Dry run — no emails, alerts, webhooks or writes. ${isInbound?'Uses a sample JSON body — nothing is sent to the real webhook URL.':(P?'Walks a real '+esc(P.obj.toLowerCase())+' through this flow.':'')}</div>`;
+  if(isInbound){
+    const jp=flSimInboundJsonParsed();
+    h+=`<div class="field"><label class="lbl">Sample JSON body</label><textarea class="cel txt" id="flSimInboundJson" rows="6" style="font-family:monospace;font-size:12px;width:100%" placeholder='{"order_id":"123","email":"a@b.com"}' onchange="flSimSetInboundJson(this.value)">${esc(FLU.simInboundJson||'')}</textarea>
+      ${jp.ok?'<div class="mini">Fields here fill placeholders like <code>{{order_id}}</code> the same way a real call would.</div>':`<div class="mini" style="color:var(--bad)">${esc(jp.err)}</div>`}</div>`;
+  } else {
+    if(!P) return h+'<div class="mini">Bind a trigger to a process first.</div>';
+    if(P.noCounts) h+=`<div class="mini" style="margin-bottom:8px">${esc(P.label)}: records aren't available here, so only structure can be walked.</div>`;
+    h+=`<div class="field"><label class="lbl">Record</label><select class="cel txt" id="flSimRecord" onchange="flSimSetRecord(this.value)">${recs.map(r=>`<option value="${esc(r.id)}" ${String(r.id)===String(FLU.simRecord)?'selected':''}>${esc(r.name)} · ${esc(r.stepLabel||r.step)}${(r.value!==''&&r.value!=null)?' · '+esc(prFmt(r.value)):''}</option>`).join('')||'<option value="">(no records)</option>'}</select></div>`;
+  }
+  h+=`<div class="field row" style="gap:6px;flex-wrap:wrap"><label style="white-space:nowrap"><input type="checkbox" id="flFF" ${FLU.ff?'checked':''} onchange="flSimSetFF(this.checked)"> Fast-forward waits</label>
       ${FLU.ff?`<input class="in" id="flFFDays" type="number" min="0" style="width:64px" value="${esc(FLU.ffDays)}" onchange="flSimSetFFDays(this.value)"><span class="mini">days</span>`:''}</div>
-    <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px"><button class="btn sm" id="flStep" ${S&&S.done?'disabled':''} onclick="flSimStepBtn()">Step</button><button class="btn sm pri" id="flRun" onclick="flSimRunBtn()">Run to end</button><button class="btn sm" onclick="flSimReset()">Reset</button><span class="sp"></span><button class="btn sm" id="flSimAll" onclick="flSimAll()">Simulate all records</button>
+    <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px"><button class="btn sm" id="flStep" ${S&&S.done?'disabled':''} onclick="flSimStepBtn()">Step</button><button class="btn sm pri" id="flRun" onclick="flSimRunBtn()">Run to end</button><button class="btn sm" onclick="flSimReset()">Reset</button><span class="sp"></span>${isInbound?'':'<button class="btn sm" id="flSimAll" onclick="flSimAll()">Simulate all records</button>'}
       <button class="btn sm" id="flReplayBtn" ${RT.tables.flow_events?'':'disabled'} title="${RT.tables.flow_events?'Run the last 30 days of real changes through this flow — dry':'Needs the flows runtime (change history) — see the run sheet'}" onclick="flReplay()">Replay last 30 days</button></div>`;
   if(S){
     const sum=flSimSummary(S,w);
@@ -4201,6 +4215,7 @@ function flPageEditor(w, diagInspector){
           <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="var(--ink-2)"></path></marker>
             <marker id="arrowSim" markerWidth="12" markerHeight="12" refX="11" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L0,9 L12,4.5 z" fill="#1F9D6B"></path></marker></defs>
           <g id="zoomLayer" transform="scale(${zoom})">
+            <rect id="flCanvasBg" x="0" y="0" width="${w0}" height="${h0}" fill="transparent" style="pointer-events:all"></rect>
             <g id="lanesLayer">${renderLanes(w)}</g>
             <g id="anchorLayer">${flAnchorLines(w)}</g>
             <g id="edgesLayer">${w.edges.map(e=>renderEdge(w,e)).join('')}</g>
@@ -4255,6 +4270,7 @@ function flPageEditorDiagram(w, inspector){
         <svg class="canvas" id="schemaCanvas" xmlns="http://www.w3.org/2000/svg" width="${w0*zoom}" height="${h0*zoom}" onmousedown="canvasBackgroundClicked()">
           <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="var(--ink-2)"></path></marker></defs>
           <g id="zoomLayer" transform="scale(${zoom})">
+            <rect id="flCanvasBg" x="0" y="0" width="${w0}" height="${h0}" fill="transparent" style="pointer-events:all"></rect>
             <g id="lanesLayer">${renderLanes(w)}</g>
             <g id="edgesLayer">${w.edges.map(e=>renderEdge(w,e)).join('')}</g>
             <g id="nodesLayer">${w.nodes.map(n=>renderNode(w,n)).join('')}</g>

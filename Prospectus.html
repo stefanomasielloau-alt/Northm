@@ -664,7 +664,8 @@ async function saveToSupabase(){
        once 2026-09-28-migration-prospectus-references-details-and-deal-link.sql has run. */
     (CFG._refTrackLoaded ? upsertRows('asset_references', CFG.refTracking, r=>Object.assign(
       {id:r.id,client_name:r.clientName||'',contact_name:r.contactName||'',notes:r.notes||''},
-      CFG._refTrackDealCol ? {deal_id:r.dealId||null} : {})) : Promise.resolve())
+      CFG._refTrackDealCol ? {deal_id:r.dealId||null} : {},
+      CFG._refTrackDoneCol ? {done:!!r.done,done_at:r.doneAt||null} : {})) : Promise.resolve())
   ]);
 }
 
@@ -843,12 +844,15 @@ async function loadFromSupabase(){
   /* 2026-09-28 (Stef: "Reference tracking should sit in Targets after 5 References"): reads the
      same asset_references table Assets (Custodia.html) used -- no data move. deal_id probed
      first (new column, see the migration); everything here is fail-soft. */
-  CFG.refTracking = []; CFG._refTrackLoaded = false; CFG._refTrackDealCol = false; CFG._refTrackLoadError = '';
+  CFG.refTracking = []; CFG._refTrackLoaded = false; CFG._refTrackDealCol = false; CFG._refTrackDoneCol = false; CFG._refTrackLoadError = '';
   try{
     try{ const pd = await sb.from('asset_references').select('deal_id').limit(1); CFG._refTrackDealCol = !pd.error; }catch(e){}
-    const rtR = await orgScoped(sb.from('asset_references').select('id,org_id,client_name,contact_name,notes'+(CFG._refTrackDealCol?',deal_id':'')));
+    /* 2026-10-06 (Scoring/Deals redesign, Augur.html): done/done_at -- "ability to track once
+       done" on a reference, toggled from here or from a deal's Details panel in Augur. */
+    try{ const pdone = await sb.from('asset_references').select('done').limit(1); CFG._refTrackDoneCol = !pdone.error; }catch(e){}
+    const rtR = await orgScoped(sb.from('asset_references').select('id,org_id,client_name,contact_name,notes'+(CFG._refTrackDealCol?',deal_id':'')+(CFG._refTrackDoneCol?',done,done_at':'')));
     if(rtR.error) throw rtR.error;
-    CFG.refTracking = (rtR.data||[]).map(r=>({id:r.id,orgId:r.org_id,clientName:r.client_name||'',contactName:r.contact_name||'',notes:r.notes||'',dealId:r.deal_id||null}));
+    CFG.refTracking = (rtR.data||[]).map(r=>({id:r.id,orgId:r.org_id,clientName:r.client_name||'',contactName:r.contact_name||'',notes:r.notes||'',dealId:r.deal_id||null,done:!!r.done,doneAt:r.done_at||null}));
     CFG._refTrackLoaded = true;
   }catch(e){ console.warn('asset_references not available', e); CFG._refTrackLoadError = String((e&&e.message)||e); }
   CFG.deals = [];
@@ -1635,6 +1639,8 @@ function refTrackFormHtml(r,dis){
         ${known?'':`<option value="${esc(r.dealId)}" selected>(deal not found)</option>`}
         ${(CFG.deals||[]).map(d=>`<option value="${d.id}" ${d.id===r.dealId?'selected':''}>${esc(d.name)}${d.account?' · '+esc(d.account):''}</option>`).join('')}</select>`,true)}
     ${prFld('Notes / guidance',`<textarea class="cel txt" rows="3" ${dis} onchange="setIn('refTracking','${r.id}','notes',this.value)">${esc(r.notes)}</textarea>`,true)}
+    ${prFld('Done',`<label style="display:flex;align-items:center;gap:6px"><input type="checkbox" ${dis} ${r.done?'checked':''} onchange="toggleRefDone('${r.id}')">
+        ${r.done?('Done'+(r.doneAt?' — '+esc(r.doneAt.slice(0,10)):'')):'Not done yet'}</label>${CFG._refTrackDoneCol?'':' <span class="mini">(run the 2026-10-06 migration to save this)</span>'}`,true)}
   </div>
   ${CFG._refTrackDealCol?'':`<div class="note" style="margin:12px 0 0">Run migration <b>Claude outputs/2026-09-28-migration-prospectus-references-details-and-deal-link.sql</b> to save the Deal link. Until then it is kept for this session only.</div>`}
   ${(CFG.deals||[]).length?'':`<p class="mini" style="margin:8px 0 0">No deals found for this organisation (Scoring).</p>`}
@@ -1647,6 +1653,15 @@ function addRefTrack(){
   openPrModal('refTrack',r.id,true);
 }
 window.addRefTrack=addRefTrack;
+/* 2026-10-06 (Scoring/Deals redesign, Augur.html): same toggle Augur's deal Details panel
+   uses -- either module can mark a reference done, both save to the same asset_references row. */
+function toggleRefDone(id){
+  const r=byId(CFG.refTracking||[],id); if(!r)return;
+  r.done=!r.done; r.doneAt=r.done?new Date().toISOString():null;
+  logAudit(r.done?'reference marked done':'reference reopened', r.clientName||r.contactName||'(reference)');
+  render();
+}
+window.toggleRefDone=toggleRefDone;
 function removeRefTrack(id){
   if(!confirm('Remove this reference?'))return;
   const row=byId(CFG.refTracking||[],id);

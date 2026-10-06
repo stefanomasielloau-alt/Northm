@@ -268,12 +268,29 @@
           'Then open the ' + esc(o.app || name) + ', paste it into a new chat (Ctrl+V / Cmd+V) and send.') + (wantJson ? ' Ask for the JSON only.' : '') + '</div>' +
         '<div class="nai-row"><button class="nai-btn pri" id="naiGo" type="button">' + (isWeb ? (canPrefill ? 'Open ' + esc(name) : 'Copy & open ' + esc(name)) : 'Copy question') + '</button><span class="mini" id="naiGoMsg"></span></div>' +
         '<details style="margin-top:8px"><summary class="mini">See exactly what will be shared (' + prompt.length.toLocaleString() + ' characters)</summary><textarea readonly rows="7" style="margin-top:6px">' + esc(prompt) + '</textarea></details></div>' +
-        '<div class="nai-step"><b class="n">2</b><b>Paste ' + esc(name) + '’s answer here</b>' +
-        '<textarea id="naiAnswer" rows="8" style="margin-top:8px" placeholder="Paste the answer…"></textarea></div>' +
+        '<div class="nai-step"><b class="n">2</b><b>Bring ' + esc(name) + '’s answer back</b>' +
+        '<div class="mini" style="margin-top:4px">Copy the answer over there, then come back to this tab — North checks your clipboard automatically. Or paste it in yourself.</div>' +
+        '<textarea id="naiAnswer" rows="8" style="margin-top:8px" placeholder="Paste the answer… (or just switch back to this tab after copying it)"></textarea>' +
+        '<div class="nai-row" style="margin-top:6px"><button class="nai-btn" id="naiPaste" type="button">📋 Paste from clipboard</button><span class="mini" id="naiPasteMsg"></span></div></div>' +
         '<div class="nai-row"><span class="mini">Change how Alec answers in <a href="#" id="naiSet">AI settings</a>.</span><span class="sp"></span>' +
         '<button class="nai-btn" id="naiCancel" type="button">Cancel</button><button class="nai-btn pri" id="naiUse" type="button">Use this answer</button></div>';
       var ov = modal(h);
-      var done = false, finish = function (ok, val) { if (done) return; done = true; closeModal(); if (ok) resolve(val); else { var e = new Error('You cancelled the hand-off.'); e.cancelled = true; reject(e); } };
+      var done = false, finish = function (ok, val) { if (done) return; done = true; window.removeEventListener('focus', onFocus); closeModal(); if (ok) resolve(val); else { var e = new Error('You cancelled the hand-off.'); e.cancelled = true; reject(e); } };
+      var autoFilled = false;
+      async function tryAutoFill(silent) {
+        var ta = ov.querySelector('#naiAnswer'); if (!ta || done) return;
+        if (ta.value.trim() && !autoFilled) return; // user already typed/pasted their own text -- never clobber it
+        try {
+          var t = await navigator.clipboard.readText(); t = (t || '').trim();
+          if (!t || t === prompt.trim()) { if (!silent) ov.querySelector('#naiPasteMsg').textContent = 'Nothing new on your clipboard yet — copy ' + esc(name) + '’s answer, then try again.'; return; }
+          if (t === ta.value.trim()) return;
+          ta.value = t; autoFilled = true;
+          if (!silent) ov.querySelector('#naiPasteMsg').textContent = 'Pasted ✓';
+        } catch (e) { if (!silent) ov.querySelector('#naiPasteMsg').textContent = 'Couldn’t read your clipboard — paste it in manually (Ctrl+V / Cmd+V).'; }
+      }
+      function onFocus() { tryAutoFill(true); }
+      window.addEventListener('focus', onFocus);
+      ov.querySelector('#naiPaste').onclick = function () { tryAutoFill(false); };
       ov.querySelector('#naiGo').onclick = async function () {
         var copied = await copyText(prompt);
         if (isWeb && openUrl) window.open(openUrl, '_blank', 'noopener');

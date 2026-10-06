@@ -314,7 +314,7 @@ const STAGES=['Prospecting','Qualifying','Proposal','Negotiation','Closed Won','
    nothing downstream needs to change; only the population source moved. */
 const CFG = {};
 
-const UI = { page:'home', helpOpen:false, dealsFilter:'', dealsSortBy:null, dealsSortDir:'asc', contactsFilter:'', contactsSortBy:null, contactsSortDir:'asc', contactSummaryFor:null };
+const UI = { page:'home', helpOpen:false, dealsFilter:'', dealsSortBy:null, dealsSortDir:'asc', contactsFilter:'', contactsSortBy:null, contactsSortDir:'asc', contactSummaryFor:null, dealDetailsFor:null, dealNoteDraft:'' };
 
 function logAudit(what,detail){
   CFG.audit.unshift({id:uid(),ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
@@ -337,8 +337,16 @@ function setIn(field,id,key,val,type){
 window.setIn=setIn;
 function setFactorScore(dealId,factorId,val){
   const d=byId(CFG.deals,dealId); if(!d)return;
+  const f=byId(CFG.scoringFactors,factorId);
   let v=parseFloat(val); if(isNaN(v))v=0; v=Math.max(0,Math.min(100,v));
-  d.factorScores=d.factorScores||{}; d.factorScores[factorId]=v; render();
+  d.factorScores=d.factorScores||{};
+  const old=d.factorScores[factorId]||0;
+  d.factorScores[factorId]=v;
+  /* 2026-10-06 (Scoring/Deals redesign): log every real change so the deal's Details panel can
+     show "when each factor was executed" -- tagged with the deal id so it can be filtered back
+     out per-deal from the shared audit_log without a schema change. */
+  if(f && old!==v) logAudit('factor score','[deal:'+dealId+'] '+esc(f.name)+': '+F.n(old,0)+' \u2192 '+F.n(v,0));
+  render();
 }
 window.setFactorScore=setFactorScore;
 
@@ -445,7 +453,15 @@ async function saveToSupabase(){
       id:a.id,contact_id:a.contactId,deal_id:a.dealId||null,type:a.type||'Call',summary:a.summary||'',
       occurred_at:a.occurredAt||null,logged_by:a.loggedBy||''
     })),
-    upsertRows('audit_log', CFG.audit, a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null}))
+    upsertRows('audit_log', CFG.audit, a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null})),
+    /* 2026-10-06 (Scoring/Deals redesign): save back the done/notes fields on linked references
+       (creating/deleting a reference stays Prospectus's job -- this only updates rows that
+       already exist) and the deal's own notes. Both fail-soft/no-op until their migration runs. */
+    (CFG._refTrackLoaded ? upsertRows('asset_references', CFG.refTracking, r=>Object.assign(
+      {id:r.id,client_name:r.clientName||'',contact_name:r.contactName||'',notes:r.notes||''},
+      CFG._refTrackDealCol?{deal_id:r.dealId||null}:{},
+      CFG._refTrackDoneCol?{done:!!r.done,done_at:r.doneAt||null}:{})) : Promise.resolve()),
+    upsertRows('augur_deal_notes', CFG.dealNotes||[], n=>({id:n.id,deal_id:n.dealId,text:n.text||'',created_by:n.createdBy||null}))
   ]);
 }
 
@@ -554,6 +570,31 @@ async function loadFromSupabase(){
     if(dpR.error) throw dpR.error;
     (dpR.data||[]).forEach(row=>{ CFG._dealPartnerFieldsById[row.id] = row; });
   }catch(e){ console.warn('partners / augur_deals.partner_id-commission_pct not available yet (migration pending?)', e); }
+
+  /* 2026-10-06 (Scoring/Deals redesign): references linked to a deal -- the SAME
+     asset_references rows Targets > Reference tracking manages (Prospectus.html), read
+     here too so a deal's Details panel can show/edit them. done/done_at probed the same
+     fail-soft way deal_id already is. See
+     Claude outputs/2026-10-06-migration-augur-deal-notes-and-reference-done.sql. */
+  CFG.refTracking = []; CFG._refTrackDealCol = false; CFG._refTrackDoneCol = false; CFG._refTrackLoaded = false;
+  try{
+    const pd = await sb.from('asset_references').select('deal_id').limit(1); CFG._refTrackDealCol = !pd.error;
+    const pdone = await sb.from('asset_references').select('done').limit(1); CFG._refTrackDoneCol = !pdone.error;
+    const rtR = await orgScoped(sb.from('asset_references').select(
+      'id,org_id,client_name,contact_name,notes'+(CFG._refTrackDealCol?',deal_id':'')+(CFG._refTrackDoneCol?',done,done_at':'')));
+    if(rtR.error) throw rtR.error;
+    CFG.refTracking = (rtR.data||[]).map(r=>({id:r.id,orgId:r.org_id,clientName:r.client_name||'',contactName:r.contact_name||'',notes:r.notes||'',dealId:r.deal_id||null,done:!!r.done,doneAt:r.done_at||null}));
+    CFG._refTrackLoaded = true;
+  }catch(e){ console.warn('asset_references not available for Deal details', e); }
+
+  /* 2026-10-06: multiple free-text notes per deal -- new table, migration-pending fail-soft
+     like everything else new this project. */
+  CFG.dealNotes = [];
+  try{
+    const dnR = await orgScoped(sb.from('augur_deal_notes').select('id,org_id,deal_id,text,created_at,created_by'));
+    if(dnR.error) throw dnR.error;
+    CFG.dealNotes = (dnR.data||[]).map(n=>({id:n.id,orgId:n.org_id,dealId:n.deal_id,text:n.text||'',createdAt:n.created_at,createdBy:n.created_by}));
+  }catch(e){ console.warn('augur_deal_notes table not available yet (migration pending?)', e); }
 
   /* 2026-09-09 (systemic org_id audit): augur_scoring_factors, augur_tiers, augur_deals,
      crm_contacts and crm_activities are all re-saved by this page's own upsertRows() calls,
@@ -1077,6 +1118,48 @@ function addBehavioralFactor(){
   render(); toast('Auto-computed behavioral factor added — scored from logged Calls/Emails/Meetings, see tooltip.');
 }
 window.addBehavioralFactor=addBehavioralFactor;
+
+/* 2026-10-06 (Stef: Decay -- "its own factor in score AS WELL AS by deal, make a manual
+   entry .. like a confidence level"): a 'decay' type factor is just a normal manually-scored
+   factor like 'fit' -- the per-deal manual entry (part 2 of the two parts) is the SAME score
+   input every other manual factor already has, now edited from the deal's Details panel. No
+   separate decay-rate maths was built: since you set the number yourself, you decide if/when a
+   deal gets stronger or weaker, which also sidesteps picking a decay start-date or direction
+   that would otherwise need its own rule. */
+function addDecayFactor(){
+  CFG.scoringFactors.push({orgId:_clickOrgId(),id:uid('f'),name:'Deal confidence (decay)',weight:15,type:'decay',autoComputed:false});
+  CFG.deals.forEach(d=>{ d.factorScores=d.factorScores||{}; d.factorScores[CFG.scoringFactors[CFG.scoringFactors.length-1].id]=0; });
+  render();
+}
+window.addDecayFactor=addDecayFactor;
+
+/* 2026-10-06 (Stef: "fill the list with relevant descriptors and # allocations"): one-click
+   starter set of common B2B scoring factors with suggested weights (summing to 100) --
+   additive only, never removes/overwrites what's already there, and skips any name already
+   present so clicking it twice doesn't duplicate. Every one of these is then just an ordinary
+   factor -- rename, reweight or remove exactly like any other. */
+const STARTER_FACTORS = [
+  {name:'Budget fit', weight:20, type:'fit'},
+  {name:'Decision-maker engagement', weight:20, type:'fit'},
+  {name:'Timeline urgency', weight:15, type:'fit'},
+  {name:'Competitive position', weight:15, type:'fit'},
+  {name:'Technical / solution fit', weight:15, type:'fit'},
+  {name:'Deal confidence (decay)', weight:15, type:'decay'}
+];
+function addStarterFactorSet(){
+  const existing=new Set(CFG.scoringFactors.map(f=>(f.name||'').trim().toLowerCase()));
+  let added=0;
+  STARTER_FACTORS.forEach(sf=>{
+    if(existing.has(sf.name.toLowerCase())) return;
+    const f={orgId:_clickOrgId(),id:uid('f'),name:sf.name,weight:sf.weight,type:sf.type,autoComputed:false};
+    CFG.scoringFactors.push(f);
+    CFG.deals.forEach(d=>{ d.factorScores=d.factorScores||{}; d.factorScores[f.id]=0; });
+    added++;
+  });
+  toast(added?('Added '+added+' starter factor'+(added===1?'':'s')+' \u2014 edit names/weights any time.'):'Starter factors are already on your list.');
+  render();
+}
+window.addStarterFactorSet=addStarterFactorSet;
 function removeFactor(id){
   CFG.scoringFactors=CFG.scoringFactors.filter(f=>f.id!==id);
   CFG.deals.forEach(d=>{ if(d.factorScores) delete d.factorScores[id]; });
@@ -1233,8 +1316,8 @@ function pageDeals(){
   const openDeals=CFG.deals.filter(d=>d.stage!=='Closed Won'&&d.stage!=='Closed Lost');
   const totalW=sum(CFG.scoringFactors.map(f=>f.weight));
   let h=`<div class="phead"><div><h1>Deals</h1>
-    <p>Score each open deal against the factors below. Weighted score drives the tier, and the tier's probability
-      drives the forecast.</p></div></div>`;
+    <p>Open <b>Details</b> on a deal to score it against your factors, see an audit log of those changes, add notes,
+      and track linked references. Weighted score drives the tier, and the tier's probability drives the forecast.</p></div></div>`;
   if(totalW!==100){
     h+=`<div class="note" style="border-color:var(--warn);background:var(--warn-bg)">Scoring factor weights sum to ${totalW}%, not 100% —
       scores are still computed correctly (normalised), but consider tidying the weights on the Scoring model page.</div>`;
@@ -1277,11 +1360,10 @@ function pageDeals(){
       <th>Close date</th>
       <th>Campaign</th>
       <th>Sourced by</th><th class="n">Commission %</th>
-      ${CFG.scoringFactors.map(f=>`<th class="n">${esc(f.name)}</th>`).join('')}
       <th class="n">Score</th><th>Tier</th>
       <th class="n">Weighted</th>
       <th></th></tr></thead><tbody>
-    ${!dealsView.length?`<tr><td colspan="${13+CFG.scoringFactors.length}" class="empty">${CFG.deals.length?'No deals match your search.':'No deals yet.'}</td></tr>`:dealsView.map(({d,m})=>{
+    ${!dealsView.length?`<tr><td colspan="13" class="empty">${CFG.deals.length?'No deals match your search.':'No deals yet.'}</td></tr>`:dealsView.map(({d,m})=>{
       return `<tr>
         <td><input class="cel txt" style="width:190px" value="${esc(d.name)}" onchange="setIn('deals','${d.id}','name',this.value)">
           <div class="mini">${esc(d.account)}${d.trackingRef?' · '+esc(d.trackingRef):''}</div></td>
@@ -1302,14 +1384,11 @@ function pageDeals(){
             ${CFG.partners.map(p=>`<option value="${p.id}" ${p.id===d.partnerId?'selected':''}>${esc(p.name)}</option>`).join('')}</select></td>
         <td class="n"><input class="cel w" style="width:56px" value="${d.commissionPct!=null?d.commissionPct:''}" placeholder="—" title="Commission %, applied to this deal's value once Closed Won." onchange="setIn('deals','${d.id}','commissionPct',this.value,'num')">
           ${(d.partnerId && d.commissionPct!=null && d.stage==='Closed Won')?`<div class="mini">${F.mk(d.value*d.commissionPct/100,CCY_SYM[d.currency])} owed</div>`:''}</td>
-        ${CFG.scoringFactors.map(f=>f.autoComputed
-          ?`<td class="n" title="Auto-computed from logged Calls/Emails/Meetings, decays over ${BEHAVIORAL_DECAY_DAYS} days. Not editable.">${F.n(computeBehavioralScore(d.id),0)}</td>`
-          :`<td class="n"><input class="cel w" value="${(d.factorScores&&d.factorScores[f.id])||0}" onchange="setFactorScore('${d.id}','${f.id}',this.value)"></td>`
-        ).join('')}
         <td class="n">${F.n(m.score,0)}</td>
         <td><span class="pill ${m.tier?m.tier.name.toLowerCase():'n'}">${m.tier?esc(m.tier.name):'—'}</span></td>
         <td class="n">${F.mk(m.weightedValue,CCY_SYM[d.currency])}</td>
-        <td class="n"><button class="btn sm" title="Contacts for this account" onclick="openContactSummary('${jsAttr(d.account)}')">👥</button>
+        <td class="n"><button class="btn sm" onclick="openDealDetails('${d.id}')" title="Scoring factors, audit log, notes and linked references">Details</button>
+          <button class="btn sm" title="Contacts for this account" onclick="openContactSummary('${jsAttr(d.account)}')">👥</button>
           <button class="btn sm dgr" onclick="removeDeal('${d.id}')">Remove</button></td></tr>`;
     }).join('')}
     </tbody></table></div></div>
@@ -1327,14 +1406,17 @@ function pageScoring(){
     <p>Factors and weights used to compute each deal's score, and the tiers that turn a score into a win probability.</p></div></div>`;
   h+=`<div class="card"><h3>Scoring factors <span class="sp"></span>
       <span class="pill ${totalW===100?'ok':'n'}">${totalW}% total</span>
+      <button class="btn sm" onclick="addStarterFactorSet()" title="Adds a starter set of common factors (Budget fit, Decision-maker engagement, Timeline urgency, Competitive position, Technical fit, Deal confidence/decay) with weights summing to 100 — edit or remove any of them afterwards.">+ Add starter factor set</button>
+      <button class="btn sm" onclick="addDecayFactor()" title="Adds a manually-scored factor representing how a deal's strength or confidence is trending — score it up or down yourself over time, just like any other factor.">+ Add decay/confidence factor</button>
       <button class="btn sm" onclick="addBehavioralFactor()" title="Adds one factor auto-scored from logged Calls/Emails/Meetings — recency-weighted, decays over ${BEHAVIORAL_DECAY_DAYS} days. Point values adapted from a 2026 B2B engagement-scoring benchmark, see code comments.">+ Add auto-computed (engagement)</button>
       <button class="btn sm pri" onclick="addFactor()">Add factor</button></h3>
     <div class="bd flush"><!-- 2026-09-28 (Stef: "Scoring factors table: filters + sort on columns") -->
     <table class="tt"><thead><tr><th>Factor</th><th>Type</th><th class="n">Weight %</th><th></th></tr></thead><tbody>
     ${CFG.scoringFactors.map(f=>`<tr>
       <td><input class="cel txt" style="width:220px" value="${esc(f.name)}" onchange="setFactor('${f.id}','name',this.value)" ${f.autoComputed?'disabled title="Auto-computed factors keep a fixed name."':''}></td>
-      <td>${f.autoComputed?'<span class="pill n" title="Scored automatically from logged activities, not a manual input.">Auto (behavioral)</span>':`<select class="cel txt" style="width:110px" onchange="setFactor('${f.id}','type',this.value)">
+      <td>${f.autoComputed?'<span class="pill n" title="Scored automatically from logged activities, not a manual input.">Auto (behavioral)</span>':`<select class="cel txt" style="width:140px" onchange="setFactor('${f.id}','type',this.value)">
           <option value="fit" ${(!f.type||f.type==='fit')?'selected':''}>Fit</option>
+          <option value="decay" ${f.type==='decay'?'selected':''}>Decay / confidence</option>
           <option value="behavioral" ${f.type==='behavioral'?'selected':''}>Behavioral</option>
         </select>`}</td>
       <td class="n"><input class="cel w" value="${f.weight}" onchange="setFactor('${f.id}','weight',this.value)"></td>
@@ -1342,7 +1424,9 @@ function pageScoring(){
     </tbody></table></div>
     <div class="bd" style="border-top:1px solid var(--line-2)"><p class="mini" style="margin:0">Weights can be negative — a factor can pull the score down as easily as up. "Behavioral" is
       just a label for organizing factors; the one factor marked "Auto (behavioral)" is scored automatically from logged Call/Email/Meeting
-      activity (recency-weighted, decays to 0 after ${BEHAVIORAL_DECAY_DAYS} days) instead of a manual per-deal input — see the Deals table.</p></div></div>`;
+      activity (recency-weighted, decays to 0 after ${BEHAVIORAL_DECAY_DAYS} days) instead of a manual per-deal input. "Decay / confidence" is
+      also a manual, per-deal score — use it to track a deal getting stronger or more fragile over time, your own call, no formula attached.
+      Every factor's per-deal score is now entered from a deal's <b>Details</b> link on the Deals table, not a column there.</p></div></div>`;
   h+=`<div class="card"><h3>Tiers &amp; win probability</h3><div class="bd flush"><table><thead><tr>
     <th>Tier</th><th class="n">Min score</th><th class="n">Win probability</th></tr></thead><tbody>
     ${[...CFG.tiers].sort((a,b)=>b.minScore-a.minScore).map(t=>`<tr>
@@ -1532,7 +1616,9 @@ const HELP_FAQ=[
   {q:'What is Super Admin?', a:"Super Admin isn't a role in the Roles table \u2014 it's a separate flag on a login that gives full cross-organization visibility in Configuration, independent of any one organization's roles."},
   {q:'What does the Super Admin cross-org view bar do?', a:'If you\u2019re a Super Admin, a bar appears letting you view this module as your own organization, all organizations merged, or one specific organization (and optionally one user within it). Switching to \u2018All\u2019 or another organization always starts read-only \u2014 editing is a separate, conscious click every time the view changes, and \u2018All\u2019 (merged data) can never be edited since there\u2019s no single organization to attribute a change to.'},
   /* 2026-09-29 */ {q:"What is Ask Alec and what does it see?", a:"Click \u2726 Ask Alec in the top bar (shown on Home and Forecast) to open a panel on the right where you can ask about what\u2019s on screen or for advice. Pin it (\ud83d\udccc) to keep it docked while you move between pages; the conversation stays until you clear it or reload. Alec is sent the page name, a text snapshot of what\u2019s visible on screen (headings, KPI tiles, the first rows of tables and visible field values \u2014 never passwords) and your last few messages, and answers only from that. It\u2019s off unless an admin turns it on in Configuration \u2192 Integrations, and uses your org\u2019s AI provider."},
-  /* 2026-09-29 */ {q:"How do I sort and filter a list?", a:"Click any column heading to sort (click again to reverse, a third time to clear). The row under the headings filters each column \u2014 type to match text, or pick from the dropdown when a column has only a few values. \"(x of y)\" by the first heading shows how many rows match. Sorting and filtering only change what you see; nothing is saved or reordered in the data."}
+  /* 2026-09-29 */ {q:"How do I sort and filter a list?", a:"Click any column heading to sort (click again to reverse, a third time to clear). The row under the headings filters each column \u2014 type to match text, or pick from the dropdown when a column has only a few values. \"(x of y)\" by the first heading shows how many rows match. Sorting and filtering only change what you see; nothing is saved or reordered in the data."},
+  /* 2026-10-06 */ {q:"Where did the per-factor columns on the Deals table go?", a:"Click Details on a deal's row \u2014 you can score every factor there, plus see an audit log of when each score changed, add multiple notes, and see (or link) that deal's references, with a done/not-done toggle. Nothing was removed, it's just one click away instead of a wall of columns."},
+  /* 2026-10-06 */ {q:"What does a \"Decay / confidence\" factor do?", a:"It's a manually-scored factor, same as Fit \u2014 use it to represent how a deal's strength is trending over time. There's no automatic formula: you decide the number (and whether it goes up or down) whenever you update it, from the deal's Details panel."}
 ];
 function helpPanelHtml(){
   const mod = MODULES.find(m=>m.id===THIS_MODULE) || {label:THIS_MODULE, desc:''};
@@ -1584,6 +1670,120 @@ function openContactSummary(account){ UI.contactSummaryFor=(account||'').trim()|
 window.openContactSummary=openContactSummary;
 function closeContactSummary(){ UI.contactSummaryFor=null; UI.contactSummaryAccount=null; render(); }
 window.closeContactSummary=closeContactSummary;
+
+/* ---------- 2026-10-06: Deal Details panel (Scoring/Deals redesign, Stef) ----------
+   Replaces the per-factor columns that used to run across the Deals table. One click from a
+   deal's row now shows: its scoring factors (same inputs, just relocated), an audit log of
+   when each factor's score actually changed, multiple free-text notes, and the references
+   (Targets > Reference tracking rows) linked to this deal, with a done/not-done toggle and
+   their own notes field. See Claude outputs/2026-10-06-migration-augur-deal-notes-and-reference-done.sql. */
+function dealDetailsPanelHtml(dealId){
+  const d=byId(CFG.deals,dealId);
+  if(!d){ return ''; }
+  const m=dealMetrics(d);
+  const notes=(CFG.dealNotes||[]).filter(n=>n.dealId===dealId).slice().sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+  const refs=(CFG.refTracking||[]).filter(r=>r.dealId===dealId);
+  const unlinked=(CFG.refTracking||[]).filter(r=>!r.dealId);
+  const tag='[deal:'+dealId+'] ';
+  const auditRows=(CFG.audit||[]).filter(a=>a.what==='factor score' && (a.detail||'').indexOf(tag)===0).slice(0,30);
+  return `<div class="mask" onclick="if(event.target===this)closeDealDetails()"><div class="modal" style="width:min(760px,100%);max-height:88vh;overflow:auto">
+    <h3>${esc(d.name)} <span class="pill ${m.tier?m.tier.name.toLowerCase():'n'}">${m.tier?esc(m.tier.name):'—'}</span>
+      <span class="sp"></span><button class="btn sm" onclick="closeDealDetails()">Close</button></h3>
+    <div class="bd">
+      <div class="kpis" style="margin-bottom:12px">
+        <div class="kpi"><div class="k">Score</div><div class="kpi-v">${F.n(m.score,0)}</div></div>
+        <div class="kpi"><div class="k">Weighted value</div><div class="kpi-v">${F.mk(m.weightedValue,CCY_SYM[d.currency])}</div></div>
+        <div class="kpi"><div class="k">Account</div><div class="kpi-v" style="font-size:14px">${esc(d.account||'—')}</div></div>
+      </div>
+
+      <div class="lbl" style="margin-bottom:6px">Scoring factors</div>
+      <table class="tt" style="margin-bottom:4px"><thead><tr><th>Factor</th><th>Type</th><th class="n">Weight %</th><th class="n">Score</th></tr></thead><tbody>
+      ${CFG.scoringFactors.map(f=>`<tr>
+        <td>${esc(f.name)}</td>
+        <td>${f.autoComputed?'<span class="pill n">Auto (behavioral)</span>':f.type==='decay'?'<span class="pill n">Decay / confidence</span>':'<span class="pill n">Fit</span>'}</td>
+        <td class="n">${F.n(f.weight,0)}%</td>
+        <td class="n">${f.autoComputed
+          ?`<span title="Auto-computed from logged Calls/Emails/Meetings, decays over ${BEHAVIORAL_DECAY_DAYS} days. Not editable.">${F.n(computeBehavioralScore(d.id),0)}</span>`
+          :`<input class="cel w" value="${(d.factorScores&&d.factorScores[f.id])||0}" onchange="setFactorScore('${d.id}','${f.id}',this.value)">`}</td>
+      </tr>`).join('')}
+      </tbody></table>
+      <p class="mini" style="margin:0 0 14px">${CFG.scoringFactors.length?'Scores here save the same way the old Deals-table columns did — nothing lost, just moved.':'No scoring factors set up yet — add some on the Scoring model page.'}</p>
+
+      <div class="lbl" style="margin-bottom:6px">Audit log — factor score changes</div>
+      <div style="max-height:160px;overflow:auto;border:1px solid var(--line-2);border-radius:8px;padding:8px;margin-bottom:14px">
+        ${auditRows.length?auditRows.map(a=>`<div style="padding:4px 0;border-bottom:1px solid var(--line-2)">
+          <span class="mini" style="color:var(--ink-2)">${F.dt(a.ts)}</span> — ${esc((a.detail||'').slice(tag.length))}</div>`).join('')
+          : '<div class="empty" style="padding:4px 0">No factor-score changes logged yet for this deal.</div>'}
+      </div>
+
+      <div class="lbl" style="margin-bottom:6px">Notes</div>
+      <div style="margin-bottom:8px">
+        <textarea id="dealNoteDraft" class="cel txt" rows="2" style="width:100%;box-sizing:border-box" placeholder="Add a note…" oninput="setDealNoteDraft(this.value)">${esc(UI.dealNoteDraft||'')}</textarea>
+        <button class="btn sm pri" style="margin-top:4px" onclick="addDealNote('${d.id}')">Add note</button>
+      </div>
+      <div style="margin-bottom:14px">
+        ${notes.length?notes.map(n=>`<div style="padding:6px 0;border-bottom:1px solid var(--line-2)">
+          <div>${esc(n.text)}</div><div class="mini" style="color:var(--ink-2)">${F.dt(n.createdAt)} · <a href="#" onclick="removeDealNote('${n.id}');return false">remove</a></div></div>`).join('')
+          : '<div class="empty" style="padding:4px 0">No notes on this deal yet.</div>'}
+      </div>
+
+      <div class="lbl" style="margin-bottom:6px">References</div>
+      <div style="margin-bottom:8px">
+        ${refs.length?refs.map(r=>`<div style="padding:8px;border:1px solid var(--line-2);border-radius:8px;margin-bottom:6px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" ${r.done?'checked':''} onchange="toggleRefDone('${r.id}')">
+            <b>${esc(r.clientName||'(unnamed)')}</b>${r.contactName?' · '+esc(r.contactName):''}
+            ${r.done?('<span class="pill ok">Done'+(r.doneAt?' '+F.dt(r.doneAt):'')+'</span>'):'<span class="pill n">Not done</span>'}
+            <span class="sp"></span><a href="#" onclick="unlinkReference('${r.id}');return false">unlink</a></label>
+          <textarea class="cel txt" rows="2" style="width:100%;box-sizing:border-box;margin-top:6px" placeholder="Notes…" onchange="setIn('refTracking','${r.id}','notes',this.value)">${esc(r.notes)}</textarea>
+        </div>`).join('') : '<div class="empty" style="padding:4px 0">No references linked to this deal yet.</div>'}
+      </div>
+      ${unlinked.length?`<div class="mini" style="margin-bottom:4px">Link an existing reference:
+        <select onchange="linkReferenceToDeal('${d.id}',this.value);this.value=''">
+          <option value="">— choose —</option>
+          ${unlinked.map(r=>`<option value="${r.id}">${esc(r.clientName||'(unnamed)')}</option>`).join('')}
+        </select></div>`:''}
+      <p class="mini" style="margin:4px 0 0">New references are added and deleted in Targets → References; link/unlink and track completion here or there — both edit the same record.</p>
+    </div>
+  </div></div>`;
+}
+function openDealDetails(id){ UI.dealDetailsFor=id; UI.dealNoteDraft=''; render(); }
+function closeDealDetails(){ UI.dealDetailsFor=null; render(); }
+window.openDealDetails=openDealDetails; window.closeDealDetails=closeDealDetails;
+function setDealNoteDraft(v){ UI.dealNoteDraft=v; }
+window.setDealNoteDraft=setDealNoteDraft;
+function addDealNote(dealId){
+  const text=(UI.dealNoteDraft||'').trim(); if(!text)return;
+  CFG.dealNotes=CFG.dealNotes||[];
+  CFG.dealNotes.unshift({id:uid('n'),orgId:_clickOrgId(),dealId:dealId,text:text,createdAt:new Date().toISOString(),createdBy:_myProfile?_myProfile.id:null});
+  UI.dealNoteDraft='';
+  render();
+}
+window.addDealNote=addDealNote;
+function removeDealNote(id){
+  const n=byId(CFG.dealNotes||[],id);
+  CFG.dealNotes=(CFG.dealNotes||[]).filter(x=>x.id!==id);
+  deleteRow('augur_deal_notes', id, n?n.orgId:undefined);
+  render();
+}
+window.removeDealNote=removeDealNote;
+function toggleRefDone(id){
+  const r=byId(CFG.refTracking||[],id); if(!r)return;
+  r.done=!r.done; r.doneAt=r.done?new Date().toISOString():null;
+  logAudit(r.done?'reference marked done':'reference reopened', r.clientName||r.contactName||'(reference)');
+  render();
+}
+window.toggleRefDone=toggleRefDone;
+function linkReferenceToDeal(dealId,refId){
+  if(!refId)return;
+  const r=byId(CFG.refTracking||[],refId); if(!r)return;
+  r.dealId=dealId; render();
+}
+window.linkReferenceToDeal=linkReferenceToDeal;
+function unlinkReference(refId){
+  const r=byId(CFG.refTracking||[],refId); if(!r)return;
+  r.dealId=null; render();
+}
+window.unlinkReference=unlinkReference;
 async function viewCompanyInHub(account){
   const _tnWin = window.open('', 'tool_AH'); // opened synchronously so the click gesture still counts once the SSO token is ready (see fix note below). Dedicated name of its own (2026-09-11: every module link now targets its own tool_<id> name too, instead of one shared tool_North that let clicking between modules silently overwrite whatever tab you were on -- AH keeps a separate name so it's never caught up in that) so AH always reuses the same tab regardless of entry point -- see 2026-09-10/11 tab-reuse fixes.
   let url = CONTACT_URL;
@@ -1762,7 +1962,7 @@ function render(){
      boot). Sidebar/topnav above don't depend on page-specific data. */
   let mainHtml;
   try{
-    mainHtml = p.fn() + (UI.helpOpen?helpPanelHtml():'') + (UI.contactSummaryFor!==null?contactSummaryPanelHtml(UI.contactSummaryAccount):'');
+    mainHtml = p.fn() + (UI.helpOpen?helpPanelHtml():'') + (UI.contactSummaryFor!==null?contactSummaryPanelHtml(UI.contactSummaryAccount):'') + (UI.dealDetailsFor?dealDetailsPanelHtml(UI.dealDetailsFor):'');
   }catch(e){
     console.error('Page render failed for "'+p.id+'"', e);
     mainHtml = '<div class="card" style="padding:24px;max-width:640px;"><h3>This page couldn\'t load</h3>'+

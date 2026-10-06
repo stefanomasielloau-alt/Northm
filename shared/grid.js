@@ -341,10 +341,16 @@
       }
     },
     admin_time: {
-      defaults: { box1: 'fiscalcalendar', box2: 'periodmap' },
-      boxSizes: { box1: 12, box2: 12 },
+      /* 2026-10-06: added box3/seasonality so the new Seasonality editor (Ordo.html's
+         ADMIN_TAB_WIDGETS.time) actually shows up for everyone -- this registry is what
+         northGetWidgetAssignments() reads for defaults AND what the widget-swap library
+         offers, so it has to list every widget separately from Ordo.html's own copy or a
+         saved layout from before this box existed silently shadows the new default. */
+      defaults: { box1: 'fiscalcalendar', box2: 'seasonality', box3: 'periodmap' },
+      boxSizes: { box1: 12, box2: 12, box3: 12 },
       widgets: {
         fiscalcalendar: { label: 'Fiscal calendar', hint: 'FY start month, reporting grain, current FY', fn: function () { return window.adminTimeWidgetFiscalCalendar(); } },
+        seasonality: { label: 'Seasonality', hint: 'Set the 12 fiscal-month multipliers, by month, quarter or half', fn: function () { return window.adminTimeWidgetSeasonality(); } },
         periodmap: { label: 'Period map', hint: 'How loaded months resolve to FY/quarter/half/seasonality', fn: function () { return window.adminTimeWidgetPeriodMap(); } }
       }
     },

@@ -2597,6 +2597,15 @@ window.setCurrencyRateField=setCurrencyRateField;
    the org can store the rate site it trusts. Saved inside currency_config (no migration). The URL
    may contain {FROM} and {TO}, which become each row's currency and the main currency -- e.g.
    https://www.xe.com/currencyconverter/convert/?Amount=1&From={FROM}&To={TO} */
+/* 2026-10-07 (Partners build decision 5, Stef confirmed: "No per deal is good as long as
+   teh default is preset and can change"). Stored on the same currency_config JSON blob --
+   no new column needed. A per-deal licensing-mode dropdown in Scoring still overrides this
+   per deal; this is just what a brand-new deal's mode pre-fills to. */
+function setDefaultLicensingMode(val){
+  CFG.currency.defaultLicensingMode=val||null;
+  bumpConfigVersion(); logAudit('set default licensing mode',val||'(none)'); render();
+}
+window.setDefaultLicensingMode=setDefaultLicensingMode;
 function setCurrencySourceUrl(val){
   const v=(val||'').trim();
   if(v && !/^https:\/\//i.test(v)){ toast('The rate site link must start with https://'); render(); return; }
@@ -2854,6 +2863,13 @@ function pageCurrency(){
   h+=`<div class="card"><h3>Main currency</h3>
     <div class="bd"><div class="field"><label class="lbl">All rates below convert to this currency</label>
       <input class="cel" style="width:80px;text-transform:uppercase" maxlength="3" value="${esc(CFG.currency.main)}" onchange="setCurrencyMain(this.value)"></div></div></div>`;
+  h+=`<div class="card"><h3>Default licensing mode</h3>
+    <div class="bd"><div class="field"><label class="lbl">What a new deal's licensing mode (Scoring &rarr; Deal details &rarr; Attribution &amp; licensing) pre-fills to when a licensing currency is set. Always overridable per deal.</label>
+      <select class="cel" onchange="setDefaultLicensingMode(this.value||null)">
+        <option value="" ${!CFG.currency.defaultLicensingMode?'selected':''}>— none (leave blank until chosen) —</option>
+        <option value="locked" ${CFG.currency.defaultLicensingMode==='locked'?'selected':''}>Locked at signing</option>
+        <option value="floating" ${CFG.currency.defaultLicensingMode==='floating'?'selected':''}>Floating</option>
+      </select></div></div></div>`;
   h+=`<div class="card"><h3>Rate source link</h3>
     <div class="bd"><div class="field"><label class="lbl">A site you trust for today's rates (optional). Use {FROM} and {TO} to link straight to each pair.</label>
       <input class="cel txt" style="width:100%;max-width:560px" placeholder="https://www.xe.com/currencyconverter/convert/?Amount=1&From={FROM}&To={TO}" value="${esc(CFG.currency.sourceUrl||'')}" onchange="setCurrencySourceUrl(this.value)">

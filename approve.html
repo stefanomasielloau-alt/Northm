@@ -21,7 +21,7 @@ a{color:#1F4FD1}
   var q=new URLSearchParams(location.search), id=q.get('id')||'', token=q.get('token')||'', decision=q.get('decision')==='reject'?'reject':'approve';
   var box=document.getElementById('box');
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
-  var runs='<p>Open <a href="Schema.html">Process Maps</a> → Runs &amp; approvals in North to see it.</p>';
+  var runs='<p>Open <a href="ProcessMaps.html">Process Maps</a> → Runs &amp; approvals in North to see it.</p>';
   function show(h){ box.innerHTML=h; }
   var api=FN+'?format=json&id='+encodeURIComponent(id)+'&token='+encodeURIComponent(token)+'&decision='+decision;
   if(!id||!token){ show('<h1>This link is not valid</h1><p>It\'s missing part of the address.</p>'+runs); return; }

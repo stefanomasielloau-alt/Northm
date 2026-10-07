@@ -36,14 +36,14 @@
 
   /* ---------- system processes: how a raw row maps onto a step ---------- */
   var PROCESSES = {
-    campaign: { table: 'campaigns', stepField: 'signoff_status', valueField: 'budget', page: 'Cursus.html', type: 'campaign' },
-    deal: { table: 'augur_deals', stepField: 'stage', valueField: 'value', page: 'Augur.html', type: 'deal' },
-    event: { table: 'eventus_events', stepField: 'status', valueField: 'budget', page: 'Eventus.html', type: 'event' },
-    task: { table: 'tasks', stepField: 'status', valueField: 'planned_cost', page: 'Cursus.html', type: 'task' },
-    asset: { table: 'assets', stepField: null, valueField: 'stock', page: 'Custodia.html', type: 'asset' },
-    campaign_budget: { table: 'campaigns', stepField: null, valueField: 'budget', page: 'Cursus.html', type: 'campaign' },
-    plan_commit: { table: null, stepField: null, valueField: null, page: 'Ordo.html', type: 'none' },
-    lead: { table: 'prospectus_leads', stepField: 'status', valueField: null, page: 'Prospectus.html', type: 'lead' }
+    campaign: { table: 'campaigns', stepField: 'signoff_status', valueField: 'budget', page: 'CampaignPlanning.html', type: 'campaign' },
+    deal: { table: 'augur_deals', stepField: 'stage', valueField: 'value', page: 'Scoring.html', type: 'deal' },
+    event: { table: 'eventus_events', stepField: 'status', valueField: 'budget', page: 'Events.html', type: 'event' },
+    task: { table: 'tasks', stepField: 'status', valueField: 'planned_cost', page: 'CampaignPlanning.html', type: 'task' },
+    asset: { table: 'assets', stepField: null, valueField: 'stock', page: 'AssetRegister.html', type: 'asset' },
+    campaign_budget: { table: 'campaigns', stepField: null, valueField: 'budget', page: 'CampaignPlanning.html', type: 'campaign' },
+    plan_commit: { table: null, stepField: null, valueField: null, page: 'Strategy.html', type: 'none' },
+    lead: { table: 'prospectus_leads', stepField: 'status', valueField: null, page: 'Targets.html', type: 'lead' }
   };
   function processesForTable(table) { var out = []; for (var k in PROCESSES) if (PROCESSES[k].table === table) out.push(k); return out; }
   function todayISO(now) { return new Date(now == null ? Date.now() : now).toISOString().slice(0, 10); }

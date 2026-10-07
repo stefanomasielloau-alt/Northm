@@ -688,7 +688,7 @@ function render(){
         <p>Funnel planning, forecasting, capacity checks and top-line reporting.</p>
         <div class="stats"><div class="stat"><b>${CFG.programmes.length}</b>programmes</div>
           <div class="stat"><b>${F.mk(r.totalBudget)}</b>total budget</div></div>
-        <div class="row"><span class="pill ok">Live</span><a class="btn" href="Ordo.html" target="tool_Ordo">Open →</a></div>
+        <div class="row"><span class="pill ok">Live</span><a class="btn" href="Strategy.html" target="tool_Ordo">Open →</a></div>
       </div>
     </div>
     ` : ''}
@@ -701,7 +701,7 @@ function render(){
         <div class="stats"><div class="stat"><b>${CFG.campaigns.length}</b>campaigns</div>
           <div class="stat"><b>${CFG.tasks.length}</b>activities</div>
           <div class="stat"><b>${r.awaitingSignoff}</b>awaiting sign-off</div></div>
-        <div class="row"><span class="pill ok">Live</span><a class="btn" href="Cursus.html" target="tool_Cursus">Open →</a></div>
+        <div class="row"><span class="pill ok">Live</span><a class="btn" href="CampaignPlanning.html" target="tool_Cursus">Open →</a></div>
       </div>
     </div>
     ` : ''}
@@ -717,7 +717,7 @@ function render(){
         <p>ICP filters, a lightweight target list, and opportunity-sizing reports.</p>
         <div class="stats"><div class="stat"><b>${CFG.leads.length}</b>leads</div>
           <div class="stat"><b>${r.openLeads.length}</b>open</div></div>
-        <div class="row"><span class="pill ok">Live</span><a class="btn" href="Prospectus.html" target="tool_Prospectus">Open →</a></div>
+        <div class="row"><span class="pill ok">Live</span><a class="btn" href="Targets.html" target="tool_Prospectus">Open →</a></div>
       </div>
     </div>
     ` : ''}
@@ -730,7 +730,7 @@ function render(){
         <div class="stats"><div class="stat"><b>${r.openDeals.length}</b>open deals</div>
           <div class="stat"><b>${F.mk(r.pipelineValue)}</b>value</div>
           <div class="stat"><b>${CFG.contacts.length}</b>contacts</div></div>
-        <div class="row"><span class="pill ok">Live</span><a class="btn" href="Augur.html" target="tool_Augur">Open →</a></div>
+        <div class="row"><span class="pill ok">Live</span><a class="btn" href="Scoring.html" target="tool_Augur">Open →</a></div>
       </div>
     </div>
     ` : ''}
@@ -756,7 +756,7 @@ function render(){
         <p>Event planning, logistics and cost tracking — multi-venue events, speakers, checklists, attendance.</p>
         <div class="stats"><div class="stat"><b>${CFG.events.length}</b>events</div>
           <div class="stat"><b>${r.upcomingEvents.length}</b>upcoming</div></div>
-        <div class="row"><span class="pill ok">Live</span><a class="btn" href="Eventus.html" target="tool_Eventus">Open →</a></div>
+        <div class="row"><span class="pill ok">Live</span><a class="btn" href="Events.html" target="tool_Eventus">Open →</a></div>
       </div>
     </div>
     ` : ''}
@@ -768,7 +768,7 @@ function render(){
         <p>Physical, digital and swag asset register with a stock transactions ledger.</p>
         <div class="stats"><div class="stat"><b>${CFG.assets.length}</b>assets</div>
           <div class="stat" style="${r.lowStockAssets.length?'color:#C8791A':''}"><b>${r.lowStockAssets.length}</b>low stock</div></div>
-        <div class="row"><span class="pill ${r.lowStockAssets.length?'warn':'ok'}">Live</span><a class="btn" href="Custodia.html" target="tool_Custodia">Open →</a></div>
+        <div class="row"><span class="pill ${r.lowStockAssets.length?'warn':'ok'}">Live</span><a class="btn" href="AssetRegister.html" target="tool_Custodia">Open →</a></div>
       </div>
     </div>
     ` : ''}
@@ -783,7 +783,7 @@ function render(){
         <h3><span class="mk" style="background:#3A5A8C">Pr</span>Process Maps</h3>
         <p>Process maps and workflow diagrams — boxes, decisions, arrows, swimlanes.</p>
         <div class="stats"><div class="stat"><b>${CFG.workflows.length}</b>diagrams</div></div>
-        <div class="row"><span class="pill ok">Live</span><a class="btn" href="Schema.html" target="tool_Schema">Open →</a></div>
+        <div class="row"><span class="pill ok">Live</span><a class="btn" href="ProcessMaps.html" target="tool_Schema">Open →</a></div>
       </div>
     </div>
     ` : ''}
@@ -793,7 +793,7 @@ function render(){
       <div class="bd">
         <h3><span class="mk" style="background:#B5730E">Co</span>Configuration</h3>
         <p>The shared configuration hub — cost buckets, tracking ID convention, roles &amp; users, and org hierarchy.</p>
-        <div class="row"><span class="pill ok">Live</span><a class="btn" href="Norma.html" target="tool_Norma">Open →</a></div>
+        <div class="row"><span class="pill ok">Live</span><a class="btn" href="Configuration.html" target="tool_Norma">Open →</a></div>
       </div>
     </div>
     ` : ''}
@@ -803,7 +803,7 @@ function render(){
       <div class="bd">
         <h3><span class="mk" style="background:#7C1F5A">Rp</span>Reporting</h3>
         <p>Cross-module dashboards, the org and sub-org overview, and an index of reports including the Board report.</p>
-        <div class="row"><span class="pill ok">Live</span><a class="btn" href="Reportus.html" target="tool_Reportus">Open →</a></div>
+        <div class="row"><span class="pill ok">Live</span><a class="btn" href="Reporting.html" target="tool_Reportus">Open →</a></div>
       </div>
     </div>
     ` : ''}

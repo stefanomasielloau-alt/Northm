@@ -226,7 +226,7 @@
     var log = document.getElementById('asstLog'); if (!log || !C) return;
     var on = enabled(), pending = !C.isEnabled && S.enabledFlag === null;
     var h = '';
-    if (!on && !pending) h += '<div class="asst-msg w" role="note"><strong>Ask Alec is turned off for this organization.</strong> An admin can turn it on in <a href="Norma.html" target="tool_North">Configuration &rarr; Integrations</a> (the AI screen interpreter / Ask Alec setting). Nothing is sent to an AI provider while it’s off.</div>';
+    if (!on && !pending) h += '<div class="asst-msg w" role="note"><strong>Ask Alec is turned off for this organization.</strong> An admin can turn it on in <a href="Configuration.html" target="tool_North">Configuration &rarr; Integrations</a> (the AI screen interpreter / Ask Alec setting). Nothing is sent to an AI provider while it’s off.</div>';
     var ex = explainCfg();
     if (!S.msgs.length) {
       h += '<div class="asst-intro">Ask Alec about what’s on this screen, or for advice on what to do next. Alec only sees what’s visible on <b>' + esc(pageInfo().label) + '</b> plus a summary of its numbers &mdash; not individual contact or deal records.</div>';

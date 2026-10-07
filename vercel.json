@@ -23,43 +23,43 @@
   "rewrites": [
     {
       "source": "/strategy",
-      "destination": "/Ordo.html"
+      "destination": "/Strategy.html"
     },
     {
       "source": "/campaigns",
-      "destination": "/Cursus.html"
+      "destination": "/CampaignPlanning.html"
     },
     {
       "source": "/campaign-planning",
-      "destination": "/Cursus.html"
+      "destination": "/CampaignPlanning.html"
     },
     {
       "source": "/events",
-      "destination": "/Eventus.html"
+      "destination": "/Events.html"
     },
     {
       "source": "/asset-register",
-      "destination": "/Custodia.html"
+      "destination": "/AssetRegister.html"
     },
     {
       "source": "/targets",
-      "destination": "/Prospectus.html"
+      "destination": "/Targets.html"
     },
     {
       "source": "/scoring",
-      "destination": "/Augur.html"
+      "destination": "/Scoring.html"
     },
     {
       "source": "/process-maps",
-      "destination": "/Schema.html"
+      "destination": "/ProcessMaps.html"
     },
     {
       "source": "/configuration",
-      "destination": "/Norma.html"
+      "destination": "/Configuration.html"
     },
     {
       "source": "/reporting",
-      "destination": "/Reportus.html"
+      "destination": "/Reporting.html"
     },
     {
       "source": "/dashboard",

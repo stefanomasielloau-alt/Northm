@@ -1070,6 +1070,28 @@ async function generateExternalTriggerToken(){
     toast('New token generated -- copy it now.');
   }catch(e){ toast('Could not reach Hub: '+(e&&e.message?e.message:'unknown error')); }
 }
+
+async function generateZapierApiKey(){
+  if(!canConfig()){ toast('Your role cannot manage API keys.'); return; }
+  if(!confirm('Generate a new Zapier/external API key for this organization?')) return;
+  try{
+    const { data } = await sb.auth.getSession();
+    const sessionToken = data && data.session && data.session.access_token;
+    if(!sessionToken){ toast('Your own North session has expired -- sign in again.'); return; }
+    const r = await fetch(SUPABASE_URL+'/functions/v1/zapier-keygen', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+sessionToken,'apikey':SUPABASE_ANON_KEY},
+      body: JSON.stringify({ label: 'Zapier' })
+    });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok || !j.ok){ toast(j.error||'Could not generate a key -- has zapier-keygen been deployed yet?'); return; }
+    UI.lastZapierApiKey = j.api_key || '';
+    logAudit('Zapier API key generated', j.label||'Zapier');
+    render();
+    toast('New key generated -- copy it now.');
+  }catch(e){ toast('Could not reach Supabase: '+(e&&e.message?e.message:'unknown error')); }
+}
+window.generateZapierApiKey=generateZapierApiKey;
 window.generateExternalTriggerToken = generateExternalTriggerToken;
 function copyExternalTriggerToken(tok){
   if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(tok); toast('Token copied.'); }
@@ -2992,6 +3014,22 @@ function pageIntegrations(){
         <p class="mini" style="margin:6px 0 0">Shown once — copy it now and paste it into whatever external system will send this webhook (as the <code>token</code>
           query param, or an <code>X-Trigger-Token</code> header). Not stored anywhere retrievable after you leave this page.</p></div>`:''}
     </div></div>`;
+  h+=`<div class="card"><h3>Zapier / external API keys</h3>
+    <div class="bd">
+      <p class="mini" style="margin:0 0 9px">Lets Zapier (or any future outside tool reaching INTO North the same way) poll
+        for flow runs and trigger flows on your org's behalf, authenticated with its own durable key -- the reverse
+        direction from the connectors above, which are North reaching OUT. Generate a key below, then paste it into
+        Zapier's North connection as the API Key field. See <code>Claude outputs/2026-10-06-zapier-setup-checklist.md</code>
+        for the rest of the one-time setup (deploying the two Edge Functions, creating a Zapier developer account,
+        <code>zapier push</code>).</p>
+      <button class="btn sm pri" ${canConfig()?'':'disabled'} onclick="generateZapierApiKey()">Generate new key</button>
+      <span class="mini" style="margin-left:8px">Generating adds a new key -- it doesn't revoke any existing one, so multiple
+        Zaps/tools can each hold their own. Key revocation isn't built yet; ask Claude if you need one disabled.</span>
+      ${UI.lastZapierApiKey?`<div class="note" style="margin-top:10px"><strong>Key: <span style="font-size:13px;letter-spacing:0.5px;word-break:break-all">${esc(UI.lastZapierApiKey)}</span></strong>
+        <button class="btn sm" onclick="copyExternalTriggerToken('${esc(UI.lastZapierApiKey)}')">Copy</button>
+        <p class="mini" style="margin:6px 0 0">Shown once -- copy it now and paste it into Zapier (or wherever needs it) as the
+          API key. Not stored anywhere retrievable after you leave this page -- generate a fresh one if you lose it.</p></div>`:''}
+    </div></div>`;
   h += outboundWebhooksPanelHtml();
   h += `<div class="card"><h3>Ask Alec <span class="sp"></span>
       <span class="pill ${CFG.aiScreenInterpreterEnabled?'ok':'n'}">${CFG.aiScreenInterpreterEnabled?'On':'Off'}</span></h3>
@@ -4367,7 +4405,8 @@ const HELP_FAQ=[
   {q:'Why can\'t I edit an Agent Registry entry from AH\'s Library?', a:'Because it\'s also used in North -- North is the master for anything shared with it, so AH shows it read-only with a link back here. Entries used only in Hub or Queue stay fully editable from AH.'},
   /* 2026-09-29 */ {q:"How do I turn Ask Alec on or off?", a:"Configuration \u2192 Integrations \u2192 Ask Alec. When it\u2019s on, an \u2726 Ask Alec button appears in the top bar of Strategy and on the dashboard, report, planning and effectiveness pages of the other modules. Alec is sent the page name, a text snapshot of what\u2019s visible on screen (never passwords) and the recent conversation, using your org\u2019s active AI provider (or the one assigned to that task in the Agent Registry). It\u2019s off by default."},
   /* 2026-10-07 */ {q:"Can people use their own AI, or does the organisation have to pick one?", a:"Configuration → AI & agents → Who chooses. Pick \"People choose\" (everyone picks from your approved list, each area starting on its own default) or \"The organisation decides\" (everyone uses that default, locked — nobody can change it). You can separately allow people to connect their own API key (Claude, ChatGPT, Gemini, Perplexity, DeepSeek — stored encrypted in Hub, only for them) and choose whether \"Org Default AI\" (Hub-Backend's own key) is offered at all. No API key is ever typed on this page itself — org keys live on Hub-Backend, personal keys go straight to Hub. When your AI mode is Web app or Desktop app, the hand-off panel reads your clipboard automatically as soon as you switch back to North after copying an answer — there's also a manual \"Paste from clipboard\" button if that doesn't catch it."},
-  /* 2026-10-07 */ {q:"Why can't I edit this user in the Users table?", a:"You can view, but not change, anyone at or above your own role tier — a small 🔒 shows on their row and the fields are disabled. This stops a peer, or someone more senior, from having their access changed by someone at or below their own level. It doesn't apply to Super Admins or to your own row."}
+  /* 2026-10-07 */ {q:"Why can't I edit this user in the Users table?", a:"You can view, but not change, anyone at or above your own role tier — a small 🔒 shows on their row and the fields are disabled. This stops a peer, or someone more senior, from having their access changed by someone at or below their own level. It doesn't apply to Super Admins or to your own row."},
+  /* 2026-10-07 */ {q:"How do I let Zapier reach into North?", a:"Configuration → Integrations → Zapier / external API keys. Generate a key there and paste it into Zapier's North connection as the API key -- this is the reverse direction from the connectors on the same page, where North reaches OUT to another app; this lets an outside tool reach IN, to poll for flow runs and trigger a flow. Each generate adds a new key rather than replacing one, so separate Zaps or tools can each hold their own."}
 ];
 function helpPanelHtml(){
   const mod = MODULES.find(m=>m.id===THIS_MODULE) || {label:THIS_MODULE, desc:''};

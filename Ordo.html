@@ -3490,7 +3490,7 @@ function pageAdmin(){
       ${CFG.customWidgets.length?CFG.customWidgets.map(w=>`<tr>
         <td class="lb">${esc(w.name)}</td>
         <td>${esc(w.categoryPageId?(pageLabels[w.categoryPageId]||w.categoryPageId):'External widgets')}</td>
-        <td>${esc({iframe:'Embed',gdoc:'Doc/Sheet',api:'API',webhook:'Webhook',note:'Note',gsheet:'Sheet (2-way)'}[w.type]||w.type)}</td>
+        <td>${esc({iframe:'Embed',gdoc:'Doc/Sheet',api:'API',webhook:'Webhook',note:'Note',gsheet:'Sheet (2-way)',gdoc_edit:'Doc (2-way)'}[w.type]||w.type)}</td>
         <td class="mini" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
           ${w.type==='webhook'?`POST ${esc(SUPABASE_URL)}/functions/v1/widget-webhook/${esc(w.id)}?token=${esc(w.webhookToken||'(not deployed yet)')}`:(w.type==='note'?esc((w.body||'').slice(0,80)):esc(w.url))}
         </td>
@@ -3513,6 +3513,7 @@ function pageAdmin(){
           <option value="webhook" ${cwEdit&&cwEdit.type==='webhook'?'selected':''}>Webhook-fed panel (no URL -- you get an endpoint)</option>
           <option value="note" ${cwEdit&&cwEdit.type==='note'?'selected':''}>Note / free text (no URL -- type the text below)</option>
           <option value="gsheet" ${cwEdit&&cwEdit.type==='gsheet'?'selected':''}>Google Sheet -- view AND edit (two-way)</option>
+          <option value="gdoc_edit" ${cwEdit&&cwEdit.type==='gdoc_edit'?'selected':''}>Google Doc -- view AND edit (two-way)</option>
         </select></div>
         <div class="f"><label>Sheet range <span class="mini">(Google Sheet two-way only, e.g. Sheet1!A1:F20)</span></label>
           <input class="in v" id="cwrange" placeholder="A1:F20" value="${cwEdit&&cwEdit.config&&cwEdit.config.range?esc(cwEdit.config.range):''}"></div>

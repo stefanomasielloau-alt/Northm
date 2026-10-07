@@ -650,6 +650,62 @@
     }).catch(function (err) { if (st) st.textContent = 'Save failed: ' + (err && err.message || err); });
   };
 
+  // 2026-10-07: two-way Google Doc widget ('gdoc_edit'). Reads and writes a document's plain
+  // text through Hub-Backend's /docs/request endpoint, same dual-auth/session pattern as the
+  // gsheet widget just above -- deliberately mirrors it rather than inventing a second shape.
+  // First-pass scope matches gsheet's own: plain text only (no rich formatting, tables or
+  // images round-tripped) -- good enough for notes/briefs/minutes, not a full Docs editor.
+  // Needs Google OAuth configured on Hub-Backend AND the `documents` scope (added 2026-10-07 --
+  // anyone who connected Google before this existed needs to reconnect under Hub Settings to
+  // grant it) -- until then it shows the same kind of "needs Google connected" message as gsheet.
+  var gdocCache = {};
+  function _docsCall(payload) {
+    if (typeof sb === 'undefined' || typeof CONTACT_URL === 'undefined') return Promise.reject(new Error('not available on this page'));
+    return sb.auth.getSession().then(function (res) {
+      var tok = res && res.data && res.data.session && res.data.session.access_token;
+      if (!tok) throw new Error('your North session has expired -- sign in again');
+      payload.north_token = tok; payload.org = (typeof _hubOrgSlug !== 'undefined' ? _hubOrgSlug : '');
+      return fetch(CONTACT_URL + '/docs/request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (!r.ok || (j && j.error)) throw new Error((j && j.error) || ('HTTP ' + r.status));
+        return j;
+      });
+    });
+  }
+  function _docIdOf(u) { var m = String(u || '').match(/\/d\/([a-zA-Z0-9_-]{20,})/); return m ? m[1] : String(u || '').trim(); }
+  function renderGdocWidget(containerId, cw) {
+    var canEdit = (typeof canConfig === 'function' && canConfig()) || (typeof readOnly === 'function' && !readOnly());
+    _docsCall({ method: 'get', docId: _docIdOf(cw.url) }).then(function (j) {
+      gdocCache[cw.id] = { text: j.text || '' };
+      var el = document.getElementById(containerId); if (!el) return;
+      var escAttr = function (v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+      var h = canEdit
+        ? ('<textarea id="' + containerId + '_ta" style="width:100%;height:100%;min-height:160px;resize:none;font:inherit;font-size:13px;padding:6px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box" onchange="window.__northGdocEdit(\'' + cw.id + '\',\'' + containerId + '\',this.value)">' + escAttr(j.text || '') + '</textarea>' +
+          '<div style="margin-top:6px;text-align:right"><span class="mini" id="' + containerId + '_st" style="opacity:.6;margin-right:8px"></span>' +
+          '<button class="btn sm pri" onclick="window.__northGdocSave(\'' + cw.id + '\',\'' + containerId + '\')">Save to Doc</button></div>')
+        : ('<div style="white-space:pre-wrap;font-size:13px;line-height:1.5">' + escAttr(j.text || '') + '</div>');
+      el.innerHTML = h;
+    }).catch(function (err) {
+      var el = document.getElementById(containerId);
+      if (el) el.innerHTML = '<div class="mini" style="color:#c33">Could not read the doc (' + String(err && err.message || err).replace(/</g, '&lt;') +
+        '). Needs Google connected for your account in Hub Settings (with the Doc permission granted -- reconnect if you connected Google before this feature existed), and the Google OAuth keys set on Hub-Backend.</div>';
+    });
+  }
+  window.__northGdocEdit = function (cwId, containerId, val) {
+    var c = gdocCache[cwId]; if (!c) return;
+    c.text = val; c.dirty = true;
+  };
+  window.__northGdocSave = function (cwId, containerId) {
+    var c = gdocCache[cwId]; if (!c || !c.dirty) return;
+    var cw = (typeof CFG !== 'undefined' && CFG.customWidgets || []).filter(function (w) { return w.id === cwId; })[0]; if (!cw) return;
+    var st = document.getElementById(containerId + '_st'); if (st) st.textContent = 'Saving…';
+    _docsCall({ method: 'replace', docId: _docIdOf(cw.url), text: c.text }).then(function () {
+      c.dirty = false; if (st) st.textContent = 'Saved ' + new Date().toLocaleTimeString();
+      if (typeof logAudit === 'function') logAudit('edit', 'Google Doc widget/' + cw.name);
+    }).catch(function (err) { if (st) st.textContent = 'Save failed: ' + (err && err.message || err); });
+  };
+
   // 2026-09-24 (Stef: "Id [I'd] rather have click-to-edit directly on the tile"): which Note
   // widgets are currently in edit mode, keyed by custom_widgets id. Module-scoped state, not
   // persisted anywhere -- same "nothing to recover if interrupted" tradeoff Ordo.html's own
@@ -710,9 +766,9 @@
         // CFG.customWidgets already loaded into cw.latestPayload -- that field is written by an
         // external system POSTing to a small Supabase Edge Function (prepared separately, see
         // 2026-09-24-migration-custom-widgets-add-webhook-columns.sql / functions/widget-webhook),
-        // not by anything in this file. "Insert/write back" to a doc is NOT built -- it needs a
-        // real Google OAuth app (client id/secret, consent flow, token storage), a decision Stef
-        // hasn't made yet; flagged separately, not guessed at here.
+        // not by anything in this file. gdoc_edit is the fifth type (2026-10-07) -- two-way
+        // write-back to a Doc's plain text, via /docs/request, mirroring gsheet above; plain
+        // gdoc stays a view-only embed since not every Doc tile needs edit rights.
         fn: function () {
           if (cwType === 'api') {
             var apiBoxId = 'extw_' + cwId.replace(/[^a-zA-Z0-9]/g, '') + '_' + Math.random().toString(36).slice(2, 8);
@@ -725,6 +781,12 @@
             setTimeout(function () { renderGsheetWidget(gsBoxId, cw); }, 0);
             return '<div class="card" style="height:100%"><div class="bd" style="height:100%;overflow:auto;padding:8px">' +
               '<div id="' + gsBoxId + '" class="mini">Loading sheet…</div></div></div>';
+          }
+          if (cwType === 'gdoc_edit') {
+            var gdBoxId = 'extgd_' + cwId.replace(/[^a-zA-Z0-9]/g, '') + '_' + Math.random().toString(36).slice(2, 8);
+            setTimeout(function () { renderGdocWidget(gdBoxId, cw); }, 0);
+            return '<div class="card" style="height:100%"><div class="bd" style="height:100%;overflow:auto;padding:8px">' +
+              '<div id="' + gdBoxId + '" class="mini">Loading doc…</div></div></div>';
           }
           if (cwType === 'webhook') {
             return '<div class="card" style="height:100%"><div class="bd" style="height:100%;overflow:auto;padding:8px">' +

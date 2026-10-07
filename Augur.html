@@ -349,6 +349,19 @@ function setFactorScore(dealId,factorId,val){
   render();
 }
 window.setFactorScore=setFactorScore;
+/* 2026-10-07: manual per-deal confidence level (0-100) -- a standalone estimate Stef sets
+   himself on the deal, separate from the automatic tier probability and from any
+   "Decay / confidence" scoring factor. Saved via the normal saveToSupabase() upsert, same
+   as every other deal field; doesn't trigger an immediate save itself (sits in CFG.deals
+   in memory until the page's own save flow runs), matching factor scores' own behaviour. */
+function setDealConfidenceLevel(dealId,val){
+  const d=byId(CFG.deals,dealId); if(!d)return;
+  if(val===''){ d.confidenceLevel=null; render(); return; }
+  let v=parseFloat(val); if(isNaN(v)){ render(); return; } v=Math.max(0,Math.min(100,Math.round(v)));
+  d.confidenceLevel=v;
+  render();
+}
+window.setDealConfidenceLevel=setDealConfidenceLevel;
 
 /* ---------- table search/sort (client-side, display-only — does not reorder CFG.deals/
    CFG.contacts or affect what gets saved) ---------- */
@@ -450,7 +463,7 @@ async function saveToSupabase(){
       stage:d.stage||'Prospecting',close_date:d.closeDate||null,source:d.source||'Manual',
       campaign_ref:d.campaignRef||'',campaign_id:d.campaignId||null,
       factor_scores:d.factorScores||{},tracking_ref:d.trackingRef||null,
-      partner_id:d.partnerId||null,commission_pct:d.commissionPct
+      partner_id:d.partnerId||null,commission_pct:d.commissionPct,confidence_level:d.confidenceLevel??null
     })),
     upsertRows('crm_contacts', CFG.contacts, c=>({
       id:c.id,name:c.name||'',title:c.title||'',account:c.account||'',email:c.email||'',phone:c.phone||'',notes:c.notes||''
@@ -583,10 +596,10 @@ async function loadFromSupabase(){
     const partnersR = await sb.from('partners').select('id,name');
     if(partnersR.error) throw partnersR.error;
     CFG.partners = (partnersR.data||[]).map(p=>({id:p.id,name:p.name||''}));
-    const dpR = await orgScoped(sb.from('augur_deals').select('id,partner_id,commission_pct'));
+    const dpR = await orgScoped(sb.from('augur_deals').select('id,partner_id,commission_pct,confidence_level'));
     if(dpR.error) throw dpR.error;
     (dpR.data||[]).forEach(row=>{ CFG._dealPartnerFieldsById[row.id] = row; });
-  }catch(e){ console.warn('partners / augur_deals.partner_id-commission_pct not available yet (migration pending?)', e); }
+  }catch(e){ console.warn('partners / augur_deals.partner_id-commission_pct-confidence_level not available yet (migration pending?)', e); }
 
   /* 2026-10-06 (Scoring/Deals redesign): references linked to a deal -- the SAME
      asset_references rows Targets > Reference tracking manages (Prospectus.html), read
@@ -657,7 +670,11 @@ async function loadFromSupabase(){
        (a partner's budget/lead share across a whole campaign). This is one partner credited
        with sourcing/influencing THIS specific deal, plus an optional commission %. */
     partnerId:(CFG._dealPartnerFieldsById[d.id]||{}).partner_id||null,
-    commissionPct:(CFG._dealPartnerFieldsById[d.id]||{}).commission_pct||null
+    commissionPct:(CFG._dealPartnerFieldsById[d.id]||{}).commission_pct||null,
+    /* 2026-10-07: manual per-deal confidence level (0-100), distinct from the automatic
+       tier probability and from the "Decay / confidence" scoring factor -- see
+       Claude outputs/2026-10-07-migration-augur-deals-add-confidence-level.sql. */
+    confidenceLevel:(CFG._dealPartnerFieldsById[d.id]||{}).confidence_level??null
   }));
   CFG.contacts = (contactsR.data||[]).map(c=>({id:c.id,orgId:c.org_id,name:c.name||'',title:c.title||'',account:c.account||'',email:c.email||'',phone:c.phone||'',notes:c.notes||''}));
   CFG.activities = (activitiesR.data||[]).map(a=>({id:a.id,orgId:a.org_id,contactId:a.contact_id,dealId:a.deal_id||null,type:a.type||'Call',summary:a.summary||'',occurredAt:a.occurred_at||'',loggedBy:a.logged_by||''}));
@@ -1673,6 +1690,7 @@ const HELP_FAQ=[
   /* 2026-09-29 */ {q:"How do I sort and filter a list?", a:"Click any column heading to sort (click again to reverse, a third time to clear). The row under the headings filters each column \u2014 type to match text, or pick from the dropdown when a column has only a few values. \"(x of y)\" by the first heading shows how many rows match. Sorting and filtering only change what you see; nothing is saved or reordered in the data."},
   /* 2026-10-06 */ {q:"Where did the per-factor columns on the Deals table go?", a:"Click Details on a deal's row \u2014 you can score every factor there, plus see an audit log of when each score changed, add multiple notes, and see (or link) that deal's references, with a done/not-done toggle. Nothing was removed, it's just one click away instead of a wall of columns."},
   /* 2026-10-06 */ {q:"What does a \"Decay / confidence\" factor do?", a:"It's a manually-scored factor, same as Fit \u2014 use it to represent how a deal's strength is trending over time. There's no automatic formula: you decide the number (and whether it goes up or down) whenever you update it, from the deal's Details panel."},
+  /* 2026-10-07 */ {q:"What's the difference between \"Confidence level\" and the \"Decay / confidence\" factor?", a:"Confidence level (the % field at the top of a deal's Details panel) is a plain manual estimate you set yourself \u2014 it doesn't feed the score or Weighted value, it's just a number you're tracking. \"Decay / confidence\" (if your org has added one) is a scoring factor with its own weight \u2014 it DOES feed the score, the same as any other factor. You can use either, both, or neither."},
   /* 2026-10-06 */ {q:"Can I have more than one auto-computed (behavioral) factor?", a:"Yes \u2014 click \u201c+ Add auto-computed (engagement)\u201d as many times as you like. Each one gets its own checkboxes for which activity types (Call/Email/Meeting) feed it and its own decay-window field, right in the Type column, so you can set up e.g. a short-decay \u201crecent momentum\u201d factor from Meetings only alongside a longer-decay \u201csustained engagement\u201d factor from everything. Rename each one so they're easy to tell apart."}
 ];
 function helpPanelHtml(){
@@ -1749,6 +1767,9 @@ function dealDetailsPanelHtml(dealId){
         <div class="kpi"><div class="k">Score</div><div class="kpi-v">${F.n(m.score,0)}</div></div>
         <div class="kpi"><div class="k">Weighted value</div><div class="kpi-v">${F.mk(m.weightedValue,CCY_SYM[d.currency])}</div></div>
         <div class="kpi"><div class="k">Account</div><div class="kpi-v" style="font-size:14px">${esc(d.account||'—')}</div></div>
+        <div class="kpi"><div class="k" title="A manual estimate you set yourself -- separate from the automatic tier probability above and from any \'Decay / confidence\' scoring factor. Doesn\'t currently change Weighted value.">Confidence level</div>
+          <div class="kpi-v"><input class="cel w" type="number" min="0" max="100" step="5" placeholder="—" value="${d.confidenceLevel==null?'':d.confidenceLevel}"
+            onchange="setDealConfidenceLevel('${d.id}',this.value)">%</div></div>
       </div>
 
       <div class="lbl" style="margin-bottom:6px">Scoring factors</div>

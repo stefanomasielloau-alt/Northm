@@ -2012,7 +2012,7 @@ function pageSync(){
     <p class="mini" style="margin:0 0 8px">Filters, reports and the target list save to this browser automatically. Local only —
       export/import is still how data reaches other tools.</p>
     <button class="btn sm dgr" onclick="clearLocal()">Clear local autosave</button></div></div>`;
-  h+=`<div class="card"><h3>LLM providers (from Configuration)</h3><div class="bd flush">
+  h+=`<div class="card"><h3>AI & agents (from Configuration)</h3><div class="bd flush">
     ${!CFG.llmProviders.length?`<div class="empty">None synced yet.</div>`:`<table><thead><tr><th>Name</th><th>Kind</th><th>Enabled</th></tr></thead><tbody>
     ${CFG.llmProviders.map(p=>`<tr><td class="lb">${esc(p.name)}</td><td>${esc(p.kind)}</td><td><span class="pill ${p.enabled?'ok':'n'}">${p.enabled?'Enabled':'Off'}</span></td></tr>`).join('')}
     </tbody></table>`}

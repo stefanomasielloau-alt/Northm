@@ -1,0 +1,17 @@
+{
+  "name": "north-zapier-integration",
+  "version": "1.0.0",
+  "description": "Zapier Platform integration for North -- lets a Zap trigger a North flow and poll North's flow runs. 2026-10-06, built to the credential point (needs a Zapier developer account + `zapier login` + `zapier push` to actually go live -- same shape as every other connector in this project needing a provider's client_id/secret before it can be tested).",
+  "main": "index.js",
+  "scripts": {
+    "test": "zapier test"
+  },
+  "engines": { "node": ">=18.0.0" },
+  "dependencies": {
+    "zapier-platform-core": "16.5.0"
+  },
+  "devDependencies": {
+    "zapier-platform-cli": "16.5.0"
+  },
+  "private": true
+}

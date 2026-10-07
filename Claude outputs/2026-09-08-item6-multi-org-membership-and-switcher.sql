@@ -135,3 +135,13 @@ $$;
 -- redemption at signup, which already sets profiles.org_id) -- this
 -- migration's ON CONFLICT-guarded backfill above covers that case too,
 -- so nothing further is needed there.
+
+-- ---------------------------------------------------------------------------
+-- 2026-10-07 (Oct 30 2026 Supabase grant-change sweep): same reasoning as
+-- the equivalent addition to 2026-09-08-item11-campaign-execution-status-
+-- migration.sql -- this table was created with RLS + a policy but no
+-- explicit GRANT, relying on a Supabase default that changes Oct 30 2026.
+-- profile_orgs' run-status was never confirmed either. Safe to run multiple
+-- times.
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.profile_orgs TO authenticated, service_role;
+-- anon intentionally NOT granted -- North requires sign-in.

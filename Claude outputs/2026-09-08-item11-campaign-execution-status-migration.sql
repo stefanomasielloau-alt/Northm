@@ -95,3 +95,16 @@ CREATE TRIGGER trg_campaigns_set_updated_at
 -- later pushes, until a person uses Cursus.html's "Review & clear" button --
 -- conflict handling is manual, per Stef's original answer; the system can
 -- only raise the flag, never lower it).
+
+-- ---------------------------------------------------------------------------
+-- 2026-10-07 (Oct 30 2026 Supabase grant-change sweep): this table was
+-- created with RLS + a policy, but no explicit GRANT for authenticated/
+-- service_role -- it relied on Supabase's old default (every new table
+-- auto-granted those roles). That default goes away for tables created on
+-- or after Oct 30 2026. This table's run-status was never confirmed, so if
+-- it's still unrun when this gets executed, add the grant explicitly rather
+-- than relying on a default that may no longer apply by then. Safe to run
+-- multiple times; harmless if the table (and its old-style default grant)
+-- already exists.
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.campaign_execution_status TO authenticated, service_role;
+-- anon intentionally NOT granted -- North requires sign-in.

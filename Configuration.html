@@ -345,6 +345,7 @@ const CFG = {
   },
   /* everything below is Supabase-backed now -- populated by loadFromSupabase(). */
   costBuckets:[],
+  budgetLineCategories:[],
   llmProviders:[],
   integrations:{ webhookUrl:'', webhookEnabled:false },
   campaignNaming:{ fyStartMonth:1, seqScope:'pod', pattern:'{fy}{period}{pod}-{seq}_{descriptor}', seqCounters:{} },
@@ -464,6 +465,7 @@ async function saveToSupabase(){
   if(!_orgId) return;
   await Promise.all([
     upsertRows('cost_buckets', CFG.costBuckets, c=>({id:c.id,code:c.code,label:c.label,dept:c.dept||'Marketing',ext_code:c.extCode||''})),
+    upsertRows('budget_line_categories', CFG.budgetLineCategories, c=>({id:c.id,name:c.name,sort_order:c.sortOrder||0})),
     upsertRows('llm_providers', CFG.llmProviders, p=>Object.assign({id:p.id,name:p.name,kind:p.kind,endpoint:p.endpoint||'',key_label:p.keyLabel||'',model:p.model||'',enabled:!!p.enabled,access_type:p.accessType||'api'},
       CFG.llmHasApproved?{approved:p.approved!==false, web_url:p.webUrl||null}:{})),   /* 2026-09-29: approved/web_url only once the AI-choice migration exists */
     upsertRows('audit_log', CFG.audit, a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null})),
@@ -606,6 +608,19 @@ async function loadFromSupabase(){
     if(fbR.error) throw fbR.error;
     CFG.feedbackItems = fbR.data || [];
   }catch(e){ console.warn('feedback_items table not available yet (migration pending?) -- Feedback tab will show empty.', e); }
+
+  /* budget_line_categories (item 11 / Reference Environment subsystem 1, 2026-10-07):
+     admin-editable category list for budget line items, same role as cost_buckets but a
+     separate table since line items are a different subsystem. Fail-soft, same reasoning as
+     feedback_items above -- the table only exists once 2026-10-07-migration-budget-line-
+     items.sql has been run, and a missing-table error here must never break the rest of
+     Configuration loading. */
+  CFG.budgetLineCategories = [];
+  try{
+    const blcR = await sb.from('budget_line_categories').select('id,name,sort_order').eq('org_id',_orgId).order('sort_order',{ascending:true});
+    if(blcR.error) throw blcR.error;
+    CFG.budgetLineCategories = (blcR.data||[]).map(c=>({id:c.id,name:c.name,sortOrder:c.sort_order||0}));
+  }catch(e){ console.warn('budget_line_categories table not available yet (migration pending?) -- Budget categories tab will show empty.', e); }
 
   CFG.costBuckets = (costBucketsR.data||[]).map(c=>({id:c.id,code:c.code,label:c.label,dept:c.dept,extCode:c.ext_code||''}));
   CFG.llmProviders = (llmR.data||[]).map(p=>({id:p.id,name:p.name,kind:p.kind,endpoint:p.endpoint||'',keyLabel:p.key_label||'',model:p.model||'',enabled:p.enabled,accessType:p.access_type||'api',approved:p.approved!==false,webUrl:p.web_url||''}));
@@ -2446,6 +2461,18 @@ function removeCostBucket(id){
 }
 window.removeCostBucket=removeCostBucket;
 
+/* ---------- budget line categories (item 11 / Reference Environment subsystem 1) ---------- */
+function addBudgetLineCategory(){
+  CFG.budgetLineCategories.push({id:uid('blc'),name:'New category',sortOrder:CFG.budgetLineCategories.length+1});
+  bumpConfigVersion(); logAudit('add budget line category','New category'); render(); toast('Category added.');
+}
+window.addBudgetLineCategory=addBudgetLineCategory;
+function removeBudgetLineCategory(id){
+  CFG.budgetLineCategories=CFG.budgetLineCategories.filter(c=>c.id!==id); bumpConfigVersion(); logAudit('remove budget line category',id); render();
+  deleteRow('budget_line_categories',id);
+}
+window.removeBudgetLineCategory=removeBudgetLineCategory;
+
 /* ---------- LLM providers (placeholder) ---------- */
 function addLlmProvider(){
   CFG.llmProviders.push({id:uid('llm'),name:'New provider',kind:'Anthropic',endpoint:'',keyLabel:'set in each tool, not stored here',model:'',enabled:false,accessType:'web',approved:true,webUrl:''});
@@ -2616,6 +2643,23 @@ function pageCostBuckets(){
         <td><input class="cel txt" style="width:120px" value="${esc(b.dept)}" onchange="setIn('costBuckets','${b.id}','dept',this.value)"></td>
         <td><input class="cel txt" style="width:150px" value="${esc(b.extCode||'')}" placeholder="not mapped yet" onchange="setIn('costBuckets','${b.id}','extCode',this.value)"></td>
         <td class="n"><button class="btn sm dgr" onclick="removeCostBucket('${b.id}')">Remove</button></td></tr>`).join('')}
+      </tbody></table></div></div></div>`;
+  return h;
+}
+
+function pageBudgetLineCategories(){
+  let h=`<div class="phead"><div><h1>Budget categories</h1>
+    <p>The category list budget line items are grouped into (Strategy, Campaign Planning) -- Media, Creative, Agency
+      fees and so on by default. Add, rename or remove to match how you actually want spend broken down; existing
+      line items keep whichever category they were assigned, even if you later rename or remove it from this list.</p></div></div>`;
+  h+=`<div class="card"><h3>Categories <span class="sp"></span><span class="pill n">${CFG.budgetLineCategories.length}</span>
+      <button class="btn sm pri" onclick="addBudgetLineCategory()">Add category</button></h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>Name</th><th>Order</th><th></th></tr></thead><tbody>
+      ${CFG.budgetLineCategories.slice().sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0)).map(c=>`<tr>
+        <td><input class="cel txt" style="width:230px" value="${esc(c.name)}" onchange="setIn('budgetLineCategories','${c.id}','name',this.value)"></td>
+        <td><input class="cel w" value="${c.sortOrder||0}" onchange="setIn('budgetLineCategories','${c.id}','sortOrder',parseInt(this.value)||0)"></td>
+        <td class="n"><button class="btn sm dgr" onclick="removeBudgetLineCategory('${c.id}')">Remove</button></td></tr>`).join('')}
       </tbody></table></div></div></div>`;
   return h;
 }
@@ -4333,6 +4377,7 @@ const PAGES=[
   {id:'home',       ix:'0', label:'Home',            fn:pageHome},
   {id:'users',      ix:'1', label:'Roles & users',   fn:pageUsers},
   {id:'buckets',    ix:'2', label:'Cost buckets',    fn:pageCostBuckets},
+  {id:'budgetcats', ix:'2b',label:'Budget categories',fn:pageBudgetLineCategories},
   {id:'tracking',   ix:'3', label:'Tracking IDs',    fn:pageTracking},
   {id:'campnaming', ix:'4', label:'Campaign naming', fn:pageCampaignNaming},
   {id:'currency',   ix:'5', label:'Currency',        fn:pageCurrency},

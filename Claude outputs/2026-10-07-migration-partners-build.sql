@@ -1,52 +1,18 @@
--- Partners relocation + commission/attribution/licensing build (item 9 extension)
+-- Partners relocation: commission/attribution/licensing build (item 9 extension)
 -- Design locked by Stef 2026-10-07 -- see
 -- claude/2026-09-07-partners-configuration-and-licensing-currency-proposal.md's final
--- section for the full reasoning. Covers decisions 2-5 (decision 1, visibility in both
--- Cursus/CampaignPlanning and Configuration, is a UI-only change, no schema needed).
+-- section for the full reasoning. Covers decisions 3-5 (decisions 1 and 2, visibility in
+-- both Cursus/CampaignPlanning + Configuration, and admin-editable partner types, are both
+-- UI-only changes against data that already exists -- the partners table itself, and
+-- org_settings.partner_type_presets, which CampaignPlanning's Partners page already reads
+-- and writes. An earlier draft of this migration added a brand-new partner_types table for
+-- decision 2 before re-reading CampaignPlanning.html closely enough to notice that list
+-- already lives on org_settings -- removed here before it shipped, to avoid two competing
+-- sources of truth for the same list).
 --
 -- Safe to run multiple times.
 
 BEGIN;
-
--- Decision 2: partner type, fully admin-editable (same shape as budget_line_categories /
--- cost_buckets). partners.type itself stays a plain text column (like cost_buckets.dept) --
--- not a strict FK -- so existing partner rows never need touching; the admin screen's
--- dropdown is just populated from this list.
-CREATE TABLE IF NOT EXISTS public.partner_types (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  name text NOT NULL,
-  sort_order integer NOT NULL DEFAULT 0,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
-ALTER TABLE public.partner_types ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS partner_types_org_isolation ON public.partner_types;
-CREATE POLICY partner_types_org_isolation ON public.partner_types
-  USING (org_id IN (SELECT org_id FROM profiles WHERE profiles.id = auth.uid()))
-  WITH CHECK (org_id IN (SELECT org_id FROM profiles WHERE profiles.id = auth.uid()));
-
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.partner_types TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.partner_types TO service_role;
-
--- Seed a starter list + one sample partner per org, per Stef's "seed one sample partner"
--- instruction (decision 2). Guarded by NOT EXISTS, safe to re-run.
-INSERT INTO public.partner_types (org_id, name, sort_order)
-SELECT o.id, t.name, t.sort_order
-FROM organizations o
-CROSS JOIN (VALUES
-  ('Reseller',1), ('Referral',2), ('Technology',3), ('Agency',4)
-) AS t(name, sort_order)
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.partner_types pt WHERE pt.org_id = o.id AND pt.name = t.name
-);
-
-INSERT INTO public.partners (org_id, name, type, contact_name, contact_email, contact_phone, notes)
-SELECT o.id, 'Sample Partner Co', 'Reseller', '', '', '', 'Seeded example -- edit or remove freely.'
-FROM organizations o
-WHERE NOT EXISTS (SELECT 1 FROM public.partners p WHERE p.org_id = o.id)
-  AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='partners' AND column_name='org_id');
 
 -- Decision 3+4: partner-level default commission % (manual entry now; the column is a
 -- plain numeric so a future automated/"agreement" source could populate it later with no
@@ -83,7 +49,6 @@ COMMIT;
 NOTIFY pgrst, 'reload schema';
 
 -- Verification:
--- SELECT * FROM public.partner_types ORDER BY org_id, sort_order;
 -- SELECT id, name, type, default_commission_pct FROM public.partners;
 -- SELECT column_name FROM information_schema.columns WHERE table_name='augur_deals'
---   AND column_name LIKE 'attribution_%' OR column_name LIKE 'licensing_%';
+--   AND (column_name LIKE 'attribution_%' OR column_name LIKE 'licensing_%');

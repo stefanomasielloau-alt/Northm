@@ -346,6 +346,17 @@ const CFG = {
   /* everything below is Supabase-backed now -- populated by loadFromSupabase(). */
   costBuckets:[],
   budgetLineCategories:[],
+  /* Partners relocation build (2026-10-07, see claude/2026-09-07-partners-configuration-
+     and-licensing-currency-proposal.md). Correction after re-reading CampaignPlanning.html:
+     partner type is NOT a new table -- it's already a live, admin-editable flat string list
+     on org_settings.partner_type_presets (CampaignPlanning's pagePartners() already reads/
+     writes it via setPartnerType()). Reusing that instead of a second, competing partner_types
+     table, which would've created two sources of truth for the same list. partners mirrors
+     the same table CampaignPlanning already manages, surfaced here too per decision 1
+     (visibility in both places) -- identity/contact/type/default-commission fields only;
+     pod assignment, ACV target and contract terms stay CampaignPlanning-only. */
+  partnerTypePresets:[],
+  partners:[],
   llmProviders:[],
   integrations:{ webhookUrl:'', webhookEnabled:false },
   campaignNaming:{ fyStartMonth:1, seqScope:'pod', pattern:'{fy}{period}{pod}-{seq}_{descriptor}', seqCounters:{} },
@@ -466,6 +477,10 @@ async function saveToSupabase(){
   await Promise.all([
     upsertRows('cost_buckets', CFG.costBuckets, c=>({id:c.id,code:c.code,label:c.label,dept:c.dept||'Marketing',ext_code:c.extCode||''})),
     upsertRows('budget_line_categories', CFG.budgetLineCategories, c=>({id:c.id,name:c.name,sort_order:c.sortOrder||0})),
+    /* Only the columns this screen edits are mapped -- upsertRows/.upsert() only touches
+       columns present in the payload, so pod_id/acv_target/contact_terms (managed in
+       CampaignPlanning) are left untouched here, never nulled out. */
+    upsertRows('partners', CFG.partners, p=>({id:p.id,name:p.name,type:p.type||'',contact_name:p.contactName||'',contact_email:p.contactEmail||'',contact_phone:p.contactPhone||'',notes:p.notes||'',default_commission_pct:(p.defaultCommissionPct==null?null:p.defaultCommissionPct)})),
     upsertRows('llm_providers', CFG.llmProviders, p=>Object.assign({id:p.id,name:p.name,kind:p.kind,endpoint:p.endpoint||'',key_label:p.keyLabel||'',model:p.model||'',enabled:!!p.enabled,access_type:p.accessType||'api'},
       CFG.llmHasApproved?{approved:p.approved!==false, web_url:p.webUrl||null}:{})),   /* 2026-09-29: approved/web_url only once the AI-choice migration exists */
     upsertRows('audit_log', CFG.audit, a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null})),
@@ -476,7 +491,8 @@ async function saveToSupabase(){
         fy_start_month:CFG.campaignNaming.fyStartMonth||1,
         campaign_naming_pattern:CFG.campaignNaming.pattern||'{fy}{period}{pod}-{seq}_{descriptor}',
         campaign_naming_seq_scope:CFG.campaignNaming.seqScope||'pod',
-        campaign_naming_seq_counters:CFG.campaignNaming.seqCounters||{}
+        campaign_naming_seq_counters:CFG.campaignNaming.seqCounters||{},
+        partner_type_presets:CFG.partnerTypePresets||[]
       };
       const { error } = await sb.from('org_settings').upsert(row);
       if(error){ console.error('Save failed for org_settings', error); }
@@ -562,7 +578,7 @@ async function loadFromSupabase(){
   const results = await Promise.all([
     sb.from('cost_buckets').select('id,code,label,dept,ext_code').eq('org_id',_orgId),
     sb.from('llm_providers').select('*').eq('org_id',_orgId),   /* 2026-09-29: '*' so the new approved/web_url columns load when present */
-    sb.from('org_settings').select('webhook_url,webhook_enabled,fy_start_month,campaign_naming_pattern,campaign_naming_seq_scope,campaign_naming_seq_counters').eq('org_id',_orgId).maybeSingle(),
+    sb.from('org_settings').select('webhook_url,webhook_enabled,fy_start_month,campaign_naming_pattern,campaign_naming_seq_scope,campaign_naming_seq_counters,partner_type_presets').eq('org_id',_orgId).maybeSingle(),
     sb.from('audit_log').select('id,ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200), /* 2026-09-23: select was missing 'id' -- same bug already found and fixed in Ordo.html on 2026-09-22 (missing id -> CFG.audit rows load with id:undefined -> the next upsertRows('audit_log',...) sends id:null for every row -> NOT NULL violation on every save/navigation). Confirmed broader in today's UAT pass; applying the identical fix here. */
     sb.from('roles').select('id,org_id,name,config,publish,write_all,scope,report_scope,description,require_commit_on_edit,allow_expert_mode,is_system,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,can_edit,manage_own_team'),
     sb.from('profiles').select('id,org_id,name,email,role_id,region_ids,cross_region,contact_access,module_overrides'),
@@ -622,6 +638,18 @@ async function loadFromSupabase(){
     CFG.budgetLineCategories = (blcR.data||[]).map(c=>({id:c.id,name:c.name,sortOrder:c.sort_order||0}));
   }catch(e){ console.warn('budget_line_categories table not available yet (migration pending?) -- Budget categories tab will show empty.', e); }
 
+  /* partners (Partners relocation build, 2026-10-07): fail-soft, same reasoning as
+     budget_line_categories above -- the partners table already exists (CampaignPlanning has
+     managed it for a while) but default_commission_pct is a new column on it from
+     2026-10-07-migration-partners-build.sql, so this block is wrapped until that migration
+     has run. */
+  CFG.partners = [];
+  try{
+    const pR = await sb.from('partners').select('id,name,type,contact_name,contact_email,contact_phone,notes,default_commission_pct').eq('org_id',_orgId).order('name',{ascending:true});
+    if(pR.error) throw pR.error;
+    CFG.partners = (pR.data||[]).map(p=>({id:p.id,name:p.name,type:p.type||'',contactName:p.contact_name||'',contactEmail:p.contact_email||'',contactPhone:p.contact_phone||'',notes:p.notes||'',defaultCommissionPct:(p.default_commission_pct==null?null:p.default_commission_pct)}));
+  }catch(e){ console.warn('partners.default_commission_pct not available yet (migration pending?) -- Partners tab will show empty.', e); }
+
   CFG.costBuckets = (costBucketsR.data||[]).map(c=>({id:c.id,code:c.code,label:c.label,dept:c.dept,extCode:c.ext_code||''}));
   CFG.llmProviders = (llmR.data||[]).map(p=>({id:p.id,name:p.name,kind:p.kind,endpoint:p.endpoint||'',keyLabel:p.key_label||'',model:p.model||'',enabled:p.enabled,accessType:p.access_type||'api',approved:p.approved!==false,webUrl:p.web_url||''}));
   CFG.llmHasApproved = (llmR.data||[]).length ? ('approved' in (llmR.data[0]||{})) : CFG.llmHasApproved;
@@ -672,6 +700,7 @@ async function loadFromSupabase(){
 
   const os = orgSettingsR.data || {};
   CFG.integrations = { webhookUrl: os.webhook_url||'', webhookEnabled: !!os.webhook_enabled };
+  CFG.partnerTypePresets = os.partner_type_presets || [];
 
   /* Ask Alex / AI screen interpreter (item 22 phase 1): fail-soft, same idiom as
      tracking_config/currency_config below -- the main org_settings query above uses an
@@ -2473,6 +2502,46 @@ function removeBudgetLineCategory(id){
 }
 window.removeBudgetLineCategory=removeBudgetLineCategory;
 
+/* ---------- partner type presets + partners (Partners relocation build, 2026-10-07) ----------
+   partnerTypePresets is a flat string list on org_settings (same field CampaignPlanning's
+   setPartnerType() already auto-grows when someone types a new value there) -- this just adds
+   an actual admin screen to add/remove/rename entries instead of only growing by accident. */
+function addPartnerTypePreset(){
+  const val=(prompt('New partner type:')||'').trim();
+  if(!val) return;
+  if(CFG.partnerTypePresets.includes(val)){ toast('That type already exists.'); return; }
+  CFG.partnerTypePresets.push(val);
+  bumpConfigVersion(); logAudit('add partner type preset',val); render(); toast('Partner type added.');
+}
+window.addPartnerTypePreset=addPartnerTypePreset;
+function renamePartnerTypePreset(oldVal,newVal){
+  newVal=(newVal||'').trim();
+  if(!newVal || newVal===oldVal) { render(); return; }
+  const ix=CFG.partnerTypePresets.indexOf(oldVal);
+  if(ix<0) return;
+  CFG.partnerTypePresets[ix]=newVal;
+  /* Existing partners keep whichever type string they already have -- same "renaming the
+     list doesn't retroactively touch assigned rows" behaviour as budget line categories. */
+  bumpConfigVersion(); logAudit('rename partner type preset', oldVal+' -> '+newVal); render();
+}
+window.renamePartnerTypePreset=renamePartnerTypePreset;
+function removePartnerTypePreset(val){
+  CFG.partnerTypePresets=CFG.partnerTypePresets.filter(t=>t!==val);
+  bumpConfigVersion(); logAudit('remove partner type preset',val); render();
+}
+window.removePartnerTypePreset=removePartnerTypePreset;
+
+function addPartner(){
+  CFG.partners.push({id:uid('partner'),name:'New partner',type:'',contactName:'',contactEmail:'',contactPhone:'',notes:'',defaultCommissionPct:null});
+  bumpConfigVersion(); logAudit('add partner','New partner'); render(); toast('Partner added.');
+}
+window.addPartner=addPartner;
+function removePartner(id){
+  CFG.partners=CFG.partners.filter(p=>p.id!==id); bumpConfigVersion(); logAudit('remove partner',id); render();
+  deleteRow('partners',id);
+}
+window.removePartner=removePartner;
+
 /* ---------- LLM providers (placeholder) ---------- */
 function addLlmProvider(){
   CFG.llmProviders.push({id:uid('llm'),name:'New provider',kind:'Anthropic',endpoint:'',keyLabel:'set in each tool, not stored here',model:'',enabled:false,accessType:'web',approved:true,webUrl:''});
@@ -2660,6 +2729,50 @@ function pageBudgetLineCategories(){
         <td><input class="cel txt" style="width:230px" value="${esc(c.name)}" onchange="setIn('budgetLineCategories','${c.id}','name',this.value)"></td>
         <td><input class="cel w" value="${c.sortOrder||0}" onchange="setIn('budgetLineCategories','${c.id}','sortOrder',parseInt(this.value)||0)"></td>
         <td class="n"><button class="btn sm dgr" onclick="removeBudgetLineCategory('${c.id}')">Remove</button></td></tr>`).join('')}
+      </tbody></table></div></div></div>`;
+  return h;
+}
+
+function pagePartnerTypes(){
+  let h=`<div class="phead"><div><h1>Partner types</h1>
+    <p>The type list shown as a dropdown wherever a partner's type is set (here and in Campaign Planning) -- Reseller,
+      Referral, Technology, Agency by default, stored on org settings (the same list Campaign Planning's Partners page
+      already reads/writes). Add, rename or remove here; existing partners keep whichever type they were assigned even
+      if you later rename or remove it from this list.</p></div></div>`;
+  h+=`<div class="card"><h3>Types <span class="sp"></span><span class="pill n">${CFG.partnerTypePresets.length}</span>
+      <button class="btn sm pri" onclick="addPartnerTypePreset()">Add type</button></h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>Name</th><th></th></tr></thead><tbody>
+      ${!CFG.partnerTypePresets.length?`<tr><td colspan="2" class="empty">No types yet -- partners can still be assigned a type, typed in on Campaign Planning's Partners page, which adds it here automatically.</td></tr>`:CFG.partnerTypePresets.map(t=>`<tr>
+        <td><input class="cel txt" style="width:230px" value="${esc(t)}" onchange="renamePartnerTypePreset('${esc(t).replace(/'/g,"\\'")}',this.value)"></td>
+        <td class="n"><button class="btn sm dgr" onclick="removePartnerTypePreset('${esc(t).replace(/'/g,"\\'")}')">Remove</button></td></tr>`).join('')}
+      </tbody></table></div></div></div>`;
+  return h;
+}
+
+function pagePartners(){
+  const typeOptions=[''].concat(CFG.partnerTypePresets||[]);
+  let h=`<div class="phead"><div><h1>Partners</h1>
+    <p>The same partner list Campaign Planning manages, surfaced here too so partner identity, contact details, type
+      and the default commission % can be set up centrally. Pod assignment, ACV target and contract terms stay
+      campaign-context fields -- edit those from Campaign Planning's own Partners page.</p></div></div>`;
+  h+=`<div class="note">Default commission % is the starting point Scoring pre-fills when a partner is attached to a
+    deal -- it can still be overridden per deal.</div>`;
+  h+=`<div class="card"><h3>Partners <span class="sp"></span><span class="pill n">${CFG.partners.length}</span>
+      <button class="btn sm pri" onclick="addPartner()">Add partner</button></h3>
+    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
+      <th>Name</th><th>Type</th><th>Contact name</th><th>Contact email</th><th>Contact phone</th><th>Default commission %</th><th>Notes</th><th></th></tr></thead><tbody>
+      ${CFG.partners.map(p=>`<tr>
+        <td><input class="cel txt" style="width:180px" value="${esc(p.name)}" onchange="setIn('partners','${p.id}','name',this.value)"></td>
+        <td><select class="cel" onchange="setIn('partners','${p.id}','type',this.value)">
+          ${(p.type && !typeOptions.includes(p.type) ? typeOptions.concat([p.type]) : typeOptions).map(t=>`<option value="${esc(t)}" ${t===p.type?'selected':''}>${t?esc(t):'—'}</option>`).join('')}
+        </select></td>
+        <td><input class="cel txt" style="width:140px" value="${esc(p.contactName||'')}" onchange="setIn('partners','${p.id}','contactName',this.value)"></td>
+        <td><input class="cel txt" style="width:170px" value="${esc(p.contactEmail||'')}" onchange="setIn('partners','${p.id}','contactEmail',this.value)"></td>
+        <td><input class="cel txt" style="width:120px" value="${esc(p.contactPhone||'')}" onchange="setIn('partners','${p.id}','contactPhone',this.value)"></td>
+        <td><input class="cel w" value="${p.defaultCommissionPct==null?'':p.defaultCommissionPct}" placeholder="—" onchange="setIn('partners','${p.id}','defaultCommissionPct',this.value===''?null:(parseFloat(this.value)||0))"></td>
+        <td><input class="cel txt" style="width:160px" value="${esc(p.notes||'')}" onchange="setIn('partners','${p.id}','notes',this.value)"></td>
+        <td class="n"><button class="btn sm dgr" onclick="removePartner('${p.id}')">Remove</button></td></tr>`).join('')}
       </tbody></table></div></div></div>`;
   return h;
 }
@@ -4378,6 +4491,8 @@ const PAGES=[
   {id:'users',      ix:'1', label:'Roles & users',   fn:pageUsers},
   {id:'buckets',    ix:'2', label:'Cost buckets',    fn:pageCostBuckets},
   {id:'budgetcats', ix:'2b',label:'Budget categories',fn:pageBudgetLineCategories},
+  {id:'partnertypes',ix:'2c',label:'Partner types',  fn:pagePartnerTypes},
+  {id:'partners',   ix:'2d',label:'Partners',        fn:pagePartners},
   {id:'tracking',   ix:'3', label:'Tracking IDs',    fn:pageTracking},
   {id:'campnaming', ix:'4', label:'Campaign naming', fn:pageCampaignNaming},
   {id:'currency',   ix:'5', label:'Currency',        fn:pageCurrency},

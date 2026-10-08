@@ -209,8 +209,8 @@
   function buildPrompt(sc) {
     var p = 'You fill in a form for: ' + sc.title + '.\nThe INPUT below may be a briefing document, meeting notes, a spoken transcript, or a short instruction such as "set the budget to forty thousand". ' +
       'Return ONLY one JSON object (no prose, no markdown). Include a key ONLY when the INPUT explicitly states or clearly implies that value; otherwise OMIT the key. Never guess or invent.\n' +
-      'Rules: dates are YYYY-MM-DD, Australian day/month order, and when the year is missing use the next occurrence on or after today (' + todayIso() + '). Numbers have no symbols or thousands separators. Select values must match an option exactly.\n\nFIELDS (key -> meaning):\n';
-    sc.fields.forEach(function (f) { p += '- "' + f.key + '" (' + typeNote(f) + '): ' + f.label + (f.hint ? ' -- ' + f.hint : '') + '\n'; });
+      'Rules: dates are YYYY-MM-DD, Australian day/month order, and when the year is missing use the next occurrence on or after today (' + todayIso() + '). Numbers have no symbols or thousands separators. Select values must match an option exactly.\n' + (sc.intro ? sc.intro + '\n' : '') + '\nFIELDS (key -> meaning):\n';
+    sc.fields.forEach(function (f) { p += '- "' + f.key + '" (' + typeNote(f) + '): ' + f.label + (f.hint ? ' -- ' + f.hint : '') + (f.ctx != null && f.ctx !== '' ? ' [currently: "' + String(f.ctx).replace(/\s+/g, ' ').slice(0, 40) + '"]' : '') + '\n'; });
     if (sc.lists && sc.lists.length) {
       p += '\nLISTS: put them under a single key "_lists" as { "<listKey>": [ {item}, ... ] }, one object per distinct item mentioned, using only these columns:\n';
       sc.lists.forEach(function (l) {
@@ -293,6 +293,7 @@
     '.afl-files{margin-top:8px;display:flex;flex-direction:column;gap:4px}.afl-file{display:flex;gap:8px;align-items:center;font-size:12.5px;padding:4px 8px;border:1px solid var(--line,#DFE3EB);border-radius:6px}.afl-file .sp{flex:1}.afl-file button{border:none;background:none;cursor:pointer;color:var(--ink-3,#6B7489)}' +
     '.afl-tbl{width:100%;border-collapse:collapse;margin-top:10px}.afl-tbl th{text-align:left;font-size:11px;color:var(--ink-3,#6B7489);padding:4px 6px;border-bottom:1px solid var(--line,#DFE3EB)}.afl-tbl td{padding:6px;border-bottom:1px solid var(--line,#EEF0F5);vertical-align:top;font-size:12.5px}' +
     '.afl-cur{color:var(--ink-3,#6B7489);max-width:200px;word-break:break-word}.afl-tag{display:inline-block;font-size:10.5px;border-radius:10px;padding:1px 7px;background:#E7F5EE;color:#0E6B3D;margin-right:6px}.afl-tag.u{background:#FFF1D6;color:#8A5A00}' +
+    '.afl-fab{position:fixed;right:76px;bottom:24px;z-index:9998;border:none;border-radius:24px;padding:11px 16px;background:var(--nav,#1F3A68);color:#fff;font:inherit;font-size:13px;font-weight:600;box-shadow:0 4px 14px rgba(16,24,43,.3);cursor:pointer}.afl-fab[hidden],body.afl-open .afl-fab{display:none}body.asst-open .afl-fab{right:min(calc(var(--asst-w,380px) + 76px),calc(100vw - 200px))}@media print{.afl-fab{display:none}}' +
     '.afl-h{font-weight:600;margin-top:14px}.afl-chip{position:fixed;left:16px;bottom:16px;z-index:205;background:var(--nav,#1F3A68);color:#fff;border-radius:10px;padding:9px 12px;font-size:12.5px;box-shadow:0 6px 20px rgba(16,24,43,.3)}.afl-chip button{margin-left:8px;border:1px solid rgba(255,255,255,.6);background:transparent;color:#fff;border-radius:6px;padding:2px 8px;cursor:pointer}';
   function ensureCss() { if (document.getElementById('afl-css')) return; var s = document.createElement('style'); s.id = 'afl-css'; s.textContent = CSS; document.head.appendChild(s); }
 
@@ -399,7 +400,7 @@
     var ta = document.getElementById('aflText'); if (ta) S.text = ta.value;
     S.dict = createDictation({
       onUpdate: function (finalText, interim) { if (!S) return; S.text = finalText; S.interim = interim; var t = document.getElementById('aflText'), im = document.getElementById('aflInterim'); if (t) t.value = finalText; if (im) im.textContent = interim ? '… ' + interim : ''; },
-      onState: function (a) { if (!S) return; S.rec = a; if (S.phase === 'input') paint(); },
+      onState: function (a) { if (!S) return; S.rec = a; if (!a && S.autoPropose && S.phase === 'input' && (S.text || '').trim()) { S.autoPropose = false; propose(); return; } if (S.phase === 'input') paint(); },
       onError: function (code) { if (!S) return; if (code === 'not-allowed' || code === 'service-not-allowed') S.msg = 'Microphone access was blocked — allow it in your browser’s site settings to speak.'; else if (code !== 'no-speech' && code !== 'aborted') S.msg = 'Speech recognition stopped (' + esc(code) + ').'; if (S.phase === 'input') paint(); }
     });
     S.dict.start(S.text);
@@ -473,7 +474,7 @@
     try { if (sc.after) sc.after(); if (sc.onApplied) sc.onApplied(summary); } catch (e) { console.warn('aiFill after failed', e); }
     toast('Applied from brief: ' + summary + (bad ? ' (' + bad + ' skipped)' : '') + '. Please double-check them.');
   }
-  function close() { if (S && S.dict) S.dict.stop(); S = null; var ov = document.getElementById('aflModal'); if (ov) ov.remove(); document.removeEventListener('keydown', onKey); }
+  function close() { if (S && S.dict) S.dict.stop(); S = null; document.body.classList.remove('afl-open'); var ov = document.getElementById('aflModal'); if (ov) ov.remove(); document.removeEventListener('keydown', onKey); }
   function onKey(e) { if (e.key === 'Escape') close(); }
 
   function open(id, ctx) {
@@ -483,7 +484,8 @@
     if (sc.canEdit && !sc.canEdit()) { toast('Your role is view-only.'); return; }
     ensureCss(); close();
     var chip = document.getElementById('aflChip'); if (chip && chip.getAttribute('data-key') === sc.key) chip.remove();
-    S = { id: id, ctx: ctx || {}, schema: sc, phase: 'input', text: '', files: [], msg: '', tok: 0, interim: '', rec: false, dict: null, proposal: null };
+    S = { id: id, ctx: ctx || {}, schema: sc, phase: 'input', text: '', files: [], msg: '', tok: 0, interim: '', rec: false, dict: null, proposal: null, autoPropose: !!(ctx && ctx.autoMic) };
+    document.body.classList.add('afl-open');
     var ov = document.createElement('div'); ov.className = 'afl-ov'; ov.id = 'aflModal'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true');
     ov.innerHTML = '<div class="afl-box"></div>'; document.body.appendChild(ov);
     ov.addEventListener('click', function (e) {
@@ -500,6 +502,7 @@
     ov.addEventListener('drop', function (e) { e.preventDefault(); if (S && S.phase === 'input' && e.dataTransfer && e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
     document.addEventListener('keydown', onKey);
     paint();
+    if (ctx && ctx.autoMic && speechSupported()) toggleMic();
     /* remembered folder for this record? (per browser) */
     if (dirSupported() && !WATCH[sc.key]) {
       loadHandle(sc.key).then(function (h) {
@@ -507,11 +510,142 @@
       }).catch(function () { });
     }
   }
+  /* ---------------- universal "talk to this screen" mode ----------------
+     No per-page wiring: scan the editable controls that are visible right now (inside an open dialog if there is
+     one, else the page's #main), describe each by its label / table column / table row, and hand that to the same
+     review flow as a normal schema. Limits (honest): it can only change fields that are ON SCREEN -- it cannot add
+     table rows or create records; pages with rich custom widgets (drag grids, canvases) are not editable this way.
+     Values are set like a person typing (native value + input/change events), so each page's own handlers, role
+     checks, audit and saving run; each set is then re-read from the screen and counted as skipped if the page
+     did not keep it (e.g. a view-only role). */
+  var SKIP_NAME = /pass(word)?|secret|token|api[-_ ]?key|credential|card|cvv|iban|ssn|otp|2fa|private[-_ ]?key/i;
+  var MAX_SCREEN_FIELDS = 120;
+  function visibleEl(el) { return !!(el.offsetParent || (el.getClientRects && el.getClientRects().length)); }
+  function txt(n) { return (n && n.textContent || '').replace(/\s+/g, ' ').trim(); }
+  function screenScope() {
+    var dl = [].slice.call(document.querySelectorAll('[role=dialog],.modal')).filter(function (d) { return !d.closest('#aflModal,#naiModal,.asst') && visibleEl(d); });
+    if (dl.length) return dl[dl.length - 1];
+    return document.getElementById('main') || document.querySelector('main') || document.body;
+  }
+  function ctrlType(el) {
+    var tag = el.tagName.toLowerCase();
+    if (tag !== 'input' && tag !== 'select' && tag !== 'textarea') return (el.getAttribute('contenteditable') === 'true' || el.getAttribute('contenteditable') === '') ? 'html' : null;
+    if (tag === 'select') return 'select'; if (tag === 'textarea') return 'longtext';
+    var t = (el.getAttribute('type') || 'text').toLowerCase();
+    if (t === 'number') return 'number'; if (t === 'date') return 'date';
+    return /^(text|email|tel|url)$/.test(t) ? 'text' : null;
+  }
+  function headerForCell(td) {
+    var tr = td.closest('tr'), table = td.closest('table'); if (!tr || !table) return '';
+    var idx = [].indexOf.call(tr.children, td), ths = table.querySelectorAll('thead th');
+    if (!ths.length) { var fr = table.querySelector('tr'); ths = fr && fr !== tr ? fr.children : []; }
+    return ths[idx] ? txt(ths[idx]) : '';
+  }
+  function describeCtrl(el) {
+    var lab = el.getAttribute('aria-label') || '';
+    if (!lab && el.id) { try { var l = document.querySelector('label[for="' + CSS.escape(el.id) + '"]'); if (l) lab = txt(l); } catch (e) { /* bad id */ } }
+    if (!lab) { var wl = el.closest('label'); if (wl) { var c = wl.cloneNode(true); c.querySelectorAll('input,select,textarea,button').forEach(function (n) { n.remove(); }); lab = txt(c); } }
+    var td = el.closest('td,th');
+    if (!lab && !td) {
+      var p = el, hops = 0;
+      while (p && !lab && hops < 3) {
+        for (var s = p.previousElementSibling; s && !lab; s = s.previousElementSibling) { if (!s.matches('.card,.modal,.mask,table,section,form,ul,ol,h1,h2,h3') && !s.querySelector('input,select,textarea,div,table,p,h1,h2,h3,[contenteditable]')) { var t = txt(s); if (t && t.length <= 60) lab = t; } }
+        p = p.parentElement; hops++;
+        if (p && p.matches('td,th,tr,.card,.bd,#main,form,.modal,.mask,[role=dialog]')) break;
+      }
+    }
+    var row = '';
+    if (td) {
+      lab = lab || headerForCell(td);
+      var tr = td.closest('tr'), body = tr.parentElement, n = [].indexOf.call(body.children, tr) + 1, key = '';
+      [].slice.call(tr.querySelectorAll('input[type=text],input:not([type]),textarea,td')).some(function (c) { var v = (c.value != null && c.tagName !== 'TD') ? c.value : txt(c); if (v && v.length <= 40) { key = v; return true; } return false; });
+      row = 'row ' + n + (key ? ' (' + key + ')' : '');
+    }
+    lab = lab || el.getAttribute('placeholder') || el.getAttribute('title') || el.getAttribute('name') || el.id || 'field';
+    var card = el.closest('.card'), h = card && card.querySelector('h3'), sec = h ? txt(h).slice(0, 50) : '';
+    return [sec, row, lab.slice(0, 60)].filter(Boolean).join(' › ');
+  }
+  function scanScreen() {
+    var scope = screenScope(), out = [], seen = {}, els = scope.querySelectorAll('input,select,textarea,[contenteditable]');
+    for (var i = 0; i < els.length && out.length < MAX_SCREEN_FIELDS; i++) {
+      var el = els[i];
+      if (el.closest('#aflModal,#naiModal,.asst,.afl-chip,#aflFab,[hidden]') || el.disabled || el.readOnly) continue;
+      var type = ctrlType(el); if (!type || !visibleEl(el)) continue;
+      if ((el.getAttribute('type') || '') === 'search' || el.getAttribute('role') === 'search' || /search|filter/i.test(el.getAttribute('placeholder') || '')) continue;
+      var label = describeCtrl(el);
+      if (SKIP_NAME.test((el.name || '') + ' ' + (el.id || '') + ' ' + (el.getAttribute('autocomplete') || '') + ' ' + label)) continue;
+      var n = seen[label] = (seen[label] || 0) + 1, f = { el: el, sig: label + ' #' + n, label: label, type: type };
+      if (type === 'select') f.options = [].slice.call(el.options).filter(function (o) { return o.value !== '' && !o.disabled; }).map(function (o) { return { value: o.value, label: txt(o) || o.value }; });
+      out.push(f);
+    }
+    return out;
+  }
+  function locateSig(sig) { var all = scanScreen(); for (var i = 0; i < all.length; i++) if (all[i].sig === sig) return all[i]; return null; }
+  function ctrlValue(f) { return f.type === 'html' ? f.el.innerHTML : (f.el.value == null ? '' : f.el.value); }
+  function fire(el, t) { el.dispatchEvent(new Event(t, { bubbles: true })); }
+  function sameLoose(a, b) {
+    var x = String(a == null ? '' : a).trim(), y = String(b == null ? '' : b).trim();
+    if (x.toLowerCase() === y.toLowerCase()) return true;
+    var nx = parseFloat(x.replace(/[$,%\s]/g, '')), ny = parseFloat(y.replace(/[$,%\s]/g, ''));
+    return isFinite(nx) && isFinite(ny) && nx === ny;
+  }
+  function setScreenField(f, v) {
+    var cur = f.el.isConnected ? f : locateSig(f.sig); if (!cur || !cur.el.isConnected) throw new Error('field no longer on screen');
+    var el = cur.el;
+    if (f.type === 'html') { el.innerHTML = v; fire(el, 'input'); try { el.dispatchEvent(new FocusEvent('blur')); } catch (e) { /* ignore */ } return; }
+    if (f.type === 'select') { el.value = v; if (el.value !== String(v)) throw new Error('option not available'); }
+    else { var d = Object.getOwnPropertyDescriptor(el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value'); d.set.call(el, String(v)); }
+    fire(el, 'input'); fire(el, 'change');
+    var after = locateSig(f.sig);   /* the page may have re-rendered; check what is on screen now */
+    if (!after || !sameLoose(ctrlValue(after), v)) throw new Error('the page did not keep the value');
+  }
+  function screenTitle() { var h = document.querySelector('#main h1'); return (h && txt(h)) || document.title || 'this page'; }
+  function universalSchema() {
+    var found = scanScreen(); if (!found.length) return null;
+    var page = screenTitle();
+    return {
+      key: 'screen:' + location.pathname + ':' + page, title: 'This screen — ' + page, universal: true,
+      intro: 'The fields are the editable inputs currently visible on a web page; each label shows where it sits (section › table row (row name) › column). The INPUT is usually a spoken or typed instruction such as "set the Hall B pax to 40 and mark it confirmed", or a short brief. Change ONLY fields the INPUT refers to; use the [currently] values to tell rows apart.',
+      canEdit: function () { return !(typeof window.isViewer === 'function' && window.isViewer()); },
+      fields: found.map(function (f, i) {
+        return {
+          key: 'f' + (i + 1), label: f.label, type: f.type, options: f.options, ctx: f.type === 'html' ? htmlToPlain(ctrlValue(f)).slice(0, 40) : ctrlValue(f),
+          get: function () { var c = f.el.isConnected ? f : locateSig(f.sig); return c ? ctrlValue(c) : ''; },
+          set: function (v) { setScreenField(f, v); }
+        };
+      }),
+      lists: []
+    };
+  }
+  function openScreen() {
+    if (!window.NorthAI) { toast('The AI isn’t available on this page.'); return; }
+    open('__screen__', { autoMic: true });
+  }
+  /* floating button, shown once a module has drawn its main area; plus the same help entry on every module */
+  var FAQ_ENTRY = { q: 'Can I talk to a screen and have it fill in?', a: 'Yes. Click “🎙 Talk to this screen” (bottom right), say what you want — for example “set Hall B pax to 40 and mark it confirmed” — then stop. North lists the fields it would change, current versus proposed; tick what you want and click Apply. It only changes fields that are visible on screen (it cannot add rows or create records), values that would replace something already filled in start unticked, and a field the page refuses (for example a view-only role) is reported as skipped. Speech works in Chrome and Edge. The field names and current values on screen are sent to your organisation’s chosen AI.' };
+  function initUniversal() {
+    if (window.__aflUniversal || window.top !== window) return; window.__aflUniversal = true;
+    var tries = 0, faqDone = false, b = null;
+    var tick = setInterval(function () {
+      if (!window.NorthAI) { if (++tries > 40) clearInterval(tick); return; }
+      if (!b) {
+        ensureCss(); b = document.createElement('button'); b.id = 'aflFab'; b.type = 'button'; b.className = 'afl-fab'; b.hidden = true;
+        b.textContent = '🎙 Talk to this screen'; b.title = 'Speak or type what you want changed on this screen; you review every change before it is applied';
+        b.onclick = openScreen; document.body.appendChild(b);
+      }
+      var m = document.getElementById('main'), show = !!(m && m.firstElementChild && m.getClientRects().length);
+      if (b.hidden === show) b.hidden = !show;
+      if (!faqDone) { try { if (typeof HELP_FAQ !== 'undefined' && Array.isArray(HELP_FAQ)) { if (!HELP_FAQ.some(function (x) { return x && x.q === FAQ_ENTRY.q; })) HELP_FAQ.push(FAQ_ENTRY); faqDone = true; } } catch (e) { faqDone = true; } }
+    }, 1500);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initUniversal); else initUniversal();
+
   function register(id, builder) { REG[id] = builder; }
+  register('__screen__', universalSchema);
 
   window.NorthAIFill = {
-    register: register, open: open, fileToText: fileToText, createDictation: createDictation, speechSupported: speechSupported,
+    register: register, open: open, openScreen: openScreen, fileToText: fileToText, createDictation: createDictation, speechSupported: speechSupported,
     FILE_ACCEPT: FILE_ACCEPT, dirSupported: dirSupported,
-    _test: { zipEntryText: zipEntryText, docxText: docxText, buildPrompt: buildPrompt, interpret: interpret, normVal: normVal, htmlFromText: htmlFromText }
+    _test: { scanScreen: scanScreen, universalSchema: universalSchema, zipEntryText: zipEntryText, docxText: docxText, buildPrompt: buildPrompt, interpret: interpret, normVal: normVal, htmlFromText: htmlFromText }
   };
 })();

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>North — connector sign-in</title>
+<style>
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:#F4F6FA;color:#1B2740;font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  .box{background:#fff;border:1px solid #DDE3EE;border-radius:12px;padding:28px 30px;max-width:420px;box-shadow:0 6px 24px rgba(16,24,43,.08);text-align:center}
+  h1{font-size:18px;margin:0 0 8px}
+  p{margin:0 0 10px;color:#46536E}
+  .ok h1{color:#1F7A4D} .err h1{color:#B3261E}
+  a{color:#23408E}
+</style>
+</head>
+<body>
+<div class="box" id="box"><h1 id="t">Finishing…</h1><p id="m"></p><p><a id="back" href="Configuration.html">Back to North · Configuration</a></p></div>
+<script>
+(function(){
+  // The connectors function sends the browser here with the result in the URL fragment:  #cr=ok|err&p=<connector id>&m=<message>
+  // (a fragment is never sent to any server). Tell the North window that opened this pop-up, then close.
+  var q = {};
+  String(location.hash || '').replace(/^#/, '').split('&').forEach(function(kv){
+    if(!kv) return; var i = kv.indexOf('='); var k = i < 0 ? kv : kv.slice(0, i);
+    var v = i < 0 ? '' : kv.slice(i + 1);
+    try { q[k] = decodeURIComponent(v.replace(/\+/g, ' ')); } catch (e) { q[k] = v; }
+  });
+  var ok = q.cr === 'ok';
+  var msg = { type: 'north-connector-result', ok: ok, p: String(q.p || '').slice(0, 80), m: String(q.m || '').slice(0, 200) };
+  var box = document.getElementById('box');
+  box.className = 'box ' + (ok ? 'ok' : 'err');
+  document.getElementById('t').textContent = q.cr ? (ok ? 'Connected' : 'Sign-in did not finish') : 'Nothing to report';
+  document.getElementById('m').textContent = ok ? 'You can close this window.' : (msg.m || (q.cr ? 'Close this window and try again from North.' : 'Open this page from a connector sign-in.'));
+  if(!q.cr) return;
+  try { if (window.opener && !window.opener.closed) window.opener.postMessage(msg, location.origin); } catch (e) {}
+  try { var bc = new BroadcastChannel('north-connector'); bc.postMessage(msg); bc.close(); } catch (e) {}
+  // do not leave the result sitting in the address bar / history
+  try { history.replaceState(null, '', location.pathname); } catch (e) {}
+  if (ok) setTimeout(function(){ try { window.close(); } catch (e) {} }, 1200);
+})();
+</script>
+</body>
+</html>

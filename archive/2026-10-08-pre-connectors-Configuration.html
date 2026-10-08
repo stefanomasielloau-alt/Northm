@@ -119,9 +119,6 @@ td.lb{font-weight:600;}
 .modal .bd{padding:16px}
 @keyframes rowFlash{0%{background:#FFF3CD}100%{background:transparent}}
 .row-flash{animation:rowFlash 2.2s ease-out}
-.cn-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-@media (max-width:1180px){.cn-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:720px){.cn-grid{grid-template-columns:minmax(0,1fr)}}
 .modal .ft{padding:11px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;background:#FAFBFE}
 .mcard{border:1px solid var(--line); border-radius:var(--r); padding:14px; background:var(--surface);}
 .mgrid{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px;}
@@ -395,7 +392,6 @@ function go(page){
   if(page==='hubcompanies' && !UI.hubCompaniesLoaded && !UI.hubCompaniesLoading) loadHubCompanies();
   if(page==='integrations' && !UI.outboundWebhooksLoaded && !UI.outboundWebhooksLoading) loadOutboundWebhooks();
   if(page==='integrations' && !voiceState().loaded && !voiceState().loading) loadVoice();
-  if(page==='integrations' && !cnState().loaded && !cnState().loading && !cnState().error) loadConnectors();
   if(page==='agentregistry' && !UI.agentRegistryLoaded && !UI.agentRegistryLoading) loadAgentRegistry();
   render();
 }
@@ -3325,271 +3321,14 @@ function voicePanelHtml(){
   return h+'</div></div>';
 }
 
-/* ===== CRM & advertising connectors (2026-10-08) =====
-   Per-organisation app credentials + sign-in, managed here by people whose role has Configuration access.
-   All secrets go to the North "connectors" Edge Function (encrypted at rest) and are NEVER sent back to the browser;
-   this file only ever holds what the person is typing (UI.cn.drafts) and the non-secret view the function returns.
-   Nothing in UI is persisted: saveLocal() stores CFG only. */
-const CN_FN_MISSING='The connectors function is not installed yet. The platform owner needs to run 2026-10-08-migration-connectors.sql and deploy the "connectors" Edge Function once (see 2026-10-08-connectors-setup.md).';
-function cnState(){ return UI.cn=UI.cn||{loaded:false,loading:false,error:'',list:[],redirect:'',unreadable:[],max:20,drafts:{},busy:{},msg:{},copied:false}; }
-async function cnCall(payload){
-  const { data } = await sb.auth.getSession();
-  const token = data && data.session && data.session.access_token;
-  if(!token) throw new Error('Your own North session has expired -- sign in again.');
-  let r;
-  try{
-    r = await fetch(SUPABASE_URL+'/functions/v1/connectors', { method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+token,'apikey':SUPABASE_ANON_KEY}, body: JSON.stringify(payload) });
-  }catch(e){ throw new Error(CN_FN_MISSING); }
-  const j = (r.headers.get('content-type')||'').includes('json') ? await r.json().catch(()=>({})) : {};
-  if(!r.ok && !j.error) j.error = r.status===404 ? CN_FN_MISSING : 'The connectors function answered HTTP '+r.status+'.';
-  return { r, j };
-}
-async function loadConnectors(silent){
-  const c=cnState();
-  if(!canConfig()){ c.error='Your role cannot view the connector settings.'; render(); return; }
-  if(!silent){ c.loading=true; c.error=''; render(); }
-  try{
-    const { r, j } = await cnCall({action:'list'});
-    if(!r.ok||!j.ok) c.error=j.error||'Could not load the connectors.';
-    else { c.list=j.connectors||[]; c.redirect=j.redirect_uri||''; c.unreadable=j.unreadable||[]; c.max=j.max_custom||20; c.loaded=true; c.error=''; }
-  }catch(e){ c.error=(e&&e.message)||'Could not load the connectors.'; }
-  c.loading=false; render();
-}
-window.loadConnectors=loadConnectors;
-function cnItem(pid){ return cnState().list.find(x=>x.id===pid); }
-function cnDraft(pid,key,val,secret){
-  const d=cnState().drafts; const o=d[pid]=d[pid]||{s:{},k:{},clear:{}};
-  (secret?o.k:o.s)[key]=val;
-}
-function cnDirty(pid){
-  const o=cnState().drafts[pid], it=cnItem(pid); if(!o||!it) return false;
-  if(Object.values(o.k).some(v=>String(v||'').trim())) return true;
-  if(Object.keys(o.clear||{}).some(k=>o.clear[k])) return true;
-  return Object.keys(o.s).some(k=>String(o.s[k]||'').trim()!==String((it.settings&&it.settings[k])||'').trim());
-}
-function cnMsg(pid,text,bad){ cnState().msg[pid]={text:text,bad:!!bad}; }
-function cnFieldHtml(it,f,dis){
-  const c=cnState(), o=c.drafts[it.id]||{s:{},k:{}}, id='cn_'+it.id+'_'+f.key, set=(it.secrets_set||[]).includes(f.key);
-  const lbl=`<label class="mini" for="${esc(id)}" style="display:block;margin:7px 0 2px">${esc(f.label)}${f.required?' <span title="required">*</span>':''}${f.secret&&set&&!(o.clear&&o.clear[f.key])?' <span class="pill ok">saved</span>':''}</label>`;
-  const help=f.help?`<div class="mini" style="margin-top:2px">${esc(f.help)}</div>`:'';
-  if(f.secret){
-    const v=o.k[f.key]||'';
-    return lbl+`<input id="${esc(id)}" type="password" autocomplete="new-password" class="cel txt" style="width:100%" value="${esc(v)}"
-      placeholder="${set?'saved — leave blank to keep it':'paste it here'}" oninput="cnDraft('${esc(it.id)}','${esc(f.key)}',this.value,true)" ${dis}>`+help;
-  }
-  const v=o.s[f.key]!=null?o.s[f.key]:((it.settings&&it.settings[f.key])||'');
-  return lbl+`<input id="${esc(id)}" type="text" autocomplete="off" class="cel txt" style="width:100%" value="${esc(v)}"
-    placeholder="${esc(f.placeholder||'')}" oninput="cnDraft('${esc(it.id)}','${esc(f.key)}',this.value,false)" ${dis}>`+help;
-}
-function cnCardHtml(it){
-  const c=cnState(), busy=!!c.busy[it.id], dis=(!canConfig()||busy)?'disabled':'', pid=esc(it.id), dirty=cnDirty(it.id);
-  const pill=it.connected?'<span class="pill ok">Connected</span>':it.ready?'<span class="pill warn">Ready to connect</span>':'<span class="pill n">Needs credentials</span>';
-  const how=it.kind==='oauth2'?'Sign-in window':it.kind==='client_credentials'?'Client credentials':'API key';
-  const m=c.msg[it.id];
-  const anySaved=it.connected||it.ready||(it.secrets_set||[]).length||Object.keys(it.settings||{}).length;
-  const act=it.kind==='oauth2'
-    ? `<button class="btn sm pri" onclick="cnSignIn('${pid}')" ${(dis||!it.ready||dirty)?'disabled':''} title="${dirty?'Save your changes first':(it.ready?'Opens the provider sign-in in a pop-up':'Save all the required credentials first')}">${it.connected?'Sign in again':'Sign in'}</button>`
-    : `<button class="btn sm pri" onclick="cnConnect('${pid}')" ${(dis||!it.ready||dirty)?'disabled':''} title="${dirty?'Save your changes first':(it.ready?'Checks the credentials with the provider':'Save all the required credentials first')}">${it.connected?'Reconnect':'Connect'}</button>`;
-  return `<div class="card cn-card" id="cn_card_${pid}" style="margin:0"><h3 style="flex-wrap:wrap">${esc(it.name)}${it.custom?' <span class="pill v">Custom</span>':''}<span class="sp"></span>${pill}</h3><div class="bd">
-    <div class="mini" style="margin-bottom:2px">${how}${it.connected&&it.connected_at?' · connected '+esc(String(it.connected_at).slice(0,10)):''}</div>
-    ${(it.fields||[]).map(f=>cnFieldHtml(it,f,dis)).join('')}
-    <details style="margin-top:8px"><summary class="mini" style="cursor:pointer">Setup steps</summary><p class="mini" style="margin:5px 0 0">${esc(it.setup||'')}</p></details>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
-      <button class="btn sm" onclick="cnSave('${pid}')" ${dis} ${dirty?'':'title="No unsaved changes"'}>Save${dirty?' *':''}</button>
-      ${act}
-      <button class="btn sm" onclick="cnTest('${pid}')" ${(dis||!it.connected)?'disabled':''}>Test</button>
-      ${it.connected?`<button class="btn sm" onclick="cnDisconnect('${pid}')" ${dis}>Disconnect</button>`:''}
-      ${it.custom?`<button class="btn sm" onclick="cnOpenModal('${pid}')" ${dis}>Edit</button>`:''}
-      ${(it.custom||anySaved)?`<button class="btn sm dgr" onclick="cnRemove('${pid}')" ${dis}>${it.custom?'Remove':'Clear'}</button>`:''}
-    </div>
-    <div class="mini" role="status" style="margin-top:6px;${m&&m.bad?'color:var(--bad)':''}">${busy?'Working…':esc(m?m.text:'')}</div>
-  </div></div>`;
-}
-function connectorsPanelHtml(){
-  const c=cnState(), can=canConfig();
-  let h=`<div class="card" id="cn_panel"><h3>CRM &amp; advertising connectors <span class="sp"></span>
-      ${c.loaded?`<span class="pill ${c.list.some(x=>x.connected)?'ok':'n'}">${c.list.filter(x=>x.connected).length} connected</span>`:'<span class="pill n">…</span>'}</h3><div class="bd">
-    <p class="mini" style="margin:0 0 9px">Connect this organisation's own CRM, finance and advertising accounts. Each organisation enters its own app credentials here —
-      nothing is set up on the server per customer. Credentials and sign-in tokens are stored encrypted in North, are never shown again after you save them,
-      and are never sent to the browser. Only people whose role has Configuration access can see or change this page.
-      Sign-in flows follow each provider's public documentation and have <strong>not yet been tested against live accounts</strong>, so use Test after connecting.</p>`;
-  if(!can) return h+'<div class="note">Your role cannot view the connector settings.</div></div></div>';
-  if(c.loading) return h+'<p class="mini">Loading…</p></div></div>';
-  if(c.error) h+=`<div class="note">${esc(c.error)}</div>`;
-  if(!c.loaded){ return h+`<button class="btn sm" onclick="loadConnectors()">Load connectors</button></div></div>`; }
-  h+=`<div class="note" style="margin-bottom:12px"><div class="mini">Redirect URL — register this exact address as the redirect / callback URL in every provider app below</div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:3px"><code id="cn_redirect" style="font-size:12px;word-break:break-all">${esc(c.redirect)}</code>
-      <button class="btn sm" onclick="cnCopyRedirect()">${c.copied?'Copied':'Copy'}</button></div></div>`;
-  if(c.unreadable&&c.unreadable.length) h+=`<div class="note">Saved credentials for ${esc(c.unreadable.join(', '))} could not be read (the server key changed). Enter them again and Save.</div>`;
-  const built=c.list.filter(x=>!x.custom), cust=c.list.filter(x=>x.custom);
-  h+=`<div class="cn-grid">${built.map(cnCardHtml).join('')}</div>`;
-  h+=`<div style="display:flex;align-items:center;gap:10px;margin:16px 0 8px"><h4 style="margin:0;font-size:13px">Custom APIs</h4>
-      <button class="btn sm pri" onclick="cnOpenModal('')" ${(cust.length>=c.max)?'disabled':''}>+ Add custom API</button>
-      <span class="mini">${cust.length} of ${c.max}. Any service with OAuth sign-in or a plain API key.</span></div>`;
-  h+= cust.length ? `<div class="cn-grid">${cust.map(cnCardHtml).join('')}</div>` : `<p class="mini">None yet.</p>`;
-  return h+'</div></div>';
-}
-async function cnCopyRedirect(){
-  const c=cnState();
-  try{ await navigator.clipboard.writeText(c.redirect); c.copied=true; render(); setTimeout(()=>{ c.copied=false; if(UI.page==='integrations') render(); },1800); }
-  catch(e){ const el=document.getElementById('cn_redirect'); if(el&&window.getSelection){ const r=document.createRange(); r.selectNodeContents(el); const s=window.getSelection(); s.removeAllRanges(); s.addRange(r); } toast('Press Ctrl+C to copy the selected address.'); }
-}
-async function cnRun(pid,label,fn){
-  const c=cnState(); c.busy[pid]=true; cnMsg(pid,''); render();
-  try{ await fn(); }catch(e){ cnMsg(pid,(e&&e.message)||(label+' failed.'),true); }
-  c.busy[pid]=false; render();
-}
-function cnSettingsFor(it){
-  const o=cnState().drafts[it.id]||{s:{},k:{}}, out={};
-  (it.fields||[]).forEach(f=>{ if(f.secret) return; out[f.key]=String(o.s[f.key]!=null?o.s[f.key]:((it.settings&&it.settings[f.key])||'')).trim(); });
-  return out;
-}
-async function cnSave(pid){
-  const it=cnItem(pid); if(!it) return;
-  await cnRun(pid,'Save',async()=>{
-    const o=cnState().drafts[pid]||{s:{},k:{},clear:{}}, secrets={};
-    Object.keys(o.k).forEach(k=>{ const v=String(o.k[k]||'').trim(); if(v) secrets[k]=v; });
-    const { r, j } = await cnCall({action:'save',provider:pid,settings:cnSettingsFor(it),secrets:secrets,clear:Object.keys(o.clear||{}).filter(k=>o.clear[k])});
-    if(!r.ok||!j.ok) throw new Error(j.error||'Could not save.');
-    const c=cnState(); const i=c.list.findIndex(x=>x.id===pid); if(i>=0) c.list[i]=j.connector;
-    delete c.drafts[pid];
-    cnMsg(pid, j.disconnected?'Saved. The credentials changed, so the old connection was dropped — sign in again.':'Saved.');
-    try{ logAudit('connector credentials saved',pid); }catch(e){}
-  });
-}
-async function cnSignIn(pid){
-  const it=cnItem(pid); if(!it) return;
-  // Open the window synchronously (inside the click) so pop-up blockers allow it; point it at the provider once we have the address.
-  const w=window.open('', 'north_connector', 'width=560,height=740');
-  if(!w){ cnMsg(pid,'The sign-in window was blocked — allow pop-ups for this site and try again.',true); render(); return; }
-  try{ w.document.title='Connecting…'; w.document.body.textContent='Opening '+it.name+'…'; }catch(e){}
-  await cnRun(pid,'Sign in',async()=>{
-    let r,j;
-    try{ ({r,j}=await cnCall({action:'start',provider:pid})); }catch(e){ try{w.close();}catch(_){} throw e; }
-    if(!r.ok||!j.ok||!j.auth_url){ try{w.close();}catch(_){} throw new Error(j.error||'Could not start the sign-in.'); }
-    w.location.href=j.auth_url;
-    cnMsg(pid,'Finish signing in in the pop-up window…');
-    const t=setInterval(()=>{ if(w.closed){ clearInterval(t); loadConnectors(true); } },1000);
-  });
-}
-async function cnConnect(pid){
-  const it=cnItem(pid); if(!it) return;
-  await cnRun(pid,'Connect',async()=>{
-    const { r, j } = await cnCall({action:'connect',provider:pid});
-    if(!r.ok||!j.ok) throw new Error(j.error||'Could not connect.');
-    const l=await cnCall({action:'list'}); if(l.j&&l.j.ok){ const c=cnState(); c.list=l.j.connectors||c.list; }
-    cnMsg(pid,'Connected.');
-    try{ logAudit('connector connected',pid); }catch(e){}
-  });
-}
-async function cnTest(pid){
-  await cnRun(pid,'Test',async()=>{
-    const { r, j } = await cnCall({action:'test',provider:pid});
-    if(!r.ok||!j.ok) throw new Error(j.error||'The test failed.');
-    cnMsg(pid,'Test passed (HTTP '+j.status+')'+(j.refreshed?' — the token was refreshed.':'.'));
-  });
-}
-async function cnDisconnect(pid){
-  const it=cnItem(pid); if(!it) return;
-  if(!confirm('Disconnect '+it.name+'? The saved credentials stay; you can sign in again.')) return;
-  await cnRun(pid,'Disconnect',async()=>{
-    const { r, j } = await cnCall({action:'disconnect',provider:pid});
-    if(!r.ok||!j.ok) throw new Error(j.error||'Could not disconnect.');
-    it.connected=false; it.connected_at=null; cnMsg(pid,'Disconnected.');
-    try{ logAudit('connector disconnected',pid); }catch(e){}
-  });
-}
-async function cnRemove(pid){
-  const it=cnItem(pid); if(!it) return;
-  if(!confirm((it.custom?'Remove ':'Clear all saved credentials and the connection for ')+it.name+'? This cannot be undone.')) return;
-  await cnRun(pid,'Remove',async()=>{
-    const { r, j } = await cnCall({action:'remove',provider:pid});
-    if(!r.ok||!j.ok) throw new Error(j.error||'Could not remove.');
-    const c=cnState(); delete c.drafts[pid]; delete c.msg[pid];
-    if(it.custom) c.list=c.list.filter(x=>x.id!==pid);
-    else { it.settings={}; it.secrets_set=[]; it.ready=false; it.connected=false; it.connected_at=null; }
-    try{ logAudit('connector removed',pid); }catch(e){}
-  });
-}
-/* ---- + Add custom API (also used to edit one) ---- */
-function cnBlankDef(){ return {type:'oauth2',name:'',notes:'',auth_url:'',token_url:'',scopes:'',test_url:'',pkce:false,basic:false,offline:false,method:'GET',header_name:'Authorization',prefix:'Bearer'}; }
-function cnOpenModal(pid){
-  const it=pid?cnItem(pid):null;
-  UI.cnModal=Object.assign(cnBlankDef(), it&&it.def?it.def:{}, {edit:pid||'',err:'',busy:false});
-  render();
-}
-function cnCloseModal(){ UI.cnModal=null; render(); }
-function cnModalSet(k,v,rerender){ if(UI.cnModal){ UI.cnModal[k]=v; if(rerender) render(); } }
-async function cnModalSave(){
-  const m=UI.cnModal; if(!m||m.busy) return;
-  m.busy=true; m.err=''; render();
-  try{
-    const def={type:m.type,name:m.name,notes:m.notes};
-    if(m.type==='apikey'){ def.test_url=m.test_url; def.method=m.method; def.header_name=m.header_name; def.prefix=m.prefix; }
-    else { def.auth_url=m.auth_url; def.token_url=m.token_url; def.scopes=m.scopes; def.test_url=m.test_url; def.pkce=!!m.pkce; def.basic=!!m.basic; def.offline=!!m.offline; }
-    const { r, j } = await cnCall({action:'save',provider:m.edit||'new_custom',settings:{},secrets:{},def:def});
-    if(!r.ok||!j.ok) throw new Error(j.error||'Could not save.');
-    const c=cnState(); const i=c.list.findIndex(x=>x.id===j.connector.id);
-    if(i>=0) c.list[i]=j.connector; else c.list.push(j.connector);
-    cnMsg(j.connector.id, m.edit?'Updated.':'Added. Enter the credentials below, then Save.');
-    try{ logAudit(m.edit?'custom connector edited':'custom connector added',j.connector.id); }catch(e){}
-    UI.cnModal=null;
-  }catch(e){ m.busy=false; m.err=(e&&e.message)||'Could not save.'; }
-  render();
-}
-function cnModalHtml(){
-  const m=UI.cnModal; if(!m) return '';
-  const fld=(k,label,ph,extra)=>`<label class="mini" for="cnm_${k}" style="display:block;margin:9px 0 2px">${label}</label>
-      <input id="cnm_${k}" class="cel txt" style="width:100%" value="${esc(m[k]||'')}" placeholder="${esc(ph||'')}" oninput="cnModalSet('${k}',this.value)" ${extra||''}>`;
-  const chk=(k,label)=>`<label class="mini" style="display:block;margin-top:7px"><input type="checkbox" ${m[k]?'checked':''} onchange="cnModalSet('${k}',this.checked)"> ${label}</label>`;
-  return `<div class="mask" id="cn_modal"><div class="modal">
-    <h3>${m.edit?'Edit custom API':'Add custom API'} <span class="sp"></span><button class="btn sm" onclick="cnCloseModal()">Close</button></h3>
-    <div class="bd">
-      <label class="mini" for="cnm_type" style="display:block;margin-bottom:2px">How does it authenticate?</label>
-      <select id="cnm_type" class="cel txt" style="width:100%" onchange="cnModalSet('type',this.value,true)" ${m.edit?'disabled':''}>
-        <option value="oauth2" ${m.type==='oauth2'?'selected':''}>OAuth sign-in (a sign-in window, e.g. a CRM)</option>
-        <option value="apikey" ${m.type==='apikey'?'selected':''}>API key (a key sent with each request)</option></select>
-      ${fld('name','Name','e.g. Acme CRM')}
-      ${m.type==='apikey'
-        ? fld('test_url','Address to check the key against (https)','https://api.example.com/v1/me')
-          +`<label class="mini" for="cnm_method" style="display:block;margin:9px 0 2px">Method</label>
-            <select id="cnm_method" class="cel txt" onchange="cnModalSet('method',this.value)"><option ${m.method!=='POST'?'selected':''}>GET</option><option ${m.method==='POST'?'selected':''}>POST</option></select>`
-          +fld('header_name','Header that carries the key','Authorization')+fld('prefix','Word before the key (a space is added; leave blank to send the key alone)','Bearer')
-        : fld('auth_url','Sign-in address (https)','https://example.com/oauth/authorize')+fld('token_url','Token address (https)','https://example.com/oauth/token')
-          +fld('scopes','Scopes (space separated, optional)','read write')+fld('test_url','Address to test with after sign-in (optional)','https://api.example.com/v1/me')
-          +chk('pkce','Provider requires PKCE')+chk('basic','Send the client id and secret as a Basic header (rather than in the body)')+chk('offline','Ask for a refresh token (offline access)')}
-      ${fld('notes','Notes shown on the card (optional)','e.g. where to create the app')}
-      ${m.type==='oauth2'?'<p class="mini" style="margin:10px 0 0">After adding, register the Redirect URL shown above in the provider\'s app and paste its client id and secret on the new card.</p>':'<p class="mini" style="margin:10px 0 0">After adding, paste the API key on the new card and press Connect.</p>'}
-      ${m.err?`<div class="note" style="margin:10px 0 0;color:var(--bad)" role="alert">${esc(m.err)}</div>`:''}
-    </div>
-    <div class="ft"><button class="btn sm" onclick="cnCloseModal()">Cancel</button><button class="btn sm pri" onclick="cnModalSave()" ${m.busy?'disabled':''}>${m.busy?'Saving…':(m.edit?'Save changes':'Add')}</button></div>
-  </div></div>`;
-}
-/* the sign-in pop-up reports back through connector-done.html (postMessage, with BroadcastChannel as a fallback when the
-   provider's own page severed window.opener). Same-origin only. */
-(function(){
-  function done(d){
-    if(!d||d.type!=='north-connector-result') return;
-    const pid=String(d.p||''); const it=cnItem(pid);
-    cnMsg(pid, d.ok?'Signed in.':('Sign-in did not finish'+(d.m?': '+d.m:'.')), !d.ok);
-    toast(d.ok?((it?it.name:'Connector')+' connected.'):'Sign-in did not finish.');
-    if(d.ok){ try{ logAudit('connector connected',pid); }catch(e){} }
-    loadConnectors(true);
-  }
-  window.addEventListener('message',function(ev){ if(ev.origin===location.origin) done(ev.data); });
-  try{ const bc=new BroadcastChannel('north-connector'); bc.onmessage=function(ev){ done(ev.data); }; }catch(e){}
-})();
-
 function pageIntegrations(){
   const wu=CFG.integrations.webhookUrl||'';
   let h=`<div class="phead"><div><h1>Integrations</h1>
-    <p>Two ways to connect outside systems. The <strong>CRM &amp; advertising connectors</strong> below hold this organisation's own
-      sign-ins and API keys, stored encrypted in North, for the CRMs, finance and advertising tools North reads from directly.
-      For everything else there is one generic outbound webhook, not a per-vendor integration: point it at a Zapier, Make,
-      or n8n webhook and let that platform's pre-built connectors route the data on to Monday, Asana, ClickUp, Smartsheet
-      or whatever else you've wired up there.</p></div></div>`;
-  h += connectorsPanelHtml();
+    <p>One generic outbound webhook, not seven per-vendor integrations. Every tool in this suite is a standalone
+      file with no server, so none of them can safely hold OAuth tokens or API keys for Monday, Asana, ClickUp,
+      HubSpot, Salesforce, NetSuite or Smartsheet. Instead, point this at a Zapier, Make, or n8n webhook, and let
+      that platform's own pre-built connectors route the data on to whichever of those systems you've wired up
+      there. This suite only ever needs to know one URL.</p></div></div>`;
   h+=`<div class="card"><h3>Outbound webhook <span class="sp"></span>
       ${ragPillHtml(ragForWebhook(CFG.integrations.webhookEnabled))}</h3>
     <div class="bd">
@@ -5178,7 +4917,7 @@ function render(){
   document.getElementById('side').innerHTML=renderSide();
   document.getElementById('tnLinks').innerHTML=renderFilteredTnLinks();
   document.getElementById('tnAcct').innerHTML=renderTnAcct();
-  document.getElementById('main').innerHTML=p.fn() + (UI.orgEdit ? orgEditModalHtml() : '') + (UI.cnModal ? cnModalHtml() : '') + (UI.feedbackDetailId ? feedbackDetailModalHtml() : '') + (UI.helpOpen ? helpPanelHtml() : '');
+  document.getElementById('main').innerHTML=p.fn() + (UI.orgEdit ? orgEditModalHtml() : '') + (UI.feedbackDetailId ? feedbackDetailModalHtml() : '') + (UI.helpOpen ? helpPanelHtml() : '');
   saveLocal();
   scheduleSupabaseSave();
 }

@@ -13,8 +13,8 @@ Done once per Supabase project. After this, every organisation's admin manages t
 3. **Turn "Verify JWT" OFF** for `connectors` (function settings). Needed because the provider's redirect back to North carries no
    login token. The function itself checks the North session token on every call except the provider redirect, and the redirect
    is protected by a signed, 15-minute `state`.
-4. **Set `NORTH_SECRET_KEY` (recommended — see "Portability" below).** Without it the encryption key is derived from the Supabase project's
-   service-role key, which would change if you move host.
+4. **No secrets to set.** The encryption key is derived from the project's own service-role key. (Optional: set a
+   `CONNECTOR_SECRET_KEY` secret to use a separate key — but do it *before* anyone saves credentials, or they must re-enter them.)
 5. **Hard refresh** North (Ctrl+F5), open Configuration → Integrations. The cards load.
 6. **Commit/push** the Northm repo so `connector-done.html` and the new `Configuration.html` go live on Vercel.
 
@@ -39,31 +39,5 @@ Done once per Supabase project. After this, every organisation's admin manages t
 
 - No provider sign-in has been tested against a real account (never tested in Hub either). Use **Test** after connecting each one.
 - Marketo's token request was changed to a GET with query parameters (per its docs) — unverified.
-- The function was tested with a Node harness (104 + 58 checks + a browser end-to-end), **not** on real Supabase/Deno.
+- The function was tested with a Node harness (104 + 46 checks + a browser end-to-end), **not** on real Supabase/Deno.
 - Contact Seeker (Hub) still has its old CRM section until you confirm this page works; then it is removed (archive first).
-
-## Portability (updated 2026-10-08) — so a future move off Supabase/Neon doesn't mean re-doing everything
-
-**1. Encryption key — do this once, now.** The connectors function and the voice function now read one shared secret, `NORTH_SECRET_KEY`.
-1. Redeploy both functions with the latest code (`connectors` and `voice`; paste `index.ts` from each, leave their JWT settings as they are).
-2. Supabase → Edge Functions → **Secrets** → add `NORTH_SECRET_KEY` = a long random value (32+ characters from your password manager's
-   generator). **Save a copy in your password manager** — it is what lets you read stored credentials after a move.
-3. Open Configuration → Integrations. Nothing needs re-entering: anything saved earlier under the old key is still read and is
-   re-encrypted under the new key automatically (connectors on the next page load, voice on its next Save). The "Portability" note on the
-   connectors panel disappears once the secret is set.
-- Do **not** use the older names `CONNECTOR_SECRET_KEY` / `VOICE_SECRET_KEY` before redeploying — the old code would pick them up and could not read earlier saves. (After the redeploy they are accepted too and take priority over `NORTH_SECRET_KEY`.)
-- If the key is ever lost or changed, saved credentials show as unreadable and admins re-enter them. Nothing else is affected.
-
-**2. Callback address — decide before you register any provider app.** Each organisation registers the redirect URL in its own provider
-apps, so changing it later means every admin re-registers everywhere. Plan:
-- A rewrite is already prepared in `vercel.json`: `https://<your North host>/oauth/callback` → the connectors function. After the next deploy,
-  opening `https://northm.vercel.app/oauth/callback` should show "North connectors function is running."
-- When you have your domain: add it to the Vercel project, then set the function secret `CONNECTOR_REDIRECT_URI` =
-  `https://<your-domain>/oauth/callback`. The Configuration page then shows that address to admins, and sign-ins use it. Register **that**
-  address in provider apps.
-- If you later move the backend, edit the one `destination` in `vercel.json`. Provider apps are untouched.
-- Until the domain exists: connect providers only if you accept re-registering later (the Supabase address shown today is the fallback).
-
-**3. What else is tied to Supabase (for a future migration).** Tables are plain Postgres (export/import works). The function uses standard
-web APIs; its Supabase-specific parts are the session check (Supabase Auth) and the table queries. Keep `NORTH_SECRET_KEY` and the three
-`connector_*` tables together and the credentials move with you.

@@ -28,12 +28,9 @@
 // Functions > Deploy a new function > Via Editor > name it exactly  connectors  > paste this file > then in the function's
 // settings turn "Verify JWT" OFF (the provider's redirect cannot carry a login token; this function checks the signed state
 // for redirects and the North session token for every other call). SUPABASE_URL / ANON / SERVICE_ROLE are provided
-// automatically. KEYS: encryption and state-signing keys come from the function secret NORTH_SECRET_KEY (or CONNECTOR_SECRET_KEY) when set
-// -- RECOMMENDED, because it moves with you if you ever change host (keep a copy in your password manager). If neither is set they are
-// derived from this project's service-role key, which would change on a move and make saved credentials unreadable. Setting the secret
-// at any time is safe: anything saved earlier under the service-role-derived key is still read, and re-saved under the new key the
-// first time it is used. OPTIONAL: secret CONNECTOR_REDIRECT_URI (https) replaces the default callback address shown to admins, so a
-// future domain/host can be used without touching provider apps (see 2026-10-08-connectors-setup.md).
+// automatically. NO SECRETS TO SET: encryption and state-signing keys are derived from this project's own service-role key
+// (optional override: function secret CONNECTOR_SECRET_KEY, set it BEFORE anyone saves credentials). If the service-role key is
+// ever rotated, saved credentials become unreadable and admins simply re-enter them.
 //
 // Built to the same point as the old Hub engine: credentials -> sign in -> stored encrypted token -> refresh -> "Test". It does
 // NOT sync records into North yet (field mapping needs a real connected account). NOT live-tested against any provider --
@@ -480,27 +477,16 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
 const text = (msg: string, status = 200) => new Response(msg, { status, headers: { ...CORS, 'Content-Type': 'text/plain; charset=utf-8' } })
 
-const dedicatedMat = () => (Deno.env.get('CONNECTOR_SECRET_KEY') || Deno.env.get('NORTH_SECRET_KEY') || '').trim()
-const serviceMat = () => (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '').trim()
-const material = () => dedicatedMat() || serviceMat()
+const material = () => (Deno.env.get('CONNECTOR_SECRET_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '').trim()
 async function getAes(): Promise<CryptoKey> {
   const m = material(); if (!m) throw new CError('No key material is available to encrypt credentials.', 500)
   return await aesKey(m)
-}
-// With a dedicated key set, things saved earlier under the service-role-derived key are still readable (and get re-saved under the new key).
-async function decryptAny(payload: string): Promise<{ val: any; legacy: boolean }> {
-  try { return { val: await decryptBlob(payload, await getAes()), legacy: false } }
-  catch (e) {
-    if (!dedicatedMat() || !serviceMat()) throw e
-    return { val: await decryptBlob(payload, await aesKey(serviceMat())), legacy: true }
-  }
 }
 async function getHmac(): Promise<CryptoKey> {
   const m = material(); if (!m) throw new CError('No key material is available to sign sign-in links.', 500)
   return await hmacKey(m)
 }
-const redirectOverride = () => { const o = (Deno.env.get('CONNECTOR_REDIRECT_URI') || '').trim(); return /^https:\/\/[^\s]+$/i.test(o) ? o : '' }
-const redirectUri = () => redirectOverride() || String(Deno.env.get('SUPABASE_URL') || '').replace(/\/+$/, '') + '/functions/v1/connectors'
+const redirectUri = () => String(Deno.env.get('SUPABASE_URL') || '').replace(/\/+$/, '') + '/functions/v1/connectors'
 
 async function dnsPublic(host: string): Promise<boolean> {
   const d = (globalThis as any).Deno
@@ -528,20 +514,14 @@ Deno.serve(async (req: Request) => {
     if (!prov && app?.kind === 'custom' && app.def) prov = customProv(pid, app.def)
     if (!prov) throw new CError('Unknown connector.', 404)
     const { data: s } = await svc.from('connector_app_secrets').select('payload').eq('org_id', orgId).eq('provider', pid).maybeSingle()
-    let sec: Rec = {}
-    if (s?.payload) {
-      const d = await decryptAny(s.payload); sec = d.val
-      if (d.legacy) await svc.from('connector_app_secrets').update({ payload: await encryptBlob(sec, await getAes()), updated_at: new Date().toISOString() }).eq('org_id', orgId).eq('provider', pid)
-    }
+    const sec: Rec = s?.payload ? await decryptBlob(s.payload, await getAes()) : {}
     const settings: Rec = app?.settings || {}
     return { prov, app, settings, sec, merged: flat(settings, sec) }
   }
   const loadToken = async (orgId: string, pid: string) => {
     const { data } = await svc.from('connector_tokens').select('data_enc,connected_by,connected_at').eq('org_id', orgId).eq('provider', pid).maybeSingle()
     if (!data?.data_enc) return { tok: null as any, row: data }
-    const d = await decryptAny(data.data_enc)
-    if (d.legacy) await svc.from('connector_tokens').update({ data_enc: await encryptBlob(d.val, await getAes()), updated_at: new Date().toISOString() }).eq('org_id', orgId).eq('provider', pid)
-    return { tok: d.val, row: data }
+    return { tok: await decryptBlob(data.data_enc, await getAes()), row: data }
   }
   const saveToken = async (orgId: string, pid: string, tok: any, userId: string | null) => {
     const { data: ex } = await svc.from('connector_tokens').select('connected_by,connected_at').eq('org_id', orgId).eq('provider', pid).maybeSingle()
@@ -620,18 +600,12 @@ Deno.serve(async (req: Request) => {
       const tokBy: Record<string, any> = {}; for (const t of toks || []) tokBy[t.provider] = t
       const secBy: Record<string, Rec> = {}
       const bad: string[] = []
-      let legacyRows = 0
-      for (const s of secs || []) {
-        try {
-          const d = await decryptAny(s.payload); secBy[s.provider] = d.val
-          if (d.legacy) { legacyRows++; await svc.from('connector_app_secrets').update({ payload: await encryptBlob(d.val, aes), updated_at: new Date().toISOString() }).eq('org_id', orgId).eq('provider', s.provider) }
-        } catch { secBy[s.provider] = {}; bad.push(s.provider) }
-      }
+      for (const s of secs || []) { try { secBy[s.provider] = await decryptBlob(s.payload, aes) } catch { secBy[s.provider] = {}; bad.push(s.provider) } }
       const items: any[] = []
       const push = (prov: Prov) => items.push(view(prov, appBy[prov.id], secBy[prov.id] || {}, !!tokBy[prov.id]?.data_enc, tokBy[prov.id]?.connected_at || null))
       for (const id of Object.keys(PROVIDERS)) push(PROVIDERS[id])
       for (const a of apps || []) if (a.kind === 'custom' && a.def) push(customProv(a.provider, a.def))
-      return json({ ok: true, redirect_uri: redirectUri(), redirect_custom: !!redirectOverride(), key_source: dedicatedMat() ? 'dedicated' : 'service-role', upgraded_rows: legacyRows, connectors: items, unreadable: bad, max_custom: MAX_CUSTOM })
+      return json({ ok: true, redirect_uri: redirectUri(), connectors: items, unreadable: bad, max_custom: MAX_CUSTOM })
     }
 
     const pid0 = trim(body.provider)

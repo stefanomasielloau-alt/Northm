@@ -22,10 +22,6 @@
   ],
   "rewrites": [
     {
-      "source": "/oauth/callback",
-      "destination": "https://rcmocuubeajnqjltuwdv.supabase.co/functions/v1/connectors"
-    },
-    {
       "source": "/strategy",
       "destination": "/Strategy.html"
     },

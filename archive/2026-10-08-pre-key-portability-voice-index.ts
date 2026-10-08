@@ -19,11 +19,10 @@
 // project) > Edge Functions > Deploy a new function > Via Editor > name it exactly  voice  > paste this file >
 // Deploy. Leave "Enforce JWT verification" ON. SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY are
 // provided automatically.
-// KEYS: the API key (and any secret headers) are encrypted with AES-256-GCM before they are stored. RECOMMENDED: set the function
-// secret NORTH_SECRET_KEY (or VOICE_SECRET_KEY) -- a long random value you keep a copy of in your password manager -- so the key
-// moves with you if you ever change host. If neither is set the key is derived from this project's service-role key, which would
-// change on a move and make saved keys unreadable (admins would paste them again). Setting the secret at any time is safe: keys
-// saved earlier under the service-role-derived key are still read, and re-encrypted under the new key the next time Save is pressed.
+// NO SECRETS TO SET: the API key (and any secret headers) are encrypted with AES-256-GCM before they are stored, using a
+// key derived from this project's own service-role key, which Supabase gives the function automatically. Nobody has to
+// create or paste anything. (Optional: set a function secret VOICE_SECRET_KEY to use your own key material instead.) If
+// the project's service-role key is ever rotated, saved keys become unreadable and admins simply paste them again.
 //
 // Organisation admins do everything from Configuration -> Integrations -> Voice; this one-time deploy is the platform owner's.
 //
@@ -365,20 +364,10 @@ const CORS = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
 
-const dedicatedMaterial = () => (Deno.env.get('VOICE_SECRET_KEY') || Deno.env.get('NORTH_SECRET_KEY') || '').trim()
-const serviceMaterial = () => (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '').trim()
 async function loadAesKey(): Promise<CryptoKey> {
-  const material = dedicatedMaterial() || serviceMaterial()
+  const material = (Deno.env.get('VOICE_SECRET_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '').trim()
   if (!material) throw new VoiceError('No key material is available to encrypt the saved key.', 500)
   return await deriveKey(material)
-}
-// read with the current key; if a dedicated key was set after the key was saved, fall back to the service-role-derived one
-async function decryptAny(payload: string): Promise<any> {
-  try { return await decryptBlob(payload, await loadAesKey()) }
-  catch (e) {
-    if (!dedicatedMaterial() || !serviceMaterial()) throw e
-    return await decryptBlob(payload, await deriveKey(serviceMaterial()))
-  }
 }
 
 // where the runtime lets us resolve DNS, refuse hosts whose answers are private; otherwise rely on the hostname checks
@@ -425,7 +414,7 @@ Deno.serve(async (req: Request) => {
     const { data: cfg } = await svc.from('voice_providers').select('*').eq('org_id', orgId).maybeSingle()
     if (!cfg) return { cfg: null, sec: null as any }
     const { data: s } = await svc.from('voice_provider_secrets').select('payload').eq('org_id', orgId).maybeSingle()
-    const sec = s?.payload ? await decryptAny(s.payload) : { api_key: '', headers: {} }
+    const sec = s?.payload ? await decryptBlob(s.payload, await loadAesKey()) : { api_key: '', headers: {} }
     return { cfg, sec }
   }
 
@@ -444,7 +433,7 @@ Deno.serve(async (req: Request) => {
       const { data: cur } = await svc.from('voice_providers').select('*').eq('org_id', orgId).maybeSingle()
       const { data: s } = await svc.from('voice_provider_secrets').select('payload').eq('org_id', orgId).maybeSingle()
       const aes = await loadAesKey()
-      const curSec = s?.payload ? await decryptAny(s.payload).catch(() => ({})) : {}
+      const curSec = s?.payload ? await decryptBlob(s.payload, aes).catch(() => ({})) : {}
       const sec = mergeSecrets(curSec, { api_key: body.api_key, clear_key: body.clear_key, headers: body.headers }, cfg.kind, cfg.auth_style)
       const { payload, encrypted } = await encryptBlob(sec, aes)
       const row = {

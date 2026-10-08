@@ -58,11 +58,6 @@ body{font-family:var(--sans); background:var(--canvas); color:var(--ink); font-s
 .navi{display:flex; align-items:center; gap:8px; padding:7px 14px; text-decoration:none; color:var(--ink-2); font-size:13px; border-left:3px solid transparent;}
 .navi:hover{background:var(--canvas-2)}
 .navi.on{background:var(--canvas-2);border-left-color:var(--nav);color:var(--ink);font-weight:700}
-.subtabs{display:flex;gap:2px;flex-wrap:wrap;margin:0 0 14px;border-bottom:1px solid var(--line)}
-.subtabs a{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;font-size:12.5px;color:var(--ink-2);text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px}
-.subtabs a:hover{background:var(--canvas-2)}
-.subtabs a.on{color:var(--ink);font-weight:700;border-bottom-color:var(--nav)}
-.subtabs a .lk{font-size:10px;color:var(--ink-3);font-weight:400}
 .navi .ix{width:16px; text-align:center; font-size:11px; color:var(--ink-3);}
 .navi.on .ix{color:var(--nav)}
 .main{flex:1; padding:18px 22px; max-width:none;}
@@ -393,7 +388,6 @@ function go(page){
   if(page==='licensing' && !CFG.isFullSuperAdmin){ toast('Licensing is limited to the full Super Admin.'); page='home'; }
   if(page==='regionsadmin' && !CFG.isSuperAdmin){ toast('This view is limited to Super Admin.'); page='home'; }
   UI.page=page;
-  { const _g=navGroupOf(page); if(_g){ UI.navLast=UI.navLast||{}; UI.navLast[_g.id]=page; } }
   // Item 26 phase 1: these two pages mirror live Hub data, not CFG -- fetch on first visit
   // rather than at boot, since most sessions never open them.
   if(page==='hubaccounts' && !UI.hubUsersLoaded && !UI.hubUsersLoading) loadHubUsers();
@@ -3358,7 +3352,7 @@ async function loadConnectors(silent){
   try{
     const { r, j } = await cnCall({action:'list'});
     if(!r.ok||!j.ok) c.error=j.error||'Could not load the connectors.';
-    else { c.list=j.connectors||[]; c.redirect=j.redirect_uri||''; c.redirectCustom=!!j.redirect_custom; c.keySource=j.key_source||''; c.unreadable=j.unreadable||[]; c.max=j.max_custom||20; c.loaded=true; c.error=''; }
+    else { c.list=j.connectors||[]; c.redirect=j.redirect_uri||''; c.unreadable=j.unreadable||[]; c.max=j.max_custom||20; c.loaded=true; c.error=''; }
   }catch(e){ c.error=(e&&e.message)||'Could not load the connectors.'; }
   c.loading=false; render();
 }
@@ -3426,9 +3420,7 @@ function connectorsPanelHtml(){
   if(!c.loaded){ return h+`<button class="btn sm" onclick="loadConnectors()">Load connectors</button></div></div>`; }
   h+=`<div class="note" style="margin-bottom:12px"><div class="mini">Redirect URL — register this exact address as the redirect / callback URL in every provider app below</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:3px"><code id="cn_redirect" style="font-size:12px;word-break:break-all">${esc(c.redirect)}</code>
-      <button class="btn sm" onclick="cnCopyRedirect()">${c.copied?'Copied':'Copy'}</button></div>
-      ${c.redirectCustom?'':'<div class="mini" style="margin-top:6px">This address belongs to the current Supabase project. If you plan to move host or use your own domain, set that up <em>before</em> registering provider apps (see the setup guide: <code>CONNECTOR_REDIRECT_URI</code>).</div>'}</div>`;
-  if(c.keySource==='service-role') h+=`<div class="note" style="margin-bottom:12px"><strong>Portability:</strong> saved credentials are encrypted with a key derived from this Supabase project, so they would become unreadable if you move projects. The platform owner can fix this at any time, without anyone re-entering anything, by setting a <code>NORTH_SECRET_KEY</code> secret on the connectors function (see the setup guide).</div>`;
+      <button class="btn sm" onclick="cnCopyRedirect()">${c.copied?'Copied':'Copy'}</button></div></div>`;
   if(c.unreadable&&c.unreadable.length) h+=`<div class="note">Saved credentials for ${esc(c.unreadable.join(', '))} could not be read (the server key changed). Enter them again and Save.</div>`;
   const byName=(x,y)=>String(x.name).localeCompare(String(y.name),undefined,{sensitivity:'base'});
   const built=c.list.filter(x=>!x.custom).sort(byName), cust=c.list.filter(x=>x.custom).sort(byName);
@@ -4972,50 +4964,17 @@ const PAGES=[
   {id:'regionsadmin',ix:'17',label:'Regions & pods (all orgs)', fn:pageRegionsAdmin}
 ];
 
-/* 2026-10-08: the left nav used to list all 21 pages. They are bundled into 9 groups; a group's pages show as tabs across the top of
-   the page. PAGES (ids, labels, functions) is unchanged, so go('<page id>') and every existing link still work. */
-const NAV=[
-  {id:'g_home', label:'Home',              ix:'0', pages:['home']},
-  {id:'g_users',label:'Roles & users',     ix:'1', pages:['users']},
-  {id:'g_cost', label:'Costs & partners',  ix:'2', pages:['buckets','budgetcats','partnertypes','partners','currency']},
-  {id:'g_track',label:'Tracking & naming', ix:'3', pages:['tracking','campnaming']},
-  {id:'g_ai',   label:'AI & agents',       ix:'4', pages:['llm','agentregistry','agentactivity']},
-  {id:'g_int',  label:'Integrations',      ix:'5', pages:['integrations','sync']},
-  {id:'g_fb',   label:'Feedback',          ix:'6', pages:['feedback','hubfeedback']},
-  {id:'g_ah',   label:'AH',                ix:'7', pages:['hubaccounts','hubcompanies']},
-  {id:'g_admin',label:'Admin',             ix:'8', pages:['branding','licensing','regionsadmin']}
-];
-const NAV_TAB_LABEL={llm:'AI providers',agentregistry:'Agent registry',agentactivity:'Agent activity',sync:'Export',feedback:'North feedback',hubfeedback:'AH feedback',hubaccounts:'Accounts',hubcompanies:'Companies',users:'Roles & users'};
-function navPageVisible(id){
-  if(id==='licensing') return !!CFG.isFullSuperAdmin;
-  if(id==='regionsadmin') return !!CFG.isSuperAdmin;
-  return true;
-}
-function navPageLocked(id){ return (id==='users'||id==='feedback'||id==='hubaccounts'||id==='hubfeedback'||id==='hubcompanies')&&!canConfig(); }
-function navGroupOf(pageId){ return NAV.find(g=>g.pages.includes(pageId)); }
-function navGroupGo(gid){
-  const g=NAV.find(x=>x.id===gid); if(!g) return;
-  const vis=g.pages.filter(navPageVisible); if(!vis.length) return;
-  if(vis.includes(UI.page)) { go(UI.page); return; }
-  const last=(UI.navLast||{})[gid];
-  go(vis.includes(last)?last:vis[0]);
-}
-window.navGroupGo=navGroupGo;
-function subTabsHtml(){
-  const g=navGroupOf(UI.page); if(!g) return '';
-  const vis=g.pages.filter(navPageVisible); if(vis.length<2) return '';
-  return '<div class="subtabs" role="tablist" aria-label="'+esc(g.label)+'">'+vis.map(id=>{
-    const pg=PAGES.find(x=>x.id===id)||{label:id};
-    return `<a href="#" role="tab" aria-selected="${UI.page===id}" class="${UI.page===id?'on':''}" onclick="go('${id}');return false">${esc(NAV_TAB_LABEL[id]||pg.label)}${navPageLocked(id)?'<span class="lk">read only</span>':''}</a>`;
-  }).join('')+'</div>';
-}
 function renderSide(){
   let h='<h4>Shared configuration</h4>';
-  NAV.forEach(g=>{
-    const vis=g.pages.filter(navPageVisible); if(!vis.length) return;
-    const on=g.pages.includes(UI.page), locked=vis.every(navPageLocked);
-    h+=`<a class="navi ${on?'on':''}" href="#" onclick="navGroupGo('${g.id}');return false">
-      <span class="ix">${g.ix}</span><span>${esc(g.label)}</span>${locked?'<span class="lk">read only</span>':''}</a>`;
+  PAGES.forEach(p=>{
+    /* item 36: Licensing is operator-only (full Super Admin) -- hidden from the nav
+       entirely for everyone else, not just marked read-only, since this is billing data
+       across every organization, not something an org's own admin should even see exists. */
+    if(p.id==='licensing' && !CFG.isFullSuperAdmin) return;
+    if(p.id==='regionsadmin' && !CFG.isSuperAdmin) return;
+    const locked = (p.id==='users'||p.id==='feedback'||p.id==='hubaccounts'||p.id==='hubfeedback'||p.id==='hubcompanies')&&!canConfig();
+    h+=`<a class="navi ${UI.page===p.id?'on':''}" href="#" onclick="go('${p.id}');return false">
+      <span class="ix">${p.ix}</span><span>${p.label}</span>${locked?'<span class="lk">read only</span>':''}</a>`;
   });
   h+=moduleVersionFooterHtml('Configuration','v0.2708.11');
   return h;
@@ -5220,7 +5179,7 @@ function render(){
   document.getElementById('side').innerHTML=renderSide();
   document.getElementById('tnLinks').innerHTML=renderFilteredTnLinks();
   document.getElementById('tnAcct').innerHTML=renderTnAcct();
-  document.getElementById('main').innerHTML=subTabsHtml() + p.fn() + (UI.orgEdit ? orgEditModalHtml() : '') + (UI.cnModal ? cnModalHtml() : '') + (UI.feedbackDetailId ? feedbackDetailModalHtml() : '') + (UI.helpOpen ? helpPanelHtml() : '');
+  document.getElementById('main').innerHTML=p.fn() + (UI.orgEdit ? orgEditModalHtml() : '') + (UI.cnModal ? cnModalHtml() : '') + (UI.feedbackDetailId ? feedbackDetailModalHtml() : '') + (UI.helpOpen ? helpPanelHtml() : '');
   saveLocal();
   scheduleSupabaseSave();
 }

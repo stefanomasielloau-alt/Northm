@@ -247,6 +247,7 @@ window.closeFieldGuide=closeFieldGuide;
 <script src="shared/superAdminView.js"></script>
 <script src="shared/clientAdmin.js"></script>
 <script src="shared/aiRouter.js"></script>
+<script src="shared/aiFill.js"></script>
 <script src="shared/askAlec.js"></script>
 <script src="shared/convertToMain.js"></script>
 <script src="shared/currencyOptions.js"></script>
@@ -2188,6 +2189,7 @@ function pageEvent(){
     <select class="in" style="width:auto" onchange="go('event',this.value)">
       ${CFG.events.map(x=>`<option value="${x.id}" ${x.id===e.id?'selected':''}>${esc(x.name)}</option>`).join('')}
     </select>
+    <button class="btn sm pri" onclick="NorthAIFill.open('event',{eventId:'${e.id}'})" title="Speak, paste, or load a briefing document or folder -- the AI proposes values and you review each one before anything is saved">✨ Fill from brief</button>
     <button class="btn sm" onclick="cloneEvent('${e.id}')">Clone event</button>
     <button class="btn sm" onclick="toggleEventTemplate('${e.id}')">${e.isTemplate?'Unmark template':'Mark as template'}</button>
     <button class="btn dgr" onclick="removeEvent('${e.id}')">Remove event</button></div>`;
@@ -2425,6 +2427,7 @@ const HELP_FAQ=[
   /* 2026-09-29 */ {q:"How do I sort and filter a list?", a:"Click any column heading to sort (click again to reverse, a third time to clear). The row under the headings filters each column \u2014 type to match text, or pick from the dropdown when a column has only a few values. \"(x of y)\" by the first heading shows how many rows match. Sorting and filtering only change what you see; nothing is saved or reordered in the data."},
   /* 2026-09-29 */ {q:"How do I reorder events now that the list sorts?", a:"Click Reorder above the Events list to drag rows into your own order; sorting and filters pause while you do. Click it again to go back to sorting and filtering."},
   /* 2026-09-29 */ {q:"How do I write the event brief?", a:"On an event\u2019s detail page, the Event brief card is a rich-text editor \u2014 bold, italic, underline, headings, bullet and numbered lists and links. It saves when you click away."},
+  /* 2026-10-08 */ {q:"Can I fill an event from a briefing document, a folder of documents, or by speaking?", a:"Yes. On an event\u2019s detail page click \u2728 Fill from brief. You can speak (Chrome or Edge), type or paste notes, add Word, text, CSV, JSON or HTML files (PDF is not read yet), or choose a folder to watch (Chrome or Edge; it only checks while North is open). The AI proposes the event details, brief, venues and speakers; you review current versus proposed values and tick what to apply. Values that would replace something already filled in start unticked, and nothing is saved until you click Apply. The text is sent to your organisation\u2019s chosen AI."},
   /* 2026-09-29 */ {q:"Can I reuse a checklist?", a:"Yes. In the Checklist, \"Add from template\" lets you pick a built-in template (Conference booth, Hosted dinner / roundtable, Webinar) or one your team saved, preview it and add its tasks \u2014 due dates are worked out from the event\u2019s start date and existing tasks are never removed. \"Save as template\" saves the current checklist for reuse."}
 ];
 function helpPanelHtml(){
@@ -2551,6 +2554,47 @@ if(window.NorthAskAlec) NorthAskAlec.init({
   moduleLabel:"Events", lsKey:"eventus", taskId:"reg_events_assistant_task", pages:["home", "rollups"],
   pageInfo: ()=>{ const p=PAGES.find(x=>x.id===UI.page); return { id:UI.page, label:p?p.label:UI.page }; },
   starters:{"home": "Which events need attention?", "rollups": "Which programmes are over budget on events?"},
+});
+/* 2026-10-08 (Stef: "ingest a briefing document or a number of documents from a folder and pre-fill the events
+   information ... speak to the screen and have it fill in"): this page's schema for the shared Fill-from-brief
+   engine (shared/aiFill.js). Every accepted value goes through setIn() -- the same path as typing it -- so
+   view-only roles, the audit log and saving behave identically; venues/speakers are added the same way
+   addVenue()/addSpeaker() do. Nothing is written until the person ticks and applies it in the review step. */
+if(window.NorthAIFill) NorthAIFill.register('event', function(ctx){
+  const e=byId(CFG.events,ctx.eventId); if(!e) return null;
+  const opts=a=>a.map(x=>({value:x,label:x}));
+  const fields=[
+    {key:'name',label:'Event name',type:'text',get:()=>e.name,set:v=>setIn('events',e.id,'name',v)},
+    {key:'type',label:'Type',type:'select',options:opts(EVENT_TYPES),get:()=>e.type,set:v=>setIn('events',e.id,'type',v)},
+    {key:'status',label:'Status',type:'select',options:opts(['Planned','Approved','Confirmed','Completed','Cancelled']),get:()=>e.status,set:v=>setIn('events',e.id,'status',v)},
+    {key:'requester',label:'Requester',type:'text',hint:'the person asking for / owning the event',get:()=>e.requester,set:v=>setIn('events',e.id,'requester',v)},
+    {key:'budget',label:'Budget',type:'money',hint:'total event budget as a plain number, assumed to be in '+CFG.currency.main,get:()=>e.budget,
+      set:v=>{ setIn('events',e.id,'budget',v,'money'); if(typeof recomputeEventBudgetFx==='function') recomputeEventBudgetFx(e.id); }},
+    {key:'campaignId',label:'Linked campaign',type:'select',options:CFG.campaigns.map(c=>({value:c.id,label:c.name})),hint:'only if the input names one of these campaigns',get:()=>e.campaignId||'',set:v=>setIn('events',e.id,'campaignId',v||null)}
+  ];
+  if(typeof _evCols!=='undefined' && _evCols.brief) fields.push({key:'brief',label:'Event brief',type:'html',hint:'a clean written summary of objectives, audience, format, key messages and logistics taken from the input',
+    get:()=>e.briefHtml||'',set:html=>{ e.briefHtml=sanitizeHtml(html); logAudit('edit','events.brief ('+e.name+')'); }});
+  const venueCols=[{key:'name',label:'Venue',type:'text'},{key:'country',label:'Country',type:'text'},{key:'location',label:'City / location',type:'text'},{key:'pax',label:'PAX (expected attendees)',type:'number'},
+    {key:'start',label:'Start',type:'date'},{key:'end',label:'End',type:'date'},{key:'status',label:'Status',type:'select',options:opts(['Planned','Confirmed','Cancelled'])},{key:'notes',label:'Notes',type:'text'}]
+    .filter(c=>c.key!=='notes' || (typeof _evCols!=='undefined' && _evCols.venues));
+  return {
+    key:'event:'+e.id, title:'Event: '+e.name,
+    canEdit:()=>!isViewer(),
+    fields:fields,
+    lists:[
+      {key:'venues',label:'Venues',hint:'every venue or site mentioned; if the input gives a date or place for the event without naming venues, return ONE venue (name = the place, or "Main venue")',matchKey:'name',columns:venueCols,
+        rows:()=>VENUES(e.id),
+        add:o=>{ const n=VENUES(e.id).length; CFG.eventVenues.push(Object.assign({id:uid('venue'),eventId:e.id,name:'Venue '+(n+1),country:'',location:'',address:'',pax:0,start:'',end:'',status:'Planned',sortOrder:n},o)); },
+        update:(row,o)=>Object.assign(row,o)},
+      {key:'speakers',label:'Speakers',hint:'each speaker or presenter mentioned',matchKey:'name',
+        columns:[{key:'name',label:'Name',type:'text'},{key:'company',label:'Company',type:'text'},{key:'topic',label:'Topic',type:'text'},{key:'contact',label:'Contact',type:'text'}],
+        rows:()=>SPEAKERS(e.id),
+        add:o=>{ CFG.speakers.push(Object.assign({orgId:_clickOrgId(),id:uid('spk'),eventId:e.id,name:'',company:'',topic:'',contact:''},o)); },
+        update:(row,o)=>Object.assign(row,o)}
+    ],
+    after:()=>render(),
+    onApplied:s=>logAudit('fill from brief',e.name+' -- '+s)
+  };
 });
 
 function render(){

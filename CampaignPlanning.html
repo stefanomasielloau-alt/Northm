@@ -257,6 +257,7 @@ window.closeFieldGuide=closeFieldGuide;
 <script src="shared/superAdminView.js"></script>
 <script src="shared/clientAdmin.js"></script>
 <script src="shared/aiRouter.js"></script>
+<script src="shared/aiFill.js"></script>
 <script src="shared/askAlec.js"></script>
 <script src="shared/convertToMain.js"></script>
 <script src="shared/currencyOptions.js"></script>
@@ -1485,24 +1486,26 @@ function wizParseDocumentText(text){
   w.entryPath='form';
   render();
 }
+/* 2026-10-08 (Stef: speak / documents should work the same everywhere): file reading now comes from the shared
+   engine (shared/aiFill.js), which adds Word (.docx), Markdown, JSON and HTML to the old .txt/.csv. PDF is still
+   not read -- fileToText() says so plainly. The AI/regex ingest below is unchanged. */
+async function wizReadAndIngest(file){
+  if(!window.NorthAIFill){ toast('Document reading is unavailable on this page -- refresh and try again.'); return; }
+  let text;
+  try{ text=await NorthAIFill.fileToText(file); }
+  catch(e){ toast((e&&e.message)||'Could not read that file.'); return; }
+  if(!String(text).trim()){ toast('That file had no readable text.'); return; }
+  await wizIngestDocumentText(String(text).slice(0,60000));
+}
 async function wizHandleFileInput(input){
   const file=input.files&&input.files[0]; if(!file) return;
-  if(!/\.(txt|csv)$/i.test(file.name)){
-    toast('For now, document prefill reads .txt or .csv files only — PDF/Word support is planned.');
-    return;
-  }
-  const text=await file.text();
-  await wizIngestDocumentText(text);
+  await wizReadAndIngest(file);
 }
 window.wizHandleFileInput=wizHandleFileInput;
 function wizHandleDrop(ev){
   ev.preventDefault();
   const file=ev.dataTransfer.files&&ev.dataTransfer.files[0]; if(!file) return;
-  if(!/\.(txt|csv)$/i.test(file.name)){
-    toast('For now, document prefill reads .txt or .csv files only — PDF/Word support is planned.');
-    return;
-  }
-  file.text().then(wizIngestDocumentText);
+  wizReadAndIngest(file);
 }
 window.wizHandleDrop=wizHandleDrop;
 
@@ -1563,37 +1566,24 @@ window.wizIngestDocumentText=wizIngestDocumentText;
    support for this API is inconsistent -- wizSpeechSupported() feature-detects and the
    UI falls back to pointing people at Upload a document / Fill the form instead. */
 let wizRecognition=null;
-function wizSpeechSupported(){ return !!(window.SpeechRecognition||window.webkitSpeechRecognition); }
+function wizSpeechSupported(){ return !!(window.NorthAIFill && NorthAIFill.speechSupported()); }
 window.wizSpeechSupported=wizSpeechSupported;
+/* 2026-10-08: the recognition engine itself now lives in shared/aiFill.js (createDictation) so every page speaks
+   the same way; this wizard only keeps its own state (dictationText / dictationInterim / dictationActive). */
 function wizStartDictation(){
   const w=UI.wizard; if(!w) return;
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){ toast("Dictation isn't supported in this browser -- try Chrome or Edge, or use Upload a document instead."); return; }
+  if(!wizSpeechSupported()){ toast("Dictation isn't supported in this browser -- try Chrome or Edge, or use Upload a document instead."); return; }
   w.dictationActive=true; render();
-  const rec=new SR();
-  rec.continuous=true; rec.interimResults=true; rec.lang='en-AU';
-  let finalText=w.dictationText||'';
-  rec.onresult=function(ev){
-    let interim='';
-    for(let i=ev.resultIndex;i<ev.results.length;i++){
-      const r=ev.results[i];
-      if(r.isFinal) finalText+=(finalText?' ':'')+r[0].transcript.trim();
-      else interim+=r[0].transcript;
+  wizRecognition=NorthAIFill.createDictation({
+    lang:'en-AU',
+    onUpdate:function(finalText,interim){ if(UI.wizard){ UI.wizard.dictationText=finalText; UI.wizard.dictationInterim=interim; render(); } },
+    onState:function(active){ if(!active && UI.wizard){ UI.wizard.dictationActive=false; UI.wizard.dictationInterim=''; render(); } },
+    onError:function(code){
+      if(code==='not-allowed'||code==='service-not-allowed'){ toast('Microphone access was blocked -- allow it in your browser settings to dictate.'); }
+      if(UI.wizard){ UI.wizard.dictationActive=false; render(); }
     }
-    if(UI.wizard){ UI.wizard.dictationText=finalText; UI.wizard.dictationInterim=interim; render(); }
-  };
-  rec.onerror=function(ev){
-    console.warn('Dictation error', ev.error);
-    if(ev.error==='not-allowed'||ev.error==='service-not-allowed'){
-      toast('Microphone access was blocked -- allow it in your browser settings to dictate.');
-    }
-    if(UI.wizard){ UI.wizard.dictationActive=false; render(); }
-  };
-  rec.onend=function(){
-    if(UI.wizard){ UI.wizard.dictationActive=false; UI.wizard.dictationInterim=''; render(); }
-  };
-  wizRecognition=rec;
-  try{ rec.start(); }catch(e){ console.warn('Could not start dictation', e); w.dictationActive=false; render(); }
+  });
+  wizRecognition.start(w.dictationText||'');
 }
 window.wizStartDictation=wizStartDictation;
 function wizStopDictation(){
@@ -1721,12 +1711,12 @@ function campaignWizardPanel(){
     return `<div class="mask"><div class="modal" style="max-width:480px">
       <h3>Upload a document <span class="sp"></span><span class="pill n">Basic prefill</span></h3>
       <div class="bd">
-        <p class="mini" style="margin:0 0 10px">Reads .txt or .csv today — we'll pull a name guess, the first
+        <p class="mini" style="margin:0 0 10px">Reads Word (.docx), .txt, .csv, .md, .json and .html files (not PDF yet) — we'll pull a name guess, the first
           couple of dates, and a dollar amount if there is one. You'll review and can edit everything before creating.</p>
         <div ondragover="event.preventDefault()" ondrop="wizHandleDrop(event)"
           style="border:2px dashed var(--line);border-radius:8px;padding:28px;text-align:center;color:var(--ink-2)">
           Drag a file here, or
-          <label class="btn sm" style="cursor:pointer">Browse<input type="file" accept=".txt,.csv" style="display:none" onchange="wizHandleFileInput(this)"></label>
+          <label class="btn sm" style="cursor:pointer">Browse<input type="file" accept=".txt,.csv,.md,.markdown,.json,.html,.htm,.xml,.docx" style="display:none" onchange="wizHandleFileInput(this)"></label>
         </div>
       </div>
       <div class="ft"><button class="btn" onclick="wizChoosePath(null);UI.wizard.entryPath=null;render()">Back</button>

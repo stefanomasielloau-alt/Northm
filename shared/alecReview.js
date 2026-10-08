@@ -20,7 +20,10 @@
    Optional per-module config (all passed to NorthAskAlec.init):
      reviewFocus : string  extra guidance for the AI review ("compare plan to target, check pipeline coverage ...")
      alerts      : () => [{level:'bad'|'warn'|'ok'|'info', text, ctx?}]  module rules computed from its own data
-     createDraft : (rec, review) => void   opens the module's own create flow pre-filled for the user to review */
+     createDraft : (rec, review) => void   opens the module's own create flow pre-filled for the user to review.
+                   Modules without one hand the recommendation to Campaign Planning (localStorage + #alecdraft hash) when
+                   that module is in the MODULES list; Campaign Planning then opens its New campaign form / Draft activity
+                   dialog pre-filled. Nothing is created until the user presses Create there. */
 (function () {
   'use strict';
   var A = window.NorthAskAlec;
@@ -227,6 +230,26 @@
   }
   function ls(k, v) { return X.ls(key(k), v); }
 
+  /* ---------------------------------------------------------------- draft hand-off */
+  function cpFile() {
+    var mods = X.g('MODULES');
+    if (!Array.isArray(mods)) return '';
+    var m = mods.filter(function (x) { return x && x.file === 'CampaignPlanning'; })[0];
+    return m ? m.file : '';
+  }
+  function canDraft() { return typeof C().createDraft === 'function' || !!cpFile(); }
+  function draftFrom(mi, ri) {
+    var m = S.msgs[mi], rec = m && m.review && m.review.recommendations[ri]; if (!rec) return;
+    try {
+      if (typeof C().createDraft === 'function') { C().createDraft(rec, m.review); return; }
+      var f = cpFile(); if (!f) throw new Error('Campaign Planning isn\u2019t available here.');
+      try { localStorage.setItem('north_alec_draft_v1', JSON.stringify({ rec: rec, ts: Date.now(), from: C().moduleLabel || '' })); }
+      catch (e) { throw new Error('this browser blocked the hand-off (site storage is off).'); }
+      window.open(f + '.html#alecdraft=' + Date.now(), 'tool_' + f);
+      S.msgs.push({ role: 'warn', text: 'Opened Campaign Planning with a draft to review. Nothing is created until you press Create there.' }); X.renderLog();
+    } catch (er) { S.msgs.push({ role: 'error', text: 'Couldn\u2019t open the draft: ' + (er && er.message || er) }); X.renderLog(); }
+  }
+
   /* ---------------------------------------------------------------- read aloud */
   function ttsOk() { return !!(window.speechSynthesis && window.SpeechSynthesisUtterance); }
   function canSpeak() { return ttsOk() || !!R.provider; }
@@ -347,12 +370,12 @@
       var tag = w.severity === 'high' ? 'bad' : w.severity === 'medium' ? 'warn' : '';
       return '<p class="rv-it">' + esc(w.issue) + '<span class="rv-tag ' + tag + '">' + esc(w.severity) + '</span>' + (w.evidence ? '<span class="ev">' + esc(w.evidence) + '</span>' : '') + (w.why ? '<span class="ev">' + esc(w.why) + '</span>' : '') + '</p>';
     }).join(''));
-    var canDraft = typeof C().createDraft === 'function';
+    var canDr = canDraft(), dlabel = typeof C().createDraft === 'function' ? 'Create draft&hellip;' : 'Draft in Campaign Planning&hellip;';
     h += sec('rec', 'Recommended activities &amp; campaigns', rv.recommendations.map(function (w, ri) {
       var meta = [w.channel, w.timing].filter(Boolean).join(' · ');
       return '<p class="rv-it"><span class="ti">' + esc(w.title) + '</span><span class="rv-tag">' + esc(w.type) + '</span>' + (w.detail ? '<span class="ev" style="color:var(--ink-2)">' + esc(w.detail) + '</span>' : '') +
         (w.fixes ? '<span class="ev">Addresses: ' + esc(w.fixes) + '</span>' : '') + (meta ? '<span class="ev">' + esc(meta) + '</span>' : '') +
-        (canDraft && (w.type === 'activity' || w.type === 'campaign') ? '<span class="rv-act"><button type="button" class="btn sm" data-rv-draft="' + i + ':' + ri + '">Create draft&hellip;</button></span>' : '') + '</p>';
+        (canDr && (w.type === 'activity' || w.type === 'campaign') ? '<span class="rv-act"><button type="button" class="btn sm" data-rv-draft="' + i + ':' + ri + '">' + dlabel + '</button></span>' : '') + '</p>';
     }).join(''));
     h += '<div class="rv-foot">AI read of what is visible on this screen &mdash; check it against your data before acting.</div>' + spk + '</div>';
     return h;
@@ -394,8 +417,7 @@
       var b = e.target.closest('button'); if (!b) return;
       if (b.hasAttribute('data-rv-speak')) speakMsg(+b.getAttribute('data-rv-speak'));
       else if (b.hasAttribute('data-rv-draft')) {
-        var p = b.getAttribute('data-rv-draft').split(':'), m = S.msgs[+p[0]], rec = m && m.review && m.review.recommendations[+p[1]];
-        if (rec && typeof C().createDraft === 'function') { try { C().createDraft(rec, m.review); } catch (er) { S.msgs.push({ role: 'error', text: 'Couldn’t open the draft: ' + (er && er.message || er) }); X.renderLog(); } }
+        var p = b.getAttribute('data-rv-draft').split(':'); draftFrom(+p[0], +p[1]);
       }
     });
     if (ttsOk()) { loadVoices(); try { window.speechSynthesis.addEventListener('voiceschanged', loadVoices); } catch (e) {} }

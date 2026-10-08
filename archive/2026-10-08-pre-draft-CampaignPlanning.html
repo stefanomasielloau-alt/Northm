@@ -1221,7 +1221,6 @@ async function bootApp(){
     applyHashRoute();
     render();
     subscribeRealtime();
-    consumeAlecHandoff();
   }catch(e){
     console.error('Post-load render failed, but the Super Admin bar is already up so you can still switch back.', e);
   }
@@ -3930,7 +3929,6 @@ if(window.NorthAskAlec) NorthAskAlec.init({
   moduleLabel:"Campaign Planning", lsKey:"cursus", taskId:"reg_campaign_assistant_task", pages:["home", "planning", "effectiveness"],
   pageInfo: ()=>{ const p=PAGES.find(x=>x.id===UI.page); return { id:UI.page, label:p?p.label:UI.page }; },
   starters:{"planning": "Which campaigns look over budget or at risk?", "effectiveness": "Which activities are working best?", "home": "What needs my attention this week?"},isEnabled: ()=> !!CFG.aiScreenInterpreterEnabled,
-  createDraft:(rec)=>alecDraftFromRec(rec),
   reviewFocus:"Look for campaigns that are over budget, behind schedule or have no activities, activities performing weakly against the rest, and unallocated budget or timing gaps. Recommend specific activities or campaigns (channel, audience or region, timing; budget only if visible) that fix a shortfall visible on this screen."
 });
 
@@ -3954,89 +3952,9 @@ function render(){
       '<p class="sub">Page: '+esc(p.id)+'. Try another page from the sidebar, or contact your Super Admin if this keeps happening.</p></div>';
   }
   document.getElementById('main').innerHTML=mainHtml;
-  document.getElementById('wizardLayer').innerHTML=campaignWizardPanel()+moveDialogPanel()+draftActivityPanel()+detailPanelHtml()+contactPickerHtml()+askAlecCursusPanel();
+  document.getElementById('wizardLayer').innerHTML=campaignWizardPanel()+moveDialogPanel()+detailPanelHtml()+contactPickerHtml()+askAlecCursusPanel();
   saveLocal();
   scheduleSupabaseSave();
-}
-
-/* ---------- Ask Alec recommendation -> draft (2026-10-08, Stef: "possible activities, campaigns to help fix an issue / shortfall") ----------
-   Review-first: nothing is created from a recommendation. A campaign suggestion opens the normal New campaign form pre-filled
-   (name + business case); an activity suggestion opens a small "Draft activity" dialog where you pick the campaign and check every
-   field. Nothing exists until you press Create. Other modules hand over through localStorage (north_alec_draft_v1) +
-   CampaignPlanning.html#alecdraft=<time>; stale hand-offs (older than 10 minutes) are ignored. */
-const ALEC_DRAFT_KEY='north_alec_draft_v1';
-function alecDraftNotes(rec){
-  return ['Suggested by Ask Alec (AI) -- review before relying on it.', rec.detail||'', rec.fixes?('Addresses: '+rec.fixes):'', rec.channel?('Channel: '+rec.channel):'', rec.timing?('Timing: '+rec.timing):''].filter(Boolean).join('\n');
-}
-function alecGuessActivityType(rec){
-  const hay=((rec.channel||'')+' '+(rec.title||'')).toLowerCase();
-  const map=[['webinar','Webinar'],['event','Event'],['email','Email'],['paid','Paid Media'],['ads','Paid Media'],['content','Content'],['outreach','Contact Outreach'],['sourcing','Contact Sourcing']];
-  for(const [k,v] of map){ if(hay.includes(k)) return v; }
-  return 'General';
-}
-function alecDraftFromRec(rec){
-  if(!rec||!rec.title) return;
-  if(rec.type==='activity'){
-    if(!CFG.campaigns.length){ toast('Create a campaign first -- activities sit inside a campaign.'); return; }
-    const cur=byId(CFG.campaigns,UI.planCampaignId)||byId(CFG.campaigns,UI.campaignId)||CFG.campaigns[0];
-    UI.draftAct={ campaignId:cur.id, name:String(rec.title).slice(0,120), type:alecGuessActivityType(rec), owner:'', startDate:'', dueDate:'', plannedCost:0, notes:alecDraftNotes(rec) };
-    render(); return;
-  }
-  openCampaignWizard();
-  if(!UI.wizard) return;
-  UI.wizard.name=String(rec.title).slice(0,120);
-  UI.wizard.businessCase=alecDraftNotes(rec);
-  UI.wizard.docNote='Drafted from an Ask Alec recommendation -- dates, budget, region and programme are NOT set. Check every field before creating.';
-  UI.wizard.entryPath='form';
-  render();
-}
-window.alecDraftFromRec=alecDraftFromRec;
-function consumeAlecHandoff(){
-  try{
-    const raw=localStorage.getItem(ALEC_DRAFT_KEY); if(!raw) return;
-    localStorage.removeItem(ALEC_DRAFT_KEY);
-    const o=JSON.parse(raw);
-    if(!o||!o.rec||!o.ts||Date.now()-o.ts>10*60*1000) return;
-    alecDraftFromRec(o.rec);
-    toast('Opened a draft from Ask Alec'+(o.from?(' ('+o.from+')'):'')+' -- review it before creating.');
-  }catch(e){ console.warn('Ask Alec hand-off failed', e); }
-}
-function draftActSet(k,v){ if(!UI.draftAct) return; UI.draftAct[k]= k==='plannedCost' ? (parseFloat(v)||0) : v; }
-window.draftActSet=draftActSet;
-function draftActCancel(){ UI.draftAct=null; render(); }
-window.draftActCancel=draftActCancel;
-function draftActSubmit(){
-  const d=UI.draftAct; if(!d) return;
-  if(!d.name||!d.name.trim()){ toast('Give the activity a name.'); return; }
-  const camp=byId(CFG.campaigns,d.campaignId); if(!camp){ toast('Pick a campaign for this activity.'); return; }
-  const sib=TASK(camp.id);
-  CFG.tasks.push({orgId:_clickOrgId(),id:uid('tk'),campaignId:camp.id,name:d.name.trim(),type:d.type||'General',owner:d.owner||'',
-    startDate:d.startDate||'',dueDate:d.dueDate||'',status:'Planned',notes:d.notes||'',supplier:'',po:'',templateId:null,
-    costBucketId:CFG.costBuckets[0].id,plannedCost:d.plannedCost||0,committedCost:0,actualCost:0,
-    trackingRef:nextTrackingRef('activity'),sortOrder:sib.length,eventId:null});
-  logAudit('add activity','"'+d.name.trim()+'" on '+camp.name+' (drafted from an Ask Alec recommendation, reviewed by user)');
-  UI.draftAct=null; render(); toast('Activity added to '+camp.name+'.');
-}
-window.draftActSubmit=draftActSubmit;
-function draftActivityPanel(){
-  const d=UI.draftAct; if(!d) return '';
-  const copts=CFG.campaigns.map(c=>`<option value="${c.id}" ${c.id===d.campaignId?'selected':''}>${esc(c.name)}</option>`).join('');
-  const topts=ACTIVITY_TYPE_SUGGESTIONS.map(t=>`<option ${t===d.type?'selected':''}>${esc(t)}</option>`).join('');
-  return `<div class="mask"><div class="modal" style="width:min(520px,100%)">
-    <h3>Draft activity <span class="mini" style="font-weight:400">from an Ask Alec recommendation</span></h3>
-    <div class="bd">
-      <p class="mini" style="margin:0 0 10px">Nothing is created until you press <b>Create activity</b>. Dates, owner and cost are blank on purpose -- Alec only saw what was on screen.</p>
-      <label class="lbl">Campaign</label><select class="in" style="width:100%" onchange="draftActSet('campaignId',this.value)">${copts}</select>
-      <label class="lbl">Activity name</label><input class="in" style="width:100%" value="${esc(d.name)}" onchange="draftActSet('name',this.value)">
-      <label class="lbl">Type</label><select class="in" style="width:100%" onchange="draftActSet('type',this.value)">${topts}</select>
-      <div class="row" style="gap:8px"><div style="flex:1"><label class="lbl">Start</label><input type="date" class="in" style="width:100%" value="${esc(d.startDate)}" onchange="draftActSet('startDate',this.value)"></div>
-        <div style="flex:1"><label class="lbl">Due</label><input type="date" class="in" style="width:100%" value="${esc(d.dueDate)}" onchange="draftActSet('dueDate',this.value)"></div></div>
-      <div class="row" style="gap:8px"><div style="flex:1"><label class="lbl">Owner</label><input class="in" style="width:100%" value="${esc(d.owner)}" onchange="draftActSet('owner',this.value)"></div>
-        <div style="flex:1"><label class="lbl">Planned cost</label><input type="number" min="0" class="in" style="width:100%" value="${d.plannedCost||0}" onchange="draftActSet('plannedCost',this.value)"></div></div>
-      <label class="lbl">Notes</label><textarea class="in" rows="5" style="width:100%" onchange="draftActSet('notes',this.value)">${esc(d.notes)}</textarea>
-    </div>
-    <div class="ft"><button class="btn" onclick="draftActCancel()">Cancel</button><button class="btn pri" onclick="draftActSubmit()">Create activity</button></div>
-  </div></div>`;
 }
 
 /* deep link from Strategy: Cursus.html#campaign=c_01 opens straight into that campaign's activities */
@@ -4055,7 +3973,7 @@ function applyHashRoute(){
     if(PAGES.some(p=>p.id===pageId)) UI.page=pageId;
   }
 }
-window.addEventListener('hashchange',()=>{ applyHashRoute(); render(); if(/alecdraft=/.test(location.hash)) consumeAlecHandoff(); });
+window.addEventListener('hashchange',()=>{ applyHashRoute(); render(); });
 /* 2026-09-10 (live-session fix): kept continuously up to date so openContact()
    below never has to guess whether a freshly-reloaded page's Supabase client has
    finished restoring its session yet -- see openContact()'s own comment for the

@@ -3929,7 +3929,6 @@ if(window.NorthAskAlec) NorthAskAlec.init({
   moduleLabel:"Campaign Planning", lsKey:"cursus", taskId:"reg_campaign_assistant_task", pages:["home", "planning", "effectiveness"],
   pageInfo: ()=>{ const p=PAGES.find(x=>x.id===UI.page); return { id:UI.page, label:p?p.label:UI.page }; },
   starters:{"planning": "Which campaigns look over budget or at risk?", "effectiveness": "Which activities are working best?", "home": "What needs my attention this week?"},isEnabled: ()=> !!CFG.aiScreenInterpreterEnabled,
-  reviewFocus:"Look for campaigns that are over budget, behind schedule or have no activities, activities performing weakly against the rest, and unallocated budget or timing gaps. Recommend specific activities or campaigns (channel, audience or region, timing; budget only if visible) that fix a shortfall visible on this screen."
 });
 
 function render(){

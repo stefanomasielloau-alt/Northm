@@ -5964,8 +5964,7 @@ if(window.NorthAskAlec) NorthAskAlec.init({
   extraHeader: ()=> 'FY: '+UI.fy+' | Version: '+((typeof version==='function'&&version())?version().name:'-')+' | Mode: '+UI.mode,
   explain: { pages:['dashboard'], label:'Explain this dashboard', skillUrl:'skills/explain-strategy-dashboard.json',
     contextFn: ()=>pageContextForAI(), taskId:'reg_dashboard_summary_task' },
-  isEnabled: ()=> !!CFG.aiScreenInterpreterEnabled,
-  reviewFocus: 'Compare plan with targets and actuals wherever the screen shows them. Look for pipeline or revenue gaps, conversion rates that look unrealistic, campaigns or activities over budget or carrying a disproportionate share of pipeline, and the regions or pods furthest from target. Recommend concrete activities or campaigns (channel, region or pod, timing) that would close a shortfall visible on this screen.'
+  isEnabled: ()=> !!CFG.aiScreenInterpreterEnabled
 });
 
 function askAlexPanel(){

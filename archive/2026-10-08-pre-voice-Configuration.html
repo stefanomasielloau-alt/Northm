@@ -391,7 +391,6 @@ function go(page){
   if(page==='hubfeedback' && !UI.hubFeedbackLoaded && !UI.hubFeedbackLoading) loadHubFeedback();
   if(page==='hubcompanies' && !UI.hubCompaniesLoaded && !UI.hubCompaniesLoading) loadHubCompanies();
   if(page==='integrations' && !UI.outboundWebhooksLoaded && !UI.outboundWebhooksLoading) loadOutboundWebhooks();
-  if(page==='integrations' && !voiceState().loaded && !voiceState().loading) loadVoice();
   if(page==='agentregistry' && !UI.agentRegistryLoaded && !UI.agentRegistryLoading) loadAgentRegistry();
   render();
 }
@@ -3147,180 +3146,6 @@ function outboundWebhooksPanelHtml(){
   return h;
 }
 
-/* ---------- Voice (read-aloud) provider (2026-10-08, Stef: "an organization can choose who their provider is ... the admin
-   needs to be able to do it themselves", "set up like Hub manages it") ----------
-   Ask Alec reads reviews aloud with the browser's own voice by default. This card lets an admin plug in the ORGANISATION'S
-   OWN voice provider: pick one, paste its key, press Test. Everything lives in North's own Supabase project: the settings in
-   voice_providers, the encrypted key in voice_provider_secrets (no browser can read that table), and the "voice" Edge Function
-   (supabase/functions/voice) that saves them and calls the provider -- the same pattern as Zapier's key function. Admins need
-   nothing in Vercel or Supabase; the SQL file and the function are a one-time install by the platform owner. The key is never
-   sent back to this page, and the browser never talks to the provider.
-   Request shapes follow each vendor's public docs and have NOT been tested against a live account yet -- Test is the first check. */
-const VOICE_KINDS={
-  openai:{label:'OpenAI, or any OpenAI-compatible service',fields:['model','voice','base_url'],
-    help:'Create an API key in your OpenAI account. Model e.g. tts-1 or gpt-4o-mini-tts; voice e.g. alloy or nova. For another OpenAI-compatible service, put its address in Base URL.',
-    ph:{model:'tts-1',voice:'alloy',base_url:'https://api.openai.com (default)'}},
-  elevenlabs:{label:'ElevenLabs',fields:['voice','model'],
-    help:'Profile > API key in ElevenLabs. Voice ID is required (copy it from the voice library); model is optional.',
-    ph:{voice:'Voice ID (required)',model:'eleven_multilingual_v2 (default)'}},
-  azure:{label:'Microsoft Azure AI Speech',fields:['region','voice','language'],
-    help:'Azure portal > your Speech resource > Keys and Endpoint: copy a key and the region (e.g. australiaeast). Voice e.g. en-AU-NatashaNeural.',
-    ph:{region:'australiaeast',voice:'en-AU-NatashaNeural',language:'en-AU (optional)'}},
-  google:{label:'Google Cloud Text-to-Speech',fields:['language','voice','base_url'],
-    help:'Enable the Text-to-Speech API in Google Cloud and create an API key. Language e.g. en-AU; voice (optional) e.g. en-AU-Neural2-A.',
-    ph:{language:'en-AU',voice:'en-AU-Neural2-A (optional)',base_url:'(default)'}},
-  custom:{label:'Custom HTTP API',fields:['base_url','model','voice','language'],
-    help:'Any https API that turns text into audio. Give its address, say how it wants the key sent, and describe the JSON body using {{text}}, {{voice}}, {{model}} and {{language}}. Say whether it replies with audio directly or JSON holding base64 audio. Providers that need request signing (e.g. Amazon Polly) are not supported.',
-    ph:{base_url:'https://api.example.com/v1/speak',model:'optional',voice:'optional',language:'optional'}}
-};
-function voiceState(){ return UI.voice=UI.voice||{loaded:false,loading:false,error:'',cfg:null,form:null,key:'',busy:false,msg:''}; }
-function voiceBlankForm(kind){ return {kind:kind||'openai',label:'',enabled:true,model:'',voice:'',language:'',region:'',base_url:'',auth_style:'bearer',auth_name:'',auth_prefix:'',headers_text:'',body_template:'',response_kind:'audio',response_path:'',content_type:'audio/mpeg'}; }
-function voiceFormFromCfg(c){
-  const f=voiceBlankForm(c.kind);
-  ['label','model','voice','language','region','base_url','auth_style','auth_name','auth_prefix','body_template','response_kind','response_path','content_type'].forEach(k=>{ if(c[k]!=null&&c[k]!=='') f[k]=c[k]; });
-  f.enabled=!!c.enabled; f.headers_text=(c.header_names||[]).map(n=>n+': ').join('\n');
-  return f;
-}
-const VOICE_FN_MISSING='The voice function is not installed yet. The platform owner needs to run 2026-10-08-migration-voice-provider.sql and deploy the "voice" Edge Function once (see 2026-10-08-voice-provider-setup.md).';
-async function voiceFn(payload){
-  const { data } = await sb.auth.getSession();
-  const token = data && data.session && data.session.access_token;
-  if(!token) throw new Error('Your own North session has expired -- sign in again.');
-  const r = await fetch(SUPABASE_URL+'/functions/v1/voice', { method:'POST',
-    headers:{'Content-Type':'application/json','Authorization':'Bearer '+token,'apikey':SUPABASE_ANON_KEY}, body: JSON.stringify(payload) });
-  const ct = r.headers.get('content-type')||'';
-  if(r.ok && ct.startsWith('audio/')) return { r, j:{ok:true}, blob: await r.blob() };
-  const j = ct.includes('json') ? await r.json().catch(()=>({})) : {};
-  if(!r.ok && r.status===404 && !j.error) j.error=VOICE_FN_MISSING;
-  return { r, j };
-}
-async function loadVoice(){
-  const v=voiceState();
-  if(!canConfig()){ v.error='Your role cannot view the voice settings.'; render(); return; }
-  v.loading=true; v.error=''; render();
-  try{
-    const { data, error } = await sb.from('voice_providers').select('*').eq('org_id',_orgId).maybeSingle();
-    if(error){
-      const m=String(error.message||'');
-      v.error = (error.code==='42P01'||error.code==='PGRST205'||/does not exist|schema cache/i.test(m)) ? 'Voice storage is not installed yet. The platform owner needs to run 2026-10-08-migration-voice-provider.sql and deploy the "voice" Edge Function once (see 2026-10-08-voice-provider-setup.md).' : 'Could not load the voice settings: '+m;
-    } else { v.cfg=data?Object.assign({configured:true},data):{configured:false,enabled:false}; v.form=data?voiceFormFromCfg(v.cfg):voiceBlankForm(); v.loaded=true; }
-  }catch(e){ v.error=(e&&e.message)||'Could not load the voice settings.'; }
-  v.loading=false; render();
-}
-window.loadVoice=loadVoice;
-function voiceSync(){
-  const v=voiceState(); if(!v.form) v.form=voiceBlankForm();
-  const g=id=>document.getElementById(id);
-  ['label','model','voice','language','region','base_url','auth_name','auth_prefix','body_template','response_path','content_type'].forEach(k=>{ const el=g('vc_'+k); if(el) v.form[k]=el.value; });
-  ['auth_style','response_kind'].forEach(k=>{ const el=g('vc_'+k); if(el) v.form[k]=el.value; });
-  const ht=g('vc_headers_text'); if(ht) v.form.headers_text=ht.value;
-  const en=g('vc_enabled'); if(en) v.form.enabled=en.checked;
-  const ky=g('vc_key'); if(ky) v.key=ky.value;
-}
-function voicePick(field,val){
-  const v=voiceState(); voiceSync();
-  if(field==='kind' && val!==v.form.kind){ ['model','voice','language','region','base_url'].forEach(k=>{ v.form[k]=''; }); v.msg=''; }
-  v.form[field]=val; render();
-}
-window.voicePick=voicePick;
-function voiceParseHeaders(text){
-  const out={};
-  String(text||'').split('\n').forEach(line=>{ const i=line.indexOf(':'); if(i<=0) return; const k=line.slice(0,i).trim(); if(k) out[k]=line.slice(i+1).trim(); });
-  return out;
-}
-async function saveVoice(){
-  if(!canConfig()){ toast('Your role cannot change the voice settings.'); return; }
-  const v=voiceState(); voiceSync(); const f=v.form; v.busy=true; v.msg=''; render();
-  try{
-    const cfgOut=Object.assign({},f); delete cfgOut.headers_text; delete cfgOut.enabled;
-    const { r, j } = await voiceFn({ action:'save', config:cfgOut, enabled:!!f.enabled, api_key:v.key||'', headers:f.kind==='custom'?voiceParseHeaders(f.headers_text):{} });
-    if(!r.ok){ v.msg='Not saved: '+(j.error||('HTTP '+r.status)); }
-    else { v.key=''; v.cfg=Object.assign({configured:true},j.config); v.form=voiceFormFromCfg(v.cfg); v.msg='Saved. Press Test voice to hear it.'; logAudit('voice provider saved',f.kind); }
-  }catch(e){ v.msg='Not saved: '+((e&&e.message)||'could not reach Hub'); }
-  v.busy=false; render();
-}
-window.saveVoice=saveVoice;
-async function testVoice(){
-  const v=voiceState(); v.busy=true; v.msg='Asking the provider…'; render();
-  try{
-    const t0=Date.now();
-    const { r, j, blob } = await voiceFn({ action:'test' });
-    if(!r.ok||!blob){ v.msg='Test failed: '+(j.error||('HTTP '+r.status)); }
-    else {
-      const kb=Math.max(1,Math.round(blob.size/1024));
-      v.msg='Provider answered in '+(Date.now()-t0)+' ms ('+kb+' KB). Playing…';
-      try{ const a=new Audio(URL.createObjectURL(blob)); await a.play(); }
-      catch(pe){ v.msg='Provider answered ('+kb+' KB) but this browser would not play it: '+((pe&&pe.message)||'blocked')+'. Click Test voice again.'; }
-    }
-  }catch(e){ v.msg='Test failed: '+((e&&e.message)||'could not reach Hub'); }
-  v.busy=false; render();
-}
-window.testVoice=testVoice;
-async function removeVoice(){
-  if(!canConfig()){ toast('Your role cannot change the voice settings.'); return; }
-  if(!confirm('Remove the organisation voice and delete its saved key? Ask Alec goes back to the browser voice.')) return;
-  const v=voiceState(); v.busy=true; v.msg=''; render();
-  try{
-    const { r, j } = await voiceFn({ action:'remove' });
-    if(!r.ok){ v.msg='Not removed: '+(j.error||('HTTP '+r.status)); }
-    else { v.cfg={configured:false,enabled:false}; v.form=voiceBlankForm(); v.key=''; v.msg='Removed.'; logAudit('voice provider removed',''); }
-  }catch(e){ v.msg='Not removed: '+((e&&e.message)||'could not reach Hub'); }
-  v.busy=false; render();
-}
-window.removeVoice=removeVoice;
-function voicePanelHtml(){
-  const v=voiceState(), c=v.cfg||{}, f=v.form||voiceBlankForm(), K=VOICE_KINDS[f.kind]||VOICE_KINDS.openai, dis=(!canConfig()||v.busy)?'disabled':'';
-  const pill=!v.loaded?'<span class="pill n">…</span>':!c.configured?'<span class="pill n">Browser voice</span>':`<span class="pill ${c.enabled?'ok':'n'}">${c.enabled?'On':'Off'}</span>`;
-  const fld=(k,label,extra)=>`<div style="min-width:180px;flex:1"><label class="mini" style="display:block;margin-bottom:3px">${label}</label>
-      <input id="vc_${k}" class="cel txt" style="width:100%" value="${esc(f[k]||'')}" placeholder="${esc((K.ph&&K.ph[k])||'')}" ${dis} ${extra||''}></div>`;
-  const labels={model:'Model',voice:f.kind==='elevenlabs'?'Voice ID':'Voice',language:'Language',region:'Region',base_url:f.kind==='custom'?'Address (URL, https)':'Base URL (optional)'};
-  const std=K.fields.map(k=>fld(k,labels[k])).join('');
-  let h=`<div class="card"><h3>Voice (read-aloud) <span class="sp"></span>${pill}</h3><div class="bd">
-    <p class="mini" style="margin:0 0 9px">Ask Alec can read screen reviews aloud. By default it uses each person's browser voice. Choose a provider here to use the
-      organisation's own voice instead: the key you paste is stored encrypted in North, is never shown again, and the browser never talks to the provider --
-      Ask Alec sends the text to a North function, which calls it. If the provider fails, Ask Alec quietly falls back to the browser voice and says so.
-      Request formats follow each provider's public documentation and are <strong>not yet tested against a live account</strong>, so use Test voice first.</p>`;
-  if(v.loading) return h+'<p class="mini">Loading…</p></div></div>';
-  if(v.error) h+=`<div class="note">${esc(v.error)}</div>`;
-  if(!v.loaded && !v.error){ return h+`<button class="btn sm" onclick="loadVoice()">Load voice settings</button></div></div>`; }
-  if(v.loaded||f){
-    h+=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px">
-        <div style="min-width:240px"><label class="mini" style="display:block;margin-bottom:3px">Provider</label>
-          <select id="vc_kind" class="cel txt" style="width:100%" onchange="voicePick('kind',this.value)" ${dis}>${Object.keys(VOICE_KINDS).map(k=>`<option value="${k}" ${k===f.kind?'selected':''}>${esc(VOICE_KINDS[k].label)}</option>`).join('')}</select></div>
-        ${fld('label','Name shown to people (optional)')}
-        <label class="mini" style="padding-bottom:6px"><input id="vc_enabled" type="checkbox" ${f.enabled?'checked':''} ${dis}> Enabled</label></div>
-      <p class="mini" style="margin:0 0 8px">${esc(K.help)}</p>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">${std}
-        <div style="min-width:240px;flex:1"><label class="mini" style="display:block;margin-bottom:3px">API key ${c.has_key?'<span class="pill ok">saved</span>':''}</label>
-          <input id="vc_key" type="password" autocomplete="new-password" class="cel txt" style="width:100%" value="${esc(v.key||'')}" placeholder="${c.has_key?'saved — leave blank to keep it':'paste the key'}" ${dis}></div></div>`;
-    if(f.kind==='custom'){
-      h+=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-        <div style="min-width:180px"><label class="mini" style="display:block;margin-bottom:3px">How the key is sent</label>
-          <select id="vc_auth_style" class="cel txt" style="width:100%" onchange="voicePick('auth_style',this.value)" ${dis}>
-            ${[['bearer','Authorization: Bearer <key>'],['header','Custom header'],['query','Query parameter'],['none','No key']].map(o=>`<option value="${o[0]}" ${o[0]===f.auth_style?'selected':''}>${o[1]}</option>`).join('')}</select></div>
-        ${(f.auth_style==='header'||f.auth_style==='query')?fld('auth_name',f.auth_style==='header'?'Header name':'Parameter name'):''}
-        ${f.auth_style==='header'?fld('auth_prefix','Value prefix (optional, e.g. "Key ")'):''}</div>
-        <label class="mini" style="display:block;margin-bottom:3px">Extra headers (one per line, <code>Name: value</code>; values are stored encrypted and never shown again — a line with a blank value keeps the saved one)</label>
-        <textarea id="vc_headers_text" class="cel txt" rows="2" style="width:100%;margin-bottom:8px" ${dis}>${esc(f.headers_text||'')}</textarea>
-        <label class="mini" style="display:block;margin-bottom:3px">Request body (JSON; leave blank for <code>{"text": "{{text}}"}</code>)</label>
-        <textarea id="vc_body_template" class="cel txt" rows="4" style="width:100%;font-family:monospace;margin-bottom:8px" placeholder='{"input": "{{text}}", "voice": "{{voice}}"}' ${dis}>${esc(f.body_template||'')}</textarea>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-          <div style="min-width:220px"><label class="mini" style="display:block;margin-bottom:3px">The reply is</label>
-            <select id="vc_response_kind" class="cel txt" style="width:100%" onchange="voicePick('response_kind',this.value)" ${dis}>
-              <option value="audio" ${f.response_kind!=='json_base64'?'selected':''}>Audio directly</option>
-              <option value="json_base64" ${f.response_kind==='json_base64'?'selected':''}>JSON holding base64 audio</option></select></div>
-          ${f.response_kind==='json_base64'?fld('response_path','Field holding the audio (e.g. audio.content)')+fld('content_type','Audio type (e.g. audio/mpeg)'):''}</div>`;
-    }
-    h+=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <button class="btn sm pri" onclick="saveVoice()" ${dis}>Save</button>
-        <button class="btn sm" onclick="testVoice()" ${(dis||!c.configured)?'disabled':''} title="Speaks a short sentence using the SAVED settings">Test voice</button>
-        <button class="btn sm dgr" onclick="removeVoice()" ${(dis||!c.configured)?'disabled':''}>Remove</button>
-        <span class="mini" id="vc_msg" role="status">${esc(v.msg||'')}</span></div>
-      <p class="mini" style="margin:8px 0 0">Who can use it: everyone in this organisation who opens Ask Alec (a sentence at a time, billed to the provider account you entered). Only people whose role has Configuration access can change it. There are no spending limits yet — watch the provider's own usage page.</p>`;
-  }
-  return h+'</div></div>';
-}
-
 function pageIntegrations(){
   const wu=CFG.integrations.webhookUrl||'';
   let h=`<div class="phead"><div><h1>Integrations</h1>
@@ -3399,7 +3224,6 @@ function pageIntegrations(){
         internal function/state names (askAlex(), UI.askAlexOpen, etc.) were deliberately left alone to avoid
         touching every call site for a cosmetic rename.)</p>
     </div></div>`;
-  h += voicePanelHtml();
   return h;
 }
 

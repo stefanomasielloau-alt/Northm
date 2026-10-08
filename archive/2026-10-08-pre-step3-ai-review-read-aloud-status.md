@@ -38,9 +38,9 @@ Strategy and Campaign Planning also carry module-specific review focus text (pla
 - Campaign drafts leave dates, budget, region and programme for you to set.
 - The AI sees the same on-screen snapshot as Ask Alec chat (never password fields, no raw contact records).
 
-## Step 3 — organisation's own voice provider (BUILT, in North — see `2026-10-08-voice-provider-step3-status.md`)
-Configuration → Integrations → Voice (admin enters provider + key), encrypted in North's Supabase, spoken via the `voice` Edge Function; Ask Alec uses it by default with browser-voice fallback. One-time install (SQL + deploy function) is in `2026-10-08-voice-provider-setup.md`. Not yet tested against a real provider account.
+## Step 3 — organisation's own voice provider (NOT started, needs your decision)
+Needs a new Hub-Backend endpoint, an encrypted per-org key table and a SQL migration you would run, plus a Configuration card. Recommended default: OpenAI text-to-speech first (the org already can add OpenAI keys), others later. Decision needed: which provider(s) you want first.
 
-[STATUS: COMPLETED]
-- Steps 1–3 built and tested headless; Steps 1–2 committed locally earlier, Step 3 committed with this update (nothing pushed).
-- Pending on you: install SQL + function, sign up to a test provider, live checks.
+[STATUS: PARTIAL – NEED CLARIFICATION]
+- Steps 1 and 2 done, tested headless and committed locally (not pushed).
+- Step 3 waiting on provider choice.

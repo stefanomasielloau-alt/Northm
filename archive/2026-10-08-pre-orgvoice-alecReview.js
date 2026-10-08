@@ -12,11 +12,8 @@
      3. "Review this screen" -- one AI call (same pipe, same org gate, same data limits as Ask Alec chat) returning a
                         structured read: what is working, what needs attention, recommended activities / campaigns.
      4. Read aloud   -- browser text-to-speech (sentence-chunked, pause / stop, voice + speed + auto-read saved per
-                        browser). If the organisation has set up its own voice provider (Configuration ->
-                        Integrations -> Voice; stored encrypted in North, called by the "voice" Edge Function),
-                        Ask Alec uses it by default, prefetches the next sentence, and falls back to the browser
-                        voice (saying so) if it fails. Each person can switch back to the browser voice. Also:
-                        NorthAlecReview.setVoiceProvider({name, speak: async (text) => audioUrl}).
+                        browser). An organisation's own voice provider can be plugged in with
+                        NorthAlecReview.setVoiceProvider({name, speak: async (text) => audioUrl}) (Step 3).
      5. "Create draft" on activity / campaign recommendations when the module supplies cfg.createDraft(rec, review);
                         review-first -- this file never creates anything itself.
 
@@ -255,7 +252,6 @@
 
   /* ---------------------------------------------------------------- read aloud */
   function ttsOk() { return !!(window.speechSynthesis && window.SpeechSynthesisUtterance); }
-  function useOrg() { return !!R.provider && ls('src') !== 'browser'; }
   function canSpeak() { return ttsOk() || !!R.provider; }
   function chunkText(t) {
     t = String(t || '').replace(/\s+/g, ' ').trim(); if (!t) return [];
@@ -295,21 +291,14 @@
   function next(gen) {
     if (gen !== T.gen) return;
     if (T.i >= T.chunks.length) { T.state = 'idle'; T.id = null; updateAudioUI(); return; }
-    var idx = T.i++, txt = T.chunks[idx];
-    if (useOrg() && !T.providerFailed) {
-      var revoke = function (u) { try { if (/^blob:/.test(u)) URL.revokeObjectURL(u); } catch (e) {} };
-      var pr = (T.pre && T.pre.idx === idx) ? T.pre.p : Promise.resolve().then(function () { return R.provider.speak(txt); });
-      T.pre = null;
-      pr.then(function (url) {
-        if (gen !== T.gen) { revoke(url); return; }
+    var txt = T.chunks[T.i++];
+    if (R.provider && !T.providerFailed) {
+      Promise.resolve().then(function () { return R.provider.speak(txt); }).then(function (url) {
+        if (gen !== T.gen) return;
         var a = new Audio(url); T.audio = a;
-        a.onended = function () { revoke(url); next(gen); };
-        a.onerror = function () { revoke(url); providerFail(gen, 'the audio could not be played', txt); };
-        var pl = a.play(); if (pl && pl.catch) pl.catch(function (e) { revoke(url); providerFail(gen, (e && e.message) || 'playback blocked', txt); });
-        if (idx + 1 < T.chunks.length) {
-          var nx = T.chunks[idx + 1], pp = Promise.resolve().then(function () { return R.provider.speak(nx); });
-          pp.catch(function () {}); T.pre = { idx: idx + 1, p: pp };
-        }
+        a.onended = function () { next(gen); };
+        a.onerror = function () { providerFail(gen, 'the audio could not be played', txt); };
+        var pr = a.play(); if (pr && pr.catch) pr.catch(function (e) { providerFail(gen, (e && e.message) || 'playback blocked', txt); });
       }, function (e) { providerFail(gen, (e && e.message) || e, txt); });
       return;
     }
@@ -323,13 +312,13 @@
   }
   function providerFail(gen, why, txt) {
     if (gen !== T.gen) return;
-    T.providerFailed = true; T.pre = null;
+    T.providerFailed = true;
     S.msgs.push({ role: 'warn', text: 'The organisation voice (' + ((R.provider && R.provider.name) || 'provider') + ') could not speak: ' + (typeof why === 'string' ? why : 'unknown error') + (ttsOk() ? ' — continuing with this browser’s voice.' : '.') });
     X.renderLog();
     if (ttsOk()) { T.i = Math.max(0, T.i - 1); next(gen); } else { T.state = 'idle'; updateAudioUI(); }
   }
   function stop(quiet) {
-    T.gen++; T.state = 'idle'; T.id = null; T.pre = null;
+    T.gen++; T.state = 'idle'; T.id = null;
     try { if (T.audio) { T.audio.pause(); T.audio = null; } } catch (e) {}
     try { if (ttsOk()) window.speechSynthesis.cancel(); } catch (e) {}
     if (!quiet) updateAudioUI();
@@ -363,8 +352,7 @@
     if (ttsOk()) h += '<label>Voice <select id="rvVoiceSel">' + opts + '</select></label>';
     h += '<label>Speed <input id="rvRate" type="range" min="0.7" max="1.5" step="0.1" value="' + rate() + '"> <span id="rvRateV">' + rate().toFixed(1) + '&times;</span></label>';
     h += '<label><input id="rvAuto" type="checkbox"' + (ls('auto') === '1' ? ' checked' : '') + '> Read each review aloud automatically</label>';
-    if (R.provider) h += '<label>Voice source <select id="rvSrc"><option value="org"' + (ls('src') !== 'browser' ? ' selected' : '') + '>Organisation voice (' + esc(R.provider.name) + ')</option><option value="browser"' + (ls('src') === 'browser' ? ' selected' : '') + '>This browser’s voice</option></select></label>';
-    h += '<div class="note-s">' + (R.provider ? (useOrg() ? 'Reading with your organisation’s voice; if it fails Alec says so and uses this browser instead.' : 'Reading with this browser’s voice.') : 'Voice source: this browser. An admin can add the organisation’s own voice provider in Configuration → Integrations → Voice.') + '</div>';
+    h += '<div class="note-s">' + (R.provider ? 'Voice source: your organisation’s ' + esc(R.provider.name) + ' (falls back to this browser if it fails).' : 'Voice source: this browser. An admin can add the organisation’s own voice provider in Configuration.') + '</div>';
     h += '<div><button type="button" class="btn sm" id="rvTest">Test voice</button></div>';
     v.innerHTML = h;
   }
@@ -391,28 +379,6 @@
     }).join(''));
     h += '<div class="rv-foot">AI read of what is visible on this screen &mdash; check it against your data before acting.</div>' + spk + '</div>';
     return h;
-  }
-
-  /* ---------------------------------------------------------------- organisation voice (North-hosted) */
-  var VF = { checked: false, checking: false };
-  function checkOrgVoice() {
-    if (VF.checked || VF.checking || R.provider) return;
-    var sb = X.g('sb'), oid = X.g('_orgId'), url = X.g('SUPABASE_URL'), anon = X.g('SUPABASE_ANON_KEY') || X.g('SUPABASE_KEY');
-    if (!sb || !oid || !url) return;
-    VF.checking = true;
-    Promise.resolve(sb.from('voice_providers').select('enabled,has_key,label,kind').eq('org_id', oid).maybeSingle()).then(function (res) {
-      VF.checking = false; VF.checked = true;
-      var row = res && !res.error && res.data;
-      if (!row || !row.enabled || !row.has_key) return;
-      R.provider = { name: row.label || row.kind || 'organisation voice', speak: async function (text) {
-        var ses = await sb.auth.getSession(), tok = ses && ses.data && ses.data.session && ses.data.session.access_token;
-        if (!tok) throw new Error('your North session has expired');
-        var r = await fetch(url + '/functions/v1/voice', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok, 'apikey': anon || '' }, body: JSON.stringify({ action: 'speak', text: text }) });
-        if (!r.ok) { var j = await r.json().catch(function () { return {}; }); throw new Error(j.error || j.message || ('HTTP ' + r.status)); }
-        return URL.createObjectURL(await r.blob());
-      } };
-      renderVoicePanel(); updateButtons();
-    }, function () { VF.checking = false; VF.checked = true; });
   }
 
   /* ---------------------------------------------------------------- panel hooks */
@@ -446,7 +412,6 @@
       if (t.id === 'rvVoiceSel') ls('voice', t.value);
       else if (t.id === 'rvRate') { ls('rate', t.value); var rv = $('rvRateV'); if (rv) rv.innerHTML = parseFloat(t.value).toFixed(1) + '&times;'; }
       else if (t.id === 'rvAuto') ls('auto', t.checked ? '1' : '0');
-      else if (t.id === 'rvSrc') { ls('src', t.value); renderVoicePanel(); }
     });
     $('asstLog').addEventListener('click', function (e) {
       var b = e.target.closest('button'); if (!b) return;
@@ -456,7 +421,7 @@
       }
     });
     if (ttsOk()) { loadVoices(); try { window.speechSynthesis.addEventListener('voiceschanged', loadVoices); } catch (e) {} }
-    updateButtons(); checkOrgVoice();
+    updateButtons();
   }
   function updateButtons() {
     var r = $('rvReview'), b = $('rvBrief'), on = X.enabled();
@@ -466,7 +431,7 @@
   function onSync() {
     var pid = X.pageInfo().id;
     if (T.state !== 'idle' && T.page && T.page !== pid) stop();
-    renderFlags(); updateButtons(); checkOrgVoice();
+    renderFlags(); updateButtons();
   }
 
   A.extend({

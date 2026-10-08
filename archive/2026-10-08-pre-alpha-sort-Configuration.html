@@ -3422,8 +3422,7 @@ function connectorsPanelHtml(){
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:3px"><code id="cn_redirect" style="font-size:12px;word-break:break-all">${esc(c.redirect)}</code>
       <button class="btn sm" onclick="cnCopyRedirect()">${c.copied?'Copied':'Copy'}</button></div></div>`;
   if(c.unreadable&&c.unreadable.length) h+=`<div class="note">Saved credentials for ${esc(c.unreadable.join(', '))} could not be read (the server key changed). Enter them again and Save.</div>`;
-  const byName=(x,y)=>String(x.name).localeCompare(String(y.name),undefined,{sensitivity:'base'});
-  const built=c.list.filter(x=>!x.custom).sort(byName), cust=c.list.filter(x=>x.custom).sort(byName);
+  const built=c.list.filter(x=>!x.custom), cust=c.list.filter(x=>x.custom);
   h+=`<div class="cn-grid">${built.map(cnCardHtml).join('')}</div>`;
   h+=`<div style="display:flex;align-items:center;gap:10px;margin:16px 0 8px"><h4 style="margin:0;font-size:13px">Custom APIs</h4>
       <button class="btn sm pri" onclick="cnOpenModal('')" ${(cust.length>=c.max)?'disabled':''}>+ Add custom API</button>

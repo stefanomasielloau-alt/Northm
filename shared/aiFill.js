@@ -250,7 +250,7 @@
   /* ---------------- prompt / interpretation ---------------- */
   function typeNote(c) {
     if (c.type === 'select') return 'one of exactly: ' + (c.options || []).map(function (o) { return '"' + o.label + '"'; }).join(' | ');
-    return { text: 'short text', longtext: 'text (may be several sentences)', html: 'plain text, paragraphs separated by a blank line', number: 'number', money: 'number, no currency symbol (40k = 40000)', date: 'date as YYYY-MM-DD' }[c.type] || 'text';
+    return { text: 'short text', longtext: 'text (may be several sentences)', html: 'plain text, paragraphs separated by a blank line', number: 'number', money: 'number, no currency symbol (40k = 40000)', date: 'date as YYYY-MM-DD', time: 'time as 24-hour HH:MM' }[c.type] || 'text';
   }
   function buildPrompt(sc) {
     var p = 'You fill in a form for: ' + sc.title + '.\nThe INPUT below may be a briefing document, meeting notes, a spoken transcript, or a short instruction such as "set the budget to forty thousand". ' +
@@ -270,6 +270,7 @@
     var t = def.type, s;
     if (t === 'number' || t === 'money') { s = typeof raw === 'number' ? raw : parseFloat(String(raw).replace(/[$,\s]/g, '')); return isFinite(s) ? s : undefined; }
     if (t === 'date') { s = String(raw).trim(); return isoOk(s) ? s : undefined; }
+    if (t === 'time') { s = String(raw).trim(); var tm = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(s); return tm ? ('0' + tm[1]).slice(-2) + ':' + tm[2] : undefined; }
     if (t === 'select') {
       s = lc(raw); var o = (def.options || []).filter(function (x) { return lc(x.label) === s || lc(x.value) === s; })[0];
       return o ? o.value : undefined;
@@ -289,7 +290,7 @@
     if (def.type === 'html') return false;
     return String(cur == null ? '' : cur).trim() === val;
   }
-  function isEmptyVal(def, v) { return v == null || v === '' || (def.type === 'html' && !htmlToPlain(v)) || ((def.type === 'number' || def.type === 'money') && !Number(v)); }
+  function isEmptyVal(def, v) { return v == null || v === '' || (def.blank != null && String(v) === def.blank) || (def.type === 'html' && !htmlToPlain(v)) || ((def.type === 'number' || def.type === 'money') && !Number(v)); }
   function interpret(sc, raw) {
     var f = raw && typeof raw === 'object' ? raw : {};
     var known = sc.fields.map(function (x) { return x.key; }).concat('_lists');
@@ -388,6 +389,7 @@
     if (def.type === 'select') return '<select id="' + id + '">' + (def.options || []).map(function (o) { return '<option value="' + esc(o.value) + '"' + (String(o.value) === String(v) ? ' selected' : '') + '>' + esc(o.label) + '</option>'; }).join('') + '</select>';
     if (def.type === 'longtext' || def.type === 'html') return '<textarea id="' + id + '" rows="4" style="margin-top:0">' + esc(v) + '</textarea>';
     if (def.type === 'date') return '<input type="date" id="' + id + '" value="' + esc(v) + '">';
+    if (def.type === 'time') return '<input type="time" id="' + id + '" value="' + esc(v) + '">';
     return '<input type="text" id="' + id + '" value="' + esc(v) + '">';
   }
   function reviewHtml() {
@@ -578,7 +580,8 @@
     if (tag !== 'input' && tag !== 'select' && tag !== 'textarea') return (el.getAttribute('contenteditable') === 'true' || el.getAttribute('contenteditable') === '') ? 'html' : null;
     if (tag === 'select') return 'select'; if (tag === 'textarea') return 'longtext';
     var t = (el.getAttribute('type') || 'text').toLowerCase();
-    if (t === 'number') return 'number'; if (t === 'date') return 'date';
+    if (t === 'number') return 'number'; if (t === 'date') return 'date'; if (t === 'time') return 'time';
+    if (t === 'checkbox') return 'checkbox'; if (t === 'radio') return 'radio';
     return /^(text|email|tel|url)$/.test(t) ? 'text' : null;
   }
   function headerForCell(td) {
@@ -611,23 +614,59 @@
     var card = el.closest('.card'), h = card && card.querySelector('h3'), sec = h ? txt(h).slice(0, 50) : '';
     return [sec, row, lab.slice(0, 60)].filter(Boolean).join(' › ');
   }
+  var YESNO = [{ value: 'yes', label: 'Ticked' }, { value: 'no', label: 'Unticked' }];
+  function radioLabel(r) {
+    var lab = '';
+    if (r.id) { try { var l = document.querySelector('label[for="' + CSS.escape(r.id) + '"]'); if (l) lab = txt(l); } catch (e) { /* bad id */ } }
+    if (!lab) { var wl = r.closest('label'); if (wl) { var c = wl.cloneNode(true); c.querySelectorAll('input,select,textarea,button').forEach(function (n) { n.remove(); }); lab = txt(c); } }
+    if (!lab && r.nextSibling && r.nextSibling.nodeType === 3) lab = txt(r.nextSibling);
+    return lab || r.getAttribute('aria-label') || r.value || '';
+  }
+  function radioGroupLabel(first) {
+    var fs = first.closest('fieldset'), lg = fs && fs.querySelector('legend'); if (lg && txt(lg)) return txt(lg);
+    var g = first.closest('[role=radiogroup]'); if (g && g.getAttribute('aria-label')) return g.getAttribute('aria-label');
+    var c = first.parentElement; for (var i = 0; c && i < 3; i++, c = c.parentElement) {
+      var ps = c.previousElementSibling; if (ps && !ps.querySelector('input,select,textarea,table') && txt(ps) && txt(ps).length <= 60) return txt(ps);
+    }
+    return first.name || 'choice';
+  }
   function scanScreen() {
-    var scope = screenScope(), out = [], seen = {}, els = scope.querySelectorAll('input,select,textarea,[contenteditable]');
+    var scope = screenScope(), out = [], seen = {}, groups = {}, els = scope.querySelectorAll('input,select,textarea,[contenteditable]');
     for (var i = 0; i < els.length && out.length < MAX_SCREEN_FIELDS; i++) {
       var el = els[i];
       if (el.closest('#aflModal,#naiModal,.asst,.afl-chip,#aflFab,[hidden]') || el.disabled || el.readOnly) continue;
       var type = ctrlType(el); if (!type || !visibleEl(el)) continue;
+      if (type === 'radio') {
+        var gk = (el.form ? 'f' : 'd') + '|' + (el.name || ''); if (!el.name) continue;
+        if (groups[gk]) { groups[gk].radios.push(el); continue; }
+        groups[gk] = { el: el, radios: [el], type: 'radio' };
+        var gl = radioGroupLabel(el), card0 = el.closest('.card'), h0 = card0 && card0.querySelector('h3');
+        var g = groups[gk]; g.label = ([h0 ? txt(h0).slice(0, 50) : '', gl.slice(0, 60)].filter(Boolean).join(' › '));
+        g.pending = true; continue;
+      }
       if ((el.getAttribute('type') || '') === 'search' || el.getAttribute('role') === 'search' || /search|filter/i.test(el.getAttribute('placeholder') || '')) continue;
       var label = describeCtrl(el);
       if (SKIP_NAME.test((el.name || '') + ' ' + (el.id || '') + ' ' + (el.getAttribute('autocomplete') || '') + ' ' + label)) continue;
       var n = seen[label] = (seen[label] || 0) + 1, f = { el: el, sig: label + ' #' + n, label: label, type: type };
+      if (type === 'checkbox') { f.type = 'select'; f.kind = 'checkbox'; f.options = YESNO; f.blank = 'no'; }
       if (type === 'select') f.options = [].slice.call(el.options).filter(function (o) { return o.value !== '' && !o.disabled; }).map(function (o) { return { value: o.value, label: txt(o) || o.value }; });
       out.push(f);
     }
+    Object.keys(groups).forEach(function (k) {
+      var g = groups[k], opts = [], used = {};
+      g.radios.forEach(function (r) { if (r.disabled) return; var l = radioLabel(r) || r.value; if (!l || used[lc(l)]) return; used[lc(l)] = 1; opts.push({ value: r.value || l, label: l, el: r }); });
+      if (opts.length < 2 || g.radios.some(function (r) { return r.readOnly || SKIP_NAME.test(r.name || ''); })) return;
+      var lab = g.label, n = seen[lab] = (seen[lab] || 0) + 1;
+      out.push({ el: g.el, sig: lab + ' #' + n, label: lab, type: 'select', kind: 'radio', options: opts.map(function (o) { return { value: o.value, label: o.label }; }), radios: opts.map(function (o) { return o.el; }) });
+    });
     return out;
   }
   function locateSig(sig) { var all = scanScreen(); for (var i = 0; i < all.length; i++) if (all[i].sig === sig) return all[i]; return null; }
-  function ctrlValue(f) { return f.type === 'html' ? f.el.innerHTML : (f.el.value == null ? '' : f.el.value); }
+  function ctrlValue(f) {
+    if (f.kind === 'checkbox') return f.el.checked ? 'yes' : 'no';
+    if (f.kind === 'radio') { var on = (f.radios || []).filter(function (r) { return r.checked; })[0]; return on ? (on.value || radioLabel(on)) : ''; }
+    return f.type === 'html' ? f.el.innerHTML : (f.el.value == null ? '' : f.el.value);
+  }
   function fire(el, t) { el.dispatchEvent(new Event(t, { bubbles: true })); }
   function sameLoose(a, b) {
     var x = String(a == null ? '' : a).trim(), y = String(b == null ? '' : b).trim();
@@ -638,6 +677,11 @@
   function setScreenField(f, v) {
     var cur = f.el.isConnected ? f : locateSig(f.sig); if (!cur || !cur.el.isConnected) throw new Error('field no longer on screen');
     var el = cur.el;
+    if (f.kind === 'checkbox') { var want = String(v) === 'yes'; if (el.checked !== want) el.click(); var a1 = locateSig(f.sig); if (!a1 || ctrlValue(a1) !== (want ? 'yes' : 'no')) throw new Error('the page did not keep the value'); return; }
+    if (f.kind === 'radio') {
+      var tgt = (cur.radios || []).filter(function (r) { return (r.value || radioLabel(r)) === String(v); })[0]; if (!tgt) throw new Error('option not available');
+      if (!tgt.checked) tgt.click(); var a2 = locateSig(f.sig); if (!a2 || String(ctrlValue(a2)) !== String(v)) throw new Error('the page did not keep the value'); return;
+    }
     if (f.type === 'html') { el.innerHTML = v; fire(el, 'input'); try { el.dispatchEvent(new FocusEvent('blur')); } catch (e) { /* ignore */ } return; }
     if (f.type === 'select') { el.value = v; if (el.value !== String(v)) throw new Error('option not available'); }
     else { var d = Object.getOwnPropertyDescriptor(el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value'); d.set.call(el, String(v)); }
@@ -655,7 +699,7 @@
       canEdit: function () { return !(typeof window.isViewer === 'function' && window.isViewer()); },
       fields: found.map(function (f, i) {
         return {
-          key: 'f' + (i + 1), label: f.label, type: f.type, options: f.options, ctx: f.type === 'html' ? htmlToPlain(ctrlValue(f)).slice(0, 40) : ctrlValue(f),
+          key: 'f' + (i + 1), label: f.label, type: f.type, options: f.options, blank: f.blank, ctx: f.type === 'html' ? htmlToPlain(ctrlValue(f)).slice(0, 40) : (f.kind === 'checkbox' ? (ctrlValue(f) === 'yes' ? 'Ticked' : 'Unticked') : ctrlValue(f)),
           get: function () { var c = f.el.isConnected ? f : locateSig(f.sig); return c ? ctrlValue(c) : ''; },
           set: function (v) { setScreenField(f, v); }
         };
@@ -668,7 +712,7 @@
     open('__screen__', { autoMic: true });
   }
   /* floating button, shown once a module has drawn its main area; plus the same help entry on every module */
-  var FAQ_ENTRY = { q: 'Can I talk to a screen and have it fill in?', a: 'Yes. Click “🎙 Talk to this screen” (bottom right), say what you want — for example “set Hall B pax to 40 and mark it confirmed” — then stop. North lists the fields it would change, current versus proposed; tick what you want and click Apply. It only changes fields that are visible on screen (it cannot add rows or create records), values that would replace something already filled in start unticked, and a field the page refuses (for example a view-only role) is reported as skipped. Speech works in Chrome and Edge. The field names and current values on screen are sent to your organisation’s chosen AI.' };
+  var FAQ_ENTRY = { q: 'Can I talk to a screen and have it fill in?', a: 'Yes. Click “🎙 Talk to this screen” (bottom right), say what you want — for example “set Hall B pax to 40 and mark it confirmed” — then stop. North lists the fields it would change, current versus proposed; tick what you want and click Apply. It can fill text, number, date, time, dropdown, tick-box and option-button fields that are visible on screen (it cannot add rows or create records), values that would replace something already filled in start unticked, and a field the page refuses (for example a view-only role) is reported as skipped. Speech works in Chrome and Edge. The field names and current values on screen are sent to your organisation’s chosen AI.' };
   function initUniversal() {
     if (window.__aflUniversal || window.top !== window) return; window.__aflUniversal = true;
     var tries = 0, faqDone = false, b = null;

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <!-- 2026-09-11: self-registers this tab's browsing-context name on load. Fixes a real gap Stef caught -- target="tool_<id>" links only reuse a tab the browser already knows by that name (one opened via window.open/target= from elsewhere); a tab that's the actual entry point (typed URL, bookmark, browser-restored) has no name yet, so even its OWN brand-mark link back to itself would open a duplicate instead of reloading in place. Assigning window.name here (only if unset, so a name the browser already gave this tab via target= is never clobbered) makes every module self-aware the same way, regardless of how the tab was opened. -->
-<script>window.name = window.name || 'tool_Events';</script>
+<script>window.name = window.name || 'tool_Eventus';</script>
 <meta charset="UTF-8">
 <title>Events — Event Planning Tool</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2714%27%20fill%3D%27%23B5480E%27/%3E%3Ctext%20x%3D%2732%27%20y%3D%2743%27%20font-family%3D%27Arial%2CHelvetica%2Csans-serif%27%20font-size%3D%2726%27%20font-weight%3D%27900%27%20fill%3D%27white%27%20text-anchor%3D%27middle%27%3EEv%3C/text%3E%3C/svg%3E">
@@ -991,7 +991,7 @@ function renderFilteredTnLinks(){
     const t = (m.desc||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
     return m.id===THIS_MODULE
       ? `<span class="tn-link on" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</span>`
-      : `<a class="tn-link" href="${m.file}.html" target="tool_${m.file}" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
+      : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
   }).join('') + (navVisible('Contact') ? '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">AH</span>AH</a>' : '');
 }
 async function checkModuleAccess(){
@@ -1604,7 +1604,7 @@ function detachAssetFromEvent(assetId){
   a.eventId=null;
   logAudit('detach asset', a.name); render();
   _saveAssetEventLink(assetId, null);
-  toast('Asset detached -- it still exists in Assets, just unlinked from this event.');
+  toast('Asset detached -- it still exists in Custodia, just unlinked from this event.');
 }
 window.detachAssetFromEvent=detachAssetFromEvent;
 function createAssetForEvent(eventId){
@@ -1617,7 +1617,7 @@ function createAssetForEvent(eventId){
   CFG.assets.push(asset);
   logAudit('create asset', name+' on event '+eventId); render();
   _createAssetRow(asset);
-  toast('Asset created -- set category, stock and tags for it in Assets.');
+  toast('Asset created -- set category, stock and tags for it in Custodia.');
 }
 window.createAssetForEvent=createAssetForEvent;
 
@@ -2287,7 +2287,7 @@ function pageEvent(){
       <td class="n">${a.costPer?F.mk(a.costPer):'--'}</td>
       <td class="n"><button class="btn sm dgr" onclick="detachAssetFromEvent('${a.id}')">Detach</button></td></tr>`).join('')}
     </tbody></table></div>
-    <p class="mini" style="padding:0 12px 10px">Assets themselves are edited in Assets (category, stock, cost, tags) -- this just links them to the event. If this list looks empty on every event, the item 45 assets migration probably hasn't run yet in Supabase.</p>
+    <p class="mini" style="padding:0 12px 10px">Assets themselves are edited in Custodia (category, stock, cost, tags) -- this just links them to the event. If this list looks empty on every event, the item 45 assets migration probably hasn't run yet in Supabase.</p>
     </div></div>`;
   })();
 
@@ -2360,7 +2360,7 @@ function pageSync(){
     <p>Cost buckets and the tracking ID convention come from Configuration, not owned here.</p></div></div>`;
   h+=`<div class="card"><h3>Import shared config from Configuration <span class="sp"></span>
       ${CFG.meta.normaSyncedAt?`<span class="pill ok">Last synced ${F.dt(CFG.meta.normaSyncedAt)} (v${CFG.meta.normaConfigVersion||'?'})</span>`:`<span class="pill warn">Never synced</span>`}
-      <a class="btn sm" href="Configuration.html" target="tool_Configuration">Open Configuration</a></h3>
+      <a class="btn sm" href="Norma.html" target="tool_Norma">Open Configuration</a></h3>
     <div class="bd">
       <label class="btn pri">Choose Configuration export file…<input type="file" accept="application/json" style="display:none" onchange="handleNormaImportFile(this.files[0])"></label>
       <p class="mini" style="margin-top:8px">Cost lines here use their own event-specific categories (Venue, Catering, AV…) rather than
@@ -2403,15 +2403,15 @@ function renderTnAcct(){
 /* Consistent cross-module bar: search jumps between the 8 tools, same list
    and behavior as every other file -- not this tool's own events. */
 const MODULES=[
-  {id:'Ordo',file:'Strategy',label:'Strategy',desc:'Funnel planning & forecasting',color:'#1F3AC7',icon:'St'},
-  {id:'Cursus',file:'CampaignPlanning',label:'Campaign Planning',desc:'Campaign & activity execution',color:'#0E7C6B',icon:'Ca'},
-  {id:'Eventus',file:'Events',label:'Events',desc:'Event planning & logistics',color:'#B5480E',icon:'Ev'},
-  {id:'Custodia',file:'AssetRegister',label:'Assets',desc:'Asset register',color:'#3B6E1F',icon:'As'},
-  {id:'Prospectus',file:'Targets',label:'Targets',desc:'ICP filters & opportunity reports',color:'#9C2B3C',icon:'Ta'},
-  {id:'Augur',file:'Scoring',label:'Scoring',desc:'Lead & deal scoring',color:'#5A3E9C',icon:'Sc'},
-  {id:'Schema',file:'ProcessMaps',label:'Process Maps',desc:'Process maps & workflows',color:'#3A5A8C',icon:'Pr'},
-  {id:'Norma',file:'Configuration',label:'Configuration',desc:'Shared configuration',color:'#B5730E',icon:'Co'},
-  {id:'Reportus',file:'Reporting',label:'Reporting',desc:'Cross-module dashboards, org overview & board reports',color:'#7C1F5A',icon:'Rp'}
+  {id:'Ordo',label:'Strategy',desc:'Funnel planning & forecasting',color:'#1F3AC7',icon:'St'},
+  {id:'Cursus',label:'Campaign Planning',desc:'Campaign & activity execution',color:'#0E7C6B',icon:'Ca'},
+  {id:'Eventus',label:'Events',desc:'Event planning & logistics',color:'#B5480E',icon:'Ev'},
+  {id:'Custodia',label:'Assets',desc:'Asset register',color:'#3B6E1F',icon:'As'},
+  {id:'Prospectus',label:'Targets',desc:'ICP filters & opportunity reports',color:'#9C2B3C',icon:'Ta'},
+  {id:'Augur',label:'Scoring',desc:'Lead & deal scoring',color:'#5A3E9C',icon:'Sc'},
+  {id:'Schema',label:'Process Maps',desc:'Process maps & workflows',color:'#3A5A8C',icon:'Pr'},
+  {id:'Norma',label:'Configuration',desc:'Shared configuration',color:'#B5730E',icon:'Co'},
+  {id:'Reportus',label:'Reporting',desc:'Cross-module dashboards, org overview & board reports',color:'#7C1F5A',icon:'Rp'}
 ];
 const THIS_MODULE='Eventus';
 const HELP_FAQ=[
@@ -2452,7 +2452,7 @@ function renderTnModuleLinks(){
     const t = (m.desc||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
     return m.id===THIS_MODULE
       ? `<span class="tn-link on" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</span>`
-      : `<a class="tn-link" href="${m.file}.html" target="tool_${m.file}" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
+      : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
   }).join('') + '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">AH</span>AH</a>';
 }
 function tnSearchResults(q){
@@ -2472,7 +2472,7 @@ function tnSearch(q){
 window.tnSearch=tnSearch;
 function tnPick(i){
   const m=_tnResultList[i]; if(!m) return;
-  window.open(m.file+'.html','tool_'+m.file);
+  window.open(m.id+'.html','tool_'+m.id);
   document.getElementById('tnResults').innerHTML='';
   document.getElementById('tnSearchInput').value='';
 }

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <!-- 2026-09-11: self-registers this tab's browsing-context name on load. Fixes a real gap Stef caught -- target="tool_<id>" links only reuse a tab the browser already knows by that name (one opened via window.open/target= from elsewhere); a tab that's the actual entry point (typed URL, bookmark, browser-restored) has no name yet, so even its OWN brand-mark link back to itself would open a duplicate instead of reloading in place. Assigning window.name here (only if unset, so a name the browser already gave this tab via target= is never clobbered) makes every module self-aware the same way, regardless of how the tab was opened. -->
-<script>window.name = window.name || 'tool_ProcessMaps';</script>
+<script>window.name = window.name || 'tool_Schema';</script>
 <meta charset="UTF-8">
 <title>Process Maps — Process Maps & Workflows</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2714%27%20fill%3D%27%233A5A8C%27/%3E%3Ctext%20x%3D%2732%27%20y%3D%2743%27%20font-family%3D%27Arial%2CHelvetica%2Csans-serif%27%20font-size%3D%2726%27%20font-weight%3D%27900%27%20fill%3D%27white%27%20text-anchor%3D%27middle%27%3EPr%3C/text%3E%3C/svg%3E">
@@ -963,7 +963,7 @@ function renderFilteredTnLinks(){
     const t = (m.desc||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
     return m.id===THIS_MODULE
       ? `<span class="tn-link on" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</span>`
-      : `<a class="tn-link" href="${m.file}.html" target="tool_${m.file}" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
+      : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
   }).join('') + (navVisible('Contact') ? '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">AH</span>AH</a>' : '');
 }
 async function checkModuleAccess(){
@@ -2376,7 +2376,7 @@ function pageList(){
     <div class="row" style="justify-content:space-between">
       <span class="mini">${CFG.meta.normaSyncedAt?'Last synced '+F.dt(CFG.meta.normaSyncedAt)+' (Configuration config v'+(CFG.meta.normaConfigVersion||'?')+')':'Never synced with Configuration'}</span>
       <div class="row">
-        <a class="btn sm" href="Configuration.html" target="tool_Configuration">Open Configuration</a>
+        <a class="btn sm" href="Norma.html" target="tool_Norma">Open Configuration</a>
         <label class="btn sm pri">Import from Configuration…<input type="file" accept="application/json" style="display:none" onchange="handleNormaImportFile(this.files[0])"></label>
       </div></div></div></div>`;
   h+=`<div class="card"><h3>Local autosave</h3><div class="bd">
@@ -2481,33 +2481,33 @@ function pageEditor(){
    ============================================================================ */
 const PR_TODAY=()=>new Date().toISOString().slice(0,10);
 const PR_PROCS=[
-  {key:'campaign', label:'Campaign sign-off', obj:'Campaign', table:'campaigns', page:'CampaignPlanning.html', stepField:'signoff_status',
+  {key:'campaign', label:'Campaign sign-off', obj:'Campaign', table:'campaigns', page:'Cursus.html', stepField:'signoff_status',
     canon:['Draft','Submitted','Approved','Rejected'], last:['Rejected'], valueField:'budget',
     dateTry:['signoff_updated_at','status_changed_at','updated_at','created_at','start_date'],
     keyCols:[['budget','Budget'],['actual','Actual'],['committed','Committed'],['owner_name','Owner'],['start_date','Start'],['end_date','End']],
     good:['Approved'], bad:['Rejected']},
-  {key:'deal', label:'Deal pipeline', obj:'Deal', table:'augur_deals', page:'Scoring.html', stepField:'stage',
+  {key:'deal', label:'Deal pipeline', obj:'Deal', table:'augur_deals', page:'Augur.html', stepField:'stage',
     canon:['Prospecting','Qualifying','Proposal','Negotiation','Closed Won','Closed Lost'], last:['Closed Won','Closed Lost'], valueField:'value',
     dateTry:['stage_changed_at','updated_at','created_at','close_date'],
     keyCols:[['account','Account'],['value','Value'],['owner_name','Owner'],['close_date','Close date'],['updated_at','Updated']],
     good:['Closed Won'], bad:['Closed Lost']},
-  {key:'event', label:'Event lifecycle', obj:'Event', table:'eventus_events', page:'Events.html', stepField:'status',
+  {key:'event', label:'Event lifecycle', obj:'Event', table:'eventus_events', page:'Eventus.html', stepField:'status',
     canon:['Planned','Approved','Confirmed','Completed','Cancelled'], last:['Completed','Cancelled'], valueField:'budget',
     dateTry:['status_changed_at','updated_at','created_at','start_date'],
     keyCols:[['start_date','Start'],['end_date','End'],['location','Location'],['budget','Budget'],['owner_name','Owner']],
     good:['Completed'], bad:['Cancelled']},
-  {key:'task', label:'Task lifecycle', obj:'Task', table:'tasks', page:'CampaignPlanning.html', stepField:'status',
+  {key:'task', label:'Task lifecycle', obj:'Task', table:'tasks', page:'Cursus.html', stepField:'status',
     canon:['Planned','Submitted','Approved','In progress','Overdue','Completed'], last:['Overdue','Completed'], valueField:'planned_cost',
     dateTry:['updated_at','created_at','due_date','start_date'],
     keyCols:[['due_date','Due'],['owner','Owner'],['owner_name','Owner'],['type','Type'],['planned_cost','Planned cost']],
     good:['Completed'], bad:['Overdue']},
-  {key:'asset', label:'Asset stock', obj:'Asset', table:'assets', page:'AssetRegister.html', stepField:null,
+  {key:'asset', label:'Asset stock', obj:'Asset', table:'assets', page:'Custodia.html', stepField:null,
     canon:['OK','Low','Out'], last:[], valueField:'stock',
     dateTry:['updated_at','created_at'],
     keyCols:[['stock','Stock'],['low_stock_at','Low at'],['location','Location'],['category','Category']],
     good:['OK'], bad:['Out'], warn:['Low']},
   /* 2026-09-29 (Stef: "Phase 2a flows"): three more built-in processes */
-  {key:'campaign_budget', label:'Campaign budget alert', obj:'Campaign', table:'campaigns', page:'CampaignPlanning.html', stepField:null,
+  {key:'campaign_budget', label:'Campaign budget alert', obj:'Campaign', table:'campaigns', page:'Cursus.html', stepField:null,
     canon:['Within budget','At alert threshold','Over budget'], last:[], valueField:'budget',
     dateTry:['updated_at','created_at','start_date'],
     keyCols:[['budget','Budget'],['committed','Committed'],['actual','Actual'],['alert_threshold_pct','Alert %'],['owner_name','Owner']],
@@ -2519,10 +2519,10 @@ const PR_PROCS=[
       const pct=(r.alert_threshold_pct==null||r.alert_threshold_pct==='')?100:Number(r.alert_threshold_pct);
       if((Number(r.committed)||0)>=b*pct/100) return 'At alert threshold';
       return 'Within budget'; }},
-  {key:'plan_commit', label:'Plan edits needing commit', obj:'Plan edit', table:null, page:'Strategy.html', stepField:null, noCounts:true,
+  {key:'plan_commit', label:'Plan edits needing commit', obj:'Plan edit', table:null, page:'Ordo.html', stepField:null, noCounts:true,
     canon:['Edit made','Submitted','Approved','Rejected'], last:['Approved','Rejected'], valueField:null, dateTry:[], keyCols:[],
     good:['Approved'], bad:['Rejected']},
-  {key:'lead', label:'Lead to deal', obj:'Lead', table:'prospectus_leads', page:'Targets.html', stepField:'status',
+  {key:'lead', label:'Lead to deal', obj:'Lead', table:'prospectus_leads', page:'Prospectus.html', stepField:'status',
     canon:['New','Contacted','Qualified','Deal created','Disqualified'], last:['Deal created','Disqualified'], valueField:null,
     dateTry:['updated_at','created_at'],
     keyCols:[['company','Company'],['contact_name','Contact'],['domain','Domain'],['status','Status']],
@@ -2586,7 +2586,7 @@ function prLink(page){ try{ return new URL(page, location.href).href; }catch(e){
 function prProc(key){
   if(String(key).startsWith('wf:')){
     const w=byId(CFG.workflows||[], key.slice(3)); if(!w) return null;
-    return {key:key, label:w.name||'Untitled diagram', obj:'Diagram step', isDiagram:true, wf:w, page:'ProcessMaps.html', canon:[], last:[], keyCols:[], dateTry:[]};
+    return {key:key, label:w.name||'Untitled diagram', obj:'Diagram step', isDiagram:true, wf:w, page:'Schema.html', canon:[], last:[], keyCols:[], dateTry:[]};
   }
   return PR_PROCS.find(p=>p.key===key)||null;
 }
@@ -2872,7 +2872,7 @@ function prEvalRule(r){
   }
   if(P.isDiagram){
     if(w.type==='schedule'||w.type==='manual'){
-      matches=[{id:'wf:'+r.step, name:P.label, step:r.step, stepLabel:stepLabel, fields:{}, value:'', owner:'', link:prLink('ProcessMaps.html')}];
+      matches=[{id:'wf:'+r.step, name:P.label, step:r.step, stepLabel:stepLabel, fields:{}, value:'', owner:'', link:prLink('Schema.html')}];
       note='Diagram steps have no live records, so this shows one sample run.';
     } else note='Diagram steps have no live records to test against — only schedule, manual and external triggers can be dry-run here.';
     return {matches, note};
@@ -4812,15 +4812,15 @@ function renderTnAcct(){
 /* Consistent cross-module bar: search jumps between the 8 tools, same list
    and behavior as every other file -- not this tool's own diagrams. */
 const MODULES=[
-  {id:'Ordo',file:'Strategy',label:'Strategy',desc:'Funnel planning & forecasting',color:'#1F3AC7',icon:'St'},
-  {id:'Cursus',file:'CampaignPlanning',label:'Campaign Planning',desc:'Campaign & activity execution',color:'#0E7C6B',icon:'Ca'},
-  {id:'Eventus',file:'Events',label:'Events',desc:'Event planning & logistics',color:'#B5480E',icon:'Ev'},
-  {id:'Custodia',file:'AssetRegister',label:'Assets',desc:'Asset register',color:'#3B6E1F',icon:'As'},
-  {id:'Prospectus',file:'Targets',label:'Targets',desc:'ICP filters & opportunity reports',color:'#9C2B3C',icon:'Ta'},
-  {id:'Augur',file:'Scoring',label:'Scoring',desc:'Lead & deal scoring',color:'#5A3E9C',icon:'Sc'},
-  {id:'Schema',file:'ProcessMaps',label:'Process Maps',desc:'Process maps & workflows',color:'#3A5A8C',icon:'Pr'},
-  {id:'Norma',file:'Configuration',label:'Configuration',desc:'Shared configuration',color:'#B5730E',icon:'Co'},
-  {id:'Reportus',file:'Reporting',label:'Reporting',desc:'Cross-module dashboards, org overview & board reports',color:'#7C1F5A',icon:'Rp'}
+  {id:'Ordo',label:'Strategy',desc:'Funnel planning & forecasting',color:'#1F3AC7',icon:'St'},
+  {id:'Cursus',label:'Campaign Planning',desc:'Campaign & activity execution',color:'#0E7C6B',icon:'Ca'},
+  {id:'Eventus',label:'Events',desc:'Event planning & logistics',color:'#B5480E',icon:'Ev'},
+  {id:'Custodia',label:'Assets',desc:'Asset register',color:'#3B6E1F',icon:'As'},
+  {id:'Prospectus',label:'Targets',desc:'ICP filters & opportunity reports',color:'#9C2B3C',icon:'Ta'},
+  {id:'Augur',label:'Scoring',desc:'Lead & deal scoring',color:'#5A3E9C',icon:'Sc'},
+  {id:'Schema',label:'Process Maps',desc:'Process maps & workflows',color:'#3A5A8C',icon:'Pr'},
+  {id:'Norma',label:'Configuration',desc:'Shared configuration',color:'#B5730E',icon:'Co'},
+  {id:'Reportus',label:'Reporting',desc:'Cross-module dashboards, org overview & board reports',color:'#7C1F5A',icon:'Rp'}
 ];
 const THIS_MODULE='Schema';
 const HELP_FAQ=[
@@ -4871,7 +4871,7 @@ function renderTnModuleLinks(){
     const t = (m.desc||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
     return m.id===THIS_MODULE
       ? `<span class="tn-link on" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</span>`
-      : `<a class="tn-link" href="${m.file}.html" target="tool_${m.file}" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
+      : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
   }).join('') + '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">AH</span>AH</a>';
 }
 function tnSearchResults(q){
@@ -4891,7 +4891,7 @@ function tnSearch(q){
 window.tnSearch=tnSearch;
 function tnPick(i){
   const m=_tnResultList[i]; if(!m) return;
-  window.open(m.file+'.html','tool_'+m.file);
+  window.open(m.id+'.html','tool_'+m.id);
   document.getElementById('tnResults').innerHTML='';
   document.getElementById('tnSearchInput').value='';
 }

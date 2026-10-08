@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <!-- 2026-09-11: self-registers this tab's browsing-context name on load. Fixes a real gap Stef caught -- target="tool_<id>" links only reuse a tab the browser already knows by that name (one opened via window.open/target= from elsewhere); a tab that's the actual entry point (typed URL, bookmark, browser-restored) has no name yet, so even its OWN brand-mark link back to itself would open a duplicate instead of reloading in place. Assigning window.name here (only if unset, so a name the browser already gave this tab via target= is never clobbered) makes every module self-aware the same way, regardless of how the tab was opened. -->
-<script>window.name = window.name || 'tool_Strategy';</script>
+<script>window.name = window.name || 'tool_Ordo';</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Strategy — Marketing Planning &amp; Funnel Calculation</title>
@@ -2435,7 +2435,7 @@ function renderFilteredTnLinks(){
       return `<a class="tn-link on" href="#" onclick="leaveBoardReport();return false" title="Back to Strategy"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
     return m.id===THIS_MODULE
       ? `<span class="tn-link on" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</span>`
-      : `<a class="tn-link" href="${m.file}.html" target="tool_${m.file}" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
+      : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
   }).join('') + (navVisible('Contact') ? '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">AH</span>AH</a>' : '');
 }
 async function checkModuleAccess(){
@@ -2977,7 +2977,7 @@ function adminSegsWidgetTable(){
 }
 function adminCampsWidgetCursusLink(){
   return `<div class="card"><h3>Campaign Planning — activity detail lives there <span class="sp"></span>
-      <a class="btn sm" href="CampaignPlanning.html" target="tool_CampaignPlanning">Open Campaign Planning — all campaigns</a></h3>
+      <a class="btn sm" href="Cursus.html" target="tool_Cursus">Open Campaign Planning — all campaigns</a></h3>
     <div class="bd">
       <p class="mini">Marketing and sales enter activities, suppliers, POs and day-to-day cost in Campaign Planning, a separate tool.
         Strategy only shows the top-line numbers. Since both are standalone files with no shared server, keep the two in sync
@@ -3062,7 +3062,7 @@ function adminCampsWidgetTable(){
         onchange="setIn('campaigns','${c.id}','convOverride',this.value,'pct')"></td>
       <td><span class="pill ${c.source==='Feed'?'n':'v'}">${esc(c.source)}</span></td>
       <td class="mini">${esc(c.extRef||'—')}</td>
-      <td><a class="btn sm" href="CampaignPlanning.html#campaign=${c.id}" target="tool_CampaignPlanning">Open →</a></td>
+      <td><a class="btn sm" href="Cursus.html#campaign=${c.id}" target="tool_Cursus">Open →</a></td>
       <td class="n"><button class="btn sm dgr" ${dis} onclick="removeCampaign('${c.id}')">Remove</button></td></tr>`;
   });
   h+=`</tbody></table></div></div></div>`;
@@ -3071,7 +3071,7 @@ function adminCampsWidgetTable(){
 function adminBucketsWidgetSharedConfig(){
   return `<div class="card"><h3>Configuration — shared configuration <span class="sp"></span>
       ${CFG.meta.normaSyncedAt?`<span class="pill ok">Last synced ${F.dt(CFG.meta.normaSyncedAt)} (v${CFG.meta.normaConfigVersion||'?'})</span>`:`<span class="pill warn">Never synced</span>`}
-      <a class="btn sm" href="Configuration.html" target="tool_Configuration">Open Configuration</a></h3>
+      <a class="btn sm" href="Norma.html" target="tool_Norma">Open Configuration</a></h3>
     <div class="bd">
       <p class="mini">Cost buckets and the tracking ID naming convention are meant to be the same across every module —
         Configuration is where that shared config is owned. Import its export here to bring Strategy's cost bucket list up to date.</p>
@@ -3213,7 +3213,7 @@ function adminUsersWidgetMoved(){
   return `<div class="card"><h3>Roles &amp; users have moved</h3>
     <div class="bd"><p>Managing roles, users, invites, and (for Super Admins) all organizations now lives in
       <b>Configuration — Shared Configuration</b>, alongside the rest of the settings that apply across every tool.</p>
-      <a class="btn pri" href="Configuration.html" target="tool_Configuration">Open Configuration → Roles &amp; users</a></div></div>`;
+      <a class="btn pri" href="Norma.html" target="tool_Norma">Open Configuration → Roles &amp; users</a></div></div>`;
 }
 function adminUsersWidgetRequireCommit(){
   const dis=canConfig()?'':'disabled';
@@ -5223,7 +5223,7 @@ function campaignWidgetTable(){
         <td class="n calc">${wins?F.n(wins,1):'—'}</td>
         <td class="n calc">${wins?F.mk(campaignBudgetMain(c)/wins):'—'}</td>
         <td><span class="pill ${c.source==='Feed'?'n':'v'}">${esc(c.source)}</span></td>
-        <td><a class="btn sm" href="CampaignPlanning.html#campaign=${c.id}" target="tool_CampaignPlanning">Open →</a></td></tr>`;}).join('')}
+        <td><a class="btn sm" href="Cursus.html#campaign=${c.id}" target="tool_Cursus">Open →</a></td></tr>`;}).join('')}
     <tr class="tot"><td>Total</td><td></td><td></td><td></td><td></td><td></td><td></td><td class="n"></td>
       <td class="n">${F.mk(budget)}</td><td class="n">${F.mk(committed)}</td><td class="n">${F.mk(actualSpend)}</td>
       <td class="n">${F.mk(actualSpend-budget)}</td><td class="n"></td><td class="n"></td><td class="n"></td><td></td><td></td></tr>
@@ -5389,7 +5389,7 @@ function pageCampaign(){
     <p>What is running when, what it costs, and whether the plan fits the capacity you have. Activity-level detail —
       suppliers, POs, day-to-day status — is entered in Campaign Planning; this page shows the top-line roll-up.</p></div>
     <div class="sp"></div>
-    <a class="btn" href="CampaignPlanning.html" target="tool_CampaignPlanning">Open Campaign Planning — all campaigns</a>
+    <a class="btn" href="Cursus.html" target="tool_Cursus">Open Campaign Planning — all campaigns</a>
     <button class="btn" onclick="go('admin','camps')">Manage campaigns</button></div>`;
 
   const vis=visibleRegions().map(r=>r.id);
@@ -6328,7 +6328,7 @@ function pageBoardReport(){
   const brSorted=(CFG.boardReportSnapshots||[]).slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   const brViewing=UI.brViewSnapId?byId(brSorted,UI.brViewSnapId):null;
 
-  let h=`<div class="crumb no-print" style="font-size:12px;color:var(--ink-2);margin-bottom:6px"><a href="Reporting.html" target="tool_Reporting" style="color:inherit">Reporting</a> &rsaquo; Board report <span style="margin-left:10px"><a href="#" onclick="leaveBoardReport();return false" style="color:var(--nav)">&larr; Back to Strategy</a></span></div>
+  let h=`<div class="crumb no-print" style="font-size:12px;color:var(--ink-2);margin-bottom:6px"><a href="Reportus.html" target="tool_Reportus" style="color:inherit">Reporting</a> &rsaquo; Board report <span style="margin-left:10px"><a href="#" onclick="leaveBoardReport();return false" style="color:var(--nav)">&larr; Back to Strategy</a></span></div>
   <div class="phead"><div><h1>Board report</h1>
     <p>One page for a board or exec audience -- headline numbers, what changed, and what needs a decision. Generated on demand from the live plan.</p></div>
     <div class="sp"></div>
@@ -7444,7 +7444,7 @@ function pageRelationships(){
     <p>The Relationship map now lives in Reporting: start from any programme, campaign, activity, event, task, asset, deal or company and follow its links up and down.</p></div></div>
   <div class="card"><div class="bd">
     <p style="margin:0 0 10px;font-size:12.5px;color:var(--ink-2)">Covers programmes, campaigns, activities, events, tasks, assets, deals and companies, plus regions, pods, reps, segments and partners — with missing-link and duplicate-company checks.</p>
-    <a class="btn pri" href="Reporting.html?page=relmap" target="tool_Reporting">Open the Relationship map in Reporting &rarr;</a>
+    <a class="btn pri" href="Reportus.html?page=relmap" target="tool_Reportus">Open the Relationship map in Reporting &rarr;</a>
   </div></div>`;
 }
 function pageRelationshipsLegacy(){
@@ -7596,7 +7596,7 @@ function renderBoardReportSide(){
     <button class="btn sm pri" style="width:100%" onclick="leaveBoardReport()" title="Back to the Strategy page you were on">&larr; Back to Strategy</button>
   </div>
   <div style="padding:4px 14px 4px">
-    <a href="Reporting.html" target="tool_Reporting" style="font-size:12px;color:var(--ink-2);text-decoration:none">&larr; Back to Reporting</a>
+    <a href="Reportus.html" target="tool_Reportus" style="font-size:12px;color:var(--ink-2);text-decoration:none">&larr; Back to Reporting</a>
   </div>
   <h4>Board report</h4>
   <div style="padding:2px 14px 10px" class="mini">Read-only export -- headline numbers, what changed, what needs a decision. Not part of Strategy's own configuration.</div>`;
@@ -7686,15 +7686,15 @@ function renderTnAcct(){
 /* Consistent cross-module bar: search jumps between the 8 tools, same list
    and behavior as every other file -- not this tool's own pages/regions/pods. */
 const MODULES=[
-  {id:'Ordo',file:'Strategy',label:'Strategy',desc:'Funnel planning & forecasting',color:'#1F3AC7',icon:'St'},
-  {id:'Cursus',file:'CampaignPlanning',label:'Campaign Planning',desc:'Campaign & activity execution',color:'#0E7C6B',icon:'Ca'},
-  {id:'Eventus',file:'Events',label:'Events',desc:'Event planning & logistics',color:'#B5480E',icon:'Ev'},
-  {id:'Custodia',file:'AssetRegister',label:'Assets',desc:'Asset register',color:'#3B6E1F',icon:'As'},
-  {id:'Prospectus',file:'Targets',label:'Targets',desc:'ICP filters & opportunity reports',color:'#9C2B3C',icon:'Ta'},
-  {id:'Augur',file:'Scoring',label:'Scoring',desc:'Lead & deal scoring',color:'#5A3E9C',icon:'Sc'},
-  {id:'Schema',file:'ProcessMaps',label:'Process Maps',desc:'Process maps & workflows',color:'#3A5A8C',icon:'Pr'},
-  {id:'Norma',file:'Configuration',label:'Configuration',desc:'Shared configuration',color:'#B5730E',icon:'Co'},
-  {id:'Reportus',file:'Reporting',label:'Reporting',desc:'Cross-module dashboards, org overview & board reports',color:'#7C1F5A',icon:'Rp'}
+  {id:'Ordo',label:'Strategy',desc:'Funnel planning & forecasting',color:'#1F3AC7',icon:'St'},
+  {id:'Cursus',label:'Campaign Planning',desc:'Campaign & activity execution',color:'#0E7C6B',icon:'Ca'},
+  {id:'Eventus',label:'Events',desc:'Event planning & logistics',color:'#B5480E',icon:'Ev'},
+  {id:'Custodia',label:'Assets',desc:'Asset register',color:'#3B6E1F',icon:'As'},
+  {id:'Prospectus',label:'Targets',desc:'ICP filters & opportunity reports',color:'#9C2B3C',icon:'Ta'},
+  {id:'Augur',label:'Scoring',desc:'Lead & deal scoring',color:'#5A3E9C',icon:'Sc'},
+  {id:'Schema',label:'Process Maps',desc:'Process maps & workflows',color:'#3A5A8C',icon:'Pr'},
+  {id:'Norma',label:'Configuration',desc:'Shared configuration',color:'#B5730E',icon:'Co'},
+  {id:'Reportus',label:'Reporting',desc:'Cross-module dashboards, org overview & board reports',color:'#7C1F5A',icon:'Rp'}
 ];
 const THIS_MODULE='Ordo';
 const HELP_FAQ=[
@@ -7735,7 +7735,7 @@ function renderTnModuleLinks(){
     const t = (m.desc||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
     return m.id===THIS_MODULE
       ? `<span class="tn-link on" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</span>`
-      : `<a class="tn-link" href="${m.file}.html" target="tool_${m.file}" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
+      : `<a class="tn-link" href="${m.id}.html" target="tool_${m.id}" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
   }).join('') + '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">AH</span>AH</a>';
 }
 function tnSearchResults(q){
@@ -7755,7 +7755,7 @@ function tnSearch(q){
 window.tnSearch=tnSearch;
 function tnPick(i){
   const m=_tnResultList[i]; if(!m) return;
-  window.open(m.file+'.html','tool_'+m.file);
+  window.open(m.id+'.html','tool_'+m.id);
   document.getElementById('tnResults').innerHTML='';
   document.getElementById('tnSearchInput').value='';
 }

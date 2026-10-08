@@ -27,19 +27,14 @@
    Also exported for other flows (e.g. the Campaign Planning wizard): fileToText(file), createDictation(opts),
    speechSupported(), FILE_ACCEPT.
 
-   Honest limits: PDFs are read when they contain real text (first 60 pages); scanned/image-only PDFs are not (no OCR). Word, text, CSV, JSON, HTML are read too. Voice uses the browser's own speech
+   Honest limits: PDF is NOT read yet (Word, text, CSV, JSON, HTML are). Voice uses the browser's own speech
    recognition (Chrome/Edge; Safari is inconsistent). Folder watching uses the browser folder picker (Chrome/
    Edge only) and only checks while North is open -- it never runs in the background. */
 (function () {
   'use strict';
   var REG = {}, S = null, WATCH = {};
   var TEXT_EXT = /\.(txt|md|markdown|csv|json|html?|xml)$/i, DOCX_EXT = /\.docx$/i;
-  var FILE_ACCEPT = '.txt,.md,.markdown,.csv,.json,.html,.htm,.xml,.docx,.pdf';
-  var PDF_EXT = /\.pdf$/i, MAX_PDF_PAGES = 60;
-  /* pdf.js is vendored in shared/vendor/ (same origin, no CDN, nothing leaves the browser) and only loaded when a PDF is chosen.
-     An org that wants to host it elsewhere can set window.NORTH_PDFJS_BASE = 'https://.../' (folder holding pdf.min.js + pdf.worker.min.js) before this script. */
-  var SELF_SRC = (document.currentScript && document.currentScript.src) || '';
-  var PDFJS_BASE = window.NORTH_PDFJS_BASE || (SELF_SRC ? SELF_SRC.replace(/[^\/]*$/, '') + 'vendor/pdfjs-3.11.174/' : 'shared/vendor/pdfjs-3.11.174/');
+  var FILE_ACCEPT = '.txt,.md,.markdown,.csv,.json,.html,.htm,.xml,.docx';
   var MAX_FILE_BYTES = 5 * 1024 * 1024, MAX_FILE_CHARS = 30000, MAX_TOTAL_CHARS = 60000, MAX_FOLDER_FILES = 25, POLL_MS = 15000;
 
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -91,53 +86,12 @@
     return (doc.body ? doc.body.textContent : '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
   }
   function unsupportedMsg(name) {
-    return 'That file type can’t be read yet (' + name + '). Save it as Word (.docx), PDF or text, or paste the text in. Supported: .docx .pdf .txt .md .csv .json .html';
-  }
-  var pdfLoading = null;
-  function loadPdfJs() {
-    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
-    if (pdfLoading) return pdfLoading;
-    pdfLoading = new Promise(function (res, rej) {
-      var s = document.createElement('script'); s.src = PDFJS_BASE + 'pdf.min.js';
-      s.onload = function () {
-        if (!window.pdfjsLib) { pdfLoading = null; return rej(new Error('The PDF reader did not start.')); }
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_BASE + 'pdf.worker.min.js'; res(window.pdfjsLib);
-      };
-      s.onerror = function () { pdfLoading = null; rej(new Error('Could not load the PDF reader. Refresh and try again, or save the PDF as Word/text.')); };
-      document.head.appendChild(s);
-    });
-    return pdfLoading;
-  }
-  async function pdfText(buf) {
-    var lib = await loadPdfJs(), doc;
-    try { doc = await lib.getDocument({ data: new Uint8Array(buf) }).promise; }
-    catch (e) {
-      if (e && e.name === 'PasswordException') throw new Error('That PDF is password-protected. Remove the password and try again.');
-      throw new Error('That PDF could not be opened (' + ((e && e.message) || 'unknown error') + ').');
-    }
-    var out = [], n = Math.min(doc.numPages, MAX_PDF_PAGES);
-    for (var p = 1; p <= n; p++) {
-      var page = await doc.getPage(p), tc = await page.getTextContent(), line = '', lastY = null;
-      tc.items.forEach(function (it) {
-        if (typeof it.str !== 'string') return;
-        var y = it.transform ? it.transform[5] : null;
-        if (lastY !== null && y !== null && Math.abs(y - lastY) > 2 && line) { out.push(line); line = ''; }
-        line += (line && it.str && !/\s$/.test(line) && !/^\s/.test(it.str) && lastY !== null && y !== null && Math.abs(y - lastY) <= 2 ? ' ' : '') + it.str;
-        if (it.hasEOL) { out.push(line); line = ''; lastY = null; } else lastY = y;
-      });
-      if (line) out.push(line);
-      out.push('');
-    }
-    var text = out.join('\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
-    if (text.length < 20) throw new Error('No readable text in that PDF — it looks like a scanned image. Scanned PDFs can’t be read yet; paste the text or use a text-based PDF.');
-    if (doc.numPages > n) text += '\n\n[Only the first ' + n + ' of ' + doc.numPages + ' pages were read.]';
-    return text;
+    return (/\.pdf$/i.test(name) ? 'PDF files can’t be read yet' : 'That file type can’t be read yet') + ' (' + name + '). Save it as Word (.docx) or text, or paste the text in. Supported: .docx .txt .md .csv .json .html';
   }
   async function fileToText(file) {
     var name = (file && file.name) || '';
     if (file.size > MAX_FILE_BYTES) throw new Error(name + ' is larger than 5 MB.');
     if (DOCX_EXT.test(name)) return docxText(await file.arrayBuffer());
-    if (PDF_EXT.test(name)) return pdfText(await file.arrayBuffer());
     if (/\.(html?|xml)$/i.test(name)) return htmlToText(await file.text());
     if (TEXT_EXT.test(name)) return file.text();
     var e = new Error(unsupportedMsg(name)); e.unsupported = true; throw e;
@@ -189,7 +143,7 @@
     async function walk(dir, prefix, depth) {
       for await (var ent of dir.values()) {
         if (ent.kind === 'file') {
-          if (!(TEXT_EXT.test(ent.name) || DOCX_EXT.test(ent.name) || PDF_EXT.test(ent.name)) || ent.name.indexOf('~$') === 0) continue;
+          if (!(TEXT_EXT.test(ent.name) || DOCX_EXT.test(ent.name)) || ent.name.indexOf('~$') === 0) continue;
           var f = await ent.getFile(); out.push({ path: prefix + ent.name, fh: ent, mtime: f.lastModified, size: f.size });
         } else if (ent.kind === 'directory' && depth < 2) await walk(ent, prefix + ent.name + '/', depth + 1);
       }

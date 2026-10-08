@@ -1487,8 +1487,8 @@ function wizParseDocumentText(text){
   render();
 }
 /* 2026-10-08 (Stef: speak / documents should work the same everywhere): file reading now comes from the shared
-   engine (shared/aiFill.js), which adds Word (.docx), Markdown, JSON and HTML to the old .txt/.csv. PDF is still
-   not read -- fileToText() says so plainly. The AI/regex ingest below is unchanged. */
+   engine (shared/aiFill.js), which adds Word (.docx), Markdown, JSON and HTML to the old .txt/.csv. PDF is now
+   read too (text-based PDFs via vendored pdf.js). The AI/regex ingest below is unchanged. */
 async function wizReadAndIngest(file){
   if(!window.NorthAIFill){ toast('Document reading is unavailable on this page -- refresh and try again.'); return; }
   let text;
@@ -1711,12 +1711,12 @@ function campaignWizardPanel(){
     return `<div class="mask"><div class="modal" style="max-width:480px">
       <h3>Upload a document <span class="sp"></span><span class="pill n">Basic prefill</span></h3>
       <div class="bd">
-        <p class="mini" style="margin:0 0 10px">Reads Word (.docx), .txt, .csv, .md, .json and .html files (not PDF yet) — we'll pull a name guess, the first
+        <p class="mini" style="margin:0 0 10px">Reads Word (.docx), PDF (text-based), .txt, .csv, .md, .json and .html files — we'll pull a name guess, the first
           couple of dates, and a dollar amount if there is one. You'll review and can edit everything before creating.</p>
         <div ondragover="event.preventDefault()" ondrop="wizHandleDrop(event)"
           style="border:2px dashed var(--line);border-radius:8px;padding:28px;text-align:center;color:var(--ink-2)">
           Drag a file here, or
-          <label class="btn sm" style="cursor:pointer">Browse<input type="file" accept=".txt,.csv,.md,.markdown,.json,.html,.htm,.xml,.docx" style="display:none" onchange="wizHandleFileInput(this)"></label>
+          <label class="btn sm" style="cursor:pointer">Browse<input type="file" accept=".txt,.csv,.md,.markdown,.json,.html,.htm,.xml,.docx,.pdf" style="display:none" onchange="wizHandleFileInput(this)"></label>
         </div>
       </div>
       <div class="ft"><button class="btn" onclick="wizChoosePath(null);UI.wizard.entryPath=null;render()">Back</button>

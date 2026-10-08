@@ -2829,7 +2829,9 @@ function adminGeoWidgetPods(){
           ${CFG.regions.map(x=>`<option value="${x.id}" ${x.id===p.regionId?'selected':''}>${esc(x.name)}</option>`).join('')}</select></td>
         <td class="n"><input class="cel w" value="${(p.share*100).toFixed(0)}" ${dis} onchange="setIn('pods','${p.id}','share',this.value,'pct')"></td>
         <td><div class="bar" style="width:100px"><i style="width:${clamp(p.share*100,0,100)}%"></i></div></td>
-        <td class="n"><button class="btn sm dgr" ${dis} onclick="removePod('${p.id}')">Remove</button></td>
+        <td class="n">${p.unassigned&&CFG.pods.filter(x=>x.unassigned).length<=1
+          ?`<button class="btn sm dgr" disabled title="This is the last Unassigned pod -- kept so records missing a pod still load instead of being rejected">Remove</button>`
+          :`<button class="btn sm dgr" ${dis} onclick="removePod('${p.id}')">Remove</button>`}</td>
       </tr>`;
     });
   });
@@ -3996,12 +3998,7 @@ function removeRegion(id){
 function addPod(){ const r=R()[0]; stage('Pods','add','a new pod',()=>{
   CFG.pods.splice(CFG.pods.length-1,0,{id:uid('p'),name:'New pod',regionId:r.id,share:0});
 });}
-function removePod(id){
-  /* 2026-10-08 (Stef): the system "Unassigned" pod row can be removed like any other. Nothing in the app looks up an
-     Unassigned pod (P() just filters it out), so the only guard is: don't orphan reps that still sit under it. */
-  const pp=pod(id), nReps=CFG.reps.filter(r=>r.podId===id).length;
-  if(pp&&pp.unassigned&&nReps){ toast('This Unassigned pod still has '+nReps+' rep'+(nReps===1?'':'s')+' -- move or remove them first.'); return; }
-  stage('Pods','remove',pod(id).name,()=>{ CFG.pods=CFG.pods.filter(x=>x.id!==id); deleteRow('pods',id); });}
+function removePod(id){ stage('Pods','remove',pod(id).name,()=>{ CFG.pods=CFG.pods.filter(x=>x.id!==id); deleteRow('pods',id); });}
 function addRep(podId){ const p=byId(CFG.pods,podId)||P()[0]; if(!p)return;
   stage('Reps','add','a new rep',()=>{ CFG.reps.push({orgId:_clickOrgId(),id:uid('rep'),name:'New rep',podId:p.id,share:0}); });}
 function removeRep(id){ const rp=byId(CFG.reps,id); if(!rp)return;

@@ -21,3 +21,6 @@
 - Created: `Northm/shared/budgetLines.js` — the component.
 - Created: `Northm/Claude outputs/2026-10-09-budgetLines-test.js` — its browser test.
 - Created: `Northm/Claude outputs/2026-10-09-budget-line-items-component-status.md` — this note.
+
+---
+**Update 2026-10-09 (later):** the panel is now wired into Campaign Planning (campaign + activity dialogs); see `2026-10-09-day-status-backlog-delta.md`. The "not wired in" statements above are superseded.

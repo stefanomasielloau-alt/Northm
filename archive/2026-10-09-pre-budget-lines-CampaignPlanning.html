@@ -259,7 +259,6 @@ window.closeFieldGuide=closeFieldGuide;
 <script src="shared/aiRouter.js"></script>
 <script src="shared/aiFill.js"></script>
 <script src="shared/askAlec.js"></script>
-<script src="shared/budgetLines.js"></script>
 <script src="shared/convertToMain.js"></script>
 <script src="shared/currencyOptions.js"></script>
 <div id="authGate" style="display:none"></div>
@@ -2800,13 +2799,6 @@ window.openDetail=openDetail;
 function closeDetail(){ UI.detail=null; render(); }
 window.closeDetail=closeDetail;
 
-/* 2026-10-09 (Reference Environment subsystem 1, step 2b): budget line items panel (shared/budgetLines.js) inside the campaign and activity
-   dialogs. Additive only: it reads/writes budget_line_items directly and does NOT change the campaign/activity budget fields above.
-   The dialog is rebuilt on every render(), so render() calls NorthBudgetLines.sync() to re-attach the same panel without re-querying. */
-function nblHostHtml(ptype,id){
-  let edit='1'; try{ if(CFG.savEnabled && !SAV.canEdit()) edit='0'; }catch(e){ edit='0'; }
-  return `<div style="margin-top:12px"><label class="lbl" style="display:block">Budget line items</label><div id="nblHost" data-ptype="${ptype}" data-pid="${esc(id)}" data-org="${esc(_clickOrgId()||'')}" data-edit="${edit}"></div></div>`;
-}
 function detailPanelHtml(){
   const d=UI.detail; if(!d) return '';
   if(d.kind==='programme') return detailProgrammeHtml(d.id);
@@ -2891,7 +2883,6 @@ function detailCampaignHtml(id){
         <div class="mini"><b>Org-wide Strategy targets</b> <span style="color:var(--ink-3)">(from Strategy, not specific to this campaign)</span> — win target <b>${F.n(CFG.strategyDrivers.winTarget,0)}</b> · bottom-up leads <b>${F.n(CFG.strategyDrivers.bottomUpLeads,0)}</b></div>
         ${CFG.aiScreenInterpreterEnabled?`<button class="btn sm" onclick="askAlecCampaign('${c.id}')" title="AI reasoning about this campaign in the context of the org's Strategy targets -- summary numbers only, never raw records">✨ Ask Alec</button>`:''}
       </div>
-      ${nblHostHtml('campaign',c.id)}
       <label class="lbl" style="margin-top:8px">Notes</label>
       <textarea class="in" rows="3" onchange="setIn('campaigns','${c.id}','notes',this.value)">${esc(c.notes||'')}</textarea>
       <label class="lbl" style="margin-top:12px;display:block">Partner allocation</label>
@@ -2956,7 +2947,6 @@ function detailActivityHtml(id){
         <span class="mini">${linkedEvent.registered||0} registered · ${linkedEvent.attended||0} attended · ${F.mk(linkedEvent.budget||0)} budget</span>
         <a class="btn sm pri" href="Events.html#event=${linkedEvent.id}" target="tool_Events">Open in Events →</a>
       </div>`:`<div class="mini" style="margin-top:4px;color:var(--ink-3)">Pick an event to deep-link this activity to its record in Events.</div>`}
-      ${nblHostHtml('task',t.id)}
       <label class="lbl" style="margin-top:8px">Notes</label>
       <textarea class="in" rows="3" onchange="setIn('tasks','${t.id}','notes',this.value)">${esc(t.notes||'')}</textarea>
       ${(t.type==='Contact Outreach'||t.type==='Contact Sourcing')?activityContactsSectionHtml(t):''}
@@ -3965,7 +3955,6 @@ function render(){
   }
   document.getElementById('main').innerHTML=mainHtml;
   document.getElementById('wizardLayer').innerHTML=campaignWizardPanel()+moveDialogPanel()+draftActivityPanel()+detailPanelHtml()+contactPickerHtml()+askAlecCursusPanel();
-  try{ if(window.NorthBudgetLines) NorthBudgetLines.sync(sb, document.getElementById('nblHost')); }catch(e){}
   saveLocal();
   scheduleSupabaseSave();
 }

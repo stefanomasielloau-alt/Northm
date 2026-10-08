@@ -73,7 +73,6 @@
       const m=String(err&&err.message||err||''), code=err&&err.code;
       if(code==='42P01'||code==='PGRST205'||/does not exist|schema cache/i.test(m)) return MISSING;
       if(code==='42501'||/permission denied|row-level security/i.test(m)) return 'You do not have permission to change budget line items here.';
-      if(code==='22P02'||/invalid input syntax for type uuid/i.test(m)) return 'This record has not been saved yet — save it first, then add budget lines.';
       return m||'Something went wrong.';
     }
     async function load(){
@@ -173,24 +172,9 @@
       try{ const { data } = await sb.from('campaign_budget_rollup').select('*').eq('campaign_id',opts.parentId).maybeSingle(); if(!S.dead){ S.roll=data||null; draw(); } }catch(e){}
     }
     load();
-    return { reload:load, totals:totals, attach(newEl){ if(S.dead) return; el=newEl; draw(); }, destroy(){ S.dead=true; if(el) el.innerHTML=''; } };
+    return { reload:load, totals:totals, destroy(){ S.dead=true; if(el) el.innerHTML=''; } };
   }
-  /* Page integration for pages that rebuild their detail dialogs wholesale on every render (Campaign Planning does):
-     put <div id="nblHost" data-ptype="campaign|task" data-pid="<uuid>" data-org="<org uuid>" data-edit="1|0"></div> in the dialog,
-     then call NorthBudgetLines.sync(sb, document.getElementById('nblHost')) after each render (host = null when no dialog is open).
-     The same panel is re-attached to the new element without reloading; a different record or no host tears it down. */
-  let live=null;
-  function sync(sb,host,extra){
-    try{
-      if(!host){ if(live){ live.h.destroy(); live=null; } return; }
-      const d=host.dataset||{}, key=(d.ptype||'')+':'+(d.pid||'');
-      if(live&&live.key===key&&live.org===d.org){ live.h.attach(host); return; }
-      if(live){ live.h.destroy(); live=null; }
-      if(!d.ptype||!d.pid||!d.org) return;
-      live={key:key,org:d.org,h:mount(host,Object.assign({sb:sb,orgId:d.org,parentType:d.ptype,parentId:d.pid,canEdit:d.edit==='1',showRollup:d.ptype==='campaign'},extra||{}))};
-    }catch(e){ try{ console.warn('NorthBudgetLines.sync',e); }catch(_){} }
-  }
-  const api={mount:mount,sync:sync,_parseAmount:parseAmount};
+  const api={mount:mount,_parseAmount:parseAmount};
   if(typeof window!=='undefined') window.NorthBudgetLines=api;
   if(typeof module!=='undefined'&&module.exports) module.exports=api;
 })();

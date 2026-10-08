@@ -100,25 +100,6 @@ await pg.evaluate(()=>{window.__keep=__DB.budget_line_items; delete __DB.budget_
 await pg.evaluate(()=>{window.__h.reload()}); await pg.evaluate(()=>NorthBudgetLines.mount(document.querySelector('#c'),{sb:__sb,orgId:'o1',parentType:'task',parentId:'t1',canEdit:true}));
 await pg.waitForFunction(()=>/not installed/.test(document.querySelector('#c').innerText));
 ok(await pg.$('#c [data-a="add"]')===null,'tables missing: friendly message, no Add button');
-
-// ---- sync() page integration ----
-await pg.evaluate(()=>{ __DB.budget_line_items=window.__keep; document.body.insertAdjacentHTML('beforeend','<div id="dlg"></div>'); });
-const mk=(pid,edit)=>pg.evaluate(([pid,edit])=>{ document.getElementById('dlg').innerHTML='<div id="nblHost" data-ptype="campaign" data-pid="'+pid+'" data-org="o1" data-edit="'+edit+'"></div>'; NorthBudgetLines.sync(__sb,document.getElementById('nblHost')); },[pid,edit]);
-await mk('p1','1'); await pg.waitForSelector('#dlg tr[data-id]');
-ok(await pg.$$eval('#dlg tr[data-id]',r=>r.length)===2,'sync: first call mounts and loads the panel');
-const q0=await pg.evaluate(()=>__log.length);
-await mk('p1','1'); await pg.waitForSelector('#dlg tr[data-id]');
-ok(await pg.evaluate(()=>__log.length)===q0,'sync: page re-render of the dialog re-attaches with NO new queries');
-ok(await pg.$$eval('#dlg [data-a="add"]',a=>a.length)===1,'sync: still editable after re-attach');
-await mk('p1','0'); await pg.waitForSelector('#dlg tr[data-id]');
-await pg.evaluate(()=>NorthBudgetLines.sync(__sb,null)); ok(await pg.$eval('#dlg',e=>e.innerText.trim())==='','sync: null host tears down without error');
-await mk('OTHERP','1'); await pg.waitForFunction(()=>/No line items yet/.test(document.querySelector('#dlg').innerText));
-ok(true,'sync: different record loads fresh (empty state)');
-await mk('not-a-uuid','1');
-await pg.evaluate(()=>{ __fail={code:'22P02',message:'invalid input syntax for type uuid: "not-a-uuid"'}; NorthBudgetLines.sync(__sb,null); document.getElementById('dlg').innerHTML='<div id="nblHost" data-ptype="task" data-pid="tmp1" data-org="o1" data-edit="1"></div>'; NorthBudgetLines.sync(__sb,document.getElementById('nblHost')); });
-await pg.waitForFunction(()=>/not been saved yet/.test(document.querySelector('#dlg').innerText));
-ok(true,'sync: unsaved (non-uuid) record shows a plain "save it first" message');
-await pg.evaluate(()=>{__fail=null});
 ok(errs.length===0,'no page errors '+errs.join(';'));
 console.log(f?('FAILED '+f):'ALL PASS'); await b.close(); process.exit(f?1:0);
 })().catch(e=>{console.error(e);process.exit(2)});

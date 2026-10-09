@@ -583,7 +583,6 @@ window.closeFieldGuide=closeFieldGuide;
 <script src="shared/currencyOptions.js"></script>
 <script src="shared/charts.js"></script>
 <script src="shared/chartsCombo.js"></script>
-<script src="shared/lineItemRollup.js"></script><!-- 2026-10-09: budget line items -> campaign Budget/Committed/Actual (additive; remove tag to roll back) -->
 <script src="shared/boardReportAccess.js"></script>
 <script src="assets/vendor/gridstack/gridstack-all.js"></script>
 <script src="shared/grid.js"></script>
@@ -753,13 +752,9 @@ const programme=id=>byId(CFG.programmes,id);
 /* Activity-level cost now lives in Campaign Planning. Once a campaign's Committed/Actual has been imported from a
    Campaign Planning roll-up export, that figure is the real number; the campaign-level fields from Phase 2 remain
    the fallback for campaigns that haven't been set up in Campaign Planning (or synced) yet. */
-/* 2026-10-09 (Stef: line items roll into Strategy): when a campaign has budget line items with a value for a stage, that total is the figure
-   (Budget = Approved else Planned per line, Committed, Actual -- shared/lineItemRollup.js); otherwise today's fields apply, unchanged. */
-function liFig(camp,k){ return (typeof NorthLineItemRollup!=='undefined' && camp) ? NorthLineItemRollup.figure(camp,k) : null; }
-function liHint(c,k){ const v=liFig(c,k); return v==null?'':'<div class="mini" style="color:var(--accent,#2a5bd7)" title="Strategy uses the total of this campaign\'s budget line items (entered in Campaign Planning). The box below is only used when there are none for this figure.">from line items: '+F.mk(v)+'</div>'; }
-function campaignCommitted(camp){ const l=liFig(camp,'committed'); if(l!=null) return l; return camp.rollupCommitted!=null ? camp.rollupCommitted : (camp.committed||0); }
-function campaignActualSpend(camp){ const l=liFig(camp,'actual'); if(l!=null) return l; return camp.rollupActual!=null ? camp.rollupActual : (camp.actual||0); }
-function campaignBudgetMain(c){ /* multi-currency phase 3: use the converted snapshot when this campaign's budget was set in a non-main currency; fails soft to the raw figure otherwise, so main-currency campaigns (the default case) are unchanged. */ { const l=liFig(c,'budget'); if(l!=null) return l; } return (c.budgetFx && c.budgetFx.converted!=null) ? c.budgetFx.converted : (c.budget||0); }
+function campaignCommitted(camp){ return camp.rollupCommitted!=null ? camp.rollupCommitted : (camp.committed||0); }
+function campaignActualSpend(camp){ return camp.rollupActual!=null ? camp.rollupActual : (camp.actual||0); }
+function campaignBudgetMain(c){ /* multi-currency phase 3: use the converted snapshot when this campaign's budget was set in a non-main currency; fails soft to the raw figure otherwise, so main-currency campaigns (the default case) are unchanged. */ return (c.budgetFx && c.budgetFx.converted!=null) ? c.budgetFx.converted : (c.budget||0); }
 
 /* ---------- shared status (RAG) colour system ----------
    Same semantic scale + class names as Campaign Planning/Events (2026-08-13). Thresholds are
@@ -2121,19 +2116,6 @@ async function loadFromSupabase(){
        match Cursus's own fallback if the column is ever null. */
     signoffStatus:c.signoff_status||'Draft'
   }));
-  /* 2026-10-09: budget line items -> campaign figures. Additive and fail-soft: if the tables/columns are missing, or anything errors,
-     campaigns simply keep today's figures. Paged (1000 rows per request) so a large org is never silently truncated. */
-  try{
-    if(window.NorthLineItemRollup){
-      const _all=async mk=>{ let out=[],from=0; for(;;){ const r=await mk().range(from,from+999); if(r.error) return {error:r.error}; out=out.concat(r.data||[]); if((r.data||[]).length<1000||from>=50000) break; from+=1000; } return {data:out}; };
-      const liR=await _all(()=>orgScoped(sb.from('budget_line_items').select('id,parent_type,parent_id,planned_amount,approved_amount,committed_amount,actual_amount').order('id')));
-      if(!liR.error && (liR.data||[]).length){
-        const tkR=await _all(()=>orgScoped(sb.from('tasks').select('id,campaign_id').order('id')));
-        const lm=NorthLineItemRollup.build(liR.data, tkR.error?[]:tkR.data);
-        CFG.campaigns.forEach(c=>{ if(lm[c.id]) c.li=lm[c.id]; });
-      }
-    }
-  }catch(e){ /* line items not installed / not readable: no change to any figure */ }
   CFG.campaignPodAllocations = (podAllocsR.data||[]).map(a=>({id:a.id,orgId:a.org_id,campaignId:a.campaign_id,podId:a.pod_id,sharePct:a.share_pct}));
   CFG.regionGateRates = (regionGateRatesR.error ? [] : (regionGateRatesR.data||[])).map(r=>({id:r.id,orgId:r.org_id,regionId:r.region_id,gateId:r.gate_id,rate:r.rate}));
   CFG.regionStreams = (regionStreamsR.error ? [] : (regionStreamsR.data||[])).map(r=>({id:r.id,orgId:r.org_id,regionId:r.region_id,streamId:r.stream_id,mix:r.mix}));
@@ -3030,7 +3012,7 @@ function adminCampsWidgetProgrammes(){
   const progRows=CFG.programmes.map(p=>{
     const camps=CFG.campaigns.filter(c=>c.programmeId===p.id);
     return { p, camps, count:camps.length, budget:sum(camps.map(c=>campaignBudgetMain(c))),
-      committed:sum(camps.map(c=>{const l=liFig(c,'committed');return l!=null?l:(c.committed||0);})), actual:sum(camps.map(c=>{const l=liFig(c,'actual');return l!=null?l:(c.actual||0);})) };
+      committed:sum(camps.map(c=>c.committed||0)), actual:sum(camps.map(c=>c.actual||0)) };
   });
   const noProg=CFG.campaigns.filter(c=>!c.programmeId).length;
   return `<div class="card"><h3>Programme roll-up <span class="sp"></span><span class="pill n">${CFG.programmes.length}</span>
@@ -3074,13 +3056,13 @@ function adminCampsWidgetTable(){
         ${CFG.regions.map(r=>`<option value="${r.id}" ${r.id===c.regionId?'selected':''}>${esc(r.name)}</option>`).join('')}</select></td>
       <td><input class="cel txt" style="width:104px" type="date" value="${c.start||''}" onchange="setIn('campaigns','${c.id}','start',this.value)"></td>
       <td><input class="cel txt ${bad?'bad':''}" style="width:104px" type="date" value="${c.end||''}" onchange="setIn('campaigns','${c.id}','end',this.value)"></td>
-      <td class="n">${liHint(c,'budget')}<input class="cel" value="${c.budget}" onchange="setIn('campaigns','${c.id}','budget',this.value,'money');recomputeCampaignBudgetFx('${c.id}')">
+      <td class="n"><input class="cel" value="${c.budget}" onchange="setIn('campaigns','${c.id}','budget',this.value,'money');recomputeCampaignBudgetFx('${c.id}')">
         <div style="display:flex;align-items:center;gap:3px;margin-top:2px">
           <select class="cel txt" style="width:62px;font-size:10px;padding:2px 4px" title="Currency this budget was entered in, if not ${CFG.currency.main}" onchange="setCampaignBudgetCurrency('${c.id}',this.value)">${currencyOptionsHtml(c.budgetCcy, {blankLabel: CFG.currency.main+' (default)'})}</select>
           ${(c.budgetFx&&c.budgetFx.originalCurrency&&c.budgetFx.originalCurrency!==CFG.currency.main)?`<span class="mini" title="Converted ${esc(F.dt(c.budgetFx.convertedAt))} at rate ${c.budgetFx.rate}">≈ ${F.mk(c.budgetFx.converted)} ${CFG.currency.main}</span>`:''}
         </div></td>
-      <td class="n">${liHint(c,'committed')}<input class="cel" value="${c.committed||0}" onchange="setIn('campaigns','${c.id}','committed',this.value,'money')"></td>
-      <td class="n">${liHint(c,'actual')}<input class="cel" value="${c.actual||0}" onchange="setIn('campaigns','${c.id}','actual',this.value,'money')"></td>
+      <td class="n"><input class="cel" value="${c.committed||0}" onchange="setIn('campaigns','${c.id}','committed',this.value,'money')"></td>
+      <td class="n"><input class="cel" value="${c.actual||0}" onchange="setIn('campaigns','${c.id}','actual',this.value,'money')"></td>
       <td><select class="cel txt" style="width:150px" onchange="setIn('campaigns','${c.id}','costBucketId',this.value)">
         ${CFG.costBuckets.map(b=>`<option value="${b.id}" ${b.id===c.costBucketId?'selected':''}>${esc(b.label)}</option>`).join('')}</select></td>
       <td><select class="cel txt" style="width:150px" onchange="applyRateSource('${c.id}',this.value)">

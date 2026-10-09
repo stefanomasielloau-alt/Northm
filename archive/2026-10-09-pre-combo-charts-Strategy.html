@@ -582,7 +582,6 @@ window.closeFieldGuide=closeFieldGuide;
 <script src="shared/convertToMain.js"></script>
 <script src="shared/currencyOptions.js"></script>
 <script src="shared/charts.js"></script>
-<script src="shared/chartsCombo.js"></script>
 <script src="assets/vendor/gridstack/gridstack-all.js"></script>
 <script src="shared/grid.js"></script>
 <script src="shared/aiRouter.js"></script>
@@ -5184,11 +5183,10 @@ function campaignWidgetCalendar(){
   const spend=fut.map(f=>sum(camps.filter(c=>c.start&&c.end&&c.start.slice(0,7)<=f.key&&c.end.slice(0,7)>=f.key)
     .map(c=>{const a=(new Date(c.end)-new Date(c.start))/86400000/30.4; return a>0?campaignBudgetMain(c)/a:campaignBudgetMain(c);})));
   return `<div class="card"><h3>Campaign calendar — next 12 months</h3><div class="bd">
-    ${(typeof chartPick==='function'&&!window.NORTH_NO_COMBO)?chartPick('strategy-camp-calendar',fut.map(f=>f.label),[{k:'Spend per month',type:'bar',axis:'left',v:spend},{k:'Campaigns live',type:'line',axis:'right',v:conc}],{money:true,h:210}):`    ${svgLines(fut.map(f=>f.label),[{k:'Campaigns live',v:conc}],{h:170})}
+    ${svgLines(fut.map(f=>f.label),[{k:'Campaigns live',v:conc}],{h:170})}
     <div class="lgd"><span><i style="background:${SER[0]}"></i>Campaigns running concurrently</span></div>
     <div class="dv"></div>
     ${svgBars(fut.map((f,i)=>({k:f.label,v:spend[i]})),{h:190,money:true,maxBw:34})}
-`}
     <div class="mini" style="margin-top:4px">Spend straight-lined across each campaign's duration. Peak concurrency is the
       input to overlap analysis in module 8 — you cannot attribute lift without knowing what else was running.</div>
   </div></div>`;
@@ -5469,9 +5467,9 @@ function actualsWidgetTrendChart(){
   const vis=visibleRegions().map(r=>r.id);
   const fys=['FY25','FY26','FY27'];
   return `<div class="card"><h3>Multi-year trend — ${esc(exitGate().name)}</h3><div class="bd">
-      ${(typeof chartPick==='function'&&!window.NORTH_NO_COMBO)?chartPick('strategy-actuals-trend',fys,[{k:'Actual',type:'bar',v:fys.map(f=>histSlice({fy:f,regionIds:vis}).acc[exitGate().id])},{k:'Plan',type:'line',dash:true,v:fys.map(()=>CFG.drivers.winTarget)}],{h:200,dec:0}):`${svgLines(fys,[{k:'Actual',v:fys.map(f=>histSlice({fy:f,regionIds:vis}).acc[exitGate().id])},
+      ${svgLines(fys,[{k:'Actual',v:fys.map(f=>histSlice({fy:f,regionIds:vis}).acc[exitGate().id])},
                       {k:'Plan',v:fys.map(()=>CFG.drivers.winTarget),dash:true}],{h:200})}
-      <div class="lgd"><span><i style="background:${SER[0]}"></i>Actual</span><span><i style="background:${SER[1]}"></i>Plan</span></div>`}</div></div>`;
+      <div class="lgd"><span><i style="background:${SER[0]}"></i>Actual</span><span><i style="background:${SER[1]}"></i>Plan</span></div></div></div>`;
 }
 function actualsWidgetRegionChart(){
   return `<div class="card"><h3>Actual by region — ${esc(UI.fy)}</h3><div class="bd">
@@ -6398,7 +6396,7 @@ function pageBoardReport(){
     return {b,bud,com,act,spend,pct};
   }).filter(r=>r.bud||r.com||r.act);
   h+=`<div class="card"><h3>Budget summary, by cost bucket</h3>
-    <div class="bd">${bucketRows.length?((typeof chartPick==='function'&&!window.NORTH_NO_COMBO)?chartPick('strategy-budget-by-bucket',bucketRows.map(r=>r.b.label),[{k:'Budget',type:'bar',v:bucketRows.map(r=>r.bud)},{k:'Spend (actual, or committed where no actual)',type:'line',v:bucketRows.map(r=>r.spend)}],{money:true,h:200}):svgBars(bucketRows.map(r=>({k:r.b.label,v:r.bud})),{money:true,h:180})):''}</div>
+    <div class="bd">${bucketRows.length?svgBars(bucketRows.map(r=>({k:r.b.label,v:r.bud})),{money:true,h:180}):''}</div>
     <div class="bd flush"><table><thead><tr><th>Bucket</th><th class="n">Budget</th><th class="n">Committed</th><th class="n">Actual</th><th class="n">% of plan</th><th>Status</th></tr></thead><tbody>
     ${bucketRows.length?bucketRows.map(r=>{ const st=r.pct<=1?'ok':r.pct<1.15?'warn':'bad';
       return `<tr><td class="lb">${esc(r.b.label)}</td><td class="n calc">${F.mk(r.bud)}</td><td class="n calc">${F.mk(r.com)}</td><td class="n calc">${F.mk(r.act)}</td>

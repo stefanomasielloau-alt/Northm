@@ -1,0 +1,205 @@
+/* shared/chartsCombo.js -- ADDITIVE chart helpers (added 2026-10-09). Does NOT change anything in
+   shared/charts.js. Loaded with a plain <script src="shared/chartsCombo.js"> AFTER charts.js.
+
+   What it adds
+     svgCombo(cats, series, opts)  -- one chart that can mix bars, lines and areas, with an optional
+                                      second (right-hand) axis. Returns an inline <svg> string, same
+                                      look/colours/fonts as the existing six charts. Every bar/point
+                                      has a native hover tooltip (<title>).
+     comboLegend(series)           -- legend HTML in the same markup the existing pages use (.lgd).
+     chartPick(id, cats, series, opts) -- svgCombo + a small "Show as: Combo | Bars | Stacked | Lines"
+                                      switch. The choice is remembered per browser (localStorage, wrapped
+                                      in try/catch; the chart works fine without it).
+
+   series item: { k:'label', v:[numbers|null...], type:'bar'|'line'|'area' (default 'bar'),
+                  axis:'left'|'right' (default 'left'), c:'#colour' (default SER[n]), dash:true }
+   opts: w, h, money (left axis in $), pct (left axis as %), dec, moneyR / pctR / decR (right axis),
+         stack:true (stack the bar series on the left axis), labels:true (value labels on bars),
+         type:'combo'|'bars'|'stack'|'lines' (chartPick start view)
+
+   Host globals (same ones charts.js already needs; looked up at call time, with safe fallbacks):
+     esc, F.n / F.p / F.mk, SER.
+   ROLLBACK: nothing else depends on this file. If it fails to load, pages fall back to their
+   original charts (every call site checks typeof svgCombo / chartPick). Kill switch for testing:
+   set window.NORTH_NO_COMBO=true before the page renders. */
+(function(){
+  'use strict';
+  var G = (typeof window !== 'undefined') ? window : globalThis;
+
+  function _esc(s){ return (typeof G.esc === 'function') ? G.esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function _num(v){ v = +v; return isFinite(v) ? v : 0; }
+  function _ser(i){ var S = (typeof G.SER !== 'undefined' && G.SER && G.SER.length) ? G.SER : ['#3B4CB8','#10AEBF','#E8A317','#D0342C','#7A5AC8','#2E9E5B','#C4559A','#7C879E']; return S[i % S.length]; }
+  function _fmt(v, kind, dec){
+    var F = G.F || {};
+    if (kind === 'money') return F.mk ? F.mk(v) : '$' + Math.round(v);
+    if (kind === 'pct')   return F.p ? F.p(v, 0) : Math.round(v * 100) + '%';
+    return F.n ? F.n(v, dec || 0) : String(Math.round(v * Math.pow(10, dec || 0)) / Math.pow(10, dec || 0));
+  }
+
+  function svgCombo(cats, series, opts){
+    opts = opts || {}; cats = cats || [];
+    series = (series || []).map(function(s, i){
+      return { k: s.k, type: (s.type === 'line' || s.type === 'area') ? s.type : 'bar', axis: s.axis === 'right' ? 'right' : 'left',
+               c: s.c || _ser(i), dash: !!s.dash,
+               v: (s.v || []).map(function(v){ return (v == null || (typeof v === 'number' && isNaN(v))) ? null : _num(v); }) };
+    });
+    var n = cats.length;
+    if (!n || !series.length) return '<svg viewBox="0 0 10 10" width="100%" height="10"></svg>';
+    var hasR = series.some(function(s){ return s.axis === 'right'; });
+    var w = opts.w || 620, h = opts.h || 210, pl = 46, pr = hasR ? 46 : 10, pb = 30, pt = 14;
+    var iw = w - pl - pr, ih = h - pb - pt, step = iw / n;
+
+    var barsL = series.filter(function(s){ return s.type === 'bar' && s.axis === 'left'; });
+    var barsR = series.filter(function(s){ return s.type === 'bar' && s.axis === 'right'; });
+    var nb = Math.max(1, barsL.length + barsR.length); // all bars share the slot, grouped side by side
+    var stack = !!opts.stack && barsL.length > 1;
+
+    function axisMax(axis){
+      var m = 1, i;
+      if (stack && axis === 'left'){
+        for (i = 0; i < n; i++){ var t = 0; barsL.forEach(function(s){ t += Math.max(0, s.v[i] || 0); }); if (t > m) m = t; }
+      }
+      series.forEach(function(s){
+        if (s.axis !== axis) return;
+        if (stack && axis === 'left' && s.type === 'bar') return;
+        s.v.forEach(function(v){ if (v != null && v > m) m = v; });
+      });
+      return m;
+    }
+    var maxL = axisMax('left'), maxR = hasR ? axisMax('right') : 1;
+    var kindL = opts.pct ? 'pct' : (opts.money ? 'money' : 'n');
+    var kindR = opts.pctR ? 'pct' : (opts.moneyR ? 'money' : 'n');
+    var Y = function(v, m){ return pt + ih * (1 - Math.max(0, v) / m); };
+    var cx = function(i){ return pl + step * i + step / 2; };
+
+    var s = '<line x1="' + pl + '" y1="' + (h - pb) + '" x2="' + (w - pr + 4) + '" y2="' + (h - pb) + '" stroke="#DFE3EB"/>';
+    for (var k = 0; k <= 3; k++){
+      var y = pt + ih * (k / 3);
+      s += '<line x1="' + pl + '" y1="' + y + '" x2="' + (w - pr + 4) + '" y2="' + y + '" stroke="#EEF1F6"/>';
+      s += '<text x="' + (pl - 6) + '" y="' + (y + 3) + '" text-anchor="end" font-size="9" fill="#7C879E">' + _fmt(maxL * (1 - k / 3), kindL, opts.dec) + '</text>';
+      if (hasR) s += '<text x="' + (w - pr + 8) + '" y="' + (y + 3) + '" text-anchor="start" font-size="9" fill="#7C879E">' + _fmt(maxR * (1 - k / 3), kindR, opts.decR) + '</text>';
+    }
+
+    // --- bars (drawn first so lines/areas sit on top) ---
+    var groupW = Math.min(nb * 38, step * 0.72);
+    var oneW = stack ? Math.min(50, step * 0.62) : groupW / nb;
+    var bi = 0;
+    series.forEach(function(sr){
+      if (sr.type !== 'bar') return;
+      var slot = bi++;
+      for (var i = 0; i < n; i++){
+        var v = sr.v[i]; if (v == null) continue; v = Math.max(0, v);
+        var m = sr.axis === 'right' ? maxR : maxL, kind = sr.axis === 'right' ? kindR : kindL, dec = sr.axis === 'right' ? opts.decR : opts.dec;
+        var bh = Math.max(1, (v / m) * ih), x, yTop;
+        if (stack && sr.axis === 'left'){
+          var idx = barsL.indexOf(sr), acc = 0, j;
+          for (j = 0; j < idx; j++) acc += Math.max(0, barsL[j].v[i] || 0);
+          bh = (v / maxL) * ih; if (bh < 0.5) continue;
+          x = cx(i) - oneW / 2; yTop = pt + ih - (acc / maxL) * ih - bh;
+        } else {
+          x = cx(i) - groupW / 2 + slot * oneW; yTop = h - pb - bh;
+        }
+        s += '<rect x="' + x + '" y="' + yTop + '" width="' + Math.max(1, oneW - (stack ? 0 : 2)) + '" height="' + bh + '" rx="2" fill="' + sr.c + '" opacity=".9"><title>' + _esc(sr.k) + ' — ' + _esc(cats[i]) + ': ' + _fmt(v, kind, dec) + '</title></rect>';
+        if (opts.labels && nb === 1 && !stack) s += '<text x="' + (x + oneW / 2) + '" y="' + (yTop - 4) + '" text-anchor="middle" font-size="9.5" font-weight="750" fill="#45506B">' + _fmt(v, kind, dec) + '</text>';
+      }
+    });
+    if (stack){ // totals above stacks
+      for (var t = 0; t < n; t++){
+        var tot = 0; barsL.forEach(function(sr){ tot += Math.max(0, sr.v[t] || 0); });
+        if (opts.labels) s += '<text x="' + cx(t) + '" y="' + (pt + ih - (tot / maxL) * ih - 4) + '" text-anchor="middle" font-size="9.5" font-weight="750" fill="#45506B">' + _fmt(tot, kindL, opts.dec) + '</text>';
+      }
+    }
+
+    // --- areas then lines ---
+    series.forEach(function(sr){
+      if (sr.type !== 'area') return;
+      var m = sr.axis === 'right' ? maxR : maxL, pts = [], first = -1, last = -1;
+      sr.v.forEach(function(v, i){ if (v == null) return; if (first < 0) first = i; last = i; pts.push(cx(i) + ',' + Y(v, m)); });
+      if (pts.length > 1) s += '<polygon points="' + cx(first) + ',' + (h - pb) + ' ' + pts.join(' ') + ' ' + cx(last) + ',' + (h - pb) + '" fill="' + sr.c + '" opacity=".16"/>';
+    });
+    series.forEach(function(sr){
+      if (sr.type === 'bar') return;
+      var m = sr.axis === 'right' ? maxR : maxL, kind = sr.axis === 'right' ? kindR : kindL, dec = sr.axis === 'right' ? opts.decR : opts.dec;
+      var pts = [];
+      sr.v.forEach(function(v, i){ if (v != null) pts.push(cx(i) + ',' + Y(v, m)); });
+      if (pts.length > 1) s += '<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + sr.c + '" stroke-width="' + (sr.dash ? 1.6 : 2.1) + '"' + (sr.dash ? ' stroke-dasharray="4 3"' : '') + ' stroke-linejoin="round"/>';
+      sr.v.forEach(function(v, i){
+        if (v == null) return;
+        s += '<circle cx="' + cx(i) + '" cy="' + Y(v, m) + '" r="2.8" fill="#fff" stroke="' + sr.c + '" stroke-width="1.8"><title>' + _esc(sr.k) + ' — ' + _esc(cats[i]) + ': ' + _fmt(v, kind, dec) + '</title></circle>';
+      });
+    });
+
+    cats.forEach(function(c, i){
+      if (n > 14 && i % 2) return;
+      s += '<text x="' + cx(i) + '" y="' + (h - pb + 13) + '" text-anchor="middle" font-size="9" fill="#7C879E">' + _esc(c) + '</text>';
+    });
+    return '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" height="' + h + '" role="img">' + s + '</svg>';
+  }
+
+  function comboLegend(series){
+    return '<div class="lgd">' + (series || []).map(function(sr, i){
+      var side = sr.axis === 'right' ? ' (right axis)' : '';
+      return '<span><i style="background:' + (sr.c || _ser(i)) + '"></i>' + _esc(sr.k) + side + '</span>';
+    }).join('') + '</div>';
+  }
+
+  // ---- chartPick: svgCombo + "Show as" switch -------------------------------------------------
+  var REG = G.__nchartReg = G.__nchartReg || {};
+  var VIEWS = [['combo', 'Combo'], ['bars', 'Bars'], ['stack', 'Stacked'], ['lines', 'Lines']];
+
+  function _view(id, opts){
+    var v = (opts && opts.type) || 'combo';
+    try { var saved = G.localStorage && G.localStorage.getItem('north.chartpick.' + id); if (saved) v = saved; } catch (e) {}
+    return VIEWS.some(function(x){ return x[0] === v; }) ? v : 'combo';
+  }
+  function _asView(series, view, opts){
+    var o = {}; for (var k in (opts || {})) o[k] = opts[k];
+    var one = series.length < 2;
+    var sr = series.map(function(s){ var c = {}; for (var k2 in s) c[k2] = s[k2]; return c; });
+    // Axis assignments are kept in every view (units on the two axes may differ, e.g. $ and a count),
+    // so switching view only changes the SHAPE, never which axis a series is read against.
+    if (view === 'bars'){ sr.forEach(function(s){ s.type = 'bar'; }); o.stack = false; }
+    else if (view === 'stack'){ sr.forEach(function(s){ s.type = 'bar'; }); o.stack = !one; o.labels = true; }
+    else if (view === 'lines'){ sr.forEach(function(s){ s.type = 'line'; }); o.stack = false; }
+    else { o.stack = false; }
+    return { series: sr, opts: o };
+  }
+  function _body(id){
+    var r = REG[id]; if (!r) return '';
+    var d = _asView(r.series, r.view, r.opts);
+    return svgCombo(r.cats, d.series, d.opts) + comboLegend(d.series);
+  }
+  function _toolbar(id, view){
+    return '<div class="ncp-tb" style="display:flex;gap:4px;align-items:center;margin:0 0 6px;font-size:11px;color:#7C879E">Show as ' + VIEWS.map(function(x){
+      var on = x[0] === view;
+      return '<button type="button" data-ncp-id="' + _esc(id) + '" data-ncp-view="' + x[0] + '" aria-pressed="' + on + '" style="font:inherit;font-size:11px;padding:2px 8px;border-radius:999px;cursor:pointer;border:1px solid ' + (on ? '#3B4CB8' : '#DFE3EB') + ';background:' + (on ? '#3B4CB8' : '#fff') + ';color:' + (on ? '#fff' : '#45506B') + '">' + x[1] + '</button>';
+    }).join('') + '</div>';
+  }
+  function chartPick(id, cats, series, opts){
+    opts = opts || {};
+    // keep the user's pick in memory across page re-renders (works even if storage is blocked);
+    // otherwise fall back to the saved pick, then to the chart's own default
+    var prev = REG[id] && REG[id].view;
+    REG[id] = { cats: cats, series: series, opts: opts, view: prev || _view(id, opts) };
+    _ensureHandlers();
+    return '<div class="ncp" data-ncp="' + _esc(id) + '">' + _toolbar(id, REG[id].view) + '<div class="ncp-body">' + _body(id) + '</div></div>';
+  }
+  var _wired = false;
+  function _ensureHandlers(){
+    if (_wired || typeof document === 'undefined') return; _wired = true;
+    var st = document.createElement('style');
+    st.textContent = '@media print{.ncp-tb{display:none!important}}';
+    document.head.appendChild(st);
+    document.addEventListener('click', function(ev){
+      var b = ev.target && ev.target.closest && ev.target.closest('button[data-ncp-view]'); if (!b) return;
+      var id = b.getAttribute('data-ncp-id'), view = b.getAttribute('data-ncp-view'); if (!REG[id]) return;
+      REG[id].view = view;
+      try { G.localStorage && G.localStorage.setItem('north.chartpick.' + id, view); } catch (e) {}
+      var wrap = b.closest('.ncp'); if (!wrap) return;
+      wrap.querySelector('.ncp-tb').outerHTML = _toolbar(id, view);
+      wrap.querySelector('.ncp-body').innerHTML = _body(id);
+    });
+  }
+
+  G.svgCombo = svgCombo; G.comboLegend = comboLegend; G.chartPick = chartPick;
+})();

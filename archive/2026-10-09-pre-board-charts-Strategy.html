@@ -2010,7 +2010,7 @@ async function loadFromSupabase(){
      aren't reachable for any reason, the Board Report's section renders empty instead of
      breaking Ordo's own load. */
   CFG.targetsSummary = { filterCount:0, topFilters:[] };
-  CFG.scoringSummary = { dealCount:0, pipelineValue:0, byStage:{}, valueByStage:{} };
+  CFG.scoringSummary = { dealCount:0, pipelineValue:0, byStage:{} };
   try{
     const [pf, ad] = await Promise.all([
       sb.from('prospectus_filters').select('id,name,industry,deal_value,currency'),
@@ -2023,10 +2023,10 @@ async function loadFromSupabase(){
     }
     if(!ad.error){
       const rows = ad.data||[];
-      const byStage = {}, valueByStage = {};
+      const byStage = {};
       let pipelineValue = 0;
-      rows.forEach(d=>{ const st=d.stage||'Unspecified'; byStage[st]=(byStage[st]||0)+1; valueByStage[st]=(valueByStage[st]||0)+(d.value||0); pipelineValue += (d.value||0); });
-      CFG.scoringSummary = { dealCount: rows.length, pipelineValue, byStage, valueByStage };
+      rows.forEach(d=>{ const st=d.stage||'Unspecified'; byStage[st]=(byStage[st]||0)+1; pipelineValue += (d.value||0); });
+      CFG.scoringSummary = { dealCount: rows.length, pipelineValue, byStage };
     }
   }catch(e){ /* prospectus_filters/augur_deals not reachable (RLS, or org hasn't run those
                 modules yet) -- Board Report's Targets/Scoring section just renders empty
@@ -6379,14 +6379,6 @@ function pageBoardReport(){
       <div class="sub" style="color:${spendSt==='bad'?'var(--bad)':spendSt==='warn'?'var(--warn)':'var(--ok)'}">${F.sp(spendVar,0)} vs ${F.mk(budgeted)} budgeted</div></div>
   </div>`;
 
-  /* 1b. Plan vs actual by year (2026-10-09): Actual bars + Plan line, same data and FY list as the
-     Actuals page's Multi-year trend. Additive; skipped if shared/chartsCombo.js is not loaded. */
-  if((typeof chartPick==='function'&&!window.NORTH_NO_COMBO)){
-    const brFys=['FY25','FY26','FY27'];
-    h+=`<div class="card"><h3>Plan vs actual by year -- ${esc(exitGate().name)}</h3><div class="bd">${chartPick('strategy-br-year',brFys,[{k:'Actual',type:'bar',v:brFys.map(f=>histSlice({fy:f,regionIds:visIds}).acc[exitId])},{k:'Plan',type:'line',dash:true,v:brFys.map(()=>d.winTarget)}],{h:200,dec:0})}
-      <div class="mini" style="margin-top:4px">Plan = the win target set in Drivers &amp; rates.</div></div></div>`;
-  }
-
   /* 2. Funnel snapshot -- chart added 2026-09-03 (item: more charting in Reporting/Board
      report), same data the table below already computes, no second calculation. */
   h+=`<div class="card"><h3>Funnel snapshot -- ${esc(version().name)} &middot; ${esc(UI.fy)}</h3>
@@ -6441,7 +6433,6 @@ function pageBoardReport(){
     </div></div>
     <div class="card"><h3>Scoring (deal pipeline)</h3><div class="bd">
       ${CFG.scoringSummary.dealCount?`<p class="mini" style="margin:0 0 8px">${CFG.scoringSummary.dealCount} deal${CFG.scoringSummary.dealCount===1?'':'s'} tracked, ${F.mk(pipelineValue)} total value.</p>
-        ${(typeof chartPick==='function'&&!window.NORTH_NO_COMBO)?chartPick('strategy-br-pipeline',Object.keys(CFG.scoringSummary.byStage),[{k:'Pipeline value',type:'bar',v:Object.keys(CFG.scoringSummary.byStage).map(st=>(CFG.scoringSummary.valueByStage||{})[st]||0)},{k:'Deals',type:'line',axis:'right',v:Object.keys(CFG.scoringSummary.byStage).map(st=>CFG.scoringSummary.byStage[st])}],{money:true,h:200}):''}
         <table><thead><tr><th>Stage</th><th class="n">Deals</th></tr></thead><tbody>
         ${Object.keys(CFG.scoringSummary.byStage).map(st=>`<tr><td class="lb">${esc(st)}</td><td class="n calc">${CFG.scoringSummary.byStage[st]}</td></tr>`).join('')}
         </tbody></table>`:'<div class="empty">No deals tracked in Scoring yet.</div>'}
@@ -6469,17 +6460,6 @@ function pageBoardReport(){
           <a href="#" onclick="removeBoardReportNote('${n.id}');return false" style="color:var(--bad)">Remove</a></td></tr>`).join('')}
       </tbody></table></div></div>`;
   }
-
-  /* 6b. Gap to target by region (2026-10-09): waterfall from the regional ACV target to recorded ACV,
-     one step per visible region (actual - target). Uses existing fields only (region acvTarget,
-     histSlice _acv); no new calculation elsewhere. */
-  const brReg=vis.map(r=>({name:r.name,tgt:+r.acvTarget||0,act:+histSlice({fy:UI.fy,regionIds:[r.id]}).acc._acv||0}));
-  const brTgt=sum(brReg.map(x=>x.tgt)), brAct=sum(brReg.map(x=>x.act));
-  h+=`<div class="card"><h3>Gap to target by region -- ACV, ${esc(UI.fy)}</h3><div class="bd">
-    ${(brTgt||brAct)?svgWaterfall([{k:'ACV target',v:brTgt}].concat(brReg.map(x=>({k:x.name,v:x.act-x.tgt}))).concat([{k:'ACV actual',total:true}]),{money:true,h:210})
-      :'<div class="empty">No regional ACV targets or recorded ACV yet.</div>'}
-    <div class="mini" style="margin-top:4px">Target = regional ACV targets (Geography &amp; pods). Actual = recorded ACV for ${esc(UI.fy)}. Each step is a region's actual minus its target: teal = ahead, red = behind.</div>
-  </div></div>`;
 
   /* 7. What changed this period -- narrative. Computed template is the default and the
      fail-soft fallback; a button upgrades it to a real AI-written paragraph on demand. */

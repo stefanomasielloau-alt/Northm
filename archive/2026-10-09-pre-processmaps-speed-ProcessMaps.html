@@ -716,11 +716,7 @@ async function loadFromSupabase(){
     if(tcR.data && tcR.data.tracking_config) CFG.trackingConfig = tcR.data.tracking_config;
   }catch(e){ console.warn('org_settings.tracking_config not available yet (migration pending?) -- keeping local/imported tracking config, if any.', e); }
 
-  /* 2026-10-09 (speed): this used to be awaited, which held the whole first screen back for as long as Hub-Backend took to answer
-     (measured 14 s on a cold start; everything else loads in ~2 s). It now runs in the background: it is fail-soft, and
-     runAutomations() (the Automations page's own immediate run and 5-minute poll) fetches the events again before it evaluates anything,
-     so no automation fires any differently. The events simply merge into CFG.evalExternalEvents when they arrive. */
-  refreshExternalTriggerEvents();
+  await refreshExternalTriggerEvents();
 
   CFG.workflows = (workflowsR.data||[]).map(w=>({
     id:w.id,orgId:w.org_id,name:w.name,description:w.description||'',updatedAt:w.updated_at||'',

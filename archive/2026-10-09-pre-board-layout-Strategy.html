@@ -6284,12 +6284,9 @@ async function changeBoardReportSheet(){
   await saveBoardReportSheetId(trimmed?_extractSheetId(trimmed):'');
 }
 window.changeBoardReportSheet = changeBoardReportSheet;
-/* ---- Board report data, computed once per render (2026-10-09, layout): the same values the page always
-   computed, now in one function so each section can be its own movable widget (see boardReportWidget* below).
-   _brMemo holds the result only while pageBoardReport is building the page; a widget used anywhere else
-   recomputes. ---- */
-let _brMemo=null;
-function brCompute(){
+function pageBoardReport(){
+  if(CFG.boardReportAccess && CFG.boardReportAccess.enforced && !CFG.boardReportAccess.allowed && window.NorthBoardReportAccess) return NorthBoardReportAccess.noAccessHtml();
+  if(calcBlocked()) return blockedPanel('Board report');
   const d=CFG.drivers, m=verMult()*segBlend();
   const vis=visibleRegions(), visIds=vis.map(r=>r.id);
   const gates=chain(), exitId=exitGate().id;
@@ -6305,16 +6302,6 @@ function brCompute(){
   const spendSt = (actualSpend||committed)<=budgeted?'ok':spendVar<0.1?'warn':'bad';
 
   const pipelineValue = CFG.scoringSummary.pipelineValue||0;
-  const fyNotes = CFG.boardReportNotes.filter(n=>n.fy===UI.fy);
-  return {d,m,vis,visIds,gates,exitId,plan,actualAcc,winVar,winSt,revenue,camps,budgeted,committed,actualSpend,spendVar,spendSt,pipelineValue,fyNotes};
-}
-function brState(){ return _brMemo||brCompute(); }
-
-function pageBoardReportInner(){
-  if(CFG.boardReportAccess && CFG.boardReportAccess.enforced && !CFG.boardReportAccess.allowed && window.NorthBoardReportAccess) { window.__northGridSubId='boardreport_view'; return NorthBoardReportAccess.noAccessHtml(); }
-  if(calcBlocked()) return blockedPanel('Board report');
-  const B=brCompute(); _brMemo=B;
-  const {d,m,vis,visIds,gates,exitId,plan,actualAcc,winVar,winSt,revenue,camps,budgeted,committed,actualSpend,spendVar,spendSt,pipelineValue,fyNotes}=B;
   UI.brAi = UI.brAi || { status:'idle', text:'', error:'' };
   UI._brCtx = 'Exit gate ('+exitGate().name+'): actual '+F.n(actualAcc[exitId])+' vs plan '+F.n(plan[exitId])+' ('+F.sp(winVar,0)+' variance). '+
     'Budget: committed '+F.mk(committed)+', actual spend '+F.mk(actualSpend)+', budgeted '+F.mk(budgeted)+' ('+F.sp(spendVar,0)+' variance). '+
@@ -6355,6 +6342,7 @@ function pageBoardReportInner(){
     commentary: CFG.boardReportNotes.filter(n=>n.fy===UI.fy && n.visible).map(n=>({text:n.note, author:n.createdBy, ts:F.dt(n.createdAt)})),
     disclaimer: 'Generated '+F.dt(new Date().toISOString())+' from the '+version().name+' version, '+UI.fy+'. This is a point-in-time snapshot -- it does not update itself.'
   };
+  const fyNotes = CFG.boardReportNotes.filter(n=>n.fy===UI.fy);
 
   const brSorted=(CFG.boardReportSnapshots||[]).slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   const brViewing=UI.brViewSnapId?byId(brSorted,UI.brViewSnapId):null;
@@ -6389,37 +6377,8 @@ function pageBoardReportInner(){
       </tbody></table></div>`:''}
   </div></div>`;
 
-  if(brViewing){ window.__northGridSubId='boardreport_view'; return h + boardReportSnapshotView(brViewing); }
+  if(brViewing) return h + boardReportSnapshotView(brViewing);
 
-  /* ---- Layout (2026-10-09): ten movable boxes in the same order as before. Uses the shared Edit layout /
-     Reset layout tool (shared/grid.js, page id 'boardreport'). Printing follows the on-screen layout via the
-     beforeprint handler below. ---- */
-  const brBoxSizes={box1:12,box2:12,box3:12,box4:12,box5:12,box6:6,box7:6,box8:12,box9:12,box10:12};
-  const brDefaults={box1:'kpis',box2:'yearchart',box3:'funnel',box4:'budget',box5:'highlights',box6:'targets',box7:'scoring',box8:'commentary',box9:'bridge',box10:'whatchanged'};
-  const brFns={kpis:boardReportWidgetKpis,yearchart:boardReportWidgetYearChart,funnel:boardReportWidgetFunnel,budget:boardReportWidgetBudget,highlights:boardReportWidgetHighlights,targets:boardReportWidgetTargets,scoring:boardReportWidgetScoring,commentary:boardReportWidgetCommentary,bridge:boardReportWidgetBridge,whatchanged:boardReportWidgetWhatChanged};
-  const brAssigned=(window.northGetWidgetAssignments?window.northGetWidgetAssignments('boardreport'):brDefaults);
-  h+=`<div class="grid-stack" id="ordo-grid-boardreport">`;
-  Object.keys(brBoxSizes).forEach(boxId=>{
-    const widgetId=brAssigned[boxId]||brDefaults[boxId];
-    const wfn=brFns[widgetId]||(()=>'<div class="card"><div class="bd">Unknown widget.</div></div>');
-    h+=`<div class="grid-stack-item" gs-w="${brBoxSizes[boxId]}" gs-id="${boxId}">
-      <div class="grid-stack-item-content">${wfn()}</div>
-    </div>`;
-  });
-  h+=`</div>`;
-
-  /* 8. Disclaimer / generated-on footer */
-  h+=`<div class="mini" style="margin-top:14px;padding-top:10px;border-top:1px solid var(--line,#DFE3EB)">
-    Generated ${F.dt(new Date().toISOString())} from the <b>${esc(version().name)}</b> version, ${esc(UI.fy)}.
-    This is a point-in-time snapshot -- reopen this page for a refreshed report; it does not update itself.</div>`;
-
-  return h;
-}
-
-
-function boardReportWidgetKpis(){
-  const B=brState(); const {d,m,vis,visIds,gates,exitId,plan,actualAcc,winVar,winSt,revenue,camps,budgeted,committed,actualSpend,spendVar,spendSt,pipelineValue,fyNotes}=B;
-  let h='';
   /* 1. Headline KPI strip */
   h+=`<div class="kpis">
     <div class="kpi hl"><div class="k">${esc(exitGate().name)} -- plan vs actual</div>
@@ -6432,13 +6391,7 @@ function boardReportWidgetKpis(){
     <div class="kpi"><div class="k">Budget committed / spent</div><div class="kpi-v">${F.mk(committed)}<span class="mini"> / ${F.mk(actualSpend)}</span></div>
       <div class="sub" style="color:${spendSt==='bad'?'var(--bad)':spendSt==='warn'?'var(--warn)':'var(--ok)'}">${F.sp(spendVar,0)} vs ${F.mk(budgeted)} budgeted</div></div>
   </div>`;
-  return h;
-}
-window.boardReportWidgetKpis=boardReportWidgetKpis;
 
-function boardReportWidgetYearChart(){
-  const B=brState(); const {d,m,vis,visIds,gates,exitId,plan,actualAcc,winVar,winSt,revenue,camps,budgeted,committed,actualSpend,spendVar,spendSt,pipelineValue,fyNotes}=B;
-  let h='';
   /* 1b. Plan vs actual by year (2026-10-09): Actual bars + Plan line, same data and FY list as the
      Actuals page's Multi-year trend. Additive; skipped if shared/chartsCombo.js is not loaded. */
   if((typeof chartPick==='function'&&!window.NORTH_NO_COMBO)){
@@ -6446,13 +6399,7 @@ function boardReportWidgetYearChart(){
     h+=`<div class="card"><h3>Plan vs actual by year -- ${esc(exitGate().name)}</h3><div class="bd">${chartPick('strategy-br-year',brFys,[{k:'Actual',type:'bar',v:brFys.map(f=>histSlice({fy:f,regionIds:visIds}).acc[exitId])},{k:'Plan',type:'line',dash:true,v:brFys.map(()=>d.winTarget)}],{h:200,dec:0})}
       <div class="mini" style="margin-top:4px">Plan = the win target set in Drivers &amp; rates.</div></div></div>`;
   }
-  return h;
-}
-window.boardReportWidgetYearChart=boardReportWidgetYearChart;
 
-function boardReportWidgetFunnel(){
-  const B=brState(); const {d,m,vis,visIds,gates,exitId,plan,actualAcc,winVar,winSt,revenue,camps,budgeted,committed,actualSpend,spendVar,spendSt,pipelineValue,fyNotes}=B;
-  let h='';
   /* 2. Funnel snapshot -- chart added 2026-09-03 (item: more charting in Reporting/Board
      report), same data the table below already computes, no second calculation. */
   h+=`<div class="card"><h3>Funnel snapshot -- ${esc(version().name)} &middot; ${esc(UI.fy)}</h3>
@@ -6463,13 +6410,7 @@ function boardReportWidgetFunnel(){
       return `<tr><td class="lb">${esc(g.name)}</td><td class="n calc">${F.n(p)}</td><td class="n calc">${F.n(a)}</td>
         <td class="n">${F.sp(pc,0)}</td><td><span class="pill ${st}">${st==='ok'?'On plan':st==='warn'?'Watch':'Off plan'}</span></td></tr>`;}).join('')}
     </tbody></table></div></div>`;
-  return h;
-}
-window.boardReportWidgetFunnel=boardReportWidgetFunnel;
 
-function boardReportWidgetBudget(){
-  const B=brState(); const {d,m,vis,visIds,gates,exitId,plan,actualAcc,winVar,winSt,revenue,camps,budgeted,committed,actualSpend,spendVar,spendSt,pipelineValue,fyNotes}=B;
-  let h='';
   /* 3. Budget summary, by cost bucket */
   const bucketRows = CFG.costBuckets.map(b=>{
     const bc=camps.filter(cm=>cm.costBucketId===b.id);
@@ -6485,13 +6426,7 @@ function boardReportWidgetBudget(){
         <td class="n">${F.p(r.pct,0)}</td><td><span class="pill ${st}">${st==='ok'?'On plan':st==='warn'?'Watch':'Over plan'}</span></td></tr>`;}).join('')
       :'<tr><td colspan="6" class="empty">No campaign budget recorded for the visible regions yet.</td></tr>'}
     </tbody></table></div></div>`;
-  return h;
-}
-window.boardReportWidgetBudget=boardReportWidgetBudget;
 
-function boardReportWidgetHighlights(){
-  const B=brState(); const {d,m,vis,visIds,gates,exitId,plan,actualAcc,winVar,winSt,revenue,camps,budgeted,committed,actualSpend,spendVar,spendSt,pipelineValue,fyNotes}=B;
-  let h='';
   /* 4. Campaign highlights -- awaiting sign-off, or meaningfully over/under budget. Not every
      campaign: just the ones that would prompt a board question. */
   const highlightCamps = camps.map(cm=>{
@@ -6508,41 +6443,24 @@ function boardReportWidgetHighlights(){
         <td class="n calc">${F.mk(campaignBudgetMain(x.cm))}</td><td class="n calc">${F.mk(x.spend)}</td><td class="n">${F.sp(x.varr,0)}</td></tr>`;}).join('')
       :'<tr><td colspan="5" class="empty">Nothing awaiting sign-off or meaningfully off budget right now.</td></tr>'}
     </tbody></table></div></div>`;
-  return h;
-}
-window.boardReportWidgetHighlights=boardReportWidgetHighlights;
 
-function boardReportWidgetTargets(){
-  const B=brState(); const {d,m,vis,visIds,gates,exitId,plan,actualAcc,winVar,winSt,revenue,camps,budgeted,committed,actualSpend,spendVar,spendSt,pipelineValue,fyNotes}=B;
-  let h='';
   /* 5. Pipeline / targets context -- summary only (Prospectus/Augur own the detail views) */
-    h+=`<div class="card"><h3>Targets (ICP definitions)</h3><div class="bd">
+  h+=`<div class="grid g2">
+    <div class="card"><h3>Targets (ICP definitions)</h3><div class="bd">
       ${CFG.targetsSummary.filterCount?`<p class="mini" style="margin:0 0 8px">${CFG.targetsSummary.filterCount} ICP filter${CFG.targetsSummary.filterCount===1?'':'s'} defined in Targets.</p>
         <table><thead><tr><th>Name</th><th>Industry</th><th class="n">Deal value</th></tr></thead><tbody>
         ${CFG.targetsSummary.topFilters.map(f=>`<tr><td class="lb">${esc(f.name)}</td><td>${esc(f.industry)}</td><td class="n calc">${F.mk(f.dealValue)}</td></tr>`).join('')}
         </tbody></table>`:'<div class="empty">No ICP filters defined in Targets yet.</div>'}
-    </div></div>`;
-  return h;
-}
-window.boardReportWidgetTargets=boardReportWidgetTargets;
-
-function boardReportWidgetScoring(){
-  const B=brState(); const {d,m,vis,visIds,gates,exitId,plan,actualAcc,winVar,winSt,revenue,camps,budgeted,committed,actualSpend,spendVar,spendSt,pipelineValue,fyNotes}=B;
-  let h='';
-  h+=`<div class="card"><h3>Scoring (deal pipeline)</h3><div class="bd">
+    </div></div>
+    <div class="card"><h3>Scoring (deal pipeline)</h3><div class="bd">
       ${CFG.scoringSummary.dealCount?`<p class="mini" style="margin:0 0 8px">${CFG.scoringSummary.dealCount} deal${CFG.scoringSummary.dealCount===1?'':'s'} tracked, ${F.mk(pipelineValue)} total value.</p>
         ${(typeof chartPick==='function'&&!window.NORTH_NO_COMBO)?chartPick('strategy-br-pipeline',Object.keys(CFG.scoringSummary.byStage),[{k:'Pipeline value',type:'bar',v:Object.keys(CFG.scoringSummary.byStage).map(st=>(CFG.scoringSummary.valueByStage||{})[st]||0)},{k:'Deals',type:'line',axis:'right',v:Object.keys(CFG.scoringSummary.byStage).map(st=>CFG.scoringSummary.byStage[st])}],{money:true,h:200}):''}
         <table><thead><tr><th>Stage</th><th class="n">Deals</th></tr></thead><tbody>
         ${Object.keys(CFG.scoringSummary.byStage).map(st=>`<tr><td class="lb">${esc(st)}</td><td class="n calc">${CFG.scoringSummary.byStage[st]}</td></tr>`).join('')}
         </tbody></table>`:'<div class="empty">No deals tracked in Scoring yet.</div>'}
-    </div></div>`;
-  return h;
-}
-window.boardReportWidgetScoring=boardReportWidgetScoring;
+    </div></div>
+  </div>`;
 
-function boardReportWidgetCommentary(){
-  const B=brState(); const {d,m,vis,visIds,gates,exitId,plan,actualAcc,winVar,winSt,revenue,camps,budgeted,committed,actualSpend,spendVar,spendSt,pipelineValue,fyNotes}=B;
-  let h='';
   /* 6. Commentary -- dated, attributed notes, each independently shown or hidden on the
      printed/PPTX output. Off by default (see addBoardReportNote's comment); toggled per note
      after the fact via toggleBoardReportNoteVisible, not just at creation. Internal-only notes
@@ -6564,13 +6482,7 @@ function boardReportWidgetCommentary(){
           <a href="#" onclick="removeBoardReportNote('${n.id}');return false" style="color:var(--bad)">Remove</a></td></tr>`).join('')}
       </tbody></table></div></div>`;
   }
-  return h;
-}
-window.boardReportWidgetCommentary=boardReportWidgetCommentary;
 
-function boardReportWidgetBridge(){
-  const B=brState(); const {d,m,vis,visIds,gates,exitId,plan,actualAcc,winVar,winSt,revenue,camps,budgeted,committed,actualSpend,spendVar,spendSt,pipelineValue,fyNotes}=B;
-  let h='';
   /* 6b. Gap to target by region (2026-10-09): waterfall from the regional ACV target to recorded ACV,
      one step per visible region (actual - target). Uses existing fields only (region acvTarget,
      histSlice _acv); no new calculation elsewhere. */
@@ -6581,13 +6493,7 @@ function boardReportWidgetBridge(){
       :'<div class="empty">No regional ACV targets or recorded ACV yet.</div>'}
     <div class="mini" style="margin-top:4px">Target = regional ACV targets (Geography &amp; pods). Actual = recorded ACV for ${esc(UI.fy)}. Each step is a region's actual minus its target: teal = ahead, red = behind.</div>
   </div></div>`;
-  return h;
-}
-window.boardReportWidgetBridge=boardReportWidgetBridge;
 
-function boardReportWidgetWhatChanged(){
-  const B=brState(); const {d,m,vis,visIds,gates,exitId,plan,actualAcc,winVar,winSt,revenue,camps,budgeted,committed,actualSpend,spendVar,spendSt,pipelineValue,fyNotes}=B;
-  let h='';
   /* 7. What changed this period -- narrative. Computed template is the default and the
      fail-soft fallback; a button upgrades it to a real AI-written paragraph on demand. */
   h+=`<div class="card"><h3>What changed this period</h3><div class="bd">`;
@@ -6602,46 +6508,14 @@ function boardReportWidgetWhatChanged(){
     else h+=`<div class="mini"><a href="#" onclick="generateBoardReportAiNarrative();return false;">&#10022; Generate an AI-written version</a></div>`;
   }
   h+=`</div></div>`;
+
+  /* 8. Disclaimer / generated-on footer */
+  h+=`<div class="mini" style="margin-top:14px;padding-top:10px;border-top:1px solid var(--line,#DFE3EB)">
+    Generated ${F.dt(new Date().toISOString())} from the <b>${esc(version().name)}</b> version, ${esc(UI.fy)}.
+    This is a point-in-time snapshot -- reopen this page for a refreshed report; it does not update itself.</div>`;
+
   return h;
 }
-window.boardReportWidgetWhatChanged=boardReportWidgetWhatChanged;
-
-function pageBoardReport(){
-  try{ return pageBoardReportInner(); } finally { _brMemo=null; }
-}
-
-
-/* ---- Board report: print follows the on-screen layout (2026-10-09) ----
-   The layout grid positions boxes absolutely with fixed heights, which can clip tall tables when printed.
-   So just before printing, the boxes are copied into a normal flowing block in the same reading order
-   (top to bottom, left to right) and the same relative widths, with no height limit; the copy is removed
-   afterwards. Screen layout is untouched. */
-(function(){
-  const st=document.createElement('style');
-  st.textContent='.br-print-flow{display:none}@media print{.br-print-flow{display:flex!important;flex-wrap:wrap;gap:8px;align-items:flex-start}.br-print-cell{box-sizing:border-box}.br-print-cell .card{break-inside:avoid}.br-print-hide{display:none!important}}';
-  document.head.appendChild(st);
-  let flow=null;
-  window.addEventListener('beforeprint',function(){
-    try{
-      const g=document.getElementById('ordo-grid-boardreport');
-      if(!g||!document.body.contains(g)) return;
-      const items=[].slice.call(g.querySelectorAll(':scope > .grid-stack-item')).map(el=>({el:el,x:+el.getAttribute('gs-x')||0,y:+el.getAttribute('gs-y')||0,w:+el.getAttribute('gs-w')||12}));
-      items.sort((a,b)=>a.y-b.y||a.x-b.x);
-      const wrap=document.createElement('div'); wrap.className='br-print-flow';
-      items.forEach(it=>{
-        const src=it.el.querySelector('.gs-inner')||it.el.querySelector('.grid-stack-item-content'); if(!src) return;
-        const cell=document.createElement('div'); cell.className='br-print-cell';
-        cell.style.width='calc('+(it.w/12*100)+'% - 8px)';
-        [].slice.call(src.childNodes).forEach(n=>{ if(n.classList&&n.classList.contains('gs-item-handle')) return; cell.appendChild(n.cloneNode(true)); });
-        wrap.appendChild(cell);
-      });
-      g.parentNode.insertBefore(wrap,g); g.classList.add('br-print-hide'); flow=wrap;
-    }catch(e){}
-  });
-  window.addEventListener('afterprint',function(){
-    try{ if(flow){ flow.remove(); flow=null; } const g=document.getElementById('ordo-grid-boardreport'); if(g) g.classList.remove('br-print-hide'); }catch(e){}
-  });
-})();
 
 function snapshotsWidgetSave(){
   const ro=readOnly()?'disabled':'';

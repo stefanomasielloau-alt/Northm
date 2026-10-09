@@ -1,0 +1,41 @@
+@media print{.asst{display:none !important}body.asst-pinned .wrap,body.asst-pinned .ctxbar{margin-right:0 !important}}
+
+/* --- Editable grid layout + widget swap, live across all 33 Strategy grid pages/tabs --- */
+.grid-stack{position:relative}
+.grid-stack-item-content{overflow:hidden}
+/* 2026-09-24 (Stef: "tighten up the padding .. that would be a much better outcome"): a
+   widget's own content is very often just a bare .card (every widget fn() wraps its output
+   that way), and .card carries a 14px margin-bottom meant for cards stacked vertically in
+   normal page flow -- inside a grid tile there is nothing below it to space away from, so
+   that 14px just became dead, clipped space at the bottom of the tile on top of whatever
+   the grid's own row gap already provides. Zeroing it only inside a grid tile (every other
+   .card on every non-grid page keeps its normal spacing). */
+.grid-stack-item-content .card{margin-bottom:0}
+.gs-inner{height:auto;min-height:100%;display:flex;flex-direction:column}
+/* 2026-09-28 (Stef: "make the top and bottom the same as side by side"): tile heights snap to
+   12px steps, so a card used to end up to 11px short of its tile, leaving a bigger-looking gap
+   below it than beside it. The card now stretches to fill its tile, so the visible gap between
+   cards is the same 8px vertically as horizontally. */
+.gs-inner>.card{flex:1 0 auto}
+/* 2026-09-28 (Stef: "the field can be heightened to remove the scroll, but it seems to have a fixed
+   maximum height"): tables inside a tile scroll in a box capped at 420px with its own little
+   browser resize grip, which also stopped at 420px. Inside a grid tile the table's scroll area now
+   fills whatever height the tile has -- make the tile taller (corner grip in Edit layout) and the
+   table shows more rows, all the way to no scroll. The separate inner grip is removed so there is
+   one way to resize. Auto-fit still sizes a new tile as if capped at 420px (see .gs-measuring). */
+.grid-stack-item-content .card{display:flex;flex-direction:column}
+.grid-stack-item-content .card>.bd:has(.scroll.cap){flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+.grid-stack-item-content .scroll.cap{flex:1 1 0;max-height:none;min-height:60px;resize:none}
+.grid-stack-item.gs-measuring .scroll.cap{flex:none;max-height:420px}
+.gs-item-handle{
+  display:none;align-items:center;justify-content:space-between;gap:8px;
+  padding:4px 8px;font-size:10.5px;color:var(--ink-3);background:var(--canvas-2);
+  border-bottom:1px solid var(--line);border-radius:var(--r) var(--r) 0 0;cursor:move;user-select:none;
+}
+.grid-edit-mode .gs-item-handle{display:flex}
+/* 2026-09-28 (Stef: option A): in edit mode the drag bar floats over the top of the tile instead
+   of pushing the content down, so a tile's size and content position are identical in view and
+   edit mode and nothing is clipped at the bottom while editing. */
+.gs-inner{position:relative}
+.grid-edit-mode .gs-item-handle{position:absolute;top:0;left:0;right:0;z-index:5;
+  background:rgba(245,247,251,.96);box-shadow:0 1px 3px rgba(0,0,0,.12)}

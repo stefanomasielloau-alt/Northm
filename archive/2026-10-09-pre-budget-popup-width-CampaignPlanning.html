@@ -2846,7 +2846,7 @@ function detailCampaignHtml(id){
   const c=byId(CFG.campaigns,id); if(!c) return '';
   const tasks=TASK(c.id), events=eventsForActivities(tasks), evR=eventRollup(events);
   const partnerAllocs=CFG.campaignPartnerAllocations.filter(a=>a.campaignId===c.id);
-  return `<div class="mask"><div class="modal" style="width:min(1180px,100%)">
+  return `<div class="mask"><div class="modal" style="width:min(620px,100%)">
     <h3>${esc(c.name)} <span class="pill n">Campaign</span> ${ragPillHtml(ragForCampaign(c))}</h3>
     <div class="bd" style="max-height:70vh;overflow:auto">
       <div class="row" style="gap:10px;flex-wrap:wrap">
@@ -2916,7 +2916,7 @@ function detailActivityHtml(id){
   const camp=byId(CFG.campaigns,t.campaignId);
   const linkedEvent=t.eventId?byId(CFG.eventsIndex,t.eventId):null;
   const candidateEvents=camp?CFG.eventsIndex.filter(e=>e.campaignId===camp.id||!e.campaignId):CFG.eventsIndex;
-  return `<div class="mask"><div class="modal" style="width:min(1180px,100%)">
+  return `<div class="mask"><div class="modal" style="width:min(620px,100%)">
     <h3>${esc(t.name)} <span class="pill n">Activity</span> ${ragPillHtml(ragForActivity(t))}</h3>
     <div class="bd" style="max-height:70vh;overflow:auto">
       <div class="row" style="gap:10px;flex-wrap:wrap">

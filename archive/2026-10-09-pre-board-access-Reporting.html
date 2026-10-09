@@ -355,7 +355,6 @@ window.closeFieldGuide=closeFieldGuide;
 <script src="shared/aiRouter.js"></script>
 <script src="shared/aiFill.js"></script>
 <script src="shared/askAlec.js"></script>
-<script src="shared/boardReportAccess.js"></script>
 <link rel="stylesheet" href="assets/vendor/gridstack/gridstack.min.css">
 <script src="assets/vendor/gridstack/gridstack-all.js"></script>
 <script src="shared/grid.js"></script>
@@ -545,12 +544,6 @@ async function loadFromSupabase(){
     console.warn('roles.report_scope not available yet (migration pending?) -- falling back to scope-less roles.', e);
     rolesR = await sb.from('roles').select('id,org_id,name,scope');
   }
-  /* Board report access (2026-10-09): same rule as Strategy -- see shared/boardReportAccess.js. */
-  try{
-    CFG.boardReportAccess = window.NorthBoardReportAccess
-      ? await NorthBoardReportAccess.load(sb,{roleId:_myProfile.role_id,isPlatformAdmin:!!CFG.isSuperAdmin})
-      : {enforced:false,allowed:true};
-  }catch(e){ CFG.boardReportAccess = {enforced:false,allowed:true}; }
 
   /* item 68 v5 fix (2026-09-10): Reportus's existing reportScopeName()==='all' design
      for a Super Admin depends on these 4 tables' RLS bypass to show every org merged --
@@ -1040,7 +1033,7 @@ function rpReportsParts(){
   P.board=`<div class="card"><h3>Board report</h3><div class="bd">
     <p style="margin:0 0 8px;font-size:12.5px;color:var(--ink-2)">Funnel performance, budget variance, pipeline, commentary and an AI-written summary for a financial year — the primary report in this module. Computed live from Strategy's planning data; opening it is what's logged below.</p>
     ${lastBoardReportView? `<div class="mini">Last viewed: <b>${esc(lastBoardReportView.ts)}</b> by ${esc(lastBoardReportView.who||'—')}</div>` : '<div class="mini">Not viewed yet.</div>'}
-    <div style="margin-top:8px">${(CFG.boardReportAccess&&CFG.boardReportAccess.enforced&&!CFG.boardReportAccess.allowed)?'<span class="mini">Available to approved roles only &mdash; ask an administrator.</span>':'<a class="btn pri" href="Strategy.html?page=boardreport" target="tool_Strategy">Open Board report &rarr;</a>'}</div>
+    <div style="margin-top:8px"><a class="btn pri" href="Strategy.html?page=boardreport" target="tool_Strategy">Open Board report &rarr;</a></div>
   </div></div>`;
   P.dash=`<div class="card"><h3>Dashboards <span class="pill n">Reporting</span></h3><div class="bd">
     <p style="margin:0 0 8px;font-size:12.5px;color:var(--ink-2)">The cross-module KPI view on this module's own Dashboards page.</p>

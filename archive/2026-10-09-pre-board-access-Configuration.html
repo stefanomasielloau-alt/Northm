@@ -667,13 +667,6 @@ async function loadFromSupabase(){
   CFG.llmHasApproved = (llmR.data||[]).length ? ('approved' in (llmR.data[0]||{})) : CFG.llmHasApproved;
   loadAiPolicy();
   CFG.roles = (rolesR.data||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name,config:r.config,publish:r.publish,writeAll:r.write_all,scope:r.scope,reportScope:r.report_scope||'own_org',desc:r.description||'',requireCommitOnEdit:r.require_commit_on_edit,allowExpertMode:r.allow_expert_mode,isSystem:!!r.is_system,moduleAccess:moduleAccessFromRow(r),canEdit:!!r.can_edit,manageOwnTeam:!!r.manage_own_team}));
-  /* Board report access (2026-10-09, option B): fetched separately and fail-soft so the roles load above is
-     untouched. If the column does not exist yet (migration not run) the "Board report" column is simply not shown. */
-  CFG.hasBoardReportFlag = false;
-  try{
-    const brR = await sb.from('roles').select('id,view_board_report');
-    if(!brR.error){ CFG.hasBoardReportFlag = true; (brR.data||[]).forEach(x=>{ const rr=byId(CFG.roles,x.id); if(rr) rr.viewBoardReport=!!x.view_board_report; }); }
-  }catch(e){ CFG.hasBoardReportFlag = false; }
   CFG.users = (profilesR.data||[]).map(p=>({id:p.id,orgId:p.org_id,name:p.name,email:p.email||'',roleId:p.role_id,regionIds:p.region_ids||[],crossRegion:p.cross_region,contactAccess:!!p.contact_access,moduleOverrides:p.module_overrides||{}}));
   CFG.orgInvites = invitesR.data || [];
   CFG.regions = (regionsR.data||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name}));
@@ -1594,12 +1587,10 @@ async function cloneRole(roleId){
   const { data, error } = await sb.from('roles').insert({
     org_id:_orgId, name, config:src.config, publish:src.publish, write_all:src.writeAll, scope:src.scope,
     description:src.desc, require_commit_on_edit:src.requireCommitOnEdit, allow_expert_mode:src.allowExpertMode,
-    is_system:false, can_edit:src.canEdit, ...moduleAccessToRow(src.moduleAccess),
-    ...(CFG.hasBoardReportFlag ? {view_board_report:!!src.viewBoardReport} : {})
+    is_system:false, can_edit:src.canEdit, ...moduleAccessToRow(src.moduleAccess)
   }).select().single();
   if(error){ toast('Could not clone role: '+error.message); return; }
   CFG.roles.push({id:data.id,orgId:data.org_id,name:data.name,config:data.config,publish:data.publish,writeAll:data.write_all,scope:data.scope,desc:data.description||'',requireCommitOnEdit:data.require_commit_on_edit,allowExpertMode:data.allow_expert_mode,isSystem:false,moduleAccess:moduleAccessFromRow(data),canEdit:!!data.can_edit});
-  if(CFG.hasBoardReportFlag){ const nr=byId(CFG.roles,data.id); if(nr) nr.viewBoardReport=!!src.viewBoardReport; }
   logAudit('clone role', src.name+' → '+name);
   render();
 }
@@ -4009,7 +4000,7 @@ function pageUsers(){
     <th title="Off = view-only wherever this role has module access (which modules is now set per organization and per person, not here). On = can edit.">Can edit</th>
     <th>Configure</th><th title="Can reassign the role and toggle module access for people in the business unit(s) they manage -- nothing else. Off has no effect if Configure is already on.">Manage own team</th><th>Publish</th><th>Write everywhere</th><th title="Region-editing visibility -- unrelated to Report scope.">Scope</th>
     <th title="Which organisation(s)/region(s)/team's data this role sees in the Reporting module. Configure -> Roles & users only; the Reporting module itself is read-only.">Report scope</th>
-    <th>Requires commit on plan edits</th><th>Expert mode allowed</th>${CFG.hasBoardReportFlag?'<th title="Lets people with this role see the Board report (menu link in Strategy and the Open button in Reporting). Platform admins always can.">Board report</th>':''}<th></th></tr></thead><tbody>
+    <th>Requires commit on plan edits</th><th>Expert mode allowed</th><th></th></tr></thead><tbody>
     ${sortByKey((sa&&UI.usersOrgFilter)?CFG.roles.filter(r=>r.orgId===UI.usersOrgFilter):CFG.roles,'roles',{org:r=>orgName(r.orgId),name:r=>r.name}).map(r=>`<tr>
       <td class="lb"><input class="cel txt" style="width:120px" value="${esc(r.name)}" ${dis} onchange="renameRole('${r.id}',this.value)">
         ${r.isSystem?'<span class="pill n" style="margin-left:6px">Standard</span>':''}</td>
@@ -4032,8 +4023,6 @@ function pageUsers(){
         <span class="pill ${r.requireCommitOnEdit?'ok':'n'}">${r.requireCommitOnEdit?'Yes':'No'}</span></button></td>
       <td><button class="btn sm" ${dis} onclick="toggleRoleFlag('${r.id}','allowExpertMode','allow_expert_mode')">
         <span class="pill ${r.allowExpertMode?'ok':'n'}">${r.allowExpertMode?'Yes':'No'}</span></button></td>
-      ${CFG.hasBoardReportFlag?`<td><button class="btn sm" ${dis} onclick="toggleRoleFlag('${r.id}','viewBoardReport','view_board_report')">
-        <span class="pill ${r.viewBoardReport?'ok':'n'}">${r.viewBoardReport?'Yes':'No'}</span></button></td>`:''}
       <td class="n" style="white-space:nowrap">
         <button class="btn sm" ${dis} onclick="cloneRole('${r.id}')">Clone</button>
         ${(!r.isSystem||CFG.isSuperAdmin)?`<button class="btn sm dgr" ${dis} onclick="deleteRoleRow('${r.id}')">Delete</button>`:''}

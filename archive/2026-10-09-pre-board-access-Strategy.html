@@ -583,7 +583,6 @@ window.closeFieldGuide=closeFieldGuide;
 <script src="shared/currencyOptions.js"></script>
 <script src="shared/charts.js"></script>
 <script src="shared/chartsCombo.js"></script>
-<script src="shared/boardReportAccess.js"></script>
 <script src="assets/vendor/gridstack/gridstack-all.js"></script>
 <script src="shared/grid.js"></script>
 <script src="shared/aiRouter.js"></script>
@@ -2145,17 +2144,6 @@ async function loadFromSupabase(){
      same as before; only which mode a fresh session starts in has changed. */
   const myRole = (CFG.roles||[]).find(r=>r.id===_myProfile.role_id);
   CFG.canExpertMode = myRole ? !!myRole.allowExpertMode : true;
-  /* Board report access (2026-10-09, option B): shown in Strategy's menu, and the page itself opens,
-     only for approved roles (roles.view_board_report) and platform admins. Before the migration has
-     been run nothing changes (enforced:false -> menu entry stays hidden, page reachable from Reporting
-     as before). Logic lives in shared/boardReportAccess.js so Reporting uses the same rule. */
-  try{
-    CFG.boardReportAccess = window.NorthBoardReportAccess
-      ? await NorthBoardReportAccess.load(sb,{roleId:_myProfile.role_id,isPlatformAdmin:!!CFG.isPlatformAdmin})
-      : {enforced:false,allowed:true};
-    const _brPage = PAGES.find(p=>p.id==='boardreport');
-    if(_brPage && CFG.boardReportAccess.enforced && CFG.boardReportAccess.allowed) _brPage.hidden = false;
-  }catch(e){ CFG.boardReportAccess = {enforced:false,allowed:true}; }
   const savedOrdoMode = (function(){ try{ return localStorage.getItem('ordo_mode'); }catch(e){ return null; } })();
   UI.mode = (savedOrdoMode==='simple' || savedOrdoMode==='expert') ? savedOrdoMode : 'simple';
   if(!CFG.canExpertMode) UI.mode = 'simple';
@@ -6285,7 +6273,6 @@ async function changeBoardReportSheet(){
 }
 window.changeBoardReportSheet = changeBoardReportSheet;
 function pageBoardReport(){
-  if(CFG.boardReportAccess && CFG.boardReportAccess.enforced && !CFG.boardReportAccess.allowed && window.NorthBoardReportAccess) return NorthBoardReportAccess.noAccessHtml();
   if(calcBlocked()) return blockedPanel('Board report');
   const d=CFG.drivers, m=verMult()*segBlend();
   const vis=visibleRegions(), visIds=vis.map(r=>r.id);
@@ -7552,7 +7539,7 @@ const PAGES=[
   {id:'boardreport',ix:'\u25a6',label:'Board report',fn:pageBoardReport,grp:'Measure',hidden:true}
 ];
 
-const SIMPLE_PAGES = ['simple','home','dashboard','boardreport']; /* 2026-10-09: Board report (read-only exec page) works in Simple mode too; it only appears in the menu for approved roles */
+const SIMPLE_PAGES = ['simple','home','dashboard'];
 const SIMPLE_STEP_LABELS = ['Landing','Driver assumptions','Projections','Regional & gaps','Activity leads'];
 function setMode(mode){
   if(mode==='expert' && !CFG.canExpertMode){ toast('Your role is limited to Simple mode \u2014 ask an admin in Configuration to change it.'); return; }

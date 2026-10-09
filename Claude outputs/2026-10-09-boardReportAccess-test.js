@@ -1,0 +1,25 @@
+global.window=global; require(process.argv[2]||'./boardReportAccess.js');
+const A=window.NorthBoardReportAccess; let f=0; const ok=(c,m)=>{console.log((c?'PASS ':'FAIL ')+m); if(!c)f++;};
+const sb=(res,log)=>({from:t=>({select:c=>({eq:(k,v)=>({limit:n=>{ if(log)log.push([t,c,k,v,n]); return typeof res==='function'?res():Promise.resolve(res);}})})})});
+(async()=>{
+ let L=[]; let r=await A.load(sb({data:[{id:'r1',view_board_report:true}],error:null},L),{roleId:'r1'});
+ ok(r.enforced&&r.allowed&&r.reason==='role','role flag true -> allowed'); ok(L[0].join('|')==='roles|id,view_board_report|id|r1|1','queries only that role row ('+L[0].join('|')+')');
+ r=await A.load(sb({data:[{id:'r1',view_board_report:false}],error:null}),{roleId:'r1'}); ok(r.enforced&&!r.allowed,'role flag false -> denied');
+ r=await A.load(sb({data:[{id:'r1',view_board_report:null}],error:null}),{roleId:'r1'}); ok(!r.allowed,'null flag -> denied');
+ r=await A.load(sb({data:[],error:null}),{roleId:'r1'}); ok(r.enforced&&!r.allowed&&r.reason==='no role','role row not found -> denied');
+ r=await A.load(sb({data:[],error:null}),{roleId:null}); ok(r.enforced&&!r.allowed,'no role id -> denied');
+ r=await A.load(sb({data:[],error:null}),{roleId:null,isPlatformAdmin:true}); ok(r.allowed&&r.reason==='platform admin','platform admin always allowed (once feature installed)');
+ r=await A.load(sb({data:null,error:{code:'42703',message:'column roles.view_board_report does not exist'}}),{roleId:'r1'}); ok(!r.enforced&&r.allowed,'column missing (42703) -> feature off, behaves as today');
+ r=await A.load(sb({data:null,error:{code:'PGRST204',message:"Could not find the 'view_board_report' column of 'roles' in the schema cache"}}),{roleId:'r1'}); ok(!r.enforced&&r.allowed,'column missing (PGRST204) -> feature off');
+ r=await A.load(sb({data:null,error:{code:'42703',message:'x'}}),{roleId:'r1',isPlatformAdmin:true}); ok(!r.enforced&&r.allowed,'platform admin + feature off -> not enforced (menu stays hidden as today)');
+ r=await A.load(sb({data:null,error:{code:'57014',message:'statement timeout'}}),{roleId:'r1'}); ok(r.enforced&&!r.allowed,'other DB error -> fails CLOSED');
+ r=await A.load(sb({data:null,error:{code:'42501',message:'permission denied for table roles'}}),{roleId:'r1',isPlatformAdmin:true}); ok(r.enforced&&!r.allowed,'RLS/permission error -> fails closed even for platform admin');
+ r=await A.load(sb(()=>Promise.reject(new Error('network'))),{roleId:'r1'}); ok(r.enforced&&!r.allowed&&/network/.test(r.reason),'network failure -> fails closed');
+ r=await A.load({from(){throw new Error('boom')}},{roleId:'r1'}); ok(r.enforced&&!r.allowed,'synchronous throw -> fails closed');
+ r=await A.load(null,{}); ok(!r.enforced&&r.allowed,'no client -> not enforced');
+ r=await A.load(sb({data:[{view_board_report:false}],error:null}),{roleId:'r1',userOverride:true}); ok(r.allowed&&r.reason==='person override','future option C: override true beats role false');
+ r=await A.load(sb({data:[{view_board_report:true}],error:null}),{roleId:'r1',userOverride:false}); ok(!r.allowed,'future option C: override false beats role true');
+ r=await A.load(sb({data:[{view_board_report:true}],error:null}),{roleId:'r1',userOverride:null}); ok(r.allowed,'override null -> follows role');
+ ok(/approved roles only/.test(A.noAccessHtml())&&/Configuration/.test(A.noAccessHtml()),'no-access panel text');
+ console.log(f?'FAILED '+f:'ALL PASS'); process.exit(f?1:0);
+})();

@@ -548,7 +548,7 @@ async function loadFromSupabase(){
   /* Board report access (2026-10-09): same rule as Strategy -- see shared/boardReportAccess.js. */
   try{
     CFG.boardReportAccess = window.NorthBoardReportAccess
-      ? await NorthBoardReportAccess.load(sb,{roleId:_myProfile.role_id,userId:_myProfile.id,isPlatformAdmin:!!CFG.isSuperAdmin})
+      ? await NorthBoardReportAccess.load(sb,{roleId:_myProfile.role_id,isPlatformAdmin:!!CFG.isSuperAdmin})
       : {enforced:false,allowed:true};
   }catch(e){ CFG.boardReportAccess = {enforced:false,allowed:true}; }
 

@@ -2169,7 +2169,7 @@ async function loadFromSupabase(){
      as before). Logic lives in shared/boardReportAccess.js so Reporting uses the same rule. */
   try{
     CFG.boardReportAccess = window.NorthBoardReportAccess
-      ? await NorthBoardReportAccess.load(sb,{roleId:_myProfile.role_id,userId:_myProfile.id,isPlatformAdmin:!!CFG.isPlatformAdmin})
+      ? await NorthBoardReportAccess.load(sb,{roleId:_myProfile.role_id,isPlatformAdmin:!!CFG.isPlatformAdmin})
       : {enforced:false,allowed:true};
     const _brPage = PAGES.find(p=>p.id==='boardreport');
     if(_brPage && CFG.boardReportAccess.enforced && CFG.boardReportAccess.allowed) _brPage.hidden = false;

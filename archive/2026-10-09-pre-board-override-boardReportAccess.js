@@ -13,7 +13,7 @@
    exactly as it did before (Board report hidden from Strategy's menu, still reachable from Reporting).
    Any OTHER failure (network, RLS) fails CLOSED: { enforced:true, allowed:false }.
 
-   NorthBoardReportAccess.load(sb, { roleId, isPlatformAdmin, userOverride, userId }) -> Promise<{enforced, allowed, reason}>
+   NorthBoardReportAccess.load(sb, { roleId, isPlatformAdmin, userOverride }) -> Promise<{enforced, allowed, reason}>
    NorthBoardReportAccess.noAccessHtml()  -> a small "no access" card for the Board report page.
    ROLLBACK: remove the <script> tags; pages guard every use with `window.NorthBoardReportAccess`. */
 (function(){
@@ -25,12 +25,6 @@
     if(!err) return false;
     var code = String(err.code || ''), msg = String(err.message || '');
     return code === '42703' || code === 'PGRST204' || /view_board_report/i.test(msg) && /(does not exist|could not find|schema cache)/i.test(msg);
-  }
-
-  function isMissingOverrideColumn(err){
-    if(!err) return false;
-    var code = String(err.code || ''), msg = String(err.message || '');
-    return code === '42703' || code === 'PGRST204' || /board_report_override/i.test(msg) && /(does not exist|could not find|schema cache)/i.test(msg);
   }
 
   function load(sb, opts){
@@ -48,28 +42,11 @@
       }
       // Column exists -> the feature is on.
       if(opts.isPlatformAdmin) return { enforced:true, allowed:true, reason:'platform admin' };
+      if(opts.userOverride === true || opts.userOverride === false)
+        return { enforced:true, allowed:opts.userOverride, reason:'person override' };
       var row = (res.data && res.data[0]) || null;
-      var roleOn = !!(row && row.view_board_report === true);
-      function decide(ov){
-        if(ov === true || ov === false) return { enforced:true, allowed:ov, reason:'person override' };
-        return { enforced:true, allowed:roleOn, reason: roleOn ? 'role' : (row ? 'role not approved' : 'no role') };
-      }
-      // Option C: a per-person yes/no (profiles.board_report_override) beats the role in both directions; null = follow the role.
-      // Pass it in as opts.userOverride, or pass opts.userId and it is read here. If that column is not installed yet it is simply ignored.
-      if(opts.userOverride === true || opts.userOverride === false) return decide(opts.userOverride);
-      if(!opts.userId) return decide(null);
-      var q2;
-      try{ q2 = sb.from('profiles').select('board_report_override').eq('id', opts.userId).limit(1); }
-      catch(e){ return { enforced:true, allowed:false, reason:'error: ' + e.message }; }
-      return Promise.resolve(q2).then(function(pr){
-        pr = pr || {};
-        if(pr.error){
-          if(isMissingOverrideColumn(pr.error)) return decide(null);
-          return { enforced:true, allowed:false, reason:'error: ' + (pr.error.message || pr.error.code || 'unknown') };
-        }
-        var v = (pr.data && pr.data[0]) ? pr.data[0].board_report_override : null;
-        return decide(v === true || v === false ? v : null);
-      }, function(e){ return { enforced:true, allowed:false, reason:'error: ' + (e && e.message) }; });
+      var on = !!(row && row.view_board_report === true);
+      return { enforced:true, allowed:on, reason: on ? 'role' : (row ? 'role not approved' : 'no role') };
     }, function(e){
       return { enforced:true, allowed:false, reason:'error: ' + (e && e.message) };
     });

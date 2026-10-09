@@ -675,14 +675,6 @@ async function loadFromSupabase(){
     if(!brR.error){ CFG.hasBoardReportFlag = true; (brR.data||[]).forEach(x=>{ const rr=byId(CFG.roles,x.id); if(rr) rr.viewBoardReport=!!x.view_board_report; }); }
   }catch(e){ CFG.hasBoardReportFlag = false; }
   CFG.users = (profilesR.data||[]).map(p=>({id:p.id,orgId:p.org_id,name:p.name,email:p.email||'',roleId:p.role_id,regionIds:p.region_ids||[],crossRegion:p.cross_region,contactAccess:!!p.contact_access,moduleOverrides:p.module_overrides||{}}));
-  /* Board report per-person override (option C, 2026-10-09): separate fail-soft query. Column missing (SQL not run) = no control shown. */
-  CFG.hasBoardOverride = false;
-  try{
-    if(CFG.hasBoardReportFlag){
-      const boR = await sb.from('profiles').select('id,board_report_override');
-      if(!boR.error){ CFG.hasBoardOverride = true; (boR.data||[]).forEach(x=>{ const uu=byId(CFG.users,x.id); if(uu) uu.brOverride=(x.board_report_override===true||x.board_report_override===false)?x.board_report_override:null; }); }
-    }
-  }catch(e){ CFG.hasBoardOverride = false; }
   CFG.orgInvites = invitesR.data || [];
   CFG.regions = (regionsR.data||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name}));
   if(CFG.isSuperAdmin){
@@ -1024,20 +1016,6 @@ async function setContactAccess(userId){
   render();
 }
 window.setContactAccess = setContactAccess;
-/* Board report per-person override (option C, 2026-10-09). '' = follow the role, 'allow' = always, 'block' = never. Platform admins always see it. */
-async function setUserBoardOverride(userId, val){
-  if(!canConfig()){ toast('Your role cannot change access.'); render(); return; }
-  if(isLockedPeerUser(userId)){ toast("You can't change a user at or above your own role tier."); render(); return; }
-  const u = byId(CFG.users, userId); if(!u) return;
-  const old = (u.brOverride===true||u.brOverride===false)?u.brOverride:null;
-  const nv = val==='allow'?true:(val==='block'?false:null);
-  u.brOverride = nv; render();
-  const { error } = await sb.from('profiles').update({ board_report_override: nv }).eq('id', userId);
-  if(error){ u.brOverride = old; render(); toast('Could not update Board report access: '+error.message); return; }
-  logAudit('board report access', u.name+' → '+(nv===true?'always allowed':(nv===false?'always blocked':'follows role')));
-  render();
-}
-window.setUserBoardOverride = setUserBoardOverride;
 /* 2026-08-27: pushUserToHub / pushPasswordDirect both call Hub's backend
    directly (not a redirect like Contact) using the admin's own live North
    session as proof of identity -- Hub re-verifies that token itself
@@ -4105,7 +4083,7 @@ function pageUsers(){
     </div>`;
   h+=`<div class="card"><h3>Users</h3>
     <div class="bd flush"><table><thead><tr><th class="sortable" style="cursor:pointer" onclick="setSort('users','name')">Name${sortArrow('users','name')}</th><th>Email</th>${sa?`<th class="sortable" style="cursor:pointer" onclick="setSort('users','org')">Organization${sortArrow('users','org')}</th>`:''}<th>Role</th>
-      <th>Cross-region visibility</th><th>Regions when isolated</th><th title="Which modules this person can open -- capped by what their organization allows">Modules</th>${(CFG.hasBoardReportFlag&&CFG.hasBoardOverride)?'<th title="Board report for this person: follow their role, or force it on / off for just them">Board report</th>':''}<th></th></tr></thead><tbody>
+      <th>Cross-region visibility</th><th>Regions when isolated</th><th title="Which modules this person can open -- capped by what their organization allows">Modules</th><th></th></tr></thead><tbody>
     ${sortByKey(CFG.users.filter(u=>(!(sa&&UI.usersOrgFilter)||u.orgId===UI.usersOrgFilter)&&(!UI.usersRegionFilter||(u.regionIds||[]).includes(UI.usersRegionFilter))&&(!UI.usersTeamFilter||(CFG.teams.find(t=>t.id===UI.usersTeamFilter)||{memberIds:[]}).memberIds.includes(u.id))),'users',{org:u=>orgName(u.orgId),name:u=>u.name}).map(u=>{
       const orgRegions = CFG.regions.filter(r=>r.orgId===u.orgId);
       const rowDis = (canConfig()||(canManageOwnTeam()&&isInMyManagedScope(u.id)))?'':'disabled';
@@ -4133,7 +4111,6 @@ function pageUsers(){
         const on = m.id==='Contact' ? !!u.contactAccess : !!u.moduleOverrides[m.id];
         return moduleAccessBtnHtml(m, on, `toggleUserModuleAccess('${u.id}','${m.id}')`, lockRowDis);
       }).join('')}</td>
-      ${(CFG.hasBoardReportFlag&&CFG.hasBoardOverride)?(()=>{ const roleOn=!!((byId(CFG.roles,u.roleId)||{}).viewBoardReport); const cur=u.brOverride===true?'allow':(u.brOverride===false?'block':''); return `<td><select class="cel txt" style="width:128px" ${lockRowDis} onchange="setUserBoardOverride('${u.id}',this.value)"><option value="" ${cur===''?'selected':''}>Follow role (${roleOn?'yes':'no'})</option><option value="allow" ${cur==='allow'?'selected':''}>Always allow</option><option value="block" ${cur==='block'?'selected':''}>Always block</option></select></td>`; })():''}
       <td class="n" style="white-space:nowrap">
         <button class="btn sm" ${lockDis} onclick="resetUserPassword('${u.id}')">Reset password</button>
         <button class="btn sm" ${lockDis} onclick="pushPasswordDirect('${u.id}')">Set password</button>

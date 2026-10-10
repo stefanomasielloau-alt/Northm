@@ -585,7 +585,6 @@ window.closeFieldGuide=closeFieldGuide;
 <script src="shared/chartsCombo.js"></script>
 <script src="shared/lineItemRollup.js"></script><!-- 2026-10-09: budget line items -> campaign Budget/Committed/Actual (additive; remove tag to roll back) -->
 <script src="shared/boardReportAccess.js"></script>
-<script src="shared/boardPeriod.js"></script><!-- 2026-10-10: Board report period + prior-year compare (pure helpers; remove tag + brPer() fallback to undo) -->
 <script src="assets/vendor/gridstack/gridstack-all.js"></script>
 <script src="shared/grid.js"></script>
 <script src="shared/aiRouter.js"></script>
@@ -1539,7 +1538,7 @@ function buildHist(){
 
 function histSlice(o){
   o=o||{};
-  const months=MONTHS.filter(m=>(!o.fy||fyOf(m)===o.fy)&&(!o.monthKey||m.key===o.monthKey)&&(o.posFrom==null||(fyPos(m)>=o.posFrom&&fyPos(m)<=o.posTo)));
+  const months=MONTHS.filter(m=>(!o.fy||fyOf(m)===o.fy)&&(!o.monthKey||m.key===o.monthKey));
   const rids=o.regionIds||R().map(r=>r.id), aids=o.activityIds||A().map(a=>a.id), gids=o.segmentIds||G().map(s=>s.id);
   const acc={}; chain().forEach(g=>acc[g.id]=0); acc._cost=0; acc._acv=0;
   months.forEach(m=>rids.forEach(rid=>aids.forEach(aid=>gids.forEach(gid=>{
@@ -6308,74 +6307,24 @@ window.changeBoardReportSheet = changeBoardReportSheet;
    _brMemo holds the result only while pageBoardReport is building the page; a widget used anywhere else
    recomputes. ---- */
 let _brMemo=null;
-/* ---- Board report period + same-period-prior-years comparison (2026-10-10; Stef: "period can be defined, and ability to
-   compare to same period previous years"). UI.brPeriod = {type,month,from,to} (see shared/boardPeriod.js), UI.brCompare = 0..3
-   earlier years. Full year with no comparison reproduces the old report exactly. Remembered per browser. ---- */
-const BR_LS='northm_br_period_v1';
-function brLoadSel(){ if(UI._brSelLoaded) return; UI._brSelLoaded=true; try{ const j=JSON.parse(localStorage.getItem(BR_LS)||'null'); if(j&&typeof j==='object'){ UI.brPeriod=(j.sel&&typeof j.sel==='object')?j.sel:{type:'fy'}; UI.brCompare=Math.max(0,Math.min(3,Number(j.cmp)||0)); } }catch(e){} }
-function brSaveSel(){ try{ localStorage.setItem(BR_LS,JSON.stringify({sel:UI.brPeriod||{type:'fy'},cmp:UI.brCompare||0})); }catch(e){} }
-function brMonthLabel(p){ return new Date(2000,(CFG.time.fyStartMonth-1+p)%12,1).toLocaleDateString('en-AU',{month:'short'}); }
-function brYtdTo(){
-  const now=new Date(), mo={y:now.getFullYear(),m:now.getMonth()+1}, cur=fyOf(mo);
-  if(cur===UI.fy) return fyPos(mo);
-  const a=NorthBoardPeriod.fyNum(UI.fy), b=NorthBoardPeriod.fyNum(cur);
-  return (a!=null&&b!=null&&a<b)?11:0; /* earlier year: whole year; later year: nothing has happened yet, first month only */
-}
-function brPer(){ brLoadSel(); return NorthBoardPeriod.resolve(UI.brPeriod||{type:'fy'},{monthLabel:brMonthLabel,ytdTo:brYtdTo()}); }
-function brLabel(){ return NorthBoardPeriod.label(UI.fy,brPer()); }
-function brSettings(){ brLoadSel(); return {sel:UI.brPeriod||{type:'fy'},cmp:UI.brCompare||0}; }
-function brApplySettings(st){ st=st||{}; UI._brSelLoaded=true; UI.brPeriod=(st.sel&&typeof st.sel==='object')?st.sel:{type:'fy'}; UI.brCompare=Math.max(0,Math.min(3,Number(st.cmp)||0)); brSaveSel(); _brMemo=null; render(); }
-function brSetPeriodType(v){ brLoadSel(); const sel=Object.assign({},UI.brPeriod||{}); sel.type=v; if(v==='month'&&sel.month==null) sel.month=0; if(v==='custom'){ if(sel.from==null) sel.from=0; if(sel.to==null) sel.to=2; } UI.brPeriod=sel; brSaveSel(); _brMemo=null; render(); }
-function brSetPeriodField(k,v){ brLoadSel(); const sel=Object.assign({},UI.brPeriod||{}); sel[k]=Number(v); UI.brPeriod=sel; brSaveSel(); _brMemo=null; render(); }
-function brSetCompare(v){ brLoadSel(); UI.brCompare=Math.max(0,Math.min(3,Number(v)||0)); brSaveSel(); _brMemo=null; render(); }
-window.brSetPeriodType=brSetPeriodType; window.brSetPeriodField=brSetPeriodField; window.brSetCompare=brSetCompare; window.brSettings=brSettings; window.brApplySettings=brApplySettings;
-/* Spend has no month of its own, so for a part-year (or an earlier year) a campaign counts in proportion to how many of its
-   days fall in the period; campaigns with no dates are spread evenly over the year. Full year, no comparison: today's figures. */
-function brPeriodFig(camps,fy,per){
-  const dts=NorthBoardPeriod.periodDates(fy,CFG.time.fyStartMonth,per.from,per.to), und=(fy===UI.fy)?per.months/12:0; /* campaigns with no dates belong to the year being reported, not to earlier years */
-  let budget=0,committed=0,actual=0;
-  (camps||[]).forEach(c=>{ const fr=dts?NorthBoardPeriod.overlapFraction(c.start,c.end,dts.start,dts.end,und):und; if(!fr) return;
-    budget+=(campaignBudgetMain(c)||0)*fr; committed+=(campaignCommitted(c)||0)*fr; actual+=(campaignActualSpend(c)||0)*fr; });
-  return {budget,committed,actual};
-}
-function brFig(camps){
-  const per=brPer();
-  if(per.isFull) return {budget:sum(camps.map(cm=>campaignBudgetMain(cm))),committed:sum(camps.map(campaignCommitted)),actual:sum(camps.map(campaignActualSpend))};
-  return brPeriodFig(camps,UI.fy,per);
-}
-/* "vs FY26 · Q2 (Oct–Dec): 1,200 +8%" lines under a headline number. cur/prev are numbers, fmt formats them. */
-function brCmpLines(B,cur,prevOf,fmt,needsData){
-  if(!B.cmp||!B.cmp.length) return '';
-  return B.cmp.map(c=>{ const lb=esc(NorthBoardPeriod.label(c.fy,B.per));
-    if(needsData&&!c.hasData) return `<div class="mini">vs ${lb}: no recorded data</div>`;
-    const pv=prevOf(c), dl=NorthBoardPeriod.delta(cur,pv);
-    return `<div class="mini">vs ${lb}: ${fmt(pv)} <b>${F.sp(dl,0)}</b></div>`; }).join('');
-}
 function brCompute(){
-  const d=CFG.drivers, m=verMult()*segBlend(), per=brPer();
+  const d=CFG.drivers, m=verMult()*segBlend();
   const vis=visibleRegions(), visIds=vis.map(r=>r.id);
   const gates=chain(), exitId=exitGate().id;
-  const share=NorthBoardPeriod.share(CFG.seasonality,per.from,per.to);
-  const plan=backward(d.winTarget*share,m);
-  const actualAcc=histSlice({fy:UI.fy,regionIds:visIds,posFrom:per.from,posTo:per.to}).acc;
+  const plan=backward(d.winTarget,m);
+  const actualAcc=histSlice({fy:UI.fy,regionIds:visIds}).acc;
   const winVar = plan[exitId] ? (actualAcc[exitId]-plan[exitId])/plan[exitId] : 0;
   const winSt = Math.abs(winVar)<0.1?'ok':Math.abs(winVar)<0.25?'warn':'bad';
   const revenue = actualAcc._acv || 0;
 
   const camps=CFG.campaigns.filter(cm=>visIds.includes(cm.regionId));
-  const fig=brFig(camps), budgeted=fig.budget, committed=fig.committed, actualSpend=fig.actual;
+  const budgeted=sum(camps.map(cm=>campaignBudgetMain(cm))), committed=sum(camps.map(campaignCommitted)), actualSpend=sum(camps.map(campaignActualSpend));
   const spendVar = budgeted ? ((actualSpend||committed)-budgeted)/budgeted : 0;
   const spendSt = (actualSpend||committed)<=budgeted?'ok':spendVar<0.1?'warn':'bad';
 
   const pipelineValue = CFG.scoringSummary.pipelineValue||0;
   const fyNotes = CFG.boardReportNotes.filter(n=>n.fy===UI.fy);
-  /* comparison: same fiscal months of earlier years (recorded actuals); spend like-for-like by campaign dates */
-  const curDated=brPeriodFig(camps,UI.fy,per);
-  const cmp=NorthBoardPeriod.priorFys(UI.fy,UI.brCompare||0).map(f=>{
-    const hs=histSlice({fy:f,regionIds:visIds,posFrom:per.from,posTo:per.to}), sp=brPeriodFig(camps,f,per);
-    return {fy:f,acc:hs.acc,hasData:hs.months>0,revenue:hs.acc._acv||0,budget:sp.budget,committed:sp.committed,actual:sp.actual,spend:sp.actual||sp.committed};
-  });
-  return {d,m,vis,visIds,gates,exitId,plan,actualAcc,winVar,winSt,revenue,camps,budgeted,committed,actualSpend,spendVar,spendSt,pipelineValue,fyNotes,per,share,cmp,curSpendDated:curDated.actual||curDated.committed};
+  return {d,m,vis,visIds,gates,exitId,plan,actualAcc,winVar,winSt,revenue,camps,budgeted,committed,actualSpend,spendVar,spendSt,pipelineValue,fyNotes};
 }
 function brState(){ return _brMemo||brCompute(); }
 
@@ -6387,14 +6336,12 @@ function pageBoardReportInner(){
   UI.brAi = UI.brAi || { status:'idle', text:'', error:'' };
   UI._brCtx = 'Exit gate ('+exitGate().name+'): actual '+F.n(actualAcc[exitId])+' vs plan '+F.n(plan[exitId])+' ('+F.sp(winVar,0)+' variance). '+
     'Budget: committed '+F.mk(committed)+', actual spend '+F.mk(actualSpend)+', budgeted '+F.mk(budgeted)+' ('+F.sp(spendVar,0)+' variance). '+
-    'Pipeline value (Scoring): '+F.mk(pipelineValue)+' across '+(CFG.scoringSummary.dealCount||0)+' deals. Revenue actual in period: '+F.mk(revenue)+'. Version: '+version().name+', FY '+UI.fy+'. Period: '+brLabel()+(B.cmp.length?' (compared with '+B.cmp.map(c=>c.fy).join(', ')+')':'')+'.';
+    'Pipeline value (Scoring): '+F.mk(pipelineValue)+' across '+(CFG.scoringSummary.dealCount||0)+' deals. Revenue actual this FY: '+F.mk(revenue)+'. Version: '+version().name+', FY '+UI.fy+'.';
   /* Same computed values, reshaped for the PPTX export endpoint (2026-09-03) -- kept in
      sync with the sections rendered below rather than recomputed a second way, so the
      deck can never show a different number than the on-screen report. */
   UI._brPayload = {
-    versionName: version().name, fy: brLabel(), periodLabel: brLabel(),
-    comparison: B.cmp.map(c=>({fy:c.fy, label:NorthBoardPeriod.label(c.fy,B.per), hasData:c.hasData, exitActual:c.acc[exitId]||0, revenue:c.revenue, spend:c.spend})),
-    generatedAt: F.dt(new Date().toISOString()),
+    versionName: version().name, fy: UI.fy, generatedAt: F.dt(new Date().toISOString()),
     /* item 50 (2026-09-07): brand variables, applied server-side in _build_board_report_pptx.
        null/omitted fields there fall back to North's own default look -- see Branding page
        in Configuration (Norma.html) for where these are set. */
@@ -6410,7 +6357,7 @@ function pageBoardReportInner(){
       return {name:g.name, plan:p||0, actual:a||0, varPct:pc, status:st}; }),
     budgetByBucket: CFG.costBuckets.map(b=>{
       const bc=camps.filter(cm=>cm.costBucketId===b.id);
-      const _f=brFig(bc), bud=_f.budget, com=_f.committed, act=_f.actual;
+      const bud=sum(bc.map(cm=>campaignBudgetMain(cm))), com=sum(bc.map(campaignCommitted)), act=sum(bc.map(campaignActualSpend));
       const spend=act||com, pct=bud?spend/bud:0, st=pct<=1?'ok':pct<1.15?'warn':'bad';
       return {bucket:b.label, budget:bud, committed:com, actual:act, pctOfPlan:pct, status:st};
     }).filter(r=>r.budget||r.committed||r.actual),
@@ -6424,7 +6371,7 @@ function pageBoardReportInner(){
     scoringSummary: { dealCount: CFG.scoringSummary.dealCount||0, byStage: CFG.scoringSummary.byStage||{} },
     narrative: (UI.brAi && UI.brAi.status==='done') ? UI.brAi.text : boardReportNarrative(winVar,spendVar,exitGate().name),
     commentary: CFG.boardReportNotes.filter(n=>n.fy===UI.fy && n.visible).map(n=>({text:n.note, author:n.createdBy, ts:F.dt(n.createdAt)})),
-    disclaimer: 'Generated '+F.dt(new Date().toISOString())+' from the '+version().name+' version, '+brLabel()+'. This is a point-in-time snapshot -- it does not update itself.'
+    disclaimer: 'Generated '+F.dt(new Date().toISOString())+' from the '+version().name+' version, '+UI.fy+'. This is a point-in-time snapshot -- it does not update itself.'
   };
 
   const brSorted=(CFG.boardReportSnapshots||[]).slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
@@ -6442,17 +6389,6 @@ function pageBoardReportInner(){
     <button class="btn sm no-print" onclick="exportBoardReportToSheets()" id="brSheetsBtn">Export to Sheets</button>
     ${CFG.boardReportSheetId?`<a href="#" class="mini no-print" style="align-self:center" onclick="changeBoardReportSheet();return false" title="Currently exporting into a saved Google Sheet -- click to point at a different one">(change sheet)</a>`:''}
     <button class="btn sm no-print" onclick="window.print()">Print / Save as PDF</button></div>`;
-
-  /* Period & comparison controls (2026-10-10) -- no-print; the chosen period is printed in the report below. */
-  { const selT=(UI.brPeriod&&UI.brPeriod.type)||'fy', pr=B.per, posOpts=cur=>Array.from({length:12},(_,i)=>`<option value="${i}" ${cur===i?'selected':''}>${esc(brMonthLabel(i))}</option>`).join('');
-    h+=`<div class="card no-print"><h3>Period &amp; comparison</h3><div class="bd"><div class="row" style="gap:12px;flex-wrap:wrap;align-items:flex-end">
-      <div><label class="lbl">Period (within ${esc(UI.fy)})</label><select class="in" style="width:auto" id="brPeriodType" onchange="brSetPeriodType(this.value)">${NorthBoardPeriod.TYPES.map(t=>`<option value="${t[0]}" ${selT===t[0]?'selected':''}>${t[1]}</option>`).join('')}</select></div>
-      ${selT==='month'?`<div><label class="lbl">Month</label><select class="in" style="width:auto" onchange="brSetPeriodField('month',this.value)">${posOpts(pr.from)}</select></div>`:''}
-      ${selT==='custom'?`<div><label class="lbl">From</label><select class="in" style="width:auto" onchange="brSetPeriodField('from',this.value)">${posOpts(pr.from)}</select></div><div><label class="lbl">To</label><select class="in" style="width:auto" onchange="brSetPeriodField('to',this.value)">${posOpts(pr.to)}</select></div>`:''}
-      <div><label class="lbl">Compare with</label><select class="in" style="width:auto" id="brCompareSel" onchange="brSetCompare(this.value)">
-        ${[[0,'Nothing'],[1,'Same period last year'],[2,'Same period, last 2 years'],[3,'Same period, last 3 years']].map(o=>`<option value="${o[0]}" ${(UI.brCompare||0)===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select></div>
-      <div class="mini" style="flex:1;min-width:240px">Showing <b>${esc(brLabel())}</b>${B.cmp.length?' compared with '+B.cmp.map(c=>esc(NorthBoardPeriod.label(c.fy,B.per))).join(', '):''}. The financial year is set in the top bar. Plan = the year's target phased by your Seasonality weights. Funnel and revenue use recorded monthly actuals. Budget, committed and spent are pro-rated by each campaign's start and end dates (campaigns with no dates are spread evenly over the year).</div>
-    </div></div></div>`; }
 
   /* Save-current-report-as-history row -- no-print since it's a control, not report content. */
   h+=`<div class="card no-print"><h3>Board report history</h3><div class="bd">
@@ -6473,7 +6409,6 @@ function pageBoardReportInner(){
 
   if(brViewing){ window.__northGridSubId='boardreport_view'; return h + boardReportSnapshotView(brViewing); }
 
-  h+=`<div class="mini" style="margin:2px 0 8px">Period: <b>${esc(brLabel())}</b>${B.cmp.length?' &middot; compared with '+B.cmp.map(c=>esc(NorthBoardPeriod.label(c.fy,B.per))).join(', '):''}</div>`;
   /* ---- Layout (2026-10-09): ten movable boxes in the same order as before. Uses the shared Edit layout /
      Reset layout tool (shared/grid.js, page id 'boardreport'). Printing follows the on-screen layout via the
      beforeprint handler below. ---- */
@@ -6493,7 +6428,7 @@ function pageBoardReportInner(){
 
   /* 8. Disclaimer / generated-on footer */
   h+=`<div class="mini" style="margin-top:14px;padding-top:10px;border-top:1px solid var(--line,#DFE3EB)">
-    Generated ${F.dt(new Date().toISOString())} from the <b>${esc(version().name)}</b> version, ${esc(brLabel())}.
+    Generated ${F.dt(new Date().toISOString())} from the <b>${esc(version().name)}</b> version, ${esc(UI.fy)}.
     This is a point-in-time snapshot -- reopen this page for a refreshed report; it does not update itself.</div>`;
 
   return h;
@@ -6507,13 +6442,13 @@ function boardReportWidgetKpis(){
   h+=`<div class="kpis">
     <div class="kpi hl"><div class="k">${esc(exitGate().name)} -- plan vs actual</div>
       <div class="kpi-v">${F.n(actualAcc[exitId])}<span class="mini"> / ${F.n(plan[exitId])}</span></div>
-      <div class="sub" style="color:${winSt==='bad'?'var(--bad)':winSt==='warn'?'var(--warn)':'var(--ok)'}">${F.sp(winVar,0)} vs plan &middot; ${esc(brLabel())}</div>${brCmpLines(B,actualAcc[exitId],c=>c.acc[exitId],F.n,true)}</div>
+      <div class="sub" style="color:${winSt==='bad'?'var(--bad)':winSt==='warn'?'var(--warn)':'var(--ok)'}">${F.sp(winVar,0)} vs plan &middot; ${esc(UI.fy)}</div></div>
     <div class="kpi"><div class="k">Pipeline value</div><div class="kpi-v">${F.mk(pipelineValue)}</div>
       <div class="sub">${CFG.scoringSummary.dealCount||0} tracked deals (Scoring)</div></div>
-    <div class="kpi"><div class="k">Revenue (actual, ${esc(B.per.isFull?'this FY':brLabel())})</div><div class="kpi-v">${F.mk(revenue)}</div>
-      <div class="sub">From recorded actuals</div>${brCmpLines(B,revenue,c=>c.revenue,F.mk,true)}</div>
+    <div class="kpi"><div class="k">Revenue (actual, this FY)</div><div class="kpi-v">${F.mk(revenue)}</div>
+      <div class="sub">From recorded actuals</div></div>
     <div class="kpi"><div class="k">Budget committed / spent</div><div class="kpi-v">${F.mk(committed)}<span class="mini"> / ${F.mk(actualSpend)}</span></div>
-      <div class="sub" style="color:${spendSt==='bad'?'var(--bad)':spendSt==='warn'?'var(--warn)':'var(--ok)'}">${F.sp(spendVar,0)} vs ${F.mk(budgeted)} budgeted</div>${B.cmp.length?`<div class="mini" style="color:var(--ink-3)">Spend comparison counts campaigns by their dates (now ${F.mk(B.curSpendDated)})</div>`+brCmpLines(B,B.curSpendDated,c=>c.spend,F.mk,false):''}</div>
+      <div class="sub" style="color:${spendSt==='bad'?'var(--bad)':spendSt==='warn'?'var(--warn)':'var(--ok)'}">${F.sp(spendVar,0)} vs ${F.mk(budgeted)} budgeted</div></div>
   </div>`;
   return h;
 }
@@ -6538,13 +6473,13 @@ function boardReportWidgetFunnel(){
   let h='';
   /* 2. Funnel snapshot -- chart added 2026-09-03 (item: more charting in Reporting/Board
      report), same data the table below already computes, no second calculation. */
-  h+=`<div class="card"><h3>Funnel snapshot -- ${esc(version().name)} &middot; ${esc(brLabel())}</h3>
+  h+=`<div class="card"><h3>Funnel snapshot -- ${esc(version().name)} &middot; ${esc(UI.fy)}</h3>
     <div class="bd">${svgFunnel(gates.map(g=>actualAcc[g.id]),gates.map(g=>g.name),640)}</div>
-    <div class="bd flush"><table><thead><tr><th>Gate</th><th class="n">Plan</th><th class="n">Actual</th><th class="n">Var %</th><th>Status</th>${B.cmp.map(c=>`<th class="n">${esc(NorthBoardPeriod.label(c.fy,B.per))}</th><th class="n">Change</th>`).join('')}</tr></thead><tbody>
+    <div class="bd flush"><table><thead><tr><th>Gate</th><th class="n">Plan</th><th class="n">Actual</th><th class="n">Var %</th><th>Status</th></tr></thead><tbody>
     ${gates.map(g=>{ const p=plan[g.id],a=actualAcc[g.id],pc=p?(a-p)/p:0;
       const st=Math.abs(pc)<0.1?'ok':Math.abs(pc)<0.25?'warn':'bad';
       return `<tr><td class="lb">${esc(g.name)}</td><td class="n calc">${F.n(p)}</td><td class="n calc">${F.n(a)}</td>
-        <td class="n">${F.sp(pc,0)}</td><td><span class="pill ${st}">${st==='ok'?'On plan':st==='warn'?'Watch':'Off plan'}</span></td>${B.cmp.map(c=>c.hasData?`<td class="n calc">${F.n(c.acc[g.id])}</td><td class="n">${F.sp(NorthBoardPeriod.delta(a,c.acc[g.id]),0)}</td>`:`<td class="n mini" colspan="2">no data</td>`).join('')}</tr>`;}).join('')}
+        <td class="n">${F.sp(pc,0)}</td><td><span class="pill ${st}">${st==='ok'?'On plan':st==='warn'?'Watch':'Off plan'}</span></td></tr>`;}).join('')}
     </tbody></table></div></div>`;
   return h;
 }
@@ -6556,11 +6491,11 @@ function boardReportWidgetBudget(){
   /* 3. Budget summary, by cost bucket */
   const bucketRows = CFG.costBuckets.map(b=>{
     const bc=camps.filter(cm=>cm.costBucketId===b.id);
-    const _f=brFig(bc), bud=_f.budget, com=_f.committed, act=_f.actual;
+    const bud=sum(bc.map(cm=>campaignBudgetMain(cm))), com=sum(bc.map(campaignCommitted)), act=sum(bc.map(campaignActualSpend));
     const spend=act||com, pct=bud?spend/bud:0;
     return {b,bud,com,act,spend,pct};
   }).filter(r=>r.bud||r.com||r.act);
-  h+=`<div class="card"><h3>Budget summary, by cost bucket${brPer().isFull?'':' -- '+esc(brLabel())+' (pro-rated by campaign dates)'}</h3>
+  h+=`<div class="card"><h3>Budget summary, by cost bucket</h3>
     <div class="bd">${bucketRows.length?((typeof chartPick==='function'&&!window.NORTH_NO_COMBO)?chartPick('strategy-budget-by-bucket',bucketRows.map(r=>r.b.label),[{k:'Budget',type:'bar',v:bucketRows.map(r=>r.bud)},{k:'Spend (actual, or committed where no actual)',type:'line',v:bucketRows.map(r=>r.spend)}],{money:true,h:200}):svgBars(bucketRows.map(r=>({k:r.b.label,v:r.bud})),{money:true,h:180})):''}</div>
     <div class="bd flush"><table><thead><tr><th>Bucket</th><th class="n">Budget</th><th class="n">Committed</th><th class="n">Actual</th><th class="n">% of plan</th><th>Status</th></tr></thead><tbody>
     ${bucketRows.length?bucketRows.map(r=>{ const st=r.pct<=1?'ok':r.pct<1.15?'warn':'bad';
@@ -6657,12 +6592,12 @@ function boardReportWidgetBridge(){
   /* 6b. Gap to target by region (2026-10-09): waterfall from the regional ACV target to recorded ACV,
      one step per visible region (actual - target). Uses existing fields only (region acvTarget,
      histSlice _acv); no new calculation elsewhere. */
-  const brReg=vis.map(r=>({name:r.name,tgt:(+r.acvTarget||0)*B.share,act:+histSlice({fy:UI.fy,regionIds:[r.id],posFrom:B.per.from,posTo:B.per.to}).acc._acv||0}));
+  const brReg=vis.map(r=>({name:r.name,tgt:+r.acvTarget||0,act:+histSlice({fy:UI.fy,regionIds:[r.id]}).acc._acv||0}));
   const brTgt=sum(brReg.map(x=>x.tgt)), brAct=sum(brReg.map(x=>x.act));
-  h+=`<div class="card"><h3>Gap to target by region -- ACV, ${esc(brLabel())}</h3><div class="bd">
+  h+=`<div class="card"><h3>Gap to target by region -- ACV, ${esc(UI.fy)}</h3><div class="bd">
     ${(brTgt||brAct)?svgWaterfall([{k:'ACV target',v:brTgt}].concat(brReg.map(x=>({k:x.name,v:x.act-x.tgt}))).concat([{k:'ACV actual',total:true}]),{money:true,h:210})
       :'<div class="empty">No regional ACV targets or recorded ACV yet.</div>'}
-    <div class="mini" style="margin-top:4px">Target = regional ACV targets (Geography &amp; pods). Actual = recorded ACV for ${esc(brLabel())}${B.per.isFull?'':' (target = the regional target phased by seasonality)'}. Each step is a region's actual minus its target: teal = ahead, red = behind.</div>
+    <div class="mini" style="margin-top:4px">Target = regional ACV targets (Geography &amp; pods). Actual = recorded ACV for ${esc(UI.fy)}. Each step is a region's actual minus its target: teal = ahead, red = behind.</div>
   </div></div>`;
   return h;
 }

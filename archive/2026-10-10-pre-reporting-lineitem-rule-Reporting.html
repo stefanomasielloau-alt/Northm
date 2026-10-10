@@ -353,7 +353,6 @@ window.closeFieldGuide=closeFieldGuide;
 <script src="shared/convertToMain.js"></script>
 <script src="shared/charts.js"></script>
 <script src="shared/chartsCombo.js"></script>
-<script src="shared/lineItemRollup.js"></script><!-- 2026-10-10: budget line items -> campaign Committed/Actual (additive; remove tag to roll back) -->
 <script src="shared/aiRouter.js"></script>
 <script src="shared/aiFill.js"></script>
 <script src="shared/askAlec.js"></script>
@@ -618,22 +617,6 @@ async function loadFromSupabase(){
     budget:c.budget||0,budgetFx:c.budget_fx||null,
     committed:c.committed||0,actual:c.actual||0,signoffStatus:c.signoff_status||'Draft'
   }));
-  /* 2026-10-10 (Stef: one budget rule everywhere): when a campaign has budget line items, its Committed/Actual here follow the same roll-up as Campaign
-     Planning and Strategy (shared/lineItemRollup.js); typed Budget stays the envelope unless it is blank. Fail-soft: any error leaves today's figures.
-     Super Admin's all-organisations view is NOT covered (no cross-org read for these two tables exists yet, so a partial result would mix rules). */
-  try{
-    if(!CFG.isSuperAdmin && window.NorthLineItemRollup){
-      const _all=async mk=>{ let out=[],from=0; for(;;){ const r=await mk().range(from,from+999); if(r.error) return {error:r.error}; out=out.concat(r.data||[]); if((r.data||[]).length<1000||from>=50000) break; from+=1000; } return {data:out}; };
-      const liR=await _all(()=>sb.from('budget_line_items').select('id,parent_type,parent_id,planned_amount,approved_amount,committed_amount,actual_amount').order('id'));
-      if(!liR.error && (liR.data||[]).length){
-        const tkR=await _all(()=>sb.from('tasks').select('id,campaign_id,planned_cost,committed_cost,actual_cost').order('id'));
-        const lm=NorthLineItemRollup.build(liR.data, tkR.error?[]:tkR.data);
-        CFG.campaigns.forEach(c=>{ const li=lm[c.id]; if(!li) return; c.li=li;
-          const b=NorthLineItemRollup.figure(c,'budget'), cm=NorthLineItemRollup.figure(c,'committed'), ac=NorthLineItemRollup.figure(c,'actual');
-          if(b!=null) c.budget=b; if(cm!=null) c.committed=cm; if(ac!=null) c.actual=ac; });
-      }
-    }
-  }catch(e){ /* line items not installed / not readable: no change to any figure */ }
   CFG.deals = (dealsR.data||[]).map(d=>({id:d.id,name:d.name,stage:d.stage,value:d.value||0}));
   CFG.events = (eventsR.data||[]).map(e=>({id:e.id,name:e.name,status:e.status,startDate:e.start_date||''}));
   CFG.assets = (assetsR.data||[]).map(a=>({id:a.id,name:a.name,stock:a.stock,lowStockAt:a.low_stock_at,campaignId:a.campaign_id||null}));
@@ -2122,8 +2105,6 @@ const HELP_FAQ=[
   /* 2026-09-29 */ {q:"How are companies and contacts shown on the map?", a:"Companies are matched by name from deal accounts and contact accounts, so \"Acme Pty Ltd\" on a deal and on a contact are one company. Names that look like the same company are flagged \"\u2248 dup?\" and listed in the Possible duplicate companies tile \u2014 nothing is merged automatically. Contacts aren\u2019t drawn as boxes; companies and deals show a \"#N contacts\" badge instead."},
   /* 2026-09-29 */ {q:"Can I rearrange the Reporting pages?", a:"Yes. Every Reporting page is now made of tiles, the same as Strategy: Edit layout lets you drag and resize tiles, \"+ Add / unhide tile\" adds or restores one, and Reset layout puts the page back to its default. Layouts are saved in your browser."},
   /* 2026-10-09 */ {q:"Can Ask Alec read answers aloud or review what is on my screen?", a:"Yes. At the top of the Ask Alec panel, \u201cWhat\u2019s on screen\u201d gives an instant written and spoken briefing built from the red, amber and green flags North already shows, and \u201cReview this screen\u201d asks your organisation\u2019s AI for a headline, what is working, what needs attention and recommended actions. Each message has a Read aloud button (pause, stop, voice and speed are remembered in your browser). \u201cCreate draft\u2026\u201d on a recommendation only opens a pre-filled form in Campaign Planning \u2014 nothing is created until you press Create there."},
-  /* 2026-10-10 */ {q:"Can I change what the Deals by stage chart shows?", a:"Yes. It draws deal value as bars and the number of deals as a line, each against its own scale. Click \"Show deals as bars\" to swap them, and use the Show as buttons above the chart to switch between Combo, Bars and Lines."},
-  /* 2026-10-10 */ {q:"Do budget line items change the figures here?", a:"Yes, for your own organisation. When a campaign has budget line items (entered in Campaign Planning), its Committed and Actual spend here follow the same rule as Campaign Planning and Strategy: an activity's figure is the total of its lines if it has any, otherwise the typed figure; the campaign adds its activities and its own lines. The typed campaign Budget stays the envelope. A Super Admin looking at all organisations still sees the typed figures, because those two tables cannot be read across organisations yet."},
   /* 2026-10-10 */ {q:"What are Saved reports?", a:"On the Reports page, click Saved reports. A saved report is a set of Reporting tiles (KPI tiles, Deals by stage, Headcount and so on) plus, if you want, a Board report setting such as FY27 Quarter 2 compared with last year. Save it as Private (only you) or Public (everyone in your organisation) and open it any time. It stores the recipe, not the numbers, so each person sees the figures their own access allows."},
   /* 2026-10-10 */ {q:"Who can see or change my saved report?", a:"A Private report is visible only to you. A Public report can be opened by everyone in your organisation, but only you (or someone with the Configure permission, who can edit or remove public reports) can change it. Making a report public needs a role with Publish or Configure. Anyone can make their own private copy of a public report with Copy."},
 ];

@@ -6312,12 +6312,7 @@ let _brMemo=null;
    compare to same period previous years"). UI.brPeriod = {type,month,from,to} (see shared/boardPeriod.js), UI.brCompare = 0..3
    earlier years. Full year with no comparison reproduces the old report exactly. Remembered per browser. ---- */
 const BR_LS='northm_br_period_v1';
-function brLoadSel(){ if(UI._brSelLoaded) return; UI._brSelLoaded=true; try{ const j=JSON.parse(localStorage.getItem(BR_LS)||'null'); if(j&&typeof j==='object'){ UI.brPeriod=(j.sel&&typeof j.sel==='object')?j.sel:{type:'fy'}; UI.brCompare=Math.max(0,Math.min(3,Number(j.cmp)||0)); } }catch(e){}
-  /* 2026-10-10: a saved report in Reporting links here with its own setting: ?page=boardreport&br={"fy":..,"sel":{..},"cmp":n}. Applied once, then removed from the address. */
-  try{ const raw=new URLSearchParams(location.search).get('br'); if(raw){ const j=JSON.parse(raw);
-      if(j&&typeof j==='object'){ if(/^FY\d{2}$/.test(String(j.fy||''))&&(CFG.time.years||[]).includes(j.fy)){ UI.fy=j.fy; const el=document.getElementById('cFy'); if(el) el.value=j.fy; }
-        if(j.sel&&typeof j.sel==='object') UI.brPeriod=j.sel; UI.brCompare=Math.max(0,Math.min(3,Number(j.cmp)||0)); brSaveSel(); }
-      try{ history.replaceState(null,'',location.pathname+'?page=boardreport'); }catch(e){} } }catch(e){} }
+function brLoadSel(){ if(UI._brSelLoaded) return; UI._brSelLoaded=true; try{ const j=JSON.parse(localStorage.getItem(BR_LS)||'null'); if(j&&typeof j==='object'){ UI.brPeriod=(j.sel&&typeof j.sel==='object')?j.sel:{type:'fy'}; UI.brCompare=Math.max(0,Math.min(3,Number(j.cmp)||0)); } }catch(e){} }
 function brSaveSel(){ try{ localStorage.setItem(BR_LS,JSON.stringify({sel:UI.brPeriod||{type:'fy'},cmp:UI.brCompare||0})); }catch(e){} }
 function brMonthLabel(p){ return new Date(2000,(CFG.time.fyStartMonth-1+p)%12,1).toLocaleDateString('en-AU',{month:'short'}); }
 function brYtdTo(){

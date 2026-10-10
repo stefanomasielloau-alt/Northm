@@ -356,7 +356,6 @@ window.closeFieldGuide=closeFieldGuide;
 <script src="shared/aiFill.js"></script>
 <script src="shared/askAlec.js"></script>
 <script src="shared/boardReportAccess.js"></script>
-<script src="shared/savedReports.js"></script><!-- 2026-10-10: saved private/public reports (pure helpers) -->
 <link rel="stylesheet" href="assets/vendor/gridstack/gridstack.min.css">
 <script src="assets/vendor/gridstack/gridstack-all.js"></script>
 <script src="shared/grid.js"></script>
@@ -1037,7 +1036,7 @@ function rpReportsParts(){
   const lastBoardReportView = reportViews.find(a=>(a.detail||'').indexOf('Board Report')>=0);
 
   const P={};
-  P.head=`<div class="phead"><div><h1>Reports</h1><p>Every report below computes live from current data each time it's opened — there's no separate "generate" step and no stored PDF archive. What's recorded here is the audit trail of who opened what, and when.</p></div><div class="sp"></div><a class="btn pri" href="#" onclick="go('saved');return false">Saved reports (private &amp; shared)</a></div>`;
+  P.head=`<div class="phead"><div><h1>Reports</h1><p>Every report below computes live from current data each time it's opened — there's no separate "generate" step and no stored PDF archive. What's recorded here is the audit trail of who opened what, and when.</p></div></div>`;
   P.board=`<div class="card"><h3>Board report</h3><div class="bd">
     <p style="margin:0 0 8px;font-size:12.5px;color:var(--ink-2)">Funnel performance, budget variance, pipeline, commentary and an AI-written summary for a financial year — the primary report in this module. Computed live from Strategy's planning data; opening it is what's logged below.</p>
     ${lastBoardReportView? `<div class="mini">Last viewed: <b>${esc(lastBoardReportView.ts)}</b> by ${esc(lastBoardReportView.who||'—')}</div>` : '<div class="mini">Not viewed yet.</div>'}
@@ -1880,173 +1879,12 @@ if(typeof window.northGridUseModule==='function'){
   window.northGridUseModule({storePrefix:'northm_reportus_', pages});
 }
 
-/* ============================================================================
-   SAVED REPORTS (2026-10-10; Stef: "the ability for a person to create and save private and public reports").
-   A saved report = a name + who can see it (Private: only you / Public: everyone in your organisation) + which Reporting tiles it
-   shows + optionally a Board report setting (financial year, period, prior-year comparison). It stores the RECIPE, never data:
-   everyone who opens it sees the numbers their own access allows. Stored in public.saved_reports (migration
-   2026-10-10-migration-saved-reports.sql); rules in shared/savedReports.js; the database enforces who can see/change what.
-   Until the migration is run the page says so and nothing else changes. Remove: drop the 'saved' entry in PAGES + this block.
-   ============================================================================ */
-const SR={list:null,loading:false,error:'',missing:false,editing:null,viewId:null,busy:false};
-function srFriendly(e){
-  const m=String((e&&e.message)||e||''), c=e&&e.code;
-  if(c==='42P01'||c==='PGRST205'||/does not exist|schema cache/i.test(m)) return 'MISSING';
-  if(c==='42501'||/row-level security|permission denied/i.test(m)) return 'You do not have permission to do that. Making a report public needs a role with Publish or Configure.';
-  return m||'Something went wrong.';
-}
-function srCanPublish(){ return NorthSavedReports.canPublish(myRole(),!!CFG.isSuperAdmin); }
-function srMe(){ return (_myProfile&&_myProfile.id)||null; }
-async function srLoad(){
-  if(SR.loading) return; SR.loading=true; SR.error='';
-  try{
-    const r=await sb.from('saved_reports').select('id,org_id,owner_id,owner_name,name,description,visibility,definition,created_at,updated_at').eq('org_id',_orgId).order('updated_at',{ascending:false});
-    if(r.error) throw r.error;
-    SR.list=r.data||[]; SR.missing=false;
-  }catch(e){ const f=srFriendly(e); if(f==='MISSING'){ SR.missing=true; SR.list=[]; } else { SR.error=f; SR.list=SR.list||[]; } }
-  SR.loading=false; if(UI.page==='saved') render();
-}
-function srDraftFrom(r,asCopy){
-  const d=r?NorthSavedReports.sanitizeDefinition(r.definition):{tiles:[],board:null}, b=d.board;
-  return { id:(r&&!asCopy)?r.id:null, name:r?(asCopy?r.name+' (copy)':r.name):'', description:r?(r.description||''):'', visibility:(r&&!asCopy)?r.visibility:'private',
-    tiles:d.tiles.slice(), boardOn:!!b, fy:(b&&b.fy)||'', type:b?b.sel.type:'fy', month:b&&b.sel.month!=null?b.sel.month:0, from:b&&b.sel.from!=null?b.sel.from:0, to:b&&b.sel.to!=null?b.sel.to:2, cmp:b?b.cmp:0, error:'' };
-}
-function srDefFromDraft(d){ return NorthSavedReports.sanitizeDefinition({tiles:d.tiles,board:d.boardOn?{fy:d.fy||null,sel:{type:d.type,month:d.month,from:d.from,to:d.to},cmp:d.cmp}:null}); }
-function srNew(){ SR.editing=srDraftFrom(null); render(); }
-function srEdit(id){ const r=(SR.list||[]).find(x=>x.id===id); if(r){ SR.editing=srDraftFrom(r,false); render(); } }
-function srCopy(id){ const r=(SR.list||[]).find(x=>x.id===id); if(r){ SR.editing=srDraftFrom(r,true); render(); } }
-function srCloseEditor(){ SR.editing=null; render(); }
-function srSetField(k,v){ if(SR.editing) SR.editing[k]=v; }
-function srSetNum(k,v){ if(SR.editing) SR.editing[k]=Number(v); }
-function srToggleTile(id,on){ const d=SR.editing; if(!d) return; d.tiles=d.tiles.filter(x=>x!==id); if(on) d.tiles.push(id); }
-function srSetBoardOn(on){ if(SR.editing){ SR.editing.boardOn=!!on; render(); } }
-function srSetType(v){ if(SR.editing){ SR.editing.type=v; render(); } }
-function srSetVisibility(v){ if(SR.editing){ SR.editing.visibility=(v==='public'&&srCanPublish())?'public':'private'; render(); } }
-async function srSave(){
-  const d=SR.editing; if(!d||SR.busy) return;
-  const name=NorthSavedReports.sanitizeName(d.name), def=srDefFromDraft(d);
-  if(!name){ d.error='Give the report a name.'; render(); return; }
-  if(NorthSavedReports.isEmpty(def)){ d.error='Pick at least one tile, or include a Board report setting.'; render(); return; }
-  if(d.visibility==='public'&&!srCanPublish()){ d.error='Making a report public needs a role with Publish or Configure.'; render(); return; }
-  if(!srMe()){ d.error='Sign in again to save reports.'; render(); return; }
-  SR.busy=true; d.error=''; render();
-  try{
-    const desc=String(d.description||'').trim().slice(0,1000)||null;
-    let r;
-    if(d.id) r=await sb.from('saved_reports').update({name:name,description:desc,visibility:d.visibility,definition:def}).eq('id',d.id).select('id');
-    else r=await sb.from('saved_reports').insert({id:uid(),org_id:_orgId,owner_id:srMe(),owner_name:(_myProfile&&_myProfile.name)||'',name:name,description:desc,visibility:d.visibility,definition:def}).select('id');
-    if(r.error) throw r.error;
-    if(!r.data||!r.data.length) throw {message:'You do not have permission to change this report.'};
-    recordReportView(d.id?'saved report updated':'saved report created', name+' ('+d.visibility+')');
-    SR.editing=null; SR.busy=false; toast(d.id?'Report updated.':'Report saved.'); await srLoad();
-  }catch(e){ const f=srFriendly(e); SR.busy=false; d.error=f==='MISSING'?'Saved reports need a one-time database setup (the platform owner runs 2026-10-10-migration-saved-reports.sql).':f; render(); }
-}
-async function srDelete(id){
-  const r0=(SR.list||[]).find(x=>x.id===id); if(!r0) return;
-  if(typeof confirm==='function'&&!confirm('Delete the report "'+r0.name+'"? This cannot be undone.')) return;
-  try{
-    const r=await sb.from('saved_reports').delete().eq('id',id).select('id');
-    if(r.error) throw r.error;
-    if(!r.data||!r.data.length) throw {message:'You do not have permission to delete this report.'};
-    recordReportView('saved report deleted', r0.name+' ('+r0.visibility+')'); if(SR.viewId===id) SR.viewId=null;
-    toast('Report deleted.'); await srLoad();
-  }catch(e){ const f=srFriendly(e); toast(f==='MISSING'?'Saved reports are not set up yet.':f); }
-}
-function srOpen(id){ const r=(SR.list||[]).find(x=>x.id===id); if(!r) return; SR.viewId=id; recordReportView('report viewed','Saved report · '+r.name); render(); }
-function srBack(){ SR.viewId=null; render(); }
-Object.assign(window,{srLoad,srNew,srEdit,srCopy,srCloseEditor,srSetField,srSetNum,srToggleTile,srSetBoardOn,srSetType,srSetVisibility,srSave,srDelete,srOpen,srBack});
-
-function srVisPill(r){ return r.visibility==='public'?'<span class="pill ok" title="Everyone in your organisation can open it">Public</span>':'<span class="pill n" title="Only you can see it">Private</span>'; }
-function srRowHtml(r,mine){
-  const me=srMe(), can=NorthSavedReports.canManage(r,me,myRole(),!!CFG.isSuperAdmin);
-  return `<tr><td class="lb"><a href="#" onclick="srOpen('${esc(r.id)}');return false"><b>${esc(r.name)}</b></a>${r.description?`<div class="mini">${esc(r.description)}</div>`:''}</td>
-    <td>${srVisPill(r)}</td><td class="mini">${esc(NorthSavedReports.summary(r.definition))}</td>
-    <td class="mini">${mine?'You':esc(r.owner_name||'—')}</td><td class="mini">${esc(F.dt(r.updated_at||r.created_at))}</td>
-    <td class="n" style="white-space:nowrap"><button class="btn sm" onclick="srOpen('${esc(r.id)}')">Open</button>
-      ${can?`<button class="btn sm" onclick="srEdit('${esc(r.id)}')">Edit</button>`:''}
-      <button class="btn sm" onclick="srCopy('${esc(r.id)}')" title="Make a private copy you can change">Copy</button>
-      ${can?`<button class="btn sm dgr" onclick="srDelete('${esc(r.id)}')">Delete</button>`:''}</td></tr>`;
-}
-function srTableHtml(rows,mine,emptyText){
-  return `<div class="bd flush"><table><thead><tr><th>Report</th><th>Who can see it</th><th>Contains</th><th>Owner</th><th>Updated</th><th></th></tr></thead><tbody>
-    ${rows.length?rows.map(r=>srRowHtml(r,mine)).join(''):`<tr><td colspan="6" class="empty">${emptyText}</td></tr>`}</tbody></table></div>`;
-}
-function srBoardCardHtml(b){
-  const denied=(CFG.boardReportAccess&&CFG.boardReportAccess.enforced&&!CFG.boardReportAccess.allowed);
-  return `<div class="card"><h3>Board report</h3><div class="bd">
-    <p style="margin:0 0 6px;font-size:12.5px">${esc(NorthSavedReports.boardSummary(b)||'Full year')}</p>
-    <div class="mini" style="margin-bottom:8px">Opens the Board report in Strategy with this period already chosen.</div>
-    ${denied?'<span class="mini">Available to approved roles only &mdash; ask an administrator.</span>':`<a class="btn pri" href="${esc(NorthSavedReports.boardLink(b))}" target="tool_Strategy">Open Board report &rarr;</a>`}
-  </div></div>`;
-}
-function srViewHtml(r){
-  const d=NorthSavedReports.sanitizeDefinition(r.definition), me=srMe(), can=NorthSavedReports.canManage(r,me,myRole(),!!CFG.isSuperAdmin);
-  let h=`<div class="phead"><div><h1>${esc(r.name)} ${srVisPill(r)}</h1><p>${r.description?esc(r.description)+' &middot; ':''}Saved by ${esc(r.owner_id===me?'you':(r.owner_name||'someone in your organisation'))} &middot; updated ${esc(F.dt(r.updated_at||r.created_at))}</p></div><div class="sp"></div>
-    <button class="btn" onclick="srBack()">&larr; All saved reports</button>${can?`<button class="btn" onclick="srEdit('${esc(r.id)}')">Edit</button>`:''}<button class="btn" onclick="window.print()">Print / Save as PDF</button></div>`;
-  h+=`<div class="note">This report shows the figures <b>your own access</b> allows (${esc(reportScopeLabel(reportScopeName()))}), computed live. Sharing it shares the layout, not anyone's data.</div>`;
-  d.tiles.forEach(id=>{ const t=NorthSavedReports.TILES.find(x=>x.id===id); if(t) h+=`<div style="margin-bottom:12px">${rpPart(t.page,t.wid)}</div>`; });
-  if(d.board) h+=`<div style="margin-bottom:12px">${srBoardCardHtml(d.board)}</div>`;
-  if(!d.tiles.length&&!d.board) h+='<div class="card"><div class="empty">This report has nothing in it yet. Edit it to add tiles.</div></div>';
-  return h;
-}
-function srEditorHtml(){
-  const d=SR.editing; if(!d) return '';
-  const pub=srCanPublish(), groups={}; NorthSavedReports.TILES.forEach(t=>{ (groups[t.group]=groups[t.group]||[]).push(t); });
-  const yr=new Date().getFullYear()%100, fys=[yr-1,yr,yr+1,yr+2].map(n=>'FY'+String(n).padStart(2,'0'));
-  const posOpts=cur=>Array.from({length:12},(_,i)=>`<option value="${i}" ${cur===i?'selected':''}>Month ${i+1}</option>`).join('');
-  return `<div class="mask" onclick="if(event.target===this)srCloseEditor()"><div class="modal" style="width:min(680px,100%)">
-    <h3>${d.id?'Edit report':'New report'} <span class="sp"></span><button class="btn sm" onclick="srCloseEditor()">Cancel</button></h3>
-    <div class="bd">
-      <label class="lbl">Name</label>
-      <input class="in" id="srName" style="width:100%;box-sizing:border-box;margin:3px 0 10px" maxlength="120" value="${esc(d.name)}" placeholder="e.g. Monday exec snapshot" oninput="srSetField('name',this.value)">
-      <label class="lbl">Description (optional)</label>
-      <textarea class="in" id="srDesc" rows="2" style="width:100%;box-sizing:border-box;margin:3px 0 10px" maxlength="1000" oninput="srSetField('description',this.value)">${esc(d.description)}</textarea>
-      <div class="lbl">Who can see it</div>
-      <div style="margin:4px 0 10px;font-size:12.5px">
-        <label style="display:block;margin-bottom:4px"><input type="radio" name="srVis" value="private" ${d.visibility!=='public'?'checked':''} onchange="srSetVisibility('private')"> <b>Private</b> &mdash; only you</label>
-        <label style="display:block;${pub?'':'opacity:.55'}"><input type="radio" name="srVis" value="public" ${d.visibility==='public'?'checked':''} ${pub?'':'disabled'} onchange="srSetVisibility('public')"> <b>Public</b> &mdash; everyone in your organisation can open it${pub?'':' (needs a role with Publish or Configure)'}</label>
-      </div>
-      <div class="lbl">Tiles to include</div>
-      <div style="margin:4px 0 10px">${Object.keys(groups).map(g=>`<div style="margin-bottom:6px"><div class="mini"><b>${esc(g)}</b></div>${groups[g].map(t=>`<label style="display:block;font-size:12.5px;margin-left:6px"><input type="checkbox" ${d.tiles.includes(t.id)?'checked':''} onchange="srToggleTile('${t.id}',this.checked)"> ${esc(t.label)} <span class="mini">&mdash; ${esc(t.hint)}</span></label>`).join('')}</div>`).join('')}</div>
-      <label style="display:block;font-size:12.5px;margin-bottom:6px"><input type="checkbox" id="srBoardOn" ${d.boardOn?'checked':''} onchange="srSetBoardOn(this.checked)"> <b>Include a Board report setting</b> <span class="mini">&mdash; a button that opens the Board report with this period and comparison already chosen</span></label>
-      ${d.boardOn?`<div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end;margin:0 0 10px 22px">
-        <div><div class="mini">Financial year</div><select class="in" onchange="srSetField('fy',this.value)"><option value="">Whatever Strategy has selected</option>${fys.map(f=>`<option ${d.fy===f?'selected':''}>${f}</option>`).join('')}</select></div>
-        <div><div class="mini">Period</div><select class="in" id="srBoardType" onchange="srSetType(this.value)">${NorthSavedReports.BOARD_TYPES.map(t=>`<option value="${t}" ${d.type===t?'selected':''}>${esc(NorthSavedReports.BOARD_LABEL[t])}</option>`).join('')}</select></div>
-        ${d.type==='month'?`<div><div class="mini">Month</div><select class="in" onchange="srSetNum('month',this.value)">${posOpts(d.month)}</select></div>`:''}
-        ${d.type==='custom'?`<div><div class="mini">From</div><select class="in" onchange="srSetNum('from',this.value)">${posOpts(d.from)}</select></div><div><div class="mini">To</div><select class="in" onchange="srSetNum('to',this.value)">${posOpts(d.to)}</select></div>`:''}
-        <div><div class="mini">Compare with</div><select class="in" onchange="srSetNum('cmp',this.value)">${[[0,'Nothing'],[1,'Same period last year'],[2,'Same period, last 2 years'],[3,'Same period, last 3 years']].map(o=>`<option value="${o[0]}" ${d.cmp===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select></div>
-      </div>`:''}
-    </div>
-    <div style="padding:11px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;align-items:center;background:#FAFBFE">
-      ${d.error?`<span class="mini" style="color:var(--bad);margin-right:auto" role="alert">${esc(d.error)}</span>`:''}
-      <button class="btn" onclick="srCloseEditor()">Cancel</button><button class="btn pri" id="srSaveBtn" onclick="srSave()" ${SR.busy?'disabled':''}>${SR.busy?'Saving…':'Save report'}</button>
-    </div></div></div>`;
-}
-function pageSavedReports(){
-  if(SR.list===null&&!SR.loading) setTimeout(srLoad,0);
-  const viewing=SR.viewId?(SR.list||[]).find(x=>x.id===SR.viewId):null;
-  if(viewing) return srViewHtml(viewing)+srEditorHtml();
-  let h=`<div class="crumb" style="font-size:12px;color:var(--ink-2);margin-bottom:6px"><a href="#" onclick="go('reports');return false" style="color:inherit">Reports</a> &rsaquo; Saved reports</div>
-    <div class="phead"><div><h1>Saved reports</h1><p>Build a report from the tiles you care about, save it as <b>private</b> (only you) or <b>public</b> (everyone in your organisation), and open it any time. A saved report is a recipe: each person sees the figures their own access allows.</p></div><div class="sp"></div>
-    ${SR.missing?'':'<button class="btn pri" onclick="srNew()">+ New report</button>'}</div>`;
-  if(SR.missing) return h+`<div class="note">Saved reports need a one-time database setup. The platform owner runs <b>2026-10-10-migration-saved-reports.sql</b> once; nothing else on this page is affected until then.</div>`;
-  if(SR.error) h+=`<div class="note" style="border-left-color:var(--bad)" role="alert">${esc(SR.error)} <a href="#" onclick="SR.list=null;srLoad();return false">Try again</a></div>`;
-  if(SR.list===null||SR.loading&&!(SR.list||[]).length) return h+'<div class="card"><div class="empty">Loading saved reports…</div></div>';
-  const sp=NorthSavedReports.split(SR.list,srMe());
-  h+=`<div class="card"><h3>My reports <span class="pill n">${sp.mine.length}</span></h3>${srTableHtml(sp.mine,true,'You have not saved any reports yet. Click <b>+ New report</b> to make one.')}</div>`;
-  h+=`<div class="card"><h3>Shared reports <span class="pill n">${sp.shared.length}</span> <span class="mini" style="font-weight:400">&mdash; public reports from people in your organisation</span></h3>${srTableHtml(sp.shared,false,'Nobody has shared a report yet.')}</div>`;
-  return h+srEditorHtml();
-}
-window.pageSavedReports=pageSavedReports;
-
-
 const PAGES=[
   {id:'dashboards',  ix:'0', label:'Dashboards',   fn:pageDashboards},
   {id:'organization',ix:'1', label:'Organization', fn:pageOrganization},
   {id:'drilldown',   ix:'2', label:'Drill-down',   fn:pageDrilldown},
   {id:'reports',     ix:'3', label:'Reports',      fn:pageReports},
-  {id:'relmap',      ix:'4', label:'Relationship map', fn:pageRelmap},
-  {id:'saved',       ix:'5', label:'Saved reports', fn:pageSavedReports}
+  {id:'relmap',      ix:'4', label:'Relationship map', fn:pageRelmap}
 ];
 function renderSide(){
   let h='<h4>Reporting</h4>';
@@ -2089,8 +1927,6 @@ const HELP_FAQ=[
   /* 2026-09-29 */ {q:"How are companies and contacts shown on the map?", a:"Companies are matched by name from deal accounts and contact accounts, so \"Acme Pty Ltd\" on a deal and on a contact are one company. Names that look like the same company are flagged \"\u2248 dup?\" and listed in the Possible duplicate companies tile \u2014 nothing is merged automatically. Contacts aren\u2019t drawn as boxes; companies and deals show a \"#N contacts\" badge instead."},
   /* 2026-09-29 */ {q:"Can I rearrange the Reporting pages?", a:"Yes. Every Reporting page is now made of tiles, the same as Strategy: Edit layout lets you drag and resize tiles, \"+ Add / unhide tile\" adds or restores one, and Reset layout puts the page back to its default. Layouts are saved in your browser."},
   /* 2026-10-09 */ {q:"Can Ask Alec read answers aloud or review what is on my screen?", a:"Yes. At the top of the Ask Alec panel, \u201cWhat\u2019s on screen\u201d gives an instant written and spoken briefing built from the red, amber and green flags North already shows, and \u201cReview this screen\u201d asks your organisation\u2019s AI for a headline, what is working, what needs attention and recommended actions. Each message has a Read aloud button (pause, stop, voice and speed are remembered in your browser). \u201cCreate draft\u2026\u201d on a recommendation only opens a pre-filled form in Campaign Planning \u2014 nothing is created until you press Create there."},
-  /* 2026-10-10 */ {q:"What are Saved reports?", a:"On the Reports page, click Saved reports. A saved report is a set of Reporting tiles (KPI tiles, Deals by stage, Headcount and so on) plus, if you want, a Board report setting such as FY27 Quarter 2 compared with last year. Save it as Private (only you) or Public (everyone in your organisation) and open it any time. It stores the recipe, not the numbers, so each person sees the figures their own access allows."},
-  /* 2026-10-10 */ {q:"Who can see or change my saved report?", a:"A Private report is visible only to you. A Public report can be opened by everyone in your organisation, but only you (or someone with the Configure permission, who can edit or remove public reports) can change it. Making a report public needs a role with Publish or Configure. Anyone can make their own private copy of a public report with Copy."},
 ];
 function helpPanelHtml(){
   const mod = MODULES.find(m=>m.id===THIS_MODULE) || {label:THIS_MODULE, desc:''};

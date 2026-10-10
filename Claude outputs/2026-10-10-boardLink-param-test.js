@@ -1,0 +1,24 @@
+const {chromium}=require('playwright'); const fs=require('fs');
+const src=fs.readFileSync('/mnt/user-data/uploads/Northm/Strategy.html.new','utf8');
+const a=src.indexOf("const BR_LS='northm_br_period_v1';"), e=src.indexOf('function brMonthLabel(p)'); const CH=src.slice(a,e);
+let f=0; const ok=(c,m)=>{console.log((c?'PASS ':'FAIL ')+m); if(!c)f++};
+(async()=>{ const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium'}); const pg=await b.newPage();
+ await pg.route('http://t.local/**',r=>r.fulfill({contentType:'text/html',body:'<html><body><select id="cFy"><option>FY26</option><option>FY27</option></select></body></html>'}));
+ const br=encodeURIComponent(JSON.stringify({fy:'FY26',sel:{type:'q3'},cmp:2}));
+ await pg.goto('http://t.local/Strategy.html?page=boardreport&br='+br);
+ await pg.evaluate(CH=>{ window.UI={fy:'FY27'}; window.CFG={time:{years:['FY25','FY26','FY27']}}; (0,eval)(CH.replace(/^const BR_LS/,'window.BR_LS').replace(/function brLoadSel/,'window.brLoadSel=function brLoadSel')); },CH);
+ await pg.evaluate(()=>{ eval(`brLoadSel`); });
+ const r=await pg.evaluate(()=>{ brLoadSel(); return {fy:UI.fy,sel:UI.brPeriod,cmp:UI.brCompare,sel2:document.getElementById('cFy').value,url:location.search,ls:localStorage.getItem('northm_br_period_v1')}; });
+ ok(r.fy==='FY26'&&r.sel.type==='q3'&&r.cmp===2&&r.sel2==='FY26','link applies FY, period and comparison');
+ ok(r.url==='?page=boardreport','the setting is removed from the address afterwards');
+ ok(/q3/.test(r.ls||''),'and remembered for this browser');
+ // unknown FY ignored, bad JSON ignored
+ await pg.goto('http://t.local/Strategy.html?page=boardreport&br='+encodeURIComponent(JSON.stringify({fy:'FY99',sel:{type:'h1'},cmp:99})));
+ await pg.evaluate(CH=>{ window.UI={fy:'FY27'}; window.CFG={time:{years:['FY25','FY26','FY27']}}; (0,eval)(CH.replace(/^const BR_LS/,'window.BR_LS').replace(/function brLoadSel/,'window.brLoadSel=function brLoadSel')); },CH);
+ const r2=await pg.evaluate(()=>{ brLoadSel(); return {fy:UI.fy,t:UI.brPeriod.type,cmp:UI.brCompare}; });
+ ok(r2.fy==='FY27'&&r2.t==='h1'&&r2.cmp===3,'unknown FY ignored (stays FY27), compare clamped to 3');
+ await pg.goto('http://t.local/Strategy.html?page=boardreport&br=%7Bnot-json');
+ await pg.evaluate(CH=>{ window.UI={fy:'FY27'}; window.CFG={time:{years:['FY25','FY26','FY27']}}; localStorage.clear(); (0,eval)(CH.replace(/^const BR_LS/,'window.BR_LS').replace(/function brLoadSel/,'window.brLoadSel=function brLoadSel')); },CH);
+ const r3=await pg.evaluate(()=>{ brLoadSel(); return {fy:UI.fy,p:UI.brPeriod||null}; });
+ ok(r3.fy==='FY27'&&!r3.p,'garbage in the link is ignored without error');
+ console.log(f?'FAILED '+f:'ALL PASS'); await b.close(); process.exit(f?1:0); })().catch(e=>{console.error(e);process.exit(2)});

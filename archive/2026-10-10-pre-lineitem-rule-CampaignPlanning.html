@@ -260,7 +260,6 @@ window.closeFieldGuide=closeFieldGuide;
 <script src="shared/aiFill.js"></script>
 <script src="shared/askAlec.js"></script>
 <script src="shared/budgetLines.js"></script>
-<script src="shared/lineItemRollup.js"></script>
 <script src="shared/convertToMain.js"></script>
 <script src="shared/currencyOptions.js"></script>
 <div id="authGate" style="display:none"></div>
@@ -400,59 +399,7 @@ const bucket = id => byId(CFG.costBuckets,id);
 const programme = id => byId(CFG.programmes,id);
 const region = id => byId(CFG.regions,id);
 const TASK = cid => CFG.tasks.filter(t=>t.campaignId===cid);
-/* 2026-10-10 (Stef: activity Planned/Committed/Actual did not add up to their budget line items -> ONE rule, shared/lineItemRollup.js):
-   an activity's Planned / Committed / Actual = the SUM of its budget lines for that stage when it has any (read-only, calculated),
-   otherwise its own typed box. A campaign's figure = its activities' figures + the campaign's own lines. The typed boxes are never
-   overwritten in the database. Everything below reads through these helpers. */
-const LI={rows:[],idx:null,loaded:false};
-const LI_STAGE={plannedCost:'planned',committedCost:'committed',actualCost:'actual'};
-const LI_HAS={planned:'hasPlanned',committed:'hasCommitted',actual:'hasActual'};
-function liOn(){ return !!(window.NorthLineItemRollup&&LI.idx); }
-/* raw=true: the typed raw value (no currency conversion) -- exports/webhook keep their existing raw plannedCost semantics */
-function taskFig(t,field,raw){ const typed=(field==='plannedCost'&&!raw)?taskPlannedCostMain(t):(t[field]||0); return liOn()?NorthLineItemRollup.taskFig(LI.idx,t.id,LI_STAGE[field],typed):typed; }
-function taskFromLines(t,field){ return liOn()&&NorthLineItemRollup.taskHasLines(LI.idx,t.id,LI_STAGE[field]); }
-function campLineFig(cid,field){ const c=liOn()&&LI.idx.camp[cid], st=LI_STAGE[field]; return (c&&c[LI_HAS[st]])?c[st]:0; }
-function campFigs(c){ return liOn()?NorthLineItemRollup.campaignFigs(LI.idx,c.id,TASK(c.id).map(t=>({id:t.id,planned:taskPlannedCostMain(t),committed:t.committedCost||0,actual:t.actualCost||0}))):null; }
-const tasksTotal = (cid,field) => sum(TASK(cid).map(t=>taskFig(t,field)))+campLineFig(cid,field);
-/* one cost box (dialog: cls 'in', table: cls 'cel'): editable as before, or read-only + "from line items" when lines supply the figure */
-function tkInner(t,field,cls){
-  const fl=taskFromLines(t,field), extra=field==='plannedCost'?`;recomputeTaskCostFx('${t.id}')`:'';
-  if(!fl) return `<input class="${cls}" value="${t[field]||0}" onchange="setIn('tasks','${t.id}','${field}',this.value,'money')${extra}">`;
-  return `<input class="${cls}" value="${taskFig(t,field,true)}" readonly tabindex="-1" style="background:#F3F6FB;color:var(--ink-2)" title="Calculated from this activity's budget line items - edit them in the line items panel (open the activity with the pencil)"><div class="mini" style="color:var(--accent,#2a5bd7)">${cls==='cel'?'from lines':'from line items'}</div>`;
-}
-function campAllocHtml(c){
-  const f=campFigs(c); if(!f||!f.hasAllocated) return '';
-  const left=(c.budget||0)-f.allocated;
-  return `<div class="kpi"><div class="k">Allocated by line items</div><div class="kpi-v">${F.mk(f.allocated)}</div><div class="sub">${(c.budget||0)>0?(left>=0?F.mk(left)+' left of '+F.mk(c.budget):F.mk(-left)+' over '+F.mk(c.budget)):'no Budget entered above'}</div></div>`;
-}
-/* in-place repaint of the open dialog after a line is added / edited / deleted (no re-render, so the line items panel keeps focus) */
-function paintDetailCosts(){
-  const d=UI.detail; if(!d) return;
-  try{
-    if(d.kind==='activity'){ const t=byId(CFG.tasks,d.id); if(!t) return;
-      ['plannedCost','committedCost','actualCost'].forEach(f=>{ const el=document.getElementById('tkBox_'+f); if(el) el.innerHTML=tkInner(t,f,'in'); }); }
-    else if(d.kind==='campaign'){ const c=byId(CFG.campaigns,d.id); if(!c) return;
-      const a=document.getElementById('cK_committed'); if(a) a.textContent=F.mk(tasksTotal(c.id,'committedCost'));
-      const b=document.getElementById('cK_actual'); if(b) b.textContent=F.mk(tasksTotal(c.id,'actualCost'));
-      const w=document.getElementById('cK_alloc'); if(w) w.innerHTML=campAllocHtml(c); }
-  }catch(e){}
-}
-function liOnRows(items,pt,pid){
-  if(!LI.loaded||!window.NorthLineItemRollup) return;
-  LI.rows=LI.rows.filter(r=>!(r.parent_type===pt&&r.parent_id===pid)).concat(items||[]);
-  LI.idx=NorthLineItemRollup.index(LI.rows); paintDetailCosts();
-}
-async function liLoad(scope){ /* scope = the loader's own orgScoped() (it is local to that function) */
-  try{
-    if(!window.NorthLineItemRollup) return;
-    let out=[],from=0;
-    for(;;){ const r=await scope(sb.from('budget_line_items').select('id,parent_type,parent_id,planned_amount,approved_amount,committed_amount,actual_amount').order('id')).range(from,from+999);
-      if(r.error) return; out=out.concat(r.data||[]); if((r.data||[]).length<1000||from>=50000) break; from+=1000; }
-    LI.rows=out; LI.idx=NorthLineItemRollup.index(out); LI.loaded=true;
-    /* re-draw only if the page has already drawn once; otherwise its own first render picks the lines up */
-    if(out.length){ try{ const m=document.getElementById('main'); if(m&&m.innerHTML.trim()) render(); }catch(e){} }
-  }catch(e){ /* line items not installed / not readable: every figure stays exactly as before */ }
-}
+const tasksTotal = (cid,field) => sum(TASK(cid).map(t=>t[field]||0));
 
 function logAudit(what,detail){
   CFG.audit.unshift({id:uid(),ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
@@ -826,7 +773,6 @@ async function loadFromSupabase(){
   CFG.templates = (templatesR.data||[]).map(t=>({
     id:t.id,name:t.name,type:t.type,defaultCostBucketId:t.default_cost_bucket_id,notes:t.notes||'',orgId:t.org_id
   }));
-  try{ if(!_crossOrg) liLoad(orgScoped); }catch(e){} /* 2026-10-10: budget line items drive activity/campaign figures (see tasksTotal) */
   /* Read-only mirror of Events' events -- lets Campaign Planning link an activity to a real event
      and roll up budget/pax/registered/attended without owning that data (phase16). */
   CFG.eventsIndex = (eventsIdxR.data||[]).map(e=>({
@@ -2205,7 +2151,7 @@ function exportActivitiesCsv(){
     const prog=c?byId(CFG.programmes,c.programmeId):null;
     const cb=byId(CFG.costBuckets,t.costBucketId);
     return [t.id, t.name, t.type, c?c.name:'', prog?prog.name:'', t.owner||'', t.startDate||'', t.dueDate||'', t.status,
-      cb?cb.label:'', taskFig(t,'plannedCost',true), taskFig(t,'committedCost'), taskFig(t,'actualCost'), t.supplier||'', t.po||'', t.notes||'', t.trackingRef||''];
+      cb?cb.label:'', t.plannedCost||0, t.committedCost||0, t.actualCost||0, t.supplier||'', t.po||'', t.notes||'', t.trackingRef||''];
   });
   downloadCsv('cursus-activities.csv', headers, rows);
   logAudit('export activities CSV', rows.length+' activit'+(rows.length===1?'y':'ies'));
@@ -2231,7 +2177,7 @@ function buildCampaignPushPayload(campaignId){
     },
     activities:TASK(c.id).map(t=>({
       id:t.id, name:t.name, type:t.type, owner:t.owner||null, startDate:t.startDate||null, dueDate:t.dueDate||null,
-      status:t.status, plannedCost:taskFig(t,'plannedCost',true), committedCost:taskFig(t,'committedCost'), actualCost:taskFig(t,'actualCost'),
+      status:t.status, plannedCost:t.plannedCost||0, committedCost:t.committedCost||0, actualCost:t.actualCost||0,
       supplier:t.supplier||null, po:t.po||null, notes:t.notes||null, trackingRef:t.trackingRef||null
     }))
   };
@@ -2578,8 +2524,8 @@ function eventRollup(events){
 function planRollup(){
   const camps=planItemsAt('campaign'), tasks=planItemsAt('activity');
   const budget=sum(camps.map(c=>c.budget||0));
-  const committed=sum(tasks.map(t=>taskFig(t,'committedCost')))+sum(camps.map(c=>campLineFig(c.id,'committedCost')));
-  const actual=sum(tasks.map(t=>taskFig(t,'actualCost')))+sum(camps.map(c=>campLineFig(c.id,'actualCost')));
+  const committed=sum(tasks.map(t=>t.committedCost||0));
+  const actual=sum(tasks.map(t=>t.actualCost||0));
   const ev=eventRollup(eventsForActivities(tasks));
   return {campCount:camps.length,taskCount:tasks.length,budget,committed,actual,events:ev};
 }
@@ -2608,8 +2554,7 @@ function ragPillHtml(rag){
 function ragForActivity(t){
   const today=new Date().toISOString().slice(0,10);
   if(t.status==='Completed'){
-    const _pl=taskFig(t,'plannedCost'), _ac=taskFig(t,'actualCost');
-    const exceed=_pl>0 && _ac>0 && _ac<_pl*RAG_THRESHOLDS.exceedActualRatio;
+    const exceed=(taskPlannedCostMain(t))>0 && (t.actualCost||0)>0 && t.actualCost<taskPlannedCostMain(t)*RAG_THRESHOLDS.exceedActualRatio;
     return {tone:'green',label:'Completed',exceed};
   }
   if(t.dueDate && t.dueDate<today) return {tone:'red',label:'Behind'};
@@ -2938,9 +2883,8 @@ function detailCampaignHtml(id){
       <p class="mini" style="margin-top:4px">Owner drives "notify the manager" automations in Process Maps (resolves to whoever manages the Owner's business unit). Off-target threshold overrides the org-wide default for this campaign only -- leave blank to use it.</p>
       <div class="kpis" style="margin-top:12px">
         <div class="kpi"><div class="k">Activities</div><div class="kpi-v">${tasks.length}</div></div>
-        <div class="kpi"><div class="k">Committed</div><div class="kpi-v" id="cK_committed">${F.mk(tasksTotal(c.id,'committedCost'))}</div></div>
-        <div class="kpi"><div class="k">Actual</div><div class="kpi-v" id="cK_actual">${F.mk(tasksTotal(c.id,'actualCost'))}</div></div>
-        <span id="cK_alloc" style="display:contents">${campAllocHtml(c)}</span>
+        <div class="kpi"><div class="k">Committed</div><div class="kpi-v">${F.mk(tasksTotal(c.id,'committedCost'))}</div></div>
+        <div class="kpi"><div class="k">Actual</div><div class="kpi-v">${F.mk(tasksTotal(c.id,'actualCost'))}</div></div>
         ${events.length?`<div class="kpi hl"><div class="k">Linked events</div><div class="kpi-v">${events.length}</div><div class="sub">${evR.attended}/${evR.registered} attended · ${F.mk(evR.budget)} budget</div></div>`:''}
       </div>
       <div class="row" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg-2)">
@@ -2994,15 +2938,15 @@ function detailActivityHtml(id){
       </div>
       <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:8px">
         <div style="flex:1;min-width:100px"><label class="lbl">Planned</label>
-          <span id="tkBox_plannedCost">${tkInner(t,'plannedCost','in')}</span>
+          <input class="in" value="${t.plannedCost||0}" onchange="setIn('tasks','${t.id}','plannedCost',this.value,'money');recomputeTaskCostFx('${t.id}')">
           <div style="display:flex;align-items:center;gap:4px;margin-top:3px">
             <select class="in" style="width:62px;font-size:10px;padding:2px 4px" title="Currency this was entered in, if not ${CFG.currency.main}" onchange="setTaskCostCurrency('${t.id}',this.value)">${currencyOptionsHtml(t.plannedCostCcy, {blankLabel: CFG.currency.main+' (default)'})}</select>
             ${(t.plannedCostFx&&t.plannedCostFx.originalCurrency&&t.plannedCostFx.originalCurrency!==CFG.currency.main)?`<span class="mini">≈ ${F.mk(t.plannedCostFx.converted)} ${CFG.currency.main}</span>`:''}
           </div></div>
         <div style="flex:1;min-width:100px"><label class="lbl">Committed</label>
-          <span id="tkBox_committedCost">${tkInner(t,'committedCost','in')}</span></div>
+          <input class="in" value="${t.committedCost||0}" onchange="setIn('tasks','${t.id}','committedCost',this.value,'money')"></div>
         <div style="flex:1;min-width:100px"><label class="lbl">Actual</label>
-          <span id="tkBox_actualCost">${tkInner(t,'actualCost','in')}</span></div>
+          <input class="in" value="${t.actualCost||0}" onchange="setIn('tasks','${t.id}','actualCost',this.value,'money')"></div>
       </div>
       <label class="lbl" style="margin-top:8px">Linked event</label>
       <select class="in" onchange="setIn('tasks','${t.id}','eventId',this.value||null)">
@@ -3257,13 +3201,13 @@ function planSingleLevelTableHtml(level, items){
         <td><select class="cel txt" style="width:106px" onchange="setIn('tasks','${t.id}','status',this.value)">
           ${TASK_STATUSES.map(s=>`<option ${s===t.status?'selected':''}>${s}</option>`).join('')}</select></td>
         <td>${ragPillHtml(ragForActivity(t))}</td>
-        <td class="n">${tkInner(t,'plannedCost','cel')}
+        <td class="n"><input class="cel" value="${t.plannedCost||0}" onchange="setIn('tasks','${t.id}','plannedCost',this.value,'money');recomputeTaskCostFx('${t.id}')">
           <div style="display:flex;align-items:center;gap:3px;margin-top:2px">
             <select class="cel txt" style="width:62px;font-size:10px;padding:2px 4px" title="Currency this was entered in, if not ${CFG.currency.main}" onchange="setTaskCostCurrency('${t.id}',this.value)">${currencyOptionsHtml(t.plannedCostCcy, {blankLabel: CFG.currency.main+' (default)'})}</select>
             ${(t.plannedCostFx&&t.plannedCostFx.originalCurrency&&t.plannedCostFx.originalCurrency!==CFG.currency.main)?`<span class="mini">≈ ${F.mk(t.plannedCostFx.converted)}</span>`:''}
           </div></td>
-        <td class="n">${tkInner(t,'committedCost','cel')}</td>
-        <td class="n">${tkInner(t,'actualCost','cel')}</td>
+        <td class="n"><input class="cel" value="${t.committedCost||0}" onchange="setIn('tasks','${t.id}','committedCost',this.value,'money')"></td>
+        <td class="n"><input class="cel" value="${t.actualCost||0}" onchange="setIn('tasks','${t.id}','actualCost',this.value,'money')"></td>
         <td class="mini">${linkedEvent?esc(linkedEvent.name):'—'}</td>
         <td class="n"><button class="btn sm" title="View details / link an event" onclick="openDetail('activity','${t.id}')">✎</button>
           <button class="btn sm dgr" onclick="removeTask('${t.id}')">Remove</button></td></tr>`;
@@ -3859,7 +3803,6 @@ const MODULES=[
 ];
 const THIS_MODULE='Cursus';
 const HELP_FAQ=[
-  /* 2026-10-10 */ {q:"Why can't I type Planned, Committed or Actual on an activity?", a:"Once an activity has budget line items, its Planned, Committed and Actual are calculated from them (the sum of each stage) and the boxes turn grey with 'from line items'. Edit the amounts in the Budget line items panel inside the activity. An activity with no line items keeps its own single typed numbers. A campaign's Committed and Actual are its activities plus any line items on the campaign itself (costs that belong to the whole campaign, not one activity). The campaign's own Budget box stays as the approved budget, and 'Allocated by line items' shows how much of it the lines add up to."},
   {q:'How do I reset my password?', a:'An admin can trigger a reset from Configuration \u2192 Roles & users \u2192 Reset password, or use "Forgot password" at login. The email comes from Supabase directly, not from North.'},
   {q:'How do I set up a passkey?', a:'From your account menu, choose to set up a passkey \u2014 your browser or device (Windows Hello, Touch ID, a security key, etc.) will walk you through it.'},
   {q:'How do I invite a new teammate?', a:'Configuration \u2192 Invite a new teammate \u2192 choose their role \u2192 Generate invite code, then send them the code. They redeem it at signup by choosing "I have an invite code."'},
@@ -4024,7 +3967,7 @@ function render(){
   }
   document.getElementById('main').innerHTML=mainHtml;
   document.getElementById('wizardLayer').innerHTML=campaignWizardPanel()+moveDialogPanel()+draftActivityPanel()+detailPanelHtml()+contactPickerHtml()+askAlecCursusPanel();
-  try{ if(window.NorthBudgetLines) NorthBudgetLines.sync(sb, document.getElementById('nblHost'), {onRows:liOnRows}); }catch(e){}
+  try{ if(window.NorthBudgetLines) NorthBudgetLines.sync(sb, document.getElementById('nblHost')); }catch(e){}
   saveLocal();
   scheduleSupabaseSave();
 }

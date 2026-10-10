@@ -757,11 +757,7 @@ const programme=id=>byId(CFG.programmes,id);
 /* 2026-10-09 (Stef: line items roll into Strategy): when a campaign has budget line items with a value for a stage, that total is the figure
    (Budget = Approved else Planned per line, Committed, Actual -- shared/lineItemRollup.js); otherwise today's fields apply, unchanged. */
 function liFig(camp,k){ return (typeof NorthLineItemRollup!=='undefined' && camp) ? NorthLineItemRollup.figure(camp,k) : null; }
-function liHint(c,k){
-  /* 2026-10-10: the campaign's typed Budget is the envelope; line items show as what is allocated against it */
-  if(k==='budget' && c && c.li && c.li.hasBudget && Number(c.budget)>0){ const left=Number(c.budget)-c.li.budget;
-    return '<div class="mini" style="color:var(--accent,#2a5bd7)" title="Budget line items (entered in Campaign Planning) allocate this much of the Budget below. Strategy keeps using the Budget below as the envelope.">line items allocate '+F.mk(c.li.budget)+' ('+(left>=0?F.mk(left)+' left':F.mk(-left)+' over')+')</div>'; }
-  const v=liFig(c,k); return v==null?'':'<div class="mini" style="color:var(--accent,#2a5bd7)" title="Strategy uses the total of this campaign\'s budget line items (entered in Campaign Planning). The box below is only used when there are none for this figure.">from line items: '+F.mk(v)+'</div>'; }
+function liHint(c,k){ const v=liFig(c,k); return v==null?'':'<div class="mini" style="color:var(--accent,#2a5bd7)" title="Strategy uses the total of this campaign\'s budget line items (entered in Campaign Planning). The box below is only used when there are none for this figure.">from line items: '+F.mk(v)+'</div>'; }
 function campaignCommitted(camp){ const l=liFig(camp,'committed'); if(l!=null) return l; return camp.rollupCommitted!=null ? camp.rollupCommitted : (camp.committed||0); }
 function campaignActualSpend(camp){ const l=liFig(camp,'actual'); if(l!=null) return l; return camp.rollupActual!=null ? camp.rollupActual : (camp.actual||0); }
 function campaignBudgetMain(c){ /* multi-currency phase 3: use the converted snapshot when this campaign's budget was set in a non-main currency; fails soft to the raw figure otherwise, so main-currency campaigns (the default case) are unchanged. */ { const l=liFig(c,'budget'); if(l!=null) return l; } return (c.budgetFx && c.budgetFx.converted!=null) ? c.budgetFx.converted : (c.budget||0); }
@@ -2133,7 +2129,7 @@ async function loadFromSupabase(){
       const _all=async mk=>{ let out=[],from=0; for(;;){ const r=await mk().range(from,from+999); if(r.error) return {error:r.error}; out=out.concat(r.data||[]); if((r.data||[]).length<1000||from>=50000) break; from+=1000; } return {data:out}; };
       const liR=await _all(()=>orgScoped(sb.from('budget_line_items').select('id,parent_type,parent_id,planned_amount,approved_amount,committed_amount,actual_amount').order('id')));
       if(!liR.error && (liR.data||[]).length){
-        const tkR=await _all(()=>orgScoped(sb.from('tasks').select('id,campaign_id,planned_cost,committed_cost,actual_cost').order('id')));
+        const tkR=await _all(()=>orgScoped(sb.from('tasks').select('id,campaign_id').order('id')));
         const lm=NorthLineItemRollup.build(liR.data, tkR.error?[]:tkR.data);
         CFG.campaigns.forEach(c=>{ if(lm[c.id]) c.li=lm[c.id]; });
       }

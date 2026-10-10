@@ -80,7 +80,7 @@
       S.items.forEach(i=>{ t.planned+=num(i.planned_amount); t.quoted+=num(i.quoted_amount); t.approved+=num(i.approved_amount); t.committed+=num(i.committed_amount); t.actual+=num(i.actual_amount); t.variance+=num(calcVariance(i)); });
       return t;
     }
-    function notify(){ try{ opts.onChange&&opts.onChange(totals()); }catch(e){} try{ opts.onRows&&!S.error&&!S.loading&&opts.onRows(S.items.slice(),opts.parentType,opts.parentId); }catch(e){} } /* 2026-10-10: onRows(rows,parentType,parentId) lets the page recalculate activity/campaign figures in place */
+    function notify(){ try{ opts.onChange&&opts.onChange(totals()); }catch(e){} }
     function friendly(err){
       const m=String(err&&err.message||err||''), code=err&&err.code;
       if(code==='42P01'||code==='PGRST205'||/does not exist|schema cache/i.test(m)) return MISSING;

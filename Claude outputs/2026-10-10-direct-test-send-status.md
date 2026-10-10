@@ -1,0 +1,3 @@
+# Direct test-send from Supabase — status · 2026-10-10
+Done (local commit, not pushed): flow-test-send rewritten to send via Resend/SendGrid/Postmark/Brevo with function secrets; Hub removed from the test path; ProcessMaps message points to the new setup doc. Tests: 2026-10-10-flowTestSend-direct-test.js (31 PASS).
+Not done / needs Stef: provider account + API key + 4 secrets + redeploy of the function; Verify JWT OFF on flow-runner (live probe 10 Oct: still ON, returns 401) and flow-test-send. Not live-tested against a real provider. FLOW_DISPATCH_SECRET mismatch still breaks real flow emails via Hub.

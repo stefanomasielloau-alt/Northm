@@ -4146,7 +4146,7 @@ function flChecksHtml(w){
 /* 2026-10-10 (Stef: "tried to simulate a process .. I dont get the email?"): Simulate stays free of side effects, but each Send email step
    it reaches can be sent ONCE, for real, to the signed-in person only (Edge Function flow-test-send; recipient comes from their login,
    subject is marked [TEST]). Needs that function deployed; until then the button explains how. */
-const FLOW_TEST_FN_MISSING='The test-send function is not installed yet. The platform owner deploys the "flow-test-send" Edge Function once (see 2026-10-10-flow-test-send-direct-setup.md).';
+const FLOW_TEST_FN_MISSING='The test-send function is not installed yet. The platform owner deploys the "flow-test-send" Edge Function once (see 2026-10-10-flow-test-send-setup.md).';
 function flSimTestEmails(S){ return ((S&&S._acts)||[]).filter(a=>a&&a.action&&a.action.type==='email'); }
 function flSimTestPanelHtml(S,w){
   const em=flSimTestEmails(S);

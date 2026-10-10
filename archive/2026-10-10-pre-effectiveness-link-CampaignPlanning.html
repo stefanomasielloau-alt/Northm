@@ -3518,7 +3518,7 @@ function pageEffectiveness(){
       <th class="n">Cost per won deal</th><th class="n">Value : cost</th></tr></thead><tbody>
     ${!rows.length?`<tr><td colspan="6" class="empty">No campaigns with cost or linked won deals yet.</td></tr>`:
       rows.map(r=>`<tr>
-        <td><a href="#" onclick="openDetail('campaign','${esc(r.c.id)}');return false" title="Open this campaign" style="color:var(--nav);font-weight:600;text-decoration:none">${esc(r.c.name)} &rarr;</a></td>
+        <td>${esc(r.c.name)}</td>
         <td class="n calc">${F.mk(r.cost)}</td>
         <td class="n calc">${r.wonCount}</td>
         <td class="n calc">${F.mk(r.wonValue)}</td>

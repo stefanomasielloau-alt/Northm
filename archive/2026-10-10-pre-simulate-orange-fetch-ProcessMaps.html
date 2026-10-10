@@ -109,10 +109,6 @@ td.n,th.n{text-align:right;}
 .btn.sm{padding:4px 9px; font-size:11.5px;}
 .btn.pri{background:var(--nav);border-color:var(--nav);color:#fff}
 .btn.pri:hover{background:var(--nav-dk)}
-/* 2026-10-10 (Stef: Send test to me was hard to see) North Orange, sampled from the North logo arrow (#F26A2E) */
-.btn.north-or{background:#F26A2E;border-color:#F26A2E;color:#fff;font-weight:700}
-.btn.north-or:hover{background:#D9561B;border-color:#D9561B}
-.btn.north-or:disabled{opacity:.55;cursor:default}
 .btn.on{background:var(--nav);border-color:var(--nav);color:#fff}
 .btn.dgr{color:var(--bad); border-color:#F3C9C6;}
 .btn.dgr:hover{background:var(--bad-bg)}
@@ -4156,7 +4152,7 @@ function flSimTestPanelHtml(S,w){
   if(!em.length) return h+'<div class="mini">No Send email step reached yet — keep stepping, or use Run to end.</div>';
   h+='<div class="mini" style="margin-bottom:6px">Sends ONE real copy to <b>you only</b>, marked [TEST] — nobody else receives anything.</div>';
   h+=em.map((a,i)=>{ const f=FlowEngine.fillAction(a.action,S.m||{});
-    return `<div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:4px"><span style="flex:1;min-width:180px">${esc(f.subject||'(no subject)')}</span><button class="btn sm north-or" id="flTestBtn${i}" onclick="flSimSendTest(${i})">Send test to me</button></div>`; }).join('');
+    return `<div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:4px"><span style="flex:1;min-width:180px">${esc(f.subject||'(no subject)')}</span><button class="btn sm" id="flTestBtn${i}" onclick="flSimSendTest(${i})">Send test to me</button></div>`; }).join('');
   return h+'<div id="flTestMsg" class="mini" style="margin-top:4px" role="status"></div>';
 }
 async function flSimSendTest(i){
@@ -4174,17 +4170,7 @@ async function flSimSendTest(i){
     if(r.status===404&&!j.error) throw new Error(FLOW_TEST_FN_MISSING);
     if(j.ok) say('Sent to '+j.to+(j.replayed?' (the same email was already sent a moment ago, so it was not sent twice)':'')+'. Check your inbox'+(j.detail?' — '+j.detail:'')+'.');
     else say(j.error||('Could not send (HTTP '+r.status+').'),true);
-  }catch(e){
-    /* 2026-10-10: a function that is not deployed answers the browser's pre-flight without CORS headers, so fetch() throws a bare
-       "Failed to fetch" and the 404 handling above never runs. Probe with a plain GET (which does carry CORS headers) to tell the cases apart. */
-    let msg=String((e&&e.message)||e);
-    if(e instanceof TypeError||/failed to fetch|networkerror|load failed/i.test(msg)){
-      try{ const pr=await fetch(SUPABASE_URL+'/functions/v1/flow-test-send',{method:'GET'});
-        msg = pr.status===404 ? FLOW_TEST_FN_MISSING : 'Could not reach the test sender (the request was blocked or the network dropped). Try again in a moment; if it keeps happening, check the flow-test-send function in Supabase.';
-      }catch(e2){ msg='Could not reach the test sender - check your internet connection and try again.'; }
-    }
-    say(msg,true);
-  }
+  }catch(e){ say(String((e&&e.message)||e),true); }
   const b2=document.getElementById('flTestBtn'+i); if(b2) b2.disabled=false;
 }
 window.flSimSendTest=flSimSendTest;

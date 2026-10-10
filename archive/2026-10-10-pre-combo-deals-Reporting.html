@@ -352,7 +352,6 @@ window.closeFieldGuide=closeFieldGuide;
 <script src="shared/orgSwitcher.js"></script>
 <script src="shared/convertToMain.js"></script>
 <script src="shared/charts.js"></script>
-<script src="shared/chartsCombo.js"></script>
 <script src="shared/aiRouter.js"></script>
 <script src="shared/aiFill.js"></script>
 <script src="shared/askAlec.js"></script>
@@ -929,9 +928,6 @@ window.recordReportView=recordReportView;
 
 function toggleTile(key){ UI.openTile = UI.openTile===key ? null : key; render(); }
 window.toggleTile=toggleTile;
-/* 2026-10-10 (Stef: Deals by stage as a combo, Deals a line or vice versa) */
-function toggleDealsSwap(){ UI.dealsSwap = !UI.dealsSwap; render(); }
-window.toggleDealsSwap=toggleDealsSwap;
 
 function orgScopeNoteHtml(){
   const s=reportScopeName();
@@ -952,8 +948,8 @@ function rpDashboardsParts(){
   const upcomingEvents = CFG.events.filter(e=>e.startDate && e.startDate>=today && e.status!=='Cancelled');
   const lowStockAssets = CFG.assets.filter(a=>a.lowStockAt!=null && a.stock!=null && a.stock<=a.lowStockAt);
   const touchpoints7d = CFG.touchpoints.filter(a=>{ if(!a.occurredAt) return false; return (Date.now()-new Date(a.occurredAt))/86400000<=7; });
-  const dealsByStage = {}, dealsValByStage = {};
-  CFG.deals.forEach(d=>{ const k=d.stage||'—'; dealsByStage[k]=(dealsByStage[k]||0)+1; dealsValByStage[k]=(dealsValByStage[k]||0)+(Number(d.value)||0); });
+  const dealsByStage = {};
+  CFG.deals.forEach(d=>{ const k=d.stage||'—'; dealsByStage[k]=(dealsByStage[k]||0)+1; });
 
   const tiles=[
     {key:'budget', label:'Campaign budget', v:F.mk(budget), sub:'converted to '+CFG.currency.main,
@@ -994,22 +990,10 @@ function rpDashboardsParts(){
       ${openT.list.length? '<ul style="margin:0;padding-left:18px'+(chartHtml?';margin-top:10px':'')+'">'+openT.list.map(x=>`<li style="margin-bottom:4px;font-size:12.5px">${x}</li>`).join('')+'</ul>' : '<div class="empty">Nothing here right now.</div>'}
     </div></div>`;
   }
-  /* 2026-10-10: combo -- deal VALUE per stage as bars (left $ axis) with the deal COUNT as a line (right axis); the button swaps them
-     (count as bars, value as the line). Falls back to the old count bars if shared/chartsCombo.js did not load. */
-  const stageKeys = Object.keys(dealsByStage), swap = !!UI.dealsSwap;
-  let dealsChart = '';
-  if(stageKeys.length){
-    if(typeof chartPick === 'function'){
-      const valS = { k:'Deal value', v:stageKeys.map(s=>dealsValByStage[s]||0), type:swap?'line':'bar', axis:swap?'right':'left' };
-      const cntS = { k:'Deals', v:stageKeys.map(s=>dealsByStage[s]), type:swap?'bar':'line', axis:swap?'left':'right' };
-      dealsChart = chartPick('rp-deals-stage', stageKeys, swap?[cntS,valS]:[valS,cntS], { h:210, money:!swap, moneyR:swap, type:'combo' });
-    } else dealsChart = svgBars(Object.entries(dealsByStage).map(([s,n])=>({k:s,v:n})),{h:180});
-  }
-  P.deals=`<div class="card"><h3>Deals by stage <span class="sp"></span>${stageKeys.length&&typeof chartPick==='function'?`<button class="btn sm" onclick="toggleDealsSwap()" title="Swap which measure is the bars and which is the line">${swap?'Show value as bars':'Show deals as bars'}</button>`:''}</h3><div class="bd">
-    ${dealsChart}
-    ${stageKeys.length?'<div class="mini" style="margin-top:6px">'+(swap?'Bars: number of deals (left axis). Line: deal value (right axis).':'Bars: deal value (left axis). Line: number of deals (right axis).')+' Value includes closed stages.</div>':''}
-  </div><div class="bd flush"><table><thead><tr><th>Stage</th><th class="n">Count</th><th class="n">Value</th></tr></thead><tbody>
-    ${stageKeys.length ? stageKeys.map(s=>`<tr><td class="lb">${esc(s)}</td><td class="n">${dealsByStage[s]}</td><td class="n">${F.mk(dealsValByStage[s]||0)}</td></tr>`).join('') : '<tr><td colspan="3" class="empty">No deals yet.</td></tr>'}
+  P.deals=`<div class="card"><h3>Deals by stage</h3><div class="bd">
+    ${Object.keys(dealsByStage).length ? svgBars(Object.entries(dealsByStage).map(([s,n])=>({k:s,v:n})),{h:180}) : ''}
+  </div><div class="bd flush"><table><thead><tr><th>Stage</th><th class="n">Count</th></tr></thead><tbody>
+    ${Object.keys(dealsByStage).length ? Object.entries(dealsByStage).map(([s,n])=>`<tr><td class="lb">${esc(s)}</td><td class="n">${n}</td></tr>`).join('') : '<tr><td colspan="2" class="empty">No deals yet.</td></tr>'}
   </tbody></table></div></div>`;
   return P;
 }

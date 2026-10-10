@@ -28,14 +28,12 @@
 
   function _esc(s){ return (typeof G.esc === 'function') ? G.esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
   function _num(v){ v = +v; return isFinite(v) ? v : 0; }
-  function _ser(i){ var S = (typeof G.SER !== 'undefined' && G.SER && G.SER.length) ? G.SER : (typeof SER !== 'undefined' && SER && SER.length) ? SER : ['#3B4CB8','#10AEBF','#E8A317','#D0342C','#7A5AC8','#2E9E5B','#C4559A','#7C879E']; return S[i % S.length]; }
+  function _ser(i){ var S = (typeof G.SER !== 'undefined' && G.SER && G.SER.length) ? G.SER : ['#3B4CB8','#10AEBF','#E8A317','#D0342C','#7A5AC8','#2E9E5B','#C4559A','#7C879E']; return S[i % S.length]; }
   function _fmt(v, kind, dec){
-    /* 2026-10-10: pages declare `const F` at top level, which is NOT a window property, so G.F was always empty and axis labels fell back to
-       plain '$1250000'. A bare identifier does reach the page's own const (this is how charts.js reaches it too). */
-    var FF = (G.F && typeof G.F === 'object') ? G.F : ((typeof F !== 'undefined' && F) ? F : {});
-    if (kind === 'money') return FF.mk ? FF.mk(v) : '$' + Math.round(v);
-    if (kind === 'pct')   return FF.p ? FF.p(v, 0) : Math.round(v * 100) + '%';
-    return FF.n ? FF.n(v, dec || 0) : String(Math.round(v * Math.pow(10, dec || 0)) / Math.pow(10, dec || 0));
+    var F = G.F || {};
+    if (kind === 'money') return F.mk ? F.mk(v) : '$' + Math.round(v);
+    if (kind === 'pct')   return F.p ? F.p(v, 0) : Math.round(v * 100) + '%';
+    return F.n ? F.n(v, dec || 0) : String(Math.round(v * Math.pow(10, dec || 0)) / Math.pow(10, dec || 0));
   }
 
   function svgCombo(cats, series, opts){

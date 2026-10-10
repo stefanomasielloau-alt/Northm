@@ -3809,8 +3809,8 @@ function flEvalCondition(n,m){ return FlowEngine.evalCondition(n,m,flCtx()); }
 function flEventHappened(c,m,P){ return FlowEngine.eventHappened(c,m,P?P.key:null); }
 function flRuleFires(r,m){ return FlowEngine.ruleFires(r,m,flCtx()); }
 function flSimInit(w, m, opts){ return FlowEngine.initRun(w,m,opts,flCtx()); }
-function flSimStep(S){ const r=FlowEngine.step(S,flCtx()); if(r&&r.actions&&r.actions.length) S._acts=(S._acts||[]).concat(r.actions); return r; } /* 2026-10-10: remember the actions reached, to list email steps for "Send test to me" */
-function flSimRun(S){ const acts=FlowEngine.run(S,flCtx()); if(acts&&acts.length) S._acts=(S._acts||[]).concat(acts); return S; }
+function flSimStep(S){ return FlowEngine.step(S,flCtx()); }
+function flSimRun(S){ FlowEngine.run(S,flCtx()); return S; }
 function flSimNm(S,x){ const f=byId(CFG.workflows||[],x.wfId||S.wfId); const n=f&&x.nodeId&&byId(f.nodes,x.nodeId); return '“'+(n?flNodeTitle(n):'flow')+'”'+((f&&f.id!==S.wfId)?' in “'+f.name+'”':''); }
 function flSimSummary(S,w){ return FlowEngine.summary(S,flCtx()); }
 function flSimCategory(S,w){ return FlowEngine.category(S,flCtx()); }
@@ -4139,46 +4139,11 @@ function flChecksHtml(w){
   if(!iss.length) return `<div class="fl-ok">✓ All checks pass</div><ul class="mini fl-checklist"><li>Every path from a trigger reaches an End</li><li>No orphan nodes</li><li>Conditions have an Else path</li><li>Waits have a timeout path</li><li>Loops have max repeats</li><li>Required settings are filled in</li><li>No subflow calls itself</li></ul>`;
   return `<div class="mini" style="margin-bottom:6px">${iss.length} issue${iss.length===1?'':'s'} — click one to jump to it.</div>`+iss.map(i=>`<a href="#" class="fl-issue ${i.sev}" onclick="${i.edgeId?`flSelect('edge','${i.edgeId}')`:i.nodeId?`flSelect('node','${i.nodeId}')`:'return false'};return false"><span>${i.sev==='error'?'✕':'!'}</span>${esc(i.msg)}</a>`).join('');
 }
-/* 2026-10-10 (Stef: "tried to simulate a process .. I dont get the email?"): Simulate stays free of side effects, but each Send email step
-   it reaches can be sent ONCE, for real, to the signed-in person only (Edge Function flow-test-send; recipient comes from their login,
-   subject is marked [TEST]). Needs that function deployed; until then the button explains how. */
-const FLOW_TEST_FN_MISSING='The test-send function is not installed yet. The platform owner deploys the "flow-test-send" Edge Function once (see 2026-10-10-flow-test-send-setup.md).';
-function flSimTestEmails(S){ return ((S&&S._acts)||[]).filter(a=>a&&a.action&&a.action.type==='email'); }
-function flSimTestPanelHtml(S,w){
-  const em=flSimTestEmails(S);
-  let h='<div class="dv"></div><div class="lbl" style="margin-bottom:4px">Send a test email to me</div>';
-  if(!S) return h+'<div class="mini">Simulate sends nothing. Run the simulation first: any <b>Send email</b> steps it reaches are listed here, and you can send a real copy to <b>your own address only</b>.</div>';
-  if(S.done&&!em.length) return h+'<div class="mini">This run did not reach a Send email step.</div>';
-  if(!em.length) return h+'<div class="mini">No Send email step reached yet — keep stepping, or use Run to end.</div>';
-  h+='<div class="mini" style="margin-bottom:6px">Sends ONE real copy to <b>you only</b>, marked [TEST] — nobody else receives anything.</div>';
-  h+=em.map((a,i)=>{ const f=FlowEngine.fillAction(a.action,S.m||{});
-    return `<div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:4px"><span style="flex:1;min-width:180px">${esc(f.subject||'(no subject)')}</span><button class="btn sm" id="flTestBtn${i}" onclick="flSimSendTest(${i})">Send test to me</button></div>`; }).join('');
-  return h+'<div id="flTestMsg" class="mini" style="margin-top:4px" role="status"></div>';
-}
-async function flSimSendTest(i){
-  const S=FLU.sim, a=flSimTestEmails(S)[i]; if(!a) return;
-  const f=FlowEngine.fillAction(a.action,S.m||{});
-  const btn=document.getElementById('flTestBtn'+i), msg=document.getElementById('flTestMsg');
-  const say=(t,bad)=>{ const m=document.getElementById('flTestMsg')||msg; if(m){ m.textContent=t; m.style.color=bad?'var(--bad)':'var(--ok)'; } };
-  if(btn) btn.disabled=true; say('Sending…');
-  try{
-    const { data } = await sb.auth.getSession(); const token=data&&data.session&&data.session.access_token;
-    if(!token) throw new Error('Your North session has expired -- sign in again.');
-    const r=await fetch(SUPABASE_URL+'/functions/v1/flow-test-send',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token,'apikey':SUPABASE_ANON_KEY},
-      body:JSON.stringify({subject:f.subject||'',body:f.body||'',flow:(currentWorkflow()||{}).name||''})});
-    const j=await r.json().catch(()=>({}));
-    if(r.status===404&&!j.error) throw new Error(FLOW_TEST_FN_MISSING);
-    if(j.ok) say('Sent to '+j.to+(j.replayed?' (the same email was already sent a moment ago, so it was not sent twice)':'')+'. Check your inbox'+(j.detail?' — '+j.detail:'')+'.');
-    else say(j.error||('Could not send (HTTP '+r.status+').'),true);
-  }catch(e){ say(String((e&&e.message)||e),true); }
-  const b2=document.getElementById('flTestBtn'+i); if(b2) b2.disabled=false;
-}
-window.flSimSendTest=flSimSendTest;
 function flSimHtml(w){
   const isInbound=flIsInboundFlow(w); /* 2026-10-06 (Stef backlog: inbound Simulate used pasted JSON, not a real campaign) */
   const P=isInbound?null:prProc(flBoundProcKey(w)), recs=isInbound?[]:flRecords(w), S=FLU.sim&&FLU.sim.wfId===w.id?FLU.sim:null;
   if(!isInbound && !FLU.simRecord && recs.length) FLU.simRecord=String(recs[0].id);
-  let h=`<div class="note" style="margin-bottom:10px;font-size:11.5px"><b>Simulate never sends anything</b> — no emails, alerts, webhooks or writes (that is why no email arrives). To see a real email, use <b>Send test email to me</b> below, or make the flow <b>Active</b>. ${isInbound?'Uses a sample JSON body — nothing is sent to the real webhook URL.':(P?'Walks a real '+esc(P.obj.toLowerCase())+' through this flow.':'')}</div>`;
+  let h=`<div class="note" style="margin-bottom:10px;font-size:11.5px">Dry run — no emails, alerts, webhooks or writes. ${isInbound?'Uses a sample JSON body — nothing is sent to the real webhook URL.':(P?'Walks a real '+esc(P.obj.toLowerCase())+' through this flow.':'')}</div>`;
   if(isInbound){
     const jp=flSimInboundJsonParsed();
     h+=`<div class="field"><label class="lbl">Sample JSON body</label><textarea class="cel txt" id="flSimInboundJson" rows="6" style="font-family:monospace;font-size:12px;width:100%" placeholder='{"order_id":"123","email":"a@b.com"}' onchange="flSimSetInboundJson(this.value)">${esc(FLU.simInboundJson||'')}</textarea>
@@ -4198,7 +4163,6 @@ function flSimHtml(w){
     h+=`<ol class="fl-log">${S.log.map(l=>`<li class="${l.cls||''}${l.wfId&&l.wfId!==w.id?' other':''}">${(l.nodeId&&(!l.wfId||l.wfId===w.id))?`<a href="#" onclick="flSelect('node','${l.nodeId}');FLU.tab='sim';render();return false">${esc(l.title)}</a>`:`<b>${esc(l.title)}</b>`}${l.lines.length?'<div>'+l.lines.map(x=>esc(x)).join('<br>')+'</div>':''}</li>`).join('')}</ol>`;
     if(S.tokens.length) h+=`<div class="mini">Next: ${S.tokens.map(t=>esc(flSimNm(S,t))).join(', ')}</div>`;
   }
-  h+=flSimTestPanelHtml(S,w); /* 2026-10-10 */
   h+=flReplayHtml(); /* 2026-09-29 (Stef: "complete phases 2b and 3") */
   if(FLU.simAll){
     h+=`<div class="dv"></div><div class="lbl" style="margin-bottom:4px">All ${FLU.simAll.total} records${FLU.ff?' (fast-forward '+esc(FLU.ffDays)+' days)':''}</div>
@@ -4878,8 +4842,7 @@ const HELP_FAQ=[
   /* 2026-09-29 (Stef: "Phase 2a flows") */
   {q:'What is a flow? (custom vs system)', a:'A flow is a process on the Flows & diagrams canvas that can branch, run steps in parallel, wait and loop. A custom flow is one you build; a system flow is one of North\u2019s system processes opened on the canvas, with its steps locked. Both can be checked and simulated. It starts from one or more triggers (for example a campaign entering Submitted), routes records through conditions, waits and actions, and finishes at an End. In this phase flows are designed, checked and simulated \u2014 nothing in a flow runs automatically yet (that arrives in the next phase). Plain diagrams still work exactly as before.'},
   {q:'What node types can a flow have?', a:'Trigger (when to start), Condition (named paths plus Else), Wait (a duration, until a date, or until an event, with a timeout path), Action (note, alert, email, task, escalation, calculation, webhook, AI agent or chat message), Bundle (an automation bundle \u2014 a saved set of actions; every automation rule is one), Split and Join (parallel branches; join on all, any or the first N), Subflow (start another flow), Step (a process step) and End (an outcome). A connector back to an earlier node is a loop and needs a max repeats setting.'},
-  /* 2026-10-10 */ {q:'Why did I not get the email when I simulated?', a:'Simulate is a dry run: it never sends emails, alerts, webhooks or changes. It only shows what each step would do. To see a real email, run the simulation, then click \u201cSend test to me\u201d next to the Send email step. That sends ONE copy, marked [TEST], to your own address only. Flows that are Active send real emails to their real recipients when they run.'},
-  {q:'How does Simulate work?', a:'Open a flow, go to the Simulate tab, pick a real record and click Step or Run to end. The canvas highlights the path taken (parallel branches too), each condition shows why it went that way, and each action shows exactly what it would send with placeholders filled in. Turn on Fast-forward waits to pretend days have passed so timeouts and escalations can be tested. Simulate all records runs every record and counts where they end up. Nothing is sent or written, so no email arrives from Simulate; to see a real one, use \u201cSend test email to me\u201d under the results (it sends one copy to your own address only), or make the flow Active.'},
+  {q:'How does Simulate work?', a:'Open a flow, go to the Simulate tab, pick a real record and click Step or Run to end. The canvas highlights the path taken (parallel branches too), each condition shows why it went that way, and each action shows exactly what it would send with placeholders filled in. Turn on Fast-forward waits to pretend days have passed so timeouts and escalations can be tested. Simulate all records runs every record and counts where they end up. Nothing is sent or written.'},
   {q:'What are built-in steps?', a:'When you open a system process (campaign sign-off, deals, events, tasks, asset stock, budget alerts, plan commits or lead to deal) as a flow, its real steps appear as locked built-in steps. You can add triggers, conditions and actions around them, but you cannot rename or delete them, because they mirror how the process works in North. Checks on the Checks tab make sure every path reaches an End, conditions have an Else, waits have a timeout and loops have a limit.'},
   {q:'What are Automation bundles?', a:'An automation bundle packages up a set of actions \u2014 a note, alerts, emails, tasks, webhooks, AI agent briefs, chat messages \u2014 so you can reuse it in any flow: drop it in as a Bundle node, or attach it to a step so it runs when the flow reaches that step. Every automation rule is a bundle (and still runs as today on the legacy engine); multi-action bundles you build are saved in this browser until the next phase. The library shows how many flows use each bundle.'},
   {q:'How do I link one flow to another?', a:'Select any node or step and, under Attached, choose Continue in flow to hand off to another custom or system flow (optionally at a specific step). A \u201c\u21aa Flow name\u201d chip appears on the canvas \u2014 click it to open that flow \u2014 and the other flow lists this one under Linked from. Simulate follows the record into the linked flow (up to 5 hand-offs), and Checks flag any chain that loops back on itself. A Subflow node is different: it calls another flow and then carries on.'},

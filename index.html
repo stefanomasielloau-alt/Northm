@@ -822,15 +822,15 @@ function render(){
 /* Real search over the 8 tools -- typing filters client-side; clicking a
    result opens that tool in its own named tab, same as the tn-links row. */
 const MODULES=[
-  {id:'Ordo',file:'Strategy',label:'Strategy',desc:'Funnel planning & forecasting',icon:'St'},
-  {id:'Cursus',file:'CampaignPlanning',label:'Campaign Planning',desc:'Campaign & activity execution',icon:'Ca'},
-  {id:'Eventus',file:'Events',label:'Events',desc:'Event planning & logistics',icon:'Ev'},
-  {id:'Custodia',file:'AssetRegister',label:'Assets',desc:'Asset register',icon:'As'},
-  {id:'Prospectus',file:'Targets',label:'Targets',desc:'ICP filters & opportunity reports',icon:'Ta'},
-  {id:'Augur',file:'Scoring',label:'Scoring',desc:'Lead & deal scoring',icon:'Sc'},
-  {id:'Schema',file:'ProcessMaps',label:'Process Maps',desc:'Process maps & workflows',icon:'Pr'},
-  {id:'Norma',file:'Configuration',label:'Configuration',desc:'Shared configuration',icon:'Co'},
-  {id:'Reportus',file:'Reporting',label:'Reporting',desc:'Cross-module dashboards, org overview & board reports',icon:'Rp'}
+  {id:'Ordo',file:'Strategy',label:'Strategy',desc:'Funnel planning & forecasting',color:'#1F3AC7',icon:'St'},
+  {id:'Cursus',file:'CampaignPlanning',label:'Campaign Planning',desc:'Campaign & activity execution',color:'#0E7C6B',icon:'Ca'},
+  {id:'Eventus',file:'Events',label:'Events',desc:'Event planning & logistics',color:'#B5480E',icon:'Ev'},
+  {id:'Custodia',file:'AssetRegister',label:'Assets',desc:'Asset register',color:'#3B6E1F',icon:'As'},
+  {id:'Prospectus',file:'Targets',label:'Targets',desc:'ICP filters & opportunity reports',color:'#9C2B3C',icon:'Ta'},
+  {id:'Augur',file:'Scoring',label:'Scoring',desc:'Lead & deal scoring',color:'#5A3E9C',icon:'Sc'},
+  {id:'Schema',file:'ProcessMaps',label:'Process Maps',desc:'Process maps & workflows',color:'#3A5A8C',icon:'Pr'},
+  {id:'Norma',file:'Configuration',label:'Configuration',desc:'Shared configuration',color:'#B5730E',icon:'Co'},
+  {id:'Reportus',file:'Reporting',label:'Reporting',desc:'Cross-module dashboards, org overview & board reports',color:'#7C1F5A',icon:'Rp'}
 ];
 function tnSearchResults(q){
   q=(q||'').trim().toLowerCase(); if(!q) return [];

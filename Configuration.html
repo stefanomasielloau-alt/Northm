@@ -804,6 +804,7 @@ async function loadFromSupabase(){
         connectionPricing:p.connection_pricing||{},
         benchmarkReportingAddon:!!p.benchmark_reporting_addon,benchmarkReportingPrice:p.benchmark_reporting_price||0,
         benchmarkExclusionAddon:!!p.benchmark_exclusion_addon,benchmarkExclusionPrice:p.benchmark_exclusion_price||0,
+        advCols:Object.prototype.hasOwnProperty.call(p,'advanced_reports_addon'),advancedReportsAddon:!!p.advanced_reports_addon,advancedReportsPrice:p.advanced_reports_price||0,
         notes:p.notes||''
       }));
     }
@@ -4801,6 +4802,12 @@ function pageLicensing(){
         <input class="cel w" value="${plan.benchmarkExclusionPrice}" onchange="setPlanField('${plan.id}','benchmarkExclusionPrice',this.value,'num')">
       </div>
       <p class="mini">Benchmark reports themselves never include an org's name or identifiable data, regardless of this setting -- this only controls whether this org's (anonymized) data is included in the pooled benchmark at all.</p>
+      <h4 style="margin:12px 0 4px">Reporting add-ons</h4>
+      ${plan.advCols?`<div class="row" style="gap:16px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+        <label class="mini"><input type="checkbox" ${plan.advancedReportsAddon?'checked':''} onchange="setPlanField('${plan.id}','advancedReportsAddon',this.checked,'bool')"> Advanced reports (chart library in saved reports)</label>
+        <input class="cel w" value="${plan.advancedReportsPrice}" onchange="setPlanField('${plan.id}','advancedReportsPrice',this.value,'num')">
+      </div><p class="mini">Active while the plan is not expired or cancelled. The organisation then chooses who can create them in Roles &amp; users &rsaquo; Advanced reports.</p>`
+      :'<p class="mini">Advanced reports needs the 2026-10-14 database update.</p>'}
       <textarea class="cel txt" style="width:100%;min-height:50px;margin-top:8px" placeholder="Notes" onchange="setPlanField('${plan.id}','notes',this.value)">${esc(plan.notes)}</textarea>
     </div></div>`;
 
@@ -4864,6 +4871,7 @@ function scheduleLicensingSave(){
       hosting_gb_extra_price:p.hostingGbExtraPrice,connection_pricing:p.connectionPricing,
       benchmark_reporting_addon:p.benchmarkReportingAddon,benchmark_reporting_price:p.benchmarkReportingPrice,
       benchmark_exclusion_addon:p.benchmarkExclusionAddon,benchmark_exclusion_price:p.benchmarkExclusionPrice,
+      ...(p.advCols?{advanced_reports_addon:!!p.advancedReportsAddon,advanced_reports_price:Number(p.advancedReportsPrice)||0}:{}),
       notes:p.notes,updated_at:new Date().toISOString()
     }).eq('id', p.id);
     if(error) toast('Could not save plan: '+error.message);
@@ -4901,6 +4909,7 @@ function computeInvoiceLineItems(plan, orgId, d){
   if(extraGb>0 && plan.hostingGbExtraPrice) items.push({description: extraGb+' GB extra hosting', amount: extraGb*plan.hostingGbExtraPrice});
   if(plan.benchmarkReportingAddon && plan.benchmarkReportingPrice) items.push({description:'Benchmark reporting', amount:plan.benchmarkReportingPrice});
   if(plan.benchmarkExclusionAddon && plan.benchmarkExclusionPrice) items.push({description:'Benchmark data exclusion', amount:plan.benchmarkExclusionPrice});
+  if(plan.advancedReportsAddon && plan.advancedReportsPrice) items.push({description:'Advanced reports', amount:plan.advancedReportsPrice});
   return items;
 }
 function openGenerateInvoice(planId){
@@ -4958,6 +4967,48 @@ window.viewInvoiceText = viewInvoiceText;
    to the Board Report PPTX export in Ordo.html/hub_local_api.py. Leaving any field blank
    keeps North's own default look for that piece (nav blue, no logo, PowerPoint's default
    font) -- nothing here is required. */
+/* ---------- 2026-10-14: Advanced reports -- who may create (Stef: chart-library elements in saved reports are a paid
+   add-on, switched on per org in Licensing; the org then lets All or Selected people create them; everyone can still
+   open the org's public reports). The database enforces both the add-on and this list (advanced_reports_can_create()). */
+async function advLoad(){
+  CFG.adv={loading:true,missing:false,enabled:false,creators:{mode:'all',user_ids:[]}};
+  try{
+    const [e,s]=await Promise.all([ sb.rpc('advanced_reports_enabled'), sb.from('org_settings').select('advanced_reports_creators').eq('org_id',_orgId).maybeSingle() ]);
+    if(e.error||s.error){ CFG.adv.missing=true; }
+    else { CFG.adv.enabled=!!e.data; const c=s.data&&s.data.advanced_reports_creators; if(c&&typeof c==='object') CFG.adv.creators={mode:c.mode==='selected'?'selected':'all',user_ids:Array.isArray(c.user_ids)?c.user_ids:[]}; }
+  }catch(err){ CFG.adv.missing=true; }
+  CFG.adv.loading=false; if(UI.page==='advreports') render();
+}
+async function advSave(){
+  if(!canConfig()){ toast('Your role cannot change this.'); return; }
+  const { error } = await sb.from('org_settings').update({advanced_reports_creators:CFG.adv.creators}).eq('org_id',_orgId);
+  if(error){ console.error(error); toast('Could not save -- see console.'); return; }
+  logAudit('edit','advanced reports creators: '+(CFG.adv.creators.mode==='all'?'all people':CFG.adv.creators.user_ids.length+' selected'));
+  toast('Saved.');
+}
+function advSetMode(m){ CFG.adv.creators.mode=(m==='selected'?'selected':'all'); render(); advSave(); }
+function advToggleUser(id,on){ const ids=CFG.adv.creators.user_ids.filter(x=>x!==id); if(on) ids.push(id); CFG.adv.creators.user_ids=ids; render(); advSave(); }
+Object.assign(window,{advLoad,advSetMode,advToggleUser});
+function pageAdvancedReports(){
+  if(!CFG.adv) setTimeout(advLoad,0);
+  const a=CFG.adv||{loading:true}, dis=canConfig()?'':'disabled';
+  let h=`<div class="phead"><div><h1>Advanced reports</h1><p>Advanced reports let people add elements from the chart library to saved reports in Reporting.
+    It is a paid add-on. Everyone in the organisation can always open the organisation's public reports, advanced or not.</p></div></div>`;
+  if(a.loading) return h+'<div class="card"><div class="empty">Loading…</div></div>';
+  if(a.missing) return h+`<div class="note w">Needs a one-time database update: <code>2026-10-14-migration-advanced-reports-and-map-views.sql</code>.</div>`;
+  if(!a.enabled) return h+`<div class="note">Advanced reports is <b>not active</b> for this organisation. It is a paid add-on${CFG.isFullSuperAdmin?' -- switch it on in Admin &rsaquo; Licensing':' -- contact your North account manager to add it'}.</div>`;
+  const people=(CFG.users||[]).filter(u=>!u.orgId||u.orgId===_orgId).sort((x,y)=>String(x.name||'').localeCompare(String(y.name||'')));
+  const sel=new Set(a.creators.user_ids);
+  h+=`<div class="card"><h3>Who can create advanced reports <span class="sp"></span><span class="pill ok">Active</span></h3><div class="bd">
+    <label style="display:block;margin-bottom:6px"><input type="radio" name="advMode" ${a.creators.mode==='all'?'checked':''} ${dis} onchange="advSetMode('all')"> <b>All people</b> in the organisation</label>
+    <label style="display:block;margin-bottom:6px"><input type="radio" name="advMode" ${a.creators.mode==='selected'?'checked':''} ${dis} onchange="advSetMode('selected')"> <b>Selected people</b> only</label>
+    ${a.creators.mode==='selected'?`<div style="margin:8px 0 0 22px">${people.length?people.map(u=>`<label style="display:block;font-size:12.5px"><input type="checkbox" ${sel.has(u.id)?'checked':''} ${dis} onchange="advToggleUser('${u.id}',this.checked)"> ${esc(u.name||u.email||u.id)}${u.email?` <span class="mini">${esc(u.email)}</span>`:''}</label>`).join(''):'<div class="mini">No people found.</div>'}
+      <div class="mini" style="margin-top:6px">${sel.size} selected.</div></div>`:''}
+    <p class="mini" style="margin-top:10px">Basic saved reports (the standard tiles) stay available to everyone. Making a report public still needs a role with Publish or Configure.</p>
+  </div></div>`;
+  return h;
+}
+window.pageAdvancedReports=pageAdvancedReports;
 function pageBranding(){
   const b = CFG.orgBrand || {primaryColor:'',secondaryColor:'',logoUrl:'',fontFamily:''};
   const swatch = c => `<span style="display:inline-block;width:16px;height:16px;border-radius:3px;border:1px solid var(--line);vertical-align:-3px;margin-right:6px;background:${c&&/^#[0-9a-fA-F]{3,8}$/.test(c)?esc(c):'transparent'}"></span>`;
@@ -5016,14 +5067,15 @@ const PAGES=[
   {id:'hubcompanies',ix:'14',label:'AH companies',  fn:pageHubCompanies},
   {id:'licensing',  ix:'15',label:'Licensing',       fn:pageLicensing},
   {id:'branding',   ix:'16',label:'Branding',        fn:pageBranding},
-  {id:'regionsadmin',ix:'17',label:'Regions & pods (all orgs)', fn:pageRegionsAdmin}
+  {id:'regionsadmin',ix:'17',label:'Regions & pods (all orgs)', fn:pageRegionsAdmin},
+  {id:'advreports', ix:'1b', label:'Advanced reports', fn:pageAdvancedReports}
 ];
 
 /* 2026-10-08: the left nav used to list all 21 pages. They are bundled into 9 groups; a group's pages show as tabs across the top of
    the page. PAGES (ids, labels, functions) is unchanged, so go('<page id>') and every existing link still work. */
 const NAV=[
   {id:'g_home', label:'Home',              ix:'0', pages:['home']},
-  {id:'g_users',label:'Roles & users',     ix:'1', pages:['users']},
+  {id:'g_users',label:'Roles & users',     ix:'1', pages:['users','advreports']},
   {id:'g_cost', label:'Costs & partners',  ix:'2', pages:['buckets','budgetcats','partnertypes','partners','currency']},
   {id:'g_track',label:'Tracking & naming', ix:'3', pages:['tracking','campnaming']},
   {id:'g_ai',   label:'AI & agents',       ix:'4', pages:['llm','agentregistry','agentactivity']},

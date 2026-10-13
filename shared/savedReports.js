@@ -19,6 +19,9 @@
      NorthSavedReports.boardSummary(board)        -> 'FY27 · Quarter 2, compared with 1 earlier year'
      NorthSavedReports.boardLink(board)           -> 'Strategy.html?page=boardreport&br=<json>'  (Strategy applies it on open)
      NorthSavedReports.summary(def)               -> '3 tiles + Board report'
+     2026-10-14: def.widgets = chart-library elements (ADVANCED, paid add-on): up to 30 ids like 'dashboards.deals',
+     'relmap.map' or 'external.<custom widget id>'. The database refuses them unless the author is entitled
+     (saved_reports_advanced_guard / advanced_reports_can_create()).
 */
 (function(){
   'use strict';
@@ -52,9 +55,14 @@
     def = (def && typeof def === 'object') ? def : {};
     var want = {}; (Array.isArray(def.tiles) ? def.tiles : []).forEach(function(t){ want[String(t)] = true; });
     var tiles = TILES.filter(function(t){ return want[t.id]; }).map(function(t){ return t.id; });
-    return { v: 1, tiles: tiles, board: sanitizeBoard(def.board) };
+    var seen = {}, widgets = (Array.isArray(def.widgets) ? def.widgets : []).map(String)
+      .filter(function(w){ if(seen[w] || !/^[a-z_]{2,40}\.[A-Za-z0-9_-]{1,80}$/.test(w)) return false; seen[w] = true; return true; }).slice(0, 30);
+    var out = { v: 1, tiles: tiles, board: sanitizeBoard(def.board) };
+    if(widgets.length){ out.v = 2; out.widgets = widgets; }
+    return out;
   }
-  function isEmpty(def){ var d = sanitizeDefinition(def); return !d.tiles.length && !d.board; }
+  function isEmpty(def){ var d = sanitizeDefinition(def); return !d.tiles.length && !d.board && !(d.widgets && d.widgets.length); }
+  function isAdvanced(def){ var d = sanitizeDefinition(def); return !!(d.widgets && d.widgets.length); }
   function canPublish(role, isSuper){ return !!(isSuper || (role && (role.publish || role.config))); }
   function isOwner(rep, me){ return !!(rep && me && rep.owner_id && rep.owner_id === me); }
   function canManage(rep, me, role, isSuper){
@@ -86,9 +94,10 @@
   function summary(def){
     var d = sanitizeDefinition(def), parts = [];
     if(d.tiles.length) parts.push(d.tiles.length + ' tile' + (d.tiles.length === 1 ? '' : 's'));
+    if(d.widgets && d.widgets.length) parts.push(d.widgets.length + ' chart library element' + (d.widgets.length === 1 ? '' : 's'));
     if(d.board) parts.push('Board report');
     return parts.length ? parts.join(' + ') : 'Empty';
   }
   G.NorthSavedReports = { TILES: TILES, BOARD_TYPES: BOARD_TYPES, BOARD_LABEL: BOARD_LABEL, sanitizeDefinition: sanitizeDefinition, sanitizeName: sanitizeName,
-    sanitizeBoard: sanitizeBoard, isEmpty: isEmpty, canPublish: canPublish, canManage: canManage, canSee: canSee, split: split, boardSummary: boardSummary, boardLink: boardLink, summary: summary };
+    sanitizeBoard: sanitizeBoard, isEmpty: isEmpty, isAdvanced: isAdvanced, canPublish: canPublish, canManage: canManage, canSee: canSee, split: split, boardSummary: boardSummary, boardLink: boardLink, summary: summary };
 })();

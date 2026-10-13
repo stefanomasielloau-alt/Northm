@@ -750,6 +750,19 @@
     if (typeof window.render === 'function') window.render();
   };
 
+  /* 2026-10-14 (Stef: Reports dashboard Edit layout should insert links to custom reports and saved Relationship map
+     views): a module can register extra tile sources as window.northExtraWidgetSources = [{ prefix, label,
+     list: () => [{id,label,hint}], get: (id) => item|null, render: (id) => html }]. Picks are stored as
+     '<prefix>.<id>' like every other cross-page pick and resolved in resolveWidget() below. */
+  function extraSources() { return (typeof window !== 'undefined' && Array.isArray(window.northExtraWidgetSources)) ? window.northExtraWidgetSources : []; }
+  function extraGroupsHtml(makeRow) {
+    return extraSources().map(function (src) {
+      var items = []; try { items = src.list() || []; } catch (e) { items = []; }
+      if (!items.length) return '';
+      return '<div class="gs-swap-category" data-search="' + String(src.label).toLowerCase().replace(/"/g, '&quot;') + '">' + src.label + '</div>' +
+        items.map(function (it) { return makeRow(src.prefix + '.' + it.id, it.label, it.hint || ''); }).join('');
+    }).join('');
+  }
   function resolveWidget(pageId, widgetId) {
     if (!widgetId) return null;
     var dot = widgetId.indexOf('.');
@@ -766,6 +779,13 @@
     // scope, not this file's, but is reachable here as a bare identifier by the
     // time any widget actually renders (long after Ordo.html's own script block has
     // run) -- same reasoning as every widget fn() below already relies on.
+    var xsrc = extraSources().filter(function (s) { return s.prefix === prefix; })[0];
+    if (xsrc) {
+      var xid = widgetId.slice(dot + 1), xit = null;
+      try { xit = xsrc.get(xid); } catch (e) { xit = null; }
+      if (!xit) return null;
+      return { label: xit.label, hint: xit.hint || '', fn: function () { return xsrc.render(xid); } };
+    }
     if (prefix === 'external') {
       var cwId = widgetId.slice(dot + 1);
       var cw = (typeof CFG !== 'undefined' && CFG.customWidgets || []).filter(function (w) { return w.id === cwId; })[0];
@@ -1433,7 +1453,7 @@
         return rowHtml(pid + '.' + wid, otherLib.widgets[wid], (pid + '.' + wid) === currentId);
       }).join('');
       return '<div class="gs-swap-category" data-search="' + attrEsc(PAGE_LABELS[pid].toLowerCase()) + '">' + PAGE_LABELS[pid] + '</div>' + groupRows;
-    }).join('') + ((typeof CFG !== 'undefined' && CFG.customWidgets && CFG.customWidgets.length) ?
+    }).join('') + extraGroupsHtml(function (fullId, label, hint) { return rowHtml(fullId, { label: label, hint: hint }, fullId === currentId); }) + ((typeof CFG !== 'undefined' && CFG.customWidgets && CFG.customWidgets.length) ?
       '<div class="gs-swap-category" data-search="external widgets">External widgets</div>' +
       CFG.customWidgets.map(function (w) {
         var fullId = 'external.' + w.id;
@@ -1544,7 +1564,10 @@
           '<span class="gs-swap-row-hint">' + w.hint + '</span></button>';
       }).join('');
       return '<div class="gs-swap-category" data-search="' + attrEsc(PAGE_LABELS[pid].toLowerCase()) + '">' + PAGE_LABELS[pid] + (pid === pageId ? ' (this page)' : '') + '</div>' + groupRows;
-    }).join('') + ((typeof CFG !== 'undefined' && CFG.customWidgets && CFG.customWidgets.length) ?
+    }).join('') + extraGroupsHtml(function (fullId, label, hint) {
+      return '<button type="button" class="gs-swap-row" data-gs-addwidget="' + fullId + '" data-search="' + attrEsc((label + ' ' + hint).toLowerCase()) + '">' +
+        '<span class="gs-swap-row-label">' + label + '</span><span class="gs-swap-row-hint">' + hint + '</span></button>';
+    }) + ((typeof CFG !== 'undefined' && CFG.customWidgets && CFG.customWidgets.length) ?
       '<div class="gs-swap-category" data-search="external widgets">External widgets</div>' +
       CFG.customWidgets.map(function (w) {
         var fullId = 'external.' + w.id;
@@ -1766,6 +1789,7 @@
     if (containerId) initGrid(effectiveId, containerId);
   };
   window.northGetWidgetAssignments = getWidgetAssignments;
+  window.northResolveWidget = resolveWidget; /* 2026-10-14: lets Reporting draw a chart-library element inside a saved report */
 
   /* 2026-09-23 (Stef's real-use report: "Reset ALL layouts did nothing"): the
      original resetAllBtn.onclick was wired up INSIDE initGrid(), so it only ever

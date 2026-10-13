@@ -1437,12 +1437,12 @@ function addPartnerContactTerm(id){
 window.addPartnerContactTerm = addPartnerContactTerm;
 function setPartnerContactTerm(id, idx, key, val){
   const p = byId(CFG.partners, id); if(!p || !p.contactTerms || !p.contactTerms[idx]) return;
-  p.contactTerms[idx][key] = val; render();
+  p.contactTerms[idx][key] = val; if(key==='termStart'||key==='termEnd') syncPartnerFyFromAgreements(p); render();
 }
 window.setPartnerContactTerm = setPartnerContactTerm;
 function removePartnerContactTerm(id, idx){
   const p = byId(CFG.partners, id); if(!p || !p.contactTerms) return;
-  p.contactTerms.splice(idx,1);
+  p.contactTerms.splice(idx,1); syncPartnerFyFromAgreements(p);
   logAudit('remove partner contact/term', p.name); render();
 }
 window.removePartnerContactTerm = removePartnerContactTerm;
@@ -2177,6 +2177,7 @@ function partnerFyTarget(p,fy){ const o=p.acvTargetsByFy||{}; return (o[fy]==nul
 function setPartnerFyTarget(id,fy,val){
   const p=byId(CFG.partners,id); if(!p) return;
   if(!CFG.partnerFyAvailable){ toast('Targets by financial year need the 2026-10-13 database update first.'); render(); return; }
+  if(partnerHasAgreementTargets(p)){ toast('This partner\'s targets follow its agreements -- change the $ target on the agreement under Details.'); render(); return; }
   const t=String(val==null?'':val).replace(/[$,\s]/g,''); const v=t===''?null:parseFloat(t); if(t!==''&&isNaN(v)){ render(); return; }
   p.acvTargetsByFy=Object.assign({},p.acvTargetsByFy||{}); if(v==null) delete p.acvTargetsByFy[fy]; else p.acvTargetsByFy[fy]=v;
   if(fy===cpFyKey(0)) p.acvTarget=v; /* keep the single figure (read by Reporting) = this FY's target */
@@ -2190,6 +2191,52 @@ function addPartnerFyTarget(id){
   p.acvTargetsByFy=Object.assign({},p.acvTargetsByFy||{}); if(!(fy in p.acvTargetsByFy)) p.acvTargetsByFy[fy]=null; render();
 }
 window.addPartnerFyTarget=addPartnerFyTarget;
+/* 2026-10-13 (Stef: "$ target ... should follow those agreement dates"): each agreement (term) under a
+   partner's Details carries its own $ target for the whole term. A financial year's target = the sum of
+   each agreement's target pro-rated by the days of that agreement falling inside the FY. When a partner
+   has at least one agreement with a target and both dates, its FY targets are calculated (read-only) and
+   saved to acv_targets_by_fy / acv_target, so Reporting reads the same figures. Otherwise they are typed
+   per FY as before. */
+function cpFyRange(fyKey){
+  const fsm=(CFG.campaignNaming||{}).fyStartMonth||1, Y=2000+parseInt(String(fyKey).slice(2),10);
+  const start=fsm>1 ? new Date(Date.UTC(Y-1,fsm-1,1)) : new Date(Date.UTC(Y,0,1));
+  const end=new Date(Date.UTC(start.getUTCFullYear()+1,start.getUTCMonth(),1)-86400000);
+  return {start,end};
+}
+function _agrDate(s){ if(!s) return null; const d=new Date(String(s).slice(0,10)+'T00:00:00Z'); return isNaN(d.getTime())?null:d; }
+function partnerAgreements(p){
+  return (p.contactTerms||[]).map((t,i)=>({i,start:_agrDate(t.termStart),end:_agrDate(t.termEnd),
+      target:(t.target===''||t.target==null||isNaN(Number(t.target)))?null:Number(t.target)}))
+    .filter(a=>a.start&&a.end&&a.end>=a.start&&a.target!=null);
+}
+function partnerHasAgreementTargets(p){ return partnerAgreements(p).length>0; }
+function cpFyKeyForDate(d){ return 'FY'+fyPeriodFromDate(d.toISOString().slice(0,10),(CFG.campaignNaming||{}).fyStartMonth||1,'Quarter').fy; }
+function partnerFyTargetsFromAgreements(p){
+  const out={}, DAY=86400000;
+  partnerAgreements(p).forEach(a=>{
+    const total=(a.end-a.start)/DAY+1; let k=cpFyKeyForDate(a.start); const last=cpFyKeyForDate(a.end);
+    for(let g=0; g<30; g++){
+      const r=cpFyRange(k), s=Math.max(a.start,r.start), e=Math.min(a.end,r.end);
+      if(e>=s) out[k]=(out[k]||0)+a.target*(((e-s)/DAY+1)/total);
+      if(k===last) break;
+      k='FY'+String((parseInt(k.slice(2),10)+1)%100).padStart(2,'0');
+    }
+  });
+  Object.keys(out).forEach(k=>{ out[k]=Math.round(out[k]); });
+  return out;
+}
+function syncPartnerFyFromAgreements(p){
+  if(!partnerHasAgreementTargets(p)) return;
+  p.acvTargetsByFy=partnerFyTargetsFromAgreements(p);
+  const cur=p.acvTargetsByFy[cpFyKey(0)]; p.acvTarget=(cur==null?null:cur);
+}
+function setPartnerTermTarget(id,idx,val){
+  const p=byId(CFG.partners,id); if(!p||!p.contactTerms||!p.contactTerms[idx]) return;
+  const t=String(val==null?'':val).replace(/[$,\s]/g,''); const v=t===''?null:parseFloat(t); if(t!==''&&isNaN(v)){ render(); return; }
+  p.contactTerms[idx].target=v; syncPartnerFyFromAgreements(p);
+  logAudit('edit','partners.agreement target: '+p.name+' term '+(idx+1)+' → '+(v==null?'—':v)); render();
+}
+window.setPartnerTermTarget=setPartnerTermTarget;
 function partnerTypeOptions(){
   const out=[], seen=new Set(); const add=x=>{ const t=String(x||'').trim(); if(!t) return; const k=t.toLowerCase(); if(seen.has(k)) return; seen.add(k); out.push(t); };
   (CFG.partnerTypePresets||[]).forEach(add); (CFG.partners||[]).map(p=>p.type).filter(Boolean).sort().forEach(add); return out;
@@ -3758,7 +3805,9 @@ function pagePartners(){
         <td><select class="cel txt" style="width:130px" onchange="setIn('partners','${p.id}','podId',this.value||null)">
           <option value="" ${!p.podId?'selected':''}>— none —</option>
           ${podOptions.map(pd=>`<option value="${pd.id}" ${pd.id===p.podId?'selected':''}>${esc(pd.name)}</option>`).join('')}</select></td>
-        <td class="n">${CFG.partnerFyAvailable
+        <td class="n">${CFG.partnerFyAvailable && partnerHasAgreementTargets(p)
+          ?`<span class="calc" title="Calculated from this partner's agreements (pro-rated by days in ${cpFyKey(0)})">${F.acc(partnerFyTarget(p,cpFyKey(0)))}</span> <span class="mini">agr.</span>`
+          :CFG.partnerFyAvailable
           ?`<input class="cel txt n" style="width:100px;text-align:right" value="${partnerFyTarget(p,cpFyKey(0))==null?'':partnerFyTarget(p,cpFyKey(0)).toLocaleString('en-AU')}" placeholder="—" title="This financial year's target -- other years under Details" onchange="setPartnerFyTarget('${p.id}','${cpFyKey(0)}',this.value)">`
           :`<input class="cel txt n" style="width:90px" value="${p.acvTarget==null?'':p.acvTarget}" placeholder="—" onchange="setPartnerAcvTarget('${p.id}',this.value)">`}</td>
         <td class="n calc">${campsAttached.length}</td>
@@ -3780,13 +3829,14 @@ function pagePartners(){
               <textarea class="cel txt" style="width:100%;margin-top:6px;min-height:40px" placeholder="Notes" onchange="setIn('partners','${p.id}','notes',this.value)">${esc(p.notes)}</textarea>
             </div>
             <div style="min-width:320px;flex:1">
-              <label class="lbl">Additional contacts / terms <span class="mini">(for multiple contacts over time, e.g. renewals)</span></label>
+              <label class="lbl">Contacts / agreements <span class="mini">(one row per agreement or renewal: dates and its $ target)</span></label>
               ${(p.contactTerms||[]).map((ct,i)=>`<div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--line);padding-top:6px">
                 <input class="cel txt" style="width:120px" placeholder="Name" value="${esc(ct.name)}" onchange="setPartnerContactTerm('${p.id}',${i},'name',this.value)">
                 <input class="cel txt" style="width:150px" placeholder="Email" value="${esc(ct.email)}" onchange="setPartnerContactTerm('${p.id}',${i},'email',this.value)">
                 <input class="cel txt" style="width:110px" placeholder="Phone" value="${esc(ct.phone)}" onchange="setPartnerContactTerm('${p.id}',${i},'phone',this.value)">
                 <input class="cel txt" type="date" style="width:130px" title="Term start" value="${esc(ct.termStart)}" onchange="setPartnerContactTerm('${p.id}',${i},'termStart',this.value)">
                 <input class="cel txt" type="date" style="width:130px" title="Term end" value="${esc(ct.termEnd)}" onchange="setPartnerContactTerm('${p.id}',${i},'termEnd',this.value)">
+                <input class="cel txt n" style="width:110px;text-align:right" placeholder="$ target" title="$ target for this agreement's whole term -- split across financial years by its dates" value="${ct.target==null||ct.target===''?'':Number(ct.target).toLocaleString('en-AU')}" onchange="setPartnerTermTarget('${p.id}',${i},this.value)">
                 <input class="cel txt" style="width:140px" placeholder="Notes" value="${esc(ct.notes)}" onchange="setPartnerContactTerm('${p.id}',${i},'notes',this.value)">
                 <button class="btn sm dgr" onclick="removePartnerContactTerm('${p.id}',${i})">Remove</button></div>`).join('')}
               <button class="btn sm" style="margin-top:6px" onclick="addPartnerContactTerm('${p.id}')">+ Add contact / term</button>
@@ -3794,6 +3844,10 @@ function pagePartners(){
             <div style="min-width:220px">
               <label class="lbl">$ target by financial year</label>
               ${!CFG.partnerFyAvailable?'<p class="mini" style="margin-top:4px">Needs the 2026-10-13 database update (one target per financial year).</p>':
+                partnerHasAgreementTargets(p)?`${Object.keys(p.acvTargetsByFy||{}).sort().map(fy=>`<div class="row" style="gap:6px;margin-top:5px;align-items:center">
+                  <span style="width:46px;font-weight:700">${esc(fy)}</span><span class="calc" style="width:110px;text-align:right">${F.acc(partnerFyTarget(p,fy))}</span>
+                  ${fy===cpFyKey(0)?'<span class="mini">this FY</span>':''}</div>`).join('')}
+                <p class="mini" style="margin-top:6px;max-width:260px">Calculated from the agreements' dates and $ targets (pro-rated by days in each financial year). Change them under Contacts / agreements.</p>`:
                 `${Object.keys(Object.assign({[cpFyKey(0)]:null,[cpFyKey(1)]:null},p.acvTargetsByFy||{})).sort().map(fy=>`<div class="row" style="gap:6px;margin-top:5px;align-items:center">
                   <span style="width:46px;font-weight:700">${esc(fy)}</span>
                   <input class="cel txt n" style="width:110px;text-align:right" value="${partnerFyTarget(p,fy)==null?'':partnerFyTarget(p,fy).toLocaleString('en-AU')}" placeholder="—" onchange="setPartnerFyTarget('${p.id}','${fy}',this.value)">

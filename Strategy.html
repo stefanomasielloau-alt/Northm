@@ -3244,7 +3244,7 @@ function adminCampsWidgetCursusLink(){
       </div>
       <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px">
         <label class="btn sm">Import new campaigns from Campaign Planning<input type="file" accept="application/json" style="display:none" onchange="handleCursusNewCampaignsFile(this.files[0])"></label>
-        <span class="mini">adds campaigns that were created in Campaign Planning first and pushed here — appears below once added, ready to have its Activity/Segment dropdowns set.</span>
+        <span class="mini">adds campaigns that were created in Campaign Planning first and pushed here — appears below once added, ready to have its Led by and Segments set below (and its activity, which sets cost per lead, on Campaign &amp; cost &rsaquo; Business case).</span>
       </div>
     </div></div>`;
 }
@@ -3311,7 +3311,9 @@ function adminCampsWidgetTable(){
         ${ledOpts.map(o=>`<option value="${esc(o)}" ${o===ledCur?'selected':''}>${esc(o)}</option>`).join('')}
         ${v2?'<option value="__new__">+ Add new…</option>':''}</select></td>
       <td>${sa
-        ?`<button type="button" class="seg-btn${segOk?'':' warn'}" onclick="toggleCampSegEditor('${c.id}')" title="${segOk?'Choose segments and the % split':'The split adds up to '+F.n(segTot,1)+'% -- it should be 100%'}">${esc(campSegLabel(c))}${segOk?'':' ⚠'}</button>`
+        ?(!segRows.length
+          ?`<button type="button" class="seg-btn warn" onclick="toggleCampSegEditor('${c.id}')" title="No segment set yet (usually a campaign started in Campaign Planning). Until one is picked, its conversion uses the base rate with no segment adjustment.">— choose — ⚠</button>`
+          :`<button type="button" class="seg-btn${segOk?'':' warn'}" onclick="toggleCampSegEditor('${c.id}')" title="${segOk?'Choose segments and the % split':'The split adds up to '+F.n(segTot,1)+'% -- it should be 100%'}">${esc(campSegLabel(c))}${segOk?'':' ⚠'}</button>`)
         :`<select class="cel txt" style="width:120px" onchange="setIn('campaigns','${c.id}','segmentId',this.value)">
           ${CFG.segments.map(x=>`<option value="${x.id}" ${x.id===c.segmentId?'selected':''}>${esc(x.name)}</option>`).join('')}</select>`}</td>
       <td><select class="cel txt" style="width:95px" onchange="setIn('campaigns','${c.id}','regionId',this.value)">

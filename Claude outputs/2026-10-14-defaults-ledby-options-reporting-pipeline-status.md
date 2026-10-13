@@ -22,3 +22,8 @@ All inline scripts parse; new checks: expected pipeline (auto + chosen stage, bo
 2. Led by options: rename one, check campaigns follow; Remove is greyed for options in use.
 3. Campaign & cost > Business case: Pipeline row has an Expected figure; Admin > Funnel gates shows Pipeline stage = Automatic (SQO).
 4. Reporting > Relationship map: a split campaign shows under each of its segments.
+
+## Addendum (09:30): live check + expected-pipeline fix (needs one more push of Strategy.html)
+- Live after push: Pipeline stage chooser shows "Automatic (SQO)"; Led by options panel works; all campaigns have a segment and Led by (Stef had already set RLS TEST CAMPAIGN -> Mid-Market and Denn campaign -> SMB at 22:18, so the defaults had nothing to fill).
+- **Fixed:** Strategy's expected pipeline worked BACKWARD from the campaign's conversion override (e.g. FY27 Enterprise Field Series uses a 2.1% "historical" rate vs the funnel's own 0.057% end-to-end), which implied 129 SQOs from 439 expected leads and showed $16.5M. It now works FORWARD from expected leads through the funnel's stage rates, same as Campaign Planning: about 3.5 SQOs, roughly $450k (Campaign Planning live: $449,553; small differences come from Strategy's segment multipliers and blended deal size). Archive: `archive/2026-10-14-pre-forward-pipeline-Strategy-v2.html`.
+- Worth a look (data, not code): that campaign's 2.1% conversion override is ~37x the funnel's own rate, and the funnel lists Win (15%) BEFORE SAO (50%), so Business case "Projected SAO" and expected closed-won ($1.18M) come out higher than expected pipeline. Either the override or the gate order is likely off.

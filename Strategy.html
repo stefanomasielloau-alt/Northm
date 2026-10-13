@@ -903,7 +903,9 @@ function campTargetFigures(c,m){
   const rate=campExitRate(c,m), proj=expLeads!=null?backward(expLeads*rate,m):null;
   const expWins=proj?proj[exitGate().id]:null, expWon=expWins!=null?expWins*blendedDeal():null;
   const d=(CFG.dealsByCampaign||{})[c.id]||null;
-  const pg=pipelineGate(); const pc=(proj&&pg.gate)?proj[pg.gate.id]:null;
+  /* forward from expected leads through the funnel's own stage rates (same method as Campaign Planning) --
+     NOT backward from the campaign's conversion override, which can sit far from the stage rates */
+  const pg=pipelineGate(); const fw=expLeads!=null?forward(expLeads,m):null; const pc=(fw&&pg.gate)?fw[pg.gate.id]:null;
   const expPipeline=(pc!=null&&isFinite(pc))?pc*blendedDeal():null;
   return { activity:a?a.name:null, costPerLead:a&&a.costPer?a.costPer:null, expLeads, expWins, expWon, expPipeline, pipelineStage:pg.gate?pg.gate.name:null, rate, deals:d };
 }
@@ -922,7 +924,7 @@ function campTargetsHtml(c,m){
         <td class="n">${inp('actualLeads',c.actualLeads)}</td>
         <td class="n">${pct(c.actualLeads,c.targetLeads)}</td><td class="n">${pct(f.expLeads,c.targetLeads)}</td></tr>
       <tr><td class="lb">Pipeline</td><td class="n">${inp('targetPipeline',c.targetPipeline)}</td>
-        <td class="n calc" title="${f.pipelineStage?'Expected '+esc(f.pipelineStage)+' × blended deal size (pipeline stage set in Admin > Funnel gates)':'No pipeline stage found -- choose one in Admin > Funnel gates'}">${f.expPipeline==null?'—':F.acc(f.expPipeline)}</td>
+        <td class="n calc" title="${f.pipelineStage?'Expected leads × funnel stage rates to '+esc(f.pipelineStage)+' × blended deal size (pipeline stage set in Admin > Funnel gates)':'No pipeline stage found -- choose one in Admin > Funnel gates'}">${f.expPipeline==null?'—':F.acc(f.expPipeline)}</td>
         <td class="n calc" title="Value of Scoring deals linked to this campaign, excluding Closed Lost">${d?F.acc(d.pipeline):'—'}</td>
         <td class="n">${pct(d?d.pipeline:null,c.targetPipeline)}</td><td class="n">${pct(f.expPipeline,c.targetPipeline)}</td></tr>
       <tr><td class="lb">Closed-won</td><td class="n">—</td>
@@ -940,7 +942,7 @@ function strategyCampaignOne(c,m){
   return { name:c.name, ledBy:c.ledBy||null, segments:campSegLabel(c), activity:f.activity, costPerLead:r(f.costPerLead),
     budget:r(bud), committed:r(com), actualSpend:r(sp), uncommitted:r(bud-com), unspent:r(bud-sp),
     leads:{ target:c.targetLeads==null?null:r(c.targetLeads), expected:r(f.expLeads), actual:c.actualLeads==null?null:r(c.actualLeads) },
-    pipeline:{ target:c.targetPipeline==null?null:r(c.targetPipeline), expected:r(f.expPipeline), expectedBasis:f.pipelineStage?('expected '+f.pipelineStage+' x blended deal size'):null, actual:f.deals?r(d.pipeline):null, linkedDeals:f.deals?d.count:0 },
+    pipeline:{ target:c.targetPipeline==null?null:r(c.targetPipeline), expected:r(f.expPipeline), expectedBasis:f.pipelineStage?('expected leads x funnel stage rates to '+f.pipelineStage+' x blended deal size'):null, actual:f.deals?r(d.pipeline):null, linkedDeals:f.deals?d.count:0 },
     closedWon:{ expected:r(f.expWon), actual:f.deals?r(d.won):null },
     conversionRatePct:Math.round(f.rate*1000)/10, status:ragForCampaign(c).label };
 }
@@ -952,7 +954,7 @@ function strategyCampaignContextForAI(){
     const camps=CFG.campaigns.filter(c=>vis.includes(c.regionId)||c.regionId===unassignedRegionId());
     const sel=byId(camps,UI.bizCampaignId)||camps[0];
     return { module:'Strategy', page:'campaign', currency:ccy, selectedCampaign: sel?strategyCampaignOne(sel,m):null, campaignsInScope:camps.length,
-      notes:'Expected leads = budget / cost per lead. Expected pipeline = expected count at the pipeline stage x blended deal size. Actual leads are typed by hand. Pipeline and closed-won actuals are Scoring deals linked to the campaign. null = not set.' };
+      notes:'Expected leads = budget / cost per lead. Expected pipeline = expected leads x funnel stage rates to the pipeline stage x blended deal size. Actual leads are typed by hand. Pipeline and closed-won actuals are Scoring deals linked to the campaign. null = not set.' };
   }
   if(UI.page==='admin' && UI.adminTab==='camps'){
     return { module:'Strategy', page:'admin-campaigns', currency:ccy, campaigns: CFG.campaigns.slice(0,40).map(c=>strategyCampaignOne(c,m)), truncated: CFG.campaigns.length>40 };
@@ -1063,7 +1065,7 @@ function pipelineGateSelectorHtml(){
     <select class="in" style="width:auto" ${dis} onchange="setPipelineGate(this.value)">
       <option value="" ${!CFG.pipelineGateId?'selected':''}>Automatic${pg.auto&&pg.gate?' ('+esc(pg.gate.name)+')':' (none found)'}</option>
       ${chain().map(g=>`<option value="${g.id}" ${g.id===CFG.pipelineGateId?'selected':''}>${esc(g.name)}</option>`).join('')}</select>
-    <span class="mini">The stage that counts as pipeline. Campaign expected pipeline = expected count at this stage × blended deal size.</span></div>`;
+    <span class="mini">The stage that counts as pipeline. Campaign expected pipeline = expected leads × funnel stage rates to this stage × blended deal size.</span></div>`;
 }
 function campaignCommitted(camp){ const l=liFig(camp,'committed'); if(l!=null) return l; return camp.rollupCommitted!=null ? camp.rollupCommitted : (camp.committed||0); }
 function campaignActualSpend(camp){ const l=liFig(camp,'actual'); if(l!=null) return l; return camp.rollupActual!=null ? camp.rollupActual : (camp.actual||0); }

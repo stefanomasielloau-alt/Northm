@@ -484,6 +484,24 @@ input.cel.gs-swap-filter{width:150px}
 }
   tr.dropon td{outline:2px dashed var(--acc,#3b82f6);outline-offset:-2px}
   tr[draggable="true"]{cursor:grab}
+
+/* 2026-10-13: Admin > Campaigns table -- level rows, right-aligned figures, accounting brackets */
+table.camp-admin td{vertical-align:middle}
+table.camp-admin td.n,table.camp-admin th.n,table.camp-targets td.n,table.camp-targets th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+table.camp-admin .ccy-amt{display:flex;gap:4px;align-items:center;justify-content:flex-end}
+table.camp-admin select.ccy{width:58px;font-size:10px;padding:2px 3px}
+input.cel.num{width:100px;text-align:right;font-variant-numeric:tabular-nums}
+table.camp-admin .neg,table.camp-targets .neg{color:var(--bad)}
+.src-tag{display:inline-block;font-size:9px;font-weight:700;color:var(--accent,#2a5bd7);border:1px solid currentColor;border-radius:3px;padding:0 3px;margin-left:4px;vertical-align:middle;cursor:help}
+.seg-btn{font:inherit;font-size:12px;text-align:left;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--input-bg);color:var(--input);font-weight:700;border:1px solid transparent;border-radius:3px;padding:2px 6px;cursor:pointer}
+.seg-btn:hover{border-color:#D9C6F8}
+.seg-btn.warn{background:var(--warn-bg);color:var(--warn)}
+.segchk{display:inline-flex;gap:5px;align-items:center;margin-right:12px;white-space:nowrap}
+tr.seg-edit td{background:var(--canvas)}
+.mcell{display:inline-flex;align-items:center;justify-content:flex-end;white-space:nowrap}
+.mcell .calc{padding:2px 5px}
+.tagslot{display:inline-block;width:32px;text-align:left}
+.tagslot .src-tag{margin-left:4px}
 </style>
 <link rel="stylesheet" href="assets/vendor/gridstack/gridstack.min.css">
 </head>
@@ -762,6 +780,184 @@ function liHint(c,k){
   if(k==='budget' && c && c.li && c.li.hasBudget && Number(c.budget)>0){ const left=Number(c.budget)-c.li.budget;
     return '<div class="mini" style="color:var(--accent,#2a5bd7)" title="Budget line items (entered in Campaign Planning) allocate this much of the Budget below. Strategy keeps using the Budget below as the envelope.">line items allocate '+F.mk(c.li.budget)+' ('+(left>=0?F.mk(left)+' left':F.mk(-left)+' over')+')</div>'; }
   const v=liFig(c,k); return v==null?'':'<div class="mini" style="color:var(--accent,#2a5bd7)" title="Strategy uses the total of this campaign\'s budget line items (entered in Campaign Planning). The box below is only used when there are none for this figure.">from line items: '+F.mk(v)+'</div>'; }
+/* ---------- 2026-10-13: Led by, multi-segment split, targets, accounting format ----------
+   Stef: the Admin > Campaigns "Activity" column should say who leads the campaign (Partner-led,
+   BDR-sourced, Marketing-sourced...), Segment can be several (split by % entered), and the
+   budget narrative becomes figures: positive, or (brackets) when over. */
+F.acc = v => { if(v==null||isNaN(v)) return '—'; const r=Math.round(Number(v)); const t='$'+Math.abs(r).toLocaleString('en-AU'); return r<0?'('+t+')':t; };
+function ledByOptions(){
+  const out=[]; const seen=new Set();
+  const add=x=>{ const t=String(x||'').trim(); if(!t) return; const k=t.toLowerCase(); if(seen.has(k)) return; seen.add(k); out.push(t); };
+  (CFG.ledByPresets||[]).forEach(add);
+  (CFG.campaigns||[]).map(c=>c.ledBy).filter(Boolean).sort().forEach(add);
+  return out;
+}
+async function setCampaignLedBy(id,val){
+  const c=byId(CFG.campaigns,id); if(!c) return;
+  if(!CFG.campV2Available){ toast('Led by needs the 2026-10-13 database update first.'); render(); return; }
+  if(val==='__new__'){
+    const name=(prompt('New "Led by" option (e.g. Marketing-sourced, BDR-sourced, Partner-led):')||'').trim().slice(0,60);
+    if(!name){ render(); return; }
+    const existing=ledByOptions().find(x=>x.toLowerCase()===name.toLowerCase());
+    if(!existing){
+      CFG.ledByPresets=(CFG.ledByPresets||[]).concat([name]);
+      if(CFG.ledByAvailable){
+        const oid=(typeof _savOrgFilter!=='undefined'&&_savOrgFilter!==null)?_savOrgFilter:_orgId;
+        const { error } = await sb.from('org_settings').update({led_by_presets:CFG.ledByPresets}).eq('org_id',oid);
+        if(error){ console.error('led_by_presets save failed',error); toast('Could not add it to the shared list (it is still set on this campaign).'); }
+      }
+    }
+    val=existing||name;
+  }
+  const old=c.ledBy||''; c.ledBy=val||'';
+  logAudit('edit','campaigns/'+c.name+'.ledBy: '+(old||'—')+' → '+(c.ledBy||'—'));
+  render();
+}
+window.setCampaignLedBy=setCampaignLedBy;
+function campV2Payload(c){
+  if(!CFG.campV2Available) return {};
+  const n=v=>(v===''||v==null||isNaN(Number(v)))?null:Number(v);
+  return { led_by:c.ledBy||null, target_leads:n(c.targetLeads), target_pipeline:n(c.targetPipeline), actual_leads:n(c.actualLeads) };
+}
+function setCampTarget(id,field,val){
+  const c=byId(CFG.campaigns,id); if(!c||!CFG.campV2Available) return;
+  const t=String(val==null?'':val).replace(/[$,\s]/g,'');
+  const v=t===''?null:parseFloat(t); if(t!==''&&isNaN(v)){ render(); return; }
+  const old=c[field]; c[field]=v;
+  logAudit('edit','campaigns/'+c.name+'.'+field+': '+(old==null?'—':old)+' → '+(v==null?'—':v));
+  render();
+}
+window.setCampTarget=setCampTarget;
+/* segment split: no rows for a campaign = its single segment at 100% (what every campaign had before) */
+function campSegments(c){
+  const rows=(CFG.campaignSegAllocs||[]).filter(a=>a.campaignId===c.id);
+  return rows.length ? rows : (c.segmentId ? [{id:null,campaignId:c.id,segmentId:c.segmentId,sharePct:100}] : []);
+}
+function campSegLabel(c){
+  const rows=campSegments(c); if(!rows.length) return '—';
+  const nm=id=>{ const x=seg(id); return x?x.name:'?'; };
+  if(rows.length===1) return nm(rows[0].segmentId);
+  return rows.slice().sort((a,b)=>b.sharePct-a.sharePct).map(r=>nm(r.segmentId)+' '+F.n(r.sharePct,0)+'%').join(' · ');
+}
+/* conversion uses the weighted mix of the campaign's segments; identical to before for one segment */
+function campSegRateMult(c){
+  const rows=campSegments(c), tot=sum(rows.map(r=>r.sharePct));
+  if(!rows.length||!tot){ const x=seg(c.segmentId); return x?x.rateMult:1; }
+  return sum(rows.map(r=>{ const x=seg(r.segmentId); return (x?x.rateMult:1)*r.sharePct; }))/tot;
+}
+function syncPrimarySegment(c){
+  const rows=campSegments(c).filter(r=>r.sharePct>0); if(!rows.length) return;
+  c.segmentId=rows.slice().sort((a,b)=>b.sharePct-a.sharePct)[0].segmentId;
+}
+function _materializeSegs(c){
+  let rows=CFG.campaignSegAllocs.filter(a=>a.campaignId===c.id);
+  if(!rows.length && c.segmentId){ const r={orgId:c.orgId||_clickOrgId(),id:uid('csa'),campaignId:c.id,segmentId:c.segmentId,sharePct:100}; CFG.campaignSegAllocs.push(r); rows=[r]; }
+  return rows;
+}
+function toggleCampSegEditor(cid){ UI.campSegEditId=(UI.campSegEditId===cid)?null:cid; render(); }
+window.toggleCampSegEditor=toggleCampSegEditor;
+function toggleCampSegment(cid,sid,on){
+  const c=byId(CFG.campaigns,cid); if(!c||!CFG.segAllocAvailable) return;
+  const rows=_materializeSegs(c); const ex=rows.find(r=>r.segmentId===sid);
+  if(on&&!ex){
+    const left=Math.max(0,100-sum(rows.map(r=>r.sharePct)));
+    CFG.campaignSegAllocs.push({orgId:c.orgId||_clickOrgId(),id:uid('csa'),campaignId:cid,segmentId:sid,sharePct:left});
+  } else if(!on&&ex){
+    if(rows.length<=1){ toast('A campaign needs at least one segment.'); render(); return; }
+    CFG.campaignSegAllocs=CFG.campaignSegAllocs.filter(r=>r.id!==ex.id);
+    deleteRow('campaign_segment_allocations',ex.id,ex.orgId);
+  }
+  syncPrimarySegment(c);
+  logAudit('edit','campaigns/'+c.name+'.segments: '+campSegLabel(c));
+  render();
+}
+window.toggleCampSegment=toggleCampSegment;
+function setCampSegShare(cid,sid,val){
+  const c=byId(CFG.campaigns,cid); if(!c||!CFG.segAllocAvailable) return;
+  const v=parseFloat(String(val).replace(/[%\s]/g,'')); if(isNaN(v)){ render(); return; }
+  const row=_materializeSegs(c).find(r=>r.segmentId===sid); if(!row) return;
+  row.sharePct=Math.max(0,Math.min(100,v));
+  syncPrimarySegment(c);
+  logAudit('edit','campaigns/'+c.name+'.segments: '+campSegLabel(c));
+  render();
+}
+window.setCampSegShare=setCampSegShare;
+/* one money cell: an input when the figure is typed here; read-only with a tag when it comes from
+   line items (LI) or from activities (ACT) in Campaign Planning -- so what is shown is what is used */
+function campMoneyCell(c,k,extraTag){
+  const typed=Number(c[k]||0);
+  const wrap=(v,tag)=>`<span class="mcell">${v}<span class="tagslot">${tag||extraTag||''}</span></span>`;
+  const l=liFig(c,k);
+  if(l!=null) return wrap(`<span class="calc" title="Total of this campaign's budget line items in Campaign Planning -- edit them there.">${F.acc(l)}</span>`,`<span class="src-tag" title="From budget line items (Campaign Planning)">LI</span>`);
+  if(k!=='budget'){ const r=k==='committed'?c.rollupCommitted:c.rollupActual;
+    if(r!=null) return wrap(`<span class="calc" title="Rolled up from this campaign's activities in Campaign Planning -- edit them there.">${F.acc(r)}</span>`,`<span class="src-tag" title="From activities (Campaign Planning)">ACT</span>`); }
+  const extra = k==='budget' ? `;recomputeCampaignBudgetFx('${c.id}')` : '';
+  return wrap(`<input class="cel num" value="${F.n(typed)}" onchange="setIn('campaigns','${c.id}','${k}',this.value,'money')${extra}">`);
+}
+/* Targets / expected / actual for one campaign (Business case). Expected leads = budget / cost per
+   lead of the campaign's activity; expected closed-won = projected exit gate x blended deal size.
+   Actual pipeline / won = Scoring deals linked to this campaign. Actual leads: typed by hand (no
+   lead feed is linked to campaigns yet). Nothing here is estimated beyond what Strategy already shows. */
+function campTargetFigures(c,m){
+  const a=act(c.activityId), expLeads=(a&&a.costPer)?campaignBudgetMain(c)/a.costPer:null;
+  const rate=campExitRate(c,m), proj=expLeads!=null?backward(expLeads*rate,m):null;
+  const expWins=proj?proj[exitGate().id]:null, expWon=expWins!=null?expWins*blendedDeal():null;
+  const d=(CFG.dealsByCampaign||{})[c.id]||null;
+  return { activity:a?a.name:null, costPerLead:a&&a.costPer?a.costPer:null, expLeads, expWins, expWon, rate, deals:d };
+}
+function campTargetsHtml(c,m){
+  const f=campTargetFigures(c,m), d=f.deals, v2=!!CFG.campV2Available;
+  const dis=v2?'':'disabled title="Needs the 2026-10-13 database update"';
+  const pct=(x,t)=>(x==null||!t)?'—':F.p(x/t,0);
+  const inp=(fl,v)=>`<input class="cel num" ${dis} value="${v==null?'':F.n(v)}" placeholder="—" onchange="setCampTarget('${c.id}','${fl}',this.value)">`;
+  return `<div class="dv"></div>
+    <div style="font-weight:700;margin:2px 0 6px">Targets, expected and actual</div>
+    ${v2?'':`<div class="note w" style="margin-bottom:8px">Targets and actual leads need <code>2026-10-13-migration-campaign-ledby-segments-targets-partner-fy.sql</code> run in Supabase.</div>`}
+    <div class="scroll"><table class="camp-targets"><thead><tr><th></th><th class="n">Target</th><th class="n">Expected</th><th class="n">Actual</th>
+      <th class="n">Actual vs target</th><th class="n">Expected vs target</th></tr></thead><tbody>
+      <tr><td class="lb">Leads (${esc(entryGate().name)})</td><td class="n">${inp('targetLeads',c.targetLeads)}</td>
+        <td class="n calc" title="Budget ÷ cost per lead${f.activity?' of '+esc(f.activity):''}">${f.expLeads==null?'—':F.n(f.expLeads,0)}</td>
+        <td class="n">${inp('actualLeads',c.actualLeads)}</td>
+        <td class="n">${pct(c.actualLeads,c.targetLeads)}</td><td class="n">${pct(f.expLeads,c.targetLeads)}</td></tr>
+      <tr><td class="lb">Pipeline</td><td class="n">${inp('targetPipeline',c.targetPipeline)}</td>
+        <td class="n calc" title="No pipeline-stage benchmark is set up in Strategy, so there is no expected figure">—</td>
+        <td class="n calc" title="Value of Scoring deals linked to this campaign, excluding Closed Lost">${d?F.acc(d.pipeline):'—'}</td>
+        <td class="n">${pct(d?d.pipeline:null,c.targetPipeline)}</td><td class="n">—</td></tr>
+      <tr><td class="lb">Closed-won</td><td class="n">—</td>
+        <td class="n calc" title="Projected ${esc(exitGate().name)} × blended deal size">${f.expWon==null?'—':F.acc(f.expWon)}</td>
+        <td class="n calc" title="Value of Closed Won Scoring deals linked to this campaign">${d?F.acc(d.won):'—'}</td><td class="n">—</td><td class="n">—</td></tr>
+    </tbody></table></div>
+    <div class="mini" style="margin-top:6px">Actual leads are typed in for now -- no lead feed is linked to campaigns yet. Actual pipeline and
+      closed-won come from deals linked to this campaign in Scoring${d&&d.otherCcy?' (some are in another currency and are added as-is, not converted)':''}.</div>`;
+}
+/* Ask Alec: what the Campaign & cost page (selected campaign) and Admin > Campaigns show, as numbers */
+function strategyCampaignOne(c,m){
+  const f=campTargetFigures(c,m), d=f.deals||{};
+  const bud=campaignBudgetMain(c), com=campaignCommitted(c), sp=campaignActualSpend(c);
+  const r=v=>v==null?null:Math.round(v);
+  return { name:c.name, ledBy:c.ledBy||null, segments:campSegLabel(c), activity:f.activity, costPerLead:r(f.costPerLead),
+    budget:r(bud), committed:r(com), actualSpend:r(sp), uncommitted:r(bud-com), unspent:r(bud-sp),
+    leads:{ target:c.targetLeads==null?null:r(c.targetLeads), expected:r(f.expLeads), actual:c.actualLeads==null?null:r(c.actualLeads) },
+    pipeline:{ target:c.targetPipeline==null?null:r(c.targetPipeline), actual:f.deals?r(d.pipeline):null, linkedDeals:f.deals?d.count:0 },
+    closedWon:{ expected:r(f.expWon), actual:f.deals?r(d.won):null },
+    conversionRatePct:Math.round(f.rate*1000)/10, status:ragForCampaign(c).label };
+}
+function strategyCampaignContextForAI(){
+  const m=verMult()*segBlend();
+  const ccy=(CFG.currency&&CFG.currency.main)||'';
+  if(UI.page==='campaign'){
+    const vis=visibleRegions().map(r=>r.id);
+    const camps=CFG.campaigns.filter(c=>vis.includes(c.regionId)||c.regionId===unassignedRegionId());
+    const sel=byId(camps,UI.bizCampaignId)||camps[0];
+    return { module:'Strategy', page:'campaign', currency:ccy, selectedCampaign: sel?strategyCampaignOne(sel,m):null, campaignsInScope:camps.length,
+      notes:'Expected leads = budget / cost per lead. Actual leads are typed by hand. Pipeline and closed-won actuals are Scoring deals linked to the campaign. null = not set.' };
+  }
+  if(UI.page==='admin' && UI.adminTab==='camps'){
+    return { module:'Strategy', page:'admin-campaigns', currency:ccy, campaigns: CFG.campaigns.slice(0,40).map(c=>strategyCampaignOne(c,m)), truncated: CFG.campaigns.length>40 };
+  }
+  return null;
+}
+window.strategyCampaignContextForAI=strategyCampaignContextForAI;
 function campaignCommitted(camp){ const l=liFig(camp,'committed'); if(l!=null) return l; return camp.rollupCommitted!=null ? camp.rollupCommitted : (camp.committed||0); }
 function campaignActualSpend(camp){ const l=liFig(camp,'actual'); if(l!=null) return l; return camp.rollupActual!=null ? camp.rollupActual : (camp.actual||0); }
 function campaignBudgetMain(c){ /* multi-currency phase 3: use the converted snapshot when this campaign's budget was set in a non-main currency; fails soft to the raw figure otherwise, so main-currency campaigns (the default case) are unchanged. */ { const l=liFig(c,'budget'); if(l!=null) return l; } return (c.budgetFx && c.budgetFx.converted!=null) ? c.budgetFx.converted : (c.budget||0); }
@@ -951,8 +1147,7 @@ function historicalExitRate(){
 }
 function campExitRate(camp,mult=1){
   if(camp.convOverride!=null && !isNaN(camp.convOverride)) return camp.convOverride;
-  const s=seg(camp.segmentId);
-  return cumRate(exitGate().id, mult*(s?s.rateMult:1));
+  return cumRate(exitGate().id, mult*campSegRateMult(camp)); /* 2026-10-13: weighted by segment split (same as before for one segment) */
 }
 function applyRateSource(id,src){
   const camp=byId(CFG.campaigns,id); if(!camp)return;
@@ -1697,7 +1892,7 @@ function impactOf(dim,action,memberName){
    MUTATION + AUDIT + PENDING-CHANGE FLOW
    ============================================================================ */
 function logAudit(what,detail){
-  CFG.audit.unshift({id:uid(),ts:new Date().toISOString().slice(0,16).replace('T',' '),who:user().name,role:roleName(),what:what,detail:detail});
+  CFG.audit.unshift({id:uid(),ts:new Date().toISOString().slice(0,16).replace('T',' '),who:user().name,role:roleName(),userId:_myProfile?_myProfile.id:null,what:what,detail:detail});
   if(CFG.audit.length>200)CFG.audit.pop();
 }
 function toast(msg){
@@ -1820,16 +2015,19 @@ async function saveToSupabase(){
     upsertRows('pod_gate_rates', CFG.podGateRates, r=>({id:r.id,pod_id:r.podId,gate_id:r.gateId,rate:r.rate})),
     upsertRows('pod_streams', CFG.podStreams, r=>({id:r.id,pod_id:r.podId,stream_id:r.streamId,mix:r.mix})),
     upsertRows('snapshots', CFG.snapshots, s=>({id:s.id,name:s.name,created_by:s.createdBy,created_at:s.timestamp,data:s.data})),
-    upsertRows('audit_log', CFG.audit, a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail,who:a.who,role:a.role,user_id:_myProfile?_myProfile.id:null})),
+    upsertRows('audit_log', CFG.audit, a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail,who:a.who,role:a.role,/* 2026-10-13: keep each row's original author */user_id:('userId' in a)?a.userId:(_myProfile?_myProfile.id:null)})),
     /* campaigns is a shared table Campaign Planning also writes to — upsert only, same as everything
        else above, so no special handling needed beyond the field mapping. */
-    upsertRows('campaigns', CFG.campaigns, c=>({
+    (async()=>{ await upsertRows('campaigns', CFG.campaigns, c=>Object.assign({
       id:c.id,name:c.name,programme_id:c.programmeId,activity_id:c.activityId,segment_id:c.segmentId,
       region_id:c.regionId,cost_bucket_id:c.costBucketId,start_date:c.start||null,end_date:c.end||null,
       budget:c.budget||0,committed:c.committed||0,actual:c.actual||0,conv_override:c.convOverride,
       rate_source:c.rateSource||'manual',source:c.source||'Manual',ext_ref:c.extRef||'',crm_ref:c.crmRef||null,
       budget_fx:c.budgetFx||null
-    })),
+    }, campV2Payload(c)));
+      /* 2026-10-13: after campaigns, so a new campaign exists before its segment rows */
+      if(CFG.segAllocAvailable) await upsertRows('campaign_segment_allocations', CFG.campaignSegAllocs, a=>({id:a.id,campaign_id:a.campaignId,segment_id:a.segmentId,share_pct:a.sharePct||0}));
+    })(),
     (async()=>{
       const row = {
         org_id:_orgId, avg_deal_size:CFG.drivers.avgDealSize||0, projected_revenue:CFG.drivers.projectedRevenue||0,
@@ -1973,7 +2171,7 @@ async function loadFromSupabase(){
        every North user on ordinary page navigation. The cross-org RPC branch (admin_cross_org_
        audit_log) was already fine -- confirmed its definition does `SELECT * FROM audit_log`, so
        it already returns id; only this direct-select branch needed the fix. */
-    (_crossOrgAudit ? sb.rpc('admin_cross_org_audit_log', {p_org_id:_savOrgFilter, p_limit:200}) : sb.from('audit_log').select('id,ts,what,detail,who,role').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200))
+    (_crossOrgAudit ? sb.rpc('admin_cross_org_audit_log', {p_org_id:_savOrgFilter, p_limit:200}) : sb.from('audit_log').select('id,ts,what,detail,who,role,user_id').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200))
   ]);
   const [rolesR,regionsR,podsR,repsR,gatesR,streamsR,routesR,activitiesR,segmentsR,costBucketsR,
          programmesR,versionsR,campaignsR,podAllocsR,regionGateRatesR,regionStreamsR,rollupsR,profilesR,orgSettingsR,snapshotsR,auditR] = results;
@@ -1992,6 +2190,18 @@ async function loadFromSupabase(){
     if(!pst.error) CFG.podStreams=(pst.data||[]).map(r=>({id:r.id,orgId:r.org_id,podId:r.pod_id,streamId:r.stream_id,mix:r.mix}));
     if(!ccf.error){ CFG.customFieldsAvailable=true; (ccf.data||[]).forEach(r=>{ CFG.campaignCustom[r.id]=r.custom_fields||{}; }); }
   }catch(e){ /* tables/column not created yet -- inherit region/global, no custom fields */ }
+  /* 2026-10-13: Led by / targets / segment split -- columns + table from
+     Claude outputs/2026-10-13-migration-campaign-ledby-segments-targets-partner-fy.sql. Fail-soft: before
+     it is run these stay unavailable and Admin > Campaigns shows a banner instead of breaking boot. */
+  CFG.campV2={}; CFG.campV2Available=false; CFG.campaignSegAllocs=[]; CFG.segAllocAvailable=false;
+  try{
+    const [cv2,csa]=await Promise.all([
+      orgScoped(sb.from('campaigns').select('id,led_by,target_leads,target_pipeline,actual_leads')),
+      orgScoped(sb.from('campaign_segment_allocations').select('id,org_id,campaign_id,segment_id,share_pct'))
+    ]);
+    if(cv2 && !cv2.error){ CFG.campV2Available=true; (cv2.data||[]).forEach(r=>{ CFG.campV2[r.id]=r; }); }
+    if(csa && !csa.error){ CFG.segAllocAvailable=true; CFG.campaignSegAllocs=(csa.data||[]).map(a=>({id:a.id,orgId:a.org_id,campaignId:a.campaign_id,segmentId:a.segment_id,sharePct:Number(a.share_pct)||0})); }
+  }catch(e){ /* not migrated yet -- single segment, no Led by / targets */ }
 
   /* org_units/org_unit_access (phase8) and regions.org_unit_id (phase14) are
      optional, additive schema pieces -- an org that hasn't run those
@@ -2022,10 +2232,11 @@ async function loadFromSupabase(){
      breaking Ordo's own load. */
   CFG.targetsSummary = { filterCount:0, topFilters:[] };
   CFG.scoringSummary = { dealCount:0, pipelineValue:0, byStage:{}, valueByStage:{} };
+  CFG.dealsByCampaign = {};
   try{
     const [pf, ad] = await Promise.all([
       sb.from('prospectus_filters').select('id,name,industry,deal_value,currency'),
-      sb.from('augur_deals').select('id,value,currency,stage')
+      sb.from('augur_deals').select('id,value,currency,stage,campaign_id')
     ]);
     if(!pf.error){
       const rows = pf.data||[];
@@ -2038,6 +2249,10 @@ async function loadFromSupabase(){
       let pipelineValue = 0;
       rows.forEach(d=>{ const st=d.stage||'Unspecified'; byStage[st]=(byStage[st]||0)+1; valueByStage[st]=(valueByStage[st]||0)+(d.value||0); pipelineValue += (d.value||0); });
       CFG.scoringSummary = { dealCount: rows.length, pipelineValue, byStage, valueByStage };
+      /* 2026-10-13: per-campaign pipeline (all but Closed Lost) and closed-won, for campaign targets */
+      const mainCcy=(CFG.currency&&CFG.currency.main)||'';
+      rows.forEach(d=>{ if(!d.campaign_id) return; const b=CFG.dealsByCampaign[d.campaign_id]||(CFG.dealsByCampaign[d.campaign_id]={pipeline:0,won:0,count:0,otherCcy:false});
+        const v=Number(d.value)||0; b.count++; if(d.stage!=='Closed Lost') b.pipeline+=v; if(d.stage==='Closed Won') b.won+=v; if(mainCcy&&d.currency&&d.currency!==mainCcy) b.otherCcy=true; });
     }
   }catch(e){ /* prospectus_filters/augur_deals not reachable (RLS, or org hasn't run those
                 modules yet) -- Board Report's Targets/Scoring section just renders empty
@@ -2140,6 +2355,7 @@ async function loadFromSupabase(){
     }
   }catch(e){ /* line items not installed / not readable: no change to any figure */ }
   CFG.campaignPodAllocations = (podAllocsR.data||[]).map(a=>({id:a.id,orgId:a.org_id,campaignId:a.campaign_id,podId:a.pod_id,sharePct:a.share_pct}));
+  CFG.campaigns.forEach(c=>{ const v=(CFG.campV2||{})[c.id]||{}; const n=x=>(x==null?null:Number(x)); c.ledBy=v.led_by||''; c.targetLeads=n(v.target_leads); c.targetPipeline=n(v.target_pipeline); c.actualLeads=n(v.actual_leads); });
   CFG.regionGateRates = (regionGateRatesR.error ? [] : (regionGateRatesR.data||[])).map(r=>({id:r.id,orgId:r.org_id,regionId:r.region_id,gateId:r.gate_id,rate:r.rate}));
   CFG.regionStreams = (regionStreamsR.error ? [] : (regionStreamsR.data||[])).map(r=>({id:r.id,orgId:r.org_id,regionId:r.region_id,streamId:r.stream_id,mix:r.mix}));
   CFG.roles = (rolesR.data||[]).map(r=>({id:r.id,orgId:r.org_id,name:r.name,config:r.config,publish:r.publish,writeAll:r.write_all,scope:r.scope,desc:r.description||'',requireCommitOnEdit:r.require_commit_on_edit,allowExpertMode:r.allow_expert_mode}));
@@ -2246,7 +2462,7 @@ async function loadFromSupabase(){
   ];
 
   CFG.meta = { normaSyncedAt:null, normaConfigVersion:null };
-  CFG.audit = (auditR.data||[]).map(a=>({id:a.id,ts:a.ts,who:a.who,role:a.role,what:a.what,detail:a.detail}));
+  CFG.audit = (auditR.data||[]).map(a=>({id:a.id,ts:a.ts,who:a.who||((CFG.users||[]).find(u=>u.id===a.user_id)||{}).name||'',role:a.role,userId:(a.user_id==null?null:a.user_id),what:a.what,detail:a.detail}));
   CFG.snapshots = (snapshotsR.data||[]).map(s=>({id:s.id,orgId:s.org_id,name:s.name,createdBy:s.created_by,timestamp:s.created_at,data:s.data}));
 
   /* the top-bar Role/Version/Region/Activity defaults pointed at hardcoded sample ids —
@@ -2279,6 +2495,8 @@ async function loadFromSupabase(){
   CFG.namingAvailable = Object.prototype.hasOwnProperty.call(os,'naming_config');
   CFG.customFieldDefs = Array.isArray(os.custom_fields_config) ? os.custom_fields_config : [];
   CFG.customFieldDefsAvailable = Object.prototype.hasOwnProperty.call(os,'custom_fields_config');
+  CFG.ledByPresets = Array.isArray(os.led_by_presets) ? os.led_by_presets : [];
+  CFG.ledByAvailable = Object.prototype.hasOwnProperty.call(os,'led_by_presets');
 
   /* sample history depends on gates/regions/activities/segments/drivers/seasonality all
      being loaded — build it last, once everything above is in place. */
@@ -2303,7 +2521,7 @@ function subscribeRealtime(){
       const targeted = Array.isArray(row.target_user_ids) && row.target_user_ids.length>0;
       const forMe = !targeted || (_myProfile && row.target_user_ids.includes(_myProfile.id));
       if(forMe) toast((row.what||'Update')+(row.detail?' — '+row.detail:''));
-      if(CFG.audit){ CFG.audit.unshift({id:row.id,ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
+      if(CFG.audit){ CFG.audit.unshift({id:row.id,ts:row.ts,who:row.who||'',role:row.role||'',userId:(row.user_id==null?null:row.user_id),what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
       render();
     })
     .subscribe();
@@ -3055,37 +3273,58 @@ function adminCampsWidgetProgrammes(){
     </div></div>`;
 }
 function adminCampsWidgetTable(){
+  /* 2026-10-13 (Stef): "Activity" -> "Led by" (who leads it; the activity that sets cost per lead now sits
+     on the campaign's Business case, Campaign & cost page). Segment -> several, split by % entered. The
+     line-item narrative -> two figures: Uncommitted (Budgeted - Committed) and Unspent (Budgeted - Actual),
+     (brackets) when over. One money format, right-aligned, currency on the same line so rows stay level. */
   const dis=canConfig()?'':'disabled';
+  const v2=!!CFG.campV2Available, sa=!!CFG.segAllocAvailable;
+  const mainCcy=(CFG.currency&&CFG.currency.main)||'';
+  const ledOpts=ledByOptions();
   let h=`<div class="card"><h3>Campaigns <span class="sp"></span>
     <span class="pill n">${CFG.campaigns.length} records</span>
     <button class="btn sm" onclick="toast('Pull queued. In the built system this calls the MAP connector.')">Pull from feed</button>
-    <button class="btn sm pri" ${dis} onclick="addCampaign()">Add campaign</button></h3>
-    <div class="bd flush"><div class="scroll cap"><table><thead><tr>
-      <th>Campaign</th><th>Programme</th><th>Activity</th><th>Segment</th><th>Region</th><th>Start</th><th>End</th>
-      <th class="n">Budgeted</th><th class="n">Committed</th><th class="n">Actual</th><th>Cost bucket</th>
-      <th>Conv. source</th><th class="n">Conv. %</th>
+    <button class="btn sm pri" ${dis} onclick="addCampaign()">Add campaign</button></h3>`;
+  if(!v2||!sa) h+=`<div class="bd" style="padding-bottom:0"><div class="note w"><strong>Database update needed.</strong>
+    Led by, the multi-segment split and campaign targets need <code>2026-10-13-migration-campaign-ledby-segments-targets-partner-fy.sql</code>
+    (Claude outputs) run in Supabase. Until then Led by is read-only and each campaign keeps one segment.</div></div>`;
+  h+=`<div class="bd flush"><div class="scroll cap"><table class="camp-admin"><thead><tr>
+      <th>Campaign</th><th>Programme</th><th title="Who leads or sources this campaign">Led by</th><th>Segments</th><th>Region</th><th>Start</th><th>End</th>
+      <th class="n">Budgeted${mainCcy?` <span class="mini">${esc(mainCcy)}</span>`:''}</th><th class="n">Committed</th><th class="n">Actual</th>
+      <th class="n" title="Budgeted minus Committed. (Brackets) = more committed than budgeted.">Uncommitted</th>
+      <th class="n" title="Budgeted minus Actual. (Brackets) = more spent than budgeted.">Unspent</th>
+      <th>Cost bucket</th><th>Conv. source</th><th class="n">Conv. %</th>
       <th>Source</th><th>Ref</th><th>Campaign Planning</th><th></th></tr></thead><tbody>`;
   CFG.campaigns.forEach(c=>{
     const bad=c.end&&c.start&&c.end<c.start;
+    const bud=campaignBudgetMain(c), com=campaignCommitted(c), spent=campaignActualSpend(c);
+    const unc=bud-com, uns=bud-spent;
+    const segRows=campSegments(c), segTot=sum(segRows.map(r=>r.sharePct)), segOk=Math.abs(segTot-100)<0.01;
+    const ledCur=c.ledBy||'';
+    const fx=(c.budgetFx&&c.budgetFx.originalCurrency&&c.budgetFx.originalCurrency!==mainCcy)?c.budgetFx:null;
     h+=`<tr><td><input class="cel txt" style="width:210px" value="${esc(c.name)}" onchange="setIn('campaigns','${c.id}','name',this.value)">${c.trackingRef?`<div class="mini">${esc(c.trackingRef)}</div>`:''}</td>
       <td><select class="cel txt" style="width:130px" onchange="setIn('campaigns','${c.id}','programmeId',this.value||null)">
         <option value="">— none —</option>
         ${CFG.programmes.map(p=>`<option value="${p.id}" ${p.id===c.programmeId?'selected':''}>${esc(p.name)}</option>`).join('')}</select></td>
-      <td><select class="cel txt" style="width:130px" onchange="setIn('campaigns','${c.id}','activityId',this.value)">
-        ${CFG.activities.map(a=>`<option value="${a.id}" ${a.id===c.activityId?'selected':''}>${esc(a.name)}</option>`).join('')}</select></td>
-      <td><select class="cel txt" style="width:105px" onchange="setIn('campaigns','${c.id}','segmentId',this.value)">
-        ${CFG.segments.map(s=>`<option value="${s.id}" ${s.id===c.segmentId?'selected':''}>${esc(s.name)}</option>`).join('')}</select></td>
+      <td><select class="cel txt" style="width:150px" ${v2?'':'disabled title="Needs the 2026-10-13 database update"'} onchange="setCampaignLedBy('${c.id}',this.value)">
+        <option value="" ${!ledCur?'selected':''}>— choose —</option>
+        ${ledOpts.map(o=>`<option value="${esc(o)}" ${o===ledCur?'selected':''}>${esc(o)}</option>`).join('')}
+        ${v2?'<option value="__new__">+ Add new…</option>':''}</select></td>
+      <td>${sa
+        ?`<button type="button" class="seg-btn${segOk?'':' warn'}" onclick="toggleCampSegEditor('${c.id}')" title="${segOk?'Choose segments and the % split':'The split adds up to '+F.n(segTot,1)+'% -- it should be 100%'}">${esc(campSegLabel(c))}${segOk?'':' ⚠'}</button>`
+        :`<select class="cel txt" style="width:120px" onchange="setIn('campaigns','${c.id}','segmentId',this.value)">
+          ${CFG.segments.map(x=>`<option value="${x.id}" ${x.id===c.segmentId?'selected':''}>${esc(x.name)}</option>`).join('')}</select>`}</td>
       <td><select class="cel txt" style="width:95px" onchange="setIn('campaigns','${c.id}','regionId',this.value)">
         ${CFG.regions.map(r=>`<option value="${r.id}" ${r.id===c.regionId?'selected':''}>${esc(r.name)}</option>`).join('')}</select></td>
-      <td><input class="cel txt" style="width:104px" type="date" value="${c.start||''}" onchange="setIn('campaigns','${c.id}','start',this.value)"></td>
-      <td><input class="cel txt ${bad?'bad':''}" style="width:104px" type="date" value="${c.end||''}" onchange="setIn('campaigns','${c.id}','end',this.value)"></td>
-      <td class="n">${liHint(c,'budget')}<input class="cel" value="${c.budget}" onchange="setIn('campaigns','${c.id}','budget',this.value,'money');recomputeCampaignBudgetFx('${c.id}')">
-        <div style="display:flex;align-items:center;gap:3px;margin-top:2px">
-          <select class="cel txt" style="width:62px;font-size:10px;padding:2px 4px" title="Currency this budget was entered in, if not ${CFG.currency.main}" onchange="setCampaignBudgetCurrency('${c.id}',this.value)">${currencyOptionsHtml(c.budgetCcy, {blankLabel: CFG.currency.main+' (default)'})}</select>
-          ${(c.budgetFx&&c.budgetFx.originalCurrency&&c.budgetFx.originalCurrency!==CFG.currency.main)?`<span class="mini" title="Converted ${esc(F.dt(c.budgetFx.convertedAt))} at rate ${c.budgetFx.rate}">≈ ${F.mk(c.budgetFx.converted)} ${CFG.currency.main}</span>`:''}
-        </div></td>
-      <td class="n">${liHint(c,'committed')}<input class="cel" value="${c.committed||0}" onchange="setIn('campaigns','${c.id}','committed',this.value,'money')"></td>
-      <td class="n">${liHint(c,'actual')}<input class="cel" value="${c.actual||0}" onchange="setIn('campaigns','${c.id}','actual',this.value,'money')"></td>
+      <td><input class="cel txt" style="width:112px" type="date" value="${c.start||''}" onchange="setIn('campaigns','${c.id}','start',this.value)"></td>
+      <td><input class="cel txt ${bad?'bad':''}" style="width:112px" type="date" value="${c.end||''}" onchange="setIn('campaigns','${c.id}','end',this.value)"></td>
+      <td class="n"><div class="ccy-amt">
+          <select class="cel txt ccy" title="Currency this budget was entered in${fx?` -- converted ${esc(F.dt(fx.convertedAt))} at ${fx.rate}: ≈ ${F.acc(fx.converted)} ${esc(mainCcy)}`:''}" onchange="setCampaignBudgetCurrency('${c.id}',this.value)">${currencyOptionsHtml(c.budgetCcy, {blankLabel: mainCcy})}</select>
+          ${campMoneyCell(c,'budget',fx?`<span class="src-tag" title="≈ ${F.acc(fx.converted)} ${esc(mainCcy)} (converted ${esc(F.dt(fx.convertedAt))})">FX</span>`:'')}</div></td>
+      <td class="n">${campMoneyCell(c,'committed')}</td>
+      <td class="n">${campMoneyCell(c,'actual')}</td>
+      <td class="n calc ${unc<0?'neg':''}" style="padding-right:12px">${F.acc(unc)}</td>
+      <td class="n calc ${uns<0?'neg':''}" style="padding-right:12px">${F.acc(uns)}</td>
       <td><select class="cel txt" style="width:150px" onchange="setIn('campaigns','${c.id}','costBucketId',this.value)">
         ${CFG.costBuckets.map(b=>`<option value="${b.id}" ${b.id===c.costBucketId?'selected':''}>${esc(b.label)}</option>`).join('')}</select></td>
       <td><select class="cel txt" style="width:150px" onchange="applyRateSource('${c.id}',this.value)">
@@ -3098,6 +3337,16 @@ function adminCampsWidgetTable(){
       <td class="mini">${esc(c.extRef||'—')}</td>
       <td><a class="btn sm" href="CampaignPlanning.html#campaign=${c.id}" target="tool_CampaignPlanning">Open →</a></td>
       <td class="n"><button class="btn sm dgr" ${dis} onclick="removeCampaign('${c.id}')">Remove</button></td></tr>`;
+    if(sa && UI.campSegEditId===c.id){
+      h+=`<tr class="seg-edit"><td colspan="19"><div class="row" style="gap:6px;flex-wrap:wrap;align-items:center">
+        <b style="margin-right:8px">Segments for ${esc(c.name)}</b>
+        ${CFG.segments.filter(x=>!x.unassigned||segRows.some(r=>r.segmentId===x.id)).map(x=>{ const r=segRows.find(y=>y.segmentId===x.id);
+          return `<label class="segchk"><input type="checkbox" ${r?'checked':''} onchange="toggleCampSegment('${c.id}','${x.id}',this.checked)"> ${esc(x.name)}
+            <input class="cel w" ${r?'':'disabled'} value="${r?F.n(r.sharePct,0):''}" onchange="setCampSegShare('${c.id}','${x.id}',this.value)">%</label>`; }).join('')}
+        <span class="pill ${segOk?'ok':'bad'}">Total ${F.n(segTot,1)}%</span>
+        <button class="btn sm" onclick="toggleCampSegEditor('${c.id}')">Done</button></div>
+        <div class="mini" style="margin-top:4px">The conversion rate uses the weighted mix of these segments. The largest share is the campaign's main segment (used where one segment is needed, e.g. Reporting).</div></td></tr>`;
+    }
   });
   h+=`</tbody></table></div></div></div>`;
   return h;
@@ -4131,7 +4380,7 @@ function addCampaign(){ CFG.campaigns.push({orgId:_clickOrgId(),id:uid('c'),name
   costBucketId:CFG.costBuckets[0].id,convOverride:null,rateSource:'manual',source:'Manual',extRef:'',
   trackingRef:nextTrackingRef('campaign')});
   logAudit('add campaign','New campaign'); render(); toast('Campaign added.'); }
-function removeCampaign(id){ CFG.campaigns=CFG.campaigns.filter(c=>c.id!==id); logAudit('remove campaign',id); render(); deleteRow('campaigns',id); }
+function removeCampaign(id){ CFG.campaigns=CFG.campaigns.filter(c=>c.id!==id); CFG.campaignSegAllocs=(CFG.campaignSegAllocs||[]).filter(a=>a.campaignId!==id); logAudit('remove campaign',id); render(); deleteRow('campaigns',id); }
 function addScenario(){ const n=CFG.versions.filter(v=>v.kind==='scenario').length+1;
   CFG.versions.push({orgId:_clickOrgId(),id:uid('v'),name:'Scenario '+n,kind:'scenario',locked:false});
   logAudit('add scenario','Scenario '+n); render(); toast('Scenario created.'); }
@@ -5251,7 +5500,7 @@ function campaignWidgetTable(){
       return `<tr><td class="lb">${esc(c.name)}</td>
         <td>${ragPillHtml(ragForCampaign(c))}</td>
         <td>${esc(a?a.name:'—')}</td><td><span class="pill n">${esc(b?b.label:'—')}</span></td>
-        <td><span class="pill n">${esc(s?s.name:'—')}</span></td>
+        <td><span class="pill n">${esc(campSegLabel(c))}</span></td>
         <td>${esc(r?r.name:'—')}</td>
         <td class="mini">${F.d(c.start)} → ${F.d(c.end)}</td>
         <td class="n calc">${days||'—'}</td>
@@ -5291,6 +5540,12 @@ function campaignWidgetBusinessCase(){
         <select class="in" style="width:auto" onchange="UI.bizCampaignId=this.value;render()">
           ${camps.map(cm=>`<option value="${cm.id}" ${cm.id===bizSel.id?'selected':''}>${esc(cm.name)}</option>`).join('')}</select></h3>
         <div class="bd">
+          <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+            <label class="lbl" style="margin:0">Activity used for cost per lead</label>
+            <select class="in" style="width:auto" onchange="setIn('campaigns','${bizSel.id}','activityId',this.value)">
+              ${CFG.activities.map(x=>`<option value="${x.id}" ${x.id===bizSel.activityId?'selected':''}>${esc(x.name)}${x.costPer?' ('+F.m(x.costPer)+'/lead)':''}</option>`).join('')}</select>
+            <span class="mini">Led by <b>${esc(bizSel.ledBy||'—')}</b> · Segments <b>${esc(campSegLabel(bizSel))}</b></span>
+          </div>
           <div class="kpis">
             <div class="kpi"><div class="k">Budget</div><div class="kpi-v">${F.mk(campaignBudgetMain(bizSel))}</div><div class="sub">${esc(a?a.name:'—')} at ${a&&a.costPer?F.m(a.costPer):'—'}/lead</div></div>
             <div class="kpi"><div class="k">Implied ${esc(entryGate().name)}</div><div class="kpi-v">${F.n(leads,0)}</div><div class="sub">budget ÷ cost per lead</div></div>
@@ -5302,6 +5557,7 @@ function campaignWidgetBusinessCase(){
           <div class="mini" style="margin-top:6px"><b>Business case:</b> budget ${F.mk(campaignBudgetMain(bizSel))} &rarr; ${F.n(leads,0)} ${esc(entryGate().name)}
             at ${a&&a.costPer?F.m(a.costPer):'—'}/lead &rarr; ${F.n(proj[exitGate().id],1)} projected ${esc(exitGate().name)}, using this
             campaign's own conversion rate (set above in Campaigns in scope, or in Admin &gt; Campaigns).</div>
+          ${campTargetsHtml(bizSel,m)}
         </div></div>`;
 }
 function campaignWidgetPreChain(){
@@ -6000,7 +6256,7 @@ if(window.NorthAskAlec) NorthAskAlec.init({
     geo:'Which regions or pods are furthest from target?', drivers:'Do any conversion rates look unrealistic?',
     actuals:'How do actuals compare to plan?', insight:'What are the key insights here?',
     admin:"What's configured here and what looks incomplete?", segment:'Which segments matter most to the plan?' },
-  summary: ()=> UI.page==='dashboard' ? pageContextForAI() : (UI.page==='boardreport' && UI._brCtx ? UI._brCtx : null),
+  summary: ()=> UI.page==='dashboard' ? pageContextForAI() : (UI.page==='boardreport' && UI._brCtx ? UI._brCtx : strategyCampaignContextForAI()),
   extraHeader: ()=> 'FY: '+UI.fy+' | Version: '+((typeof version==='function'&&version())?version().name:'-')+' | Mode: '+UI.mode,
   explain: { pages:['dashboard'], label:'Explain this dashboard', skillUrl:'skills/explain-strategy-dashboard.json',
     contextFn: ()=>pageContextForAI(), taskId:'reg_dashboard_summary_task' },

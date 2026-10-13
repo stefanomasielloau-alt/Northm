@@ -378,9 +378,20 @@ const CFG = {
 const UI = { page:'home', helpOpen:false, orgEdit:null, showArchivedInvites:false, addMembOrgId:'', usersOrgFilter:'', usersRegionFilter:'', usersTeamFilter:'', rolesSortKey:'org', rolesSortDir:'asc', usersSortKey:'org', usersSortDir:'asc', alertsFilter:{role:'',unit:'',q:''}, buFilter:{role:'',q:''}, hubUsers:[], hubUsersLoaded:false, hubUsersLoading:false, hubUsersError:'', hubFeedback:[], hubFeedbackLoaded:false, hubFeedbackLoading:false, hubFeedbackError:'', outboundWebhooks:[], outboundWebhooksLoaded:false, outboundWebhooksLoading:false, outboundWebhooksError:'', lastCreatedWebhookSecret:null, hubCompanies:[], hubCompaniesLoaded:false, hubCompaniesLoading:false, hubCompaniesError:'', hubCompanyDetailId:null, hubCompanyDetail:null, hubCompanyDetailLoading:false, hubCompanyDetailError:'' };
 
 function logAudit(what,detail){
-  CFG.audit.unshift({id:uid(),ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
+  CFG.audit.unshift({id:uid(),ts:new Date().toISOString().slice(0,16).replace('T',' '),who:(_myProfile&&_myProfile.name)||'',userId:_myProfile?_myProfile.id:null,what:what,detail:detail});
   if(CFG.audit.length>100)CFG.audit.pop();
 }
+
+/* 2026-10-13 (Stef: "Activity logs should also have who executed it so we have an audit trail"):
+   who = the name stamped when the entry was made; falls back to the profile name for older rows
+   that only carry user_id. Never re-stamped on save -- see the audit_log upsert below. */
+function auditWho(a){
+  if(a && a.who) return a.who;
+  const list = (CFG.orgUsers||CFG.users||[]);
+  const u = a && a.userId ? list.find(x=>x.id===a.userId) : null;
+  return u ? (u.name||'') : '—';
+}
+window.auditWho = auditWho;
 /* 2026-08-27: bumped from 2200ms -- several toasts here are the ONLY feedback for an
    action that otherwise looks like nothing happened (e.g. Push to Hub's "Check Contact
    access first" gate), so a message that vanishes in ~2s is easy to miss entirely. */
@@ -495,7 +506,7 @@ async function saveToSupabase(){
     upsertRows('partners', CFG.partners, p=>({id:p.id,name:p.name,type:p.type||'',contact_name:p.contactName||'',contact_email:p.contactEmail||'',contact_phone:p.contactPhone||'',notes:p.notes||'',default_commission_pct:(p.defaultCommissionPct==null?null:p.defaultCommissionPct)})),
     upsertRows('llm_providers', CFG.llmProviders, p=>Object.assign({id:p.id,name:p.name,kind:p.kind,endpoint:p.endpoint||'',key_label:p.keyLabel||'',model:p.model||'',enabled:!!p.enabled,access_type:p.accessType||'api'},
       CFG.llmHasApproved?{approved:p.approved!==false, web_url:p.webUrl||null}:{})),   /* 2026-09-29: approved/web_url only once the AI-choice migration exists */
-    upsertRows('audit_log', CFG.audit, a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null})),
+    upsertRows('audit_log', CFG.audit, a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail,who:a.who||null,/* 2026-10-13: keep each row's original author -- this used to re-stamp every loaded row with whoever saved last */user_id:('userId' in a)?a.userId:(_myProfile?_myProfile.id:null)})),
     upsertRows('teams', CFG.teams, t=>({id:t.id,name:t.name||'',member_ids:t.memberIds||[],unit_ids:t.unitIds||[]})),
     (async()=>{
       const row = {
@@ -591,7 +602,7 @@ async function loadFromSupabase(){
     sb.from('cost_buckets').select('id,code,label,dept,ext_code').eq('org_id',_orgId),
     sb.from('llm_providers').select('*').eq('org_id',_orgId),   /* 2026-09-29: '*' so the new approved/web_url columns load when present */
     sb.from('org_settings').select('webhook_url,webhook_enabled,fy_start_month,campaign_naming_pattern,campaign_naming_seq_scope,campaign_naming_seq_counters,partner_type_presets').eq('org_id',_orgId).maybeSingle(),
-    sb.from('audit_log').select('id,ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200), /* 2026-09-23: select was missing 'id' -- same bug already found and fixed in Ordo.html on 2026-09-22 (missing id -> CFG.audit rows load with id:undefined -> the next upsertRows('audit_log',...) sends id:null for every row -> NOT NULL violation on every save/navigation). Confirmed broader in today's UAT pass; applying the identical fix here. */
+    sb.from('audit_log').select('id,ts,what,detail,who,user_id').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200), /* 2026-09-23: select was missing 'id' -- same bug already found and fixed in Ordo.html on 2026-09-22 (missing id -> CFG.audit rows load with id:undefined -> the next upsertRows('audit_log',...) sends id:null for every row -> NOT NULL violation on every save/navigation). Confirmed broader in today's UAT pass; applying the identical fix here. */
     sb.from('roles').select('id,org_id,name,config,publish,write_all,scope,report_scope,description,require_commit_on_edit,allow_expert_mode,is_system,access_ordo,access_cursus,access_eventus,access_custodia,access_prospectus,access_augur,access_schema,access_norma,can_edit,manage_own_team'),
     sb.from('profiles').select('id,org_id,name,email,role_id,region_ids,cross_region,contact_access,module_overrides'),
     sb.from('org_invites').select('id,code,role_id,region_ids,cross_region,created_by,created_at,expires_at,used_by,used_at,org_id,archived').order('created_at',{ascending:false}),
@@ -745,7 +756,7 @@ async function loadFromSupabase(){
     seqScope: os.campaign_naming_seq_scope||'pod',
     seqCounters: os.campaign_naming_seq_counters||{}
   };
-  CFG.audit = (auditR.data||[]).map(a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail}));
+  CFG.audit = (auditR.data||[]).map(a=>({id:a.id,ts:a.ts,who:a.who||'',userId:(a.user_id==null?null:a.user_id),what:a.what,detail:a.detail}));
   CFG.agentDispatches = (agentDispR.data||[]).map(d=>({
     id:d.id,automationId:d.automation_id,brief:d.brief||'',destinationId:d.destination_id,
     destinationName:d.destination_name||'',status:d.status||'pending',resultDetail:d.result_detail||'',
@@ -1788,7 +1799,7 @@ function subscribeRealtime(){
       const targeted = Array.isArray(row.target_user_ids) && row.target_user_ids.length>0;
       const forMe = !targeted || (_myProfile && row.target_user_ids.includes(_myProfile.id));
       if(forMe) toast((row.what||'Update')+(row.detail?' — '+row.detail:''));
-      if(CFG.audit){ CFG.audit.unshift({id:row.id,ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
+      if(CFG.audit){ CFG.audit.unshift({id:row.id,ts:row.ts,who:row.who||'',userId:(row.user_id==null?null:row.user_id),what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
       render();
     })
     .subscribe();
@@ -2803,7 +2814,9 @@ function pagePartnerTypes(){
 }
 
 function pagePartners(){
-  const typeOptions=[''].concat(CFG.partnerTypePresets||[]);
+  /* 2026-10-13 (Stef): Type list = presets (Partner types tab) + types already used on partners, de-duplicated */
+  const typeOptions=['']; { const seen=new Set(); const add=x=>{ const t=String(x||'').trim(); if(!t) return; const k=t.toLowerCase(); if(seen.has(k)) return; seen.add(k); typeOptions.push(t); };
+    (CFG.partnerTypePresets||[]).forEach(add); (CFG.partners||[]).map(p=>p.type).filter(Boolean).sort().forEach(add); }
   let h=`<div class="phead"><div><h1>Partners</h1>
     <p>The same partner list Campaign Planning manages, surfaced here too so partner identity, contact details, type
       and the default commission % can be set up centrally. Pod assignment, ACV target and contract terms stay
@@ -3994,9 +4007,9 @@ function pageSync(){
       close won't lose anything. It's local to this browser only — export/import is still how config reaches other modules.</p>
     <button class="btn sm dgr" onclick="clearLocal()">Clear local autosave</button></div></div>`;
   h+=`<div class="card"><h3>Activity log</h3><div class="bd flush"><div class="scroll cap"><table><thead><tr>
-      <th>When</th><th>What</th><th>Detail</th></tr></thead><tbody>
-      ${!CFG.audit.length?`<tr><td colspan="3" class="empty">Nothing yet.</td></tr>`:
-        CFG.audit.map(a=>`<tr><td class="mini">${esc(a.ts)}</td><td>${esc(a.what)}</td><td class="mini">${esc(a.detail)}</td></tr>`).join('')}
+      <th>When</th><th>Who</th><th>What</th><th>Detail</th></tr></thead><tbody>
+      ${!CFG.audit.length?`<tr><td colspan="4" class="empty">Nothing yet.</td></tr>`:
+        CFG.audit.map(a=>`<tr><td class="mini">${esc(a.ts)}</td><td class="lb">${esc(auditWho(a))}</td><td>${esc(a.what)}</td><td class="mini">${esc(a.detail)}</td></tr>`).join('')}
       </tbody></table></div></div></div>`;
   return h;
 }

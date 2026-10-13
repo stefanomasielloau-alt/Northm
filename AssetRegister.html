@@ -377,9 +377,20 @@ function assetCostMain(a){ return (a.costPerFx && a.costPerFx.converted!=null) ?
 const UI = { page:'home', helpOpen:false, assetDetailId:null, assetsFilter:'', assetsSortBy:null, assetsSortDir:'asc', assetsLowStockOnly:false, txFilter:'', txSortBy:null, txSortDir:'desc', ms:null /* 2026-09-28: open multi-select picker {id,field,q,x,y} */ };
 
 function logAudit(what,detail){
-  CFG.audit.unshift({id:uid(),ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
+  CFG.audit.unshift({id:uid(),ts:new Date().toISOString().slice(0,16).replace('T',' '),who:(_myProfile&&_myProfile.name)||'',userId:_myProfile?_myProfile.id:null,what:what,detail:detail});
   if(CFG.audit.length>150)CFG.audit.pop();
 }
+
+/* 2026-10-13 (Stef: "Activity logs should also have who executed it so we have an audit trail"):
+   who = the name stamped when the entry was made; falls back to the profile name for older rows
+   that only carry user_id. Never re-stamped on save -- see the audit_log upsert below. */
+function auditWho(a){
+  if(a && a.who) return a.who;
+  const list = (CFG.orgUsers||CFG.users||[]);
+  const u = a && a.userId ? list.find(x=>x.id===a.userId) : null;
+  return u ? (u.name||'') : '—';
+}
+window.auditWho = auditWho;
 function toast(msg){
   const l=document.getElementById('layer');
   const d=document.createElement('div'); d.className='toast'; d.textContent=msg;
@@ -480,7 +491,7 @@ async function saveToSupabase(){
       id:t.id,asset_id:t.assetId,date:t.date||null,type:t.type,qty:t.qty||0,before:t.before,after:t.after,
       campaign_id:t.campaignId||null,campaign_ref:t.campaignRef||'',notes:t.notes||''
     })),
-    upsertRows('audit_log', CFG.audit, a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null})),
+    upsertRows('audit_log', CFG.audit, a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail,who:a.who||null,/* 2026-10-13: keep each row's original author -- this used to re-stamp every loaded row with whoever saved last */user_id:('userId' in a)?a.userId:(_myProfile?_myProfile.id:null)})),
     (async()=>{
       /* 2026-09-10 (data-safety fix, same class as Ordo/Cursus's org_settings gap
          flagged 2026-09-10 in the item 68 rollout notes): stamp the org actually
@@ -598,7 +609,7 @@ async function loadFromSupabase(){
     orgScoped(sb.from('profiles').select('id,name,org_id')),
     sb.from('cost_buckets').select('id,code,label'),
     sb.from('campaigns').select('id,name,programme_id'),
-    (_crossOrgAudit ? sb.rpc('admin_cross_org_audit_log', {p_org_id:_savOrgFilter, p_limit:200}) : sb.from('audit_log').select('id,ts,what,detail').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200)) /* 2026-09-23: select was missing 'id' -- same bug already found and fixed in Ordo.html on 2026-09-22 (missing id -> CFG.audit rows load with id:undefined -> the next upsertRows('audit_log',...) sends id:null for every row -> NOT NULL violation on every save/navigation). Confirmed broader in today's UAT pass; applying the identical fix here. */
+    (_crossOrgAudit ? sb.rpc('admin_cross_org_audit_log', {p_org_id:_savOrgFilter, p_limit:200}) : sb.from('audit_log').select('id,ts,what,detail,who,user_id').eq('org_id',prof.org_id).order('ts',{ascending:false}).limit(200)) /* 2026-09-23: select was missing 'id' -- same bug already found and fixed in Ordo.html on 2026-09-22 (missing id -> CFG.audit rows load with id:undefined -> the next upsertRows('audit_log',...) sends id:null for every row -> NOT NULL violation on every save/navigation). Confirmed broader in today's UAT pass; applying the identical fix here. */
   ]);
   const [assetsR,referencesR,transactionsR,profilesR,costBucketsR,campaignsR,auditR] = results;
   for(const r of results){ if(r.error) throw r.error; }
@@ -622,7 +633,7 @@ async function loadFromSupabase(){
   /* live campaigns, replacing the old stale JSON-import bridge -- same field shape
      (id,name,programmeName) the existing pages already read from CFG.referenceList.campaigns. */
   CFG.referenceList.campaigns = (campaignsR.data||[]).map(c=>({id:c.id,name:c.name,programmeName:null}));
-  CFG.audit = (auditR.data||[]).map(a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail}));
+  CFG.audit = (auditR.data||[]).map(a=>({id:a.id,ts:a.ts,who:a.who||'',userId:(a.user_id==null?null:a.user_id),what:a.what,detail:a.detail}));
   loadLiveWonDeals(orgScoped); /* 2026-09-28: fire-and-forget, never blocks boot */
 }
 /* 2026-09-28 (Stef: "where the transaction's campaign has won deals, show a link to the won deals in Scoring"):
@@ -669,7 +680,7 @@ function subscribeRealtime(){
       const targeted = Array.isArray(row.target_user_ids) && row.target_user_ids.length>0;
       const forMe = !targeted || (_myProfile && row.target_user_ids.includes(_myProfile.id));
       if(forMe) toast((row.what||'Update')+(row.detail?' — '+row.detail:''));
-      if(CFG.audit){ CFG.audit.unshift({id:row.id,ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
+      if(CFG.audit){ CFG.audit.unshift({id:row.id,ts:row.ts,who:row.who||'',userId:(row.user_id==null?null:row.user_id),what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
       render();
     })
     .subscribe();
@@ -1446,9 +1457,9 @@ function pageSync(){
       export/import is still how data reaches other tools.</p>
     <button class="btn sm dgr" onclick="clearLocal()">Clear local autosave</button></div></div>`;
   h+=`<div class="card"><h3>Activity log</h3><div class="bd flush"><div class="scroll cap"><table><thead><tr>
-      <th>When</th><th>What</th><th>Detail</th></tr></thead><tbody>
-      ${!CFG.audit.length?`<tr><td colspan="3" class="empty">Nothing yet.</td></tr>`:
-        CFG.audit.map(a=>`<tr><td class="mini">${esc(a.ts)}</td><td>${esc(a.what)}</td><td class="mini">${esc(a.detail)}</td></tr>`).join('')}
+      <th>When</th><th>Who</th><th>What</th><th>Detail</th></tr></thead><tbody>
+      ${!CFG.audit.length?`<tr><td colspan="4" class="empty">Nothing yet.</td></tr>`:
+        CFG.audit.map(a=>`<tr><td class="mini">${esc(a.ts)}</td><td class="lb">${esc(auditWho(a))}</td><td>${esc(a.what)}</td><td class="mini">${esc(a.detail)}</td></tr>`).join('')}
       </tbody></table></div></div></div>`;
   return h;
 }

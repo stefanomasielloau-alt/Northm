@@ -455,9 +455,20 @@ async function liLoad(scope){ /* scope = the loader's own orgScoped() (it is loc
 }
 
 function logAudit(what,detail){
-  CFG.audit.unshift({id:uid(),ts:new Date().toISOString().slice(0,16).replace('T',' '),what:what,detail:detail});
+  CFG.audit.unshift({id:uid(),ts:new Date().toISOString().slice(0,16).replace('T',' '),who:(_myProfile&&_myProfile.name)||'',userId:_myProfile?_myProfile.id:null,what:what,detail:detail});
   if(CFG.audit.length>100)CFG.audit.pop();
 }
+
+/* 2026-10-13 (Stef: "Activity logs should also have who executed it so we have an audit trail"):
+   who = the name stamped when the entry was made; falls back to the profile name for older rows
+   that only carry user_id. Never re-stamped on save -- see the audit_log upsert below. */
+function auditWho(a){
+  if(a && a.who) return a.who;
+  const list = (CFG.orgUsers||CFG.users||[]);
+  const u = a && a.userId ? list.find(x=>x.id===a.userId) : null;
+  return u ? (u.name||'') : '—';
+}
+window.auditWho = auditWho;
 function toast(msg){
   const l=document.getElementById('layer');
   const d=document.createElement('div'); d.className='toast'; d.textContent=msg;
@@ -544,7 +555,7 @@ async function saveToSupabase(){
   await Promise.all([
     /* campaigns is shared with Strategy — only send the fields Campaign Planning owns/edits, so Strategy's
        committed/actual planning-stage estimates aren't touched by this upsert. */
-    upsertRows('campaigns', CFG.campaigns, c=>({
+    upsertRows('campaigns', CFG.campaigns, c=>Object.assign({
       id:c.id,name:c.name,programme_id:c.programmeId,region_id:c.regionId,
       cost_bucket_id:c.costBucketId,start_date:c.start||null,end_date:c.end||null,
       budget:c.budget||0,crm_ref:c.crmRef||null,
@@ -557,13 +568,13 @@ async function saveToSupabase(){
       partner_motion_tags:c.partnerMotionTags||[],cloned_from_id:c.clonedFromId||null,
       contact_list_ref:c.contactListRef||'',icp_ref:c.icpRef||'',sort_order:c.sortOrder||0,
       notes:c.notes||''
-    })),
-    upsertRows('partners', CFG.partners, p=>({
+    }, cpCampV2Payload(c))),
+    upsertRows('partners', CFG.partners, p=>Object.assign({
       id:p.id,name:p.name,type:p.type||'',contact_name:p.contactName||'',
       contact_email:p.contactEmail||'',contact_phone:p.contactPhone||'',notes:p.notes||'',
       pod_id:p.podId||null,acv_target:(p.acvTarget==null||p.acvTarget===''?null:p.acvTarget),
       contact_terms:p.contactTerms||[]
-    })),
+    }, CFG.partnerFyAvailable?{acv_targets_by_fy:p.acvTargetsByFy||{}}:{})),
     upsertRows('campaign_partner_allocations', CFG.campaignPartnerAllocations, a=>({
       id:a.id,campaign_id:a.campaignId,partner_id:a.partnerId,role:a.role||'',
       budget_share_pct:a.budgetSharePct||0,lead_share_pct:a.leadSharePct||0
@@ -590,7 +601,7 @@ async function saveToSupabase(){
     upsertRows('templates', CFG.templates, t=>({
       id:t.id,name:t.name,type:t.type,default_cost_bucket_id:t.defaultCostBucketId,notes:t.notes||''
     })),
-    upsertRows('audit_log', CFG.audit, a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail,user_id:_myProfile?_myProfile.id:null})),
+    upsertRows('audit_log', CFG.audit, a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail,who:a.who||null,/* 2026-10-13: keep each row's original author -- this used to re-stamp every loaded row with whoever saved last */user_id:('userId' in a)?a.userId:(_myProfile?_myProfile.id:null)})),
     (async()=>{
       /* 2026-09-10 (data-safety fix, latent gap flagged 2026-09-10 in the item 68
          rollout notes): this used to stamp the caller's own _orgId unconditionally --
@@ -774,7 +785,7 @@ async function loadFromSupabase(){
        org-wide Ask Alec kill-switch (Configuration > Integrations) Ordo.html's askAlex()
        already gates on -- reused as-is rather than inventing a second toggle. */
     sb.from('org_settings').select('webhook_url,webhook_enabled,fy_start_month,campaign_naming_pattern,campaign_naming_seq_scope,campaign_naming_seq_counters,partner_type_presets,win_target,bottom_up_leads,ai_screen_interpreter_enabled').eq('org_id',_orgId).maybeSingle(),
-    _crossOrg ? adminCrossOrg('audit_log', {p_limit:200}) : orgScoped(sb.from('audit_log').select('id,ts,what,detail').order('ts',{ascending:false}).limit(200)), /* 2026-09-23: select was missing 'id' -- same bug already found and fixed in Ordo.html on 2026-09-22 (missing id -> CFG.audit rows load with id:undefined -> the next upsertRows('audit_log',...) sends id:null for every row -> NOT NULL violation on every save/navigation). Confirmed broader in today's UAT pass; applying the identical fix here. */
+    _crossOrg ? adminCrossOrg('audit_log', {p_limit:200}) : orgScoped(sb.from('audit_log').select('id,ts,what,detail,who,user_id').order('ts',{ascending:false}).limit(200)), /* 2026-09-23: select was missing 'id' -- same bug already found and fixed in Ordo.html on 2026-09-22 (missing id -> CFG.audit rows load with id:undefined -> the next upsertRows('audit_log',...) sends id:null for every row -> NOT NULL violation on every save/navigation). Confirmed broader in today's UAT pass; applying the identical fix here. */
     _crossOrg ? adminCrossOrg('partners') : orgScoped(sb.from('partners').select('id,name,type,contact_name,contact_email,contact_phone,notes,pod_id,acv_target,contact_terms,org_id')),
     _crossOrg ? adminCrossOrg('campaign_partner_allocations') : orgScoped(sb.from('campaign_partner_allocations').select('id,campaign_id,partner_id,role,budget_share_pct,lead_share_pct,org_id')),
     sb.from('assets').select('id,name,category'),
@@ -850,7 +861,7 @@ async function loadFromSupabase(){
     campaignNamingSeqScope: os.campaign_naming_seq_scope||'pod',
     campaignNamingSeqCounters: os.campaign_naming_seq_counters||{}
   };
-  CFG.audit = (auditR.data||[]).map(a=>({id:a.id,ts:a.ts,what:a.what,detail:a.detail}));
+  CFG.audit = (auditR.data||[]).map(a=>({id:a.id,ts:a.ts,who:a.who||'',userId:(a.user_id==null?null:a.user_id),what:a.what,detail:a.detail}));
   /* 2026-09-08 (item 41): editable preset list for the Partner 'type' dropdown -- starts
      empty (fail-soft if the migration hasn't run), grows as anyone picks '+ Add new type'. */
   CFG.partnerTypePresets = os.partner_type_presets || [];
@@ -874,6 +885,30 @@ async function loadFromSupabase(){
     id:d.id,name:d.name,account:d.account||'',value:d.value||0,currency:d.currency||'AUD',
     closeDate:d.close_date||'',campaignId:d.campaign_id
   }));
+  /* 2026-10-13: Led by, campaign targets, expected leads, linked-deal pipeline, partner $ target by FY.
+     All additive (Claude outputs/2026-10-13-migration-campaign-ledby-segments-targets-partner-fy.sql) and
+     loaded here, separately and fail-soft, so boot never depends on that migration having run. */
+  CFG.campV2Available=false; CFG.ledByPresets=[]; CFG.ledByAvailable=false; CFG.activityById={}; CFG.campPipeline={}; CFG.partnerFyAvailable=false;
+  CFG.partners.forEach(p=>{ p.acvTargetsByFy={}; });
+  try{
+    const [cv2,osv2,acts,deals,pfy]=await Promise.all([
+      _crossOrg ? Promise.resolve({error:'cross-org view'}) : orgScoped(sb.from('campaigns').select('id,activity_id,led_by,target_leads,target_pipeline,actual_leads')),
+      sb.from('org_settings').select('led_by_presets').eq('org_id',_orgId).maybeSingle(),
+      orgScoped(sb.from('activities').select('id,name,cost_per')),
+      orgScoped(sb.from('augur_deals').select('campaign_id,value,currency,stage')),
+      _crossOrg ? Promise.resolve({error:'cross-org view'}) : orgScoped(sb.from('partners').select('id,acv_targets_by_fy'))
+    ]);
+    const n=x=>(x==null?null:Number(x));
+    if(cv2 && !cv2.error){ CFG.campV2Available=true; const by={}; (cv2.data||[]).forEach(r=>{ by[r.id]=r; });
+      CFG.campaigns.forEach(c=>{ const v=by[c.id]||{}; c.activityId=v.activity_id||null; c.ledBy=v.led_by||''; c.targetLeads=n(v.target_leads); c.targetPipeline=n(v.target_pipeline); c.actualLeads=n(v.actual_leads); }); }
+    if(osv2 && !osv2.error){ CFG.ledByAvailable=true; CFG.ledByPresets=(osv2.data&&Array.isArray(osv2.data.led_by_presets))?osv2.data.led_by_presets:[]; }
+    if(acts && !acts.error) (acts.data||[]).forEach(a=>{ CFG.activityById[a.id]={name:a.name,costPer:Number(a.cost_per)||0}; });
+    if(deals && !deals.error){ const main=(CFG.currency&&CFG.currency.main)||'';
+      (deals.data||[]).forEach(d=>{ if(!d.campaign_id) return; const b=CFG.campPipeline[d.campaign_id]||(CFG.campPipeline[d.campaign_id]={pipeline:0,won:0,count:0,otherCcy:false});
+        const v=Number(d.value)||0; b.count++; if(d.stage!=='Closed Lost') b.pipeline+=v; if(d.stage==='Closed Won') b.won+=v; if(main&&d.currency&&d.currency!==main) b.otherCcy=true; }); }
+    if(pfy && !pfy.error){ CFG.partnerFyAvailable=true; const by={}; (pfy.data||[]).forEach(r=>{ by[r.id]=r.acv_targets_by_fy||{}; });
+      CFG.partners.forEach(p=>{ p.acvTargetsByFy=Object.assign({},by[p.id]||{}); }); }
+  }catch(e){ /* not migrated yet -- fields stay hidden behind a banner */ }
   CFG.meta = { syncedAt:new Date().toISOString(), lastExportAt:null, lastPushAt:null, normaSyncedAt:null,
                normaConfigVersion:null, lastWebhookPushAt:null, lastReferenceExportAt:null, augurSyncedAt:null };
 
@@ -974,7 +1009,7 @@ function subscribeRealtime(){
       const targeted = Array.isArray(row.target_user_ids) && row.target_user_ids.length>0;
       const forMe = !targeted || (_myProfile && row.target_user_ids.includes(_myProfile.id));
       if(forMe) toast((row.what||'Update')+(row.detail?' — '+row.detail:''));
-      if(CFG.audit){ CFG.audit.unshift({id:row.id,ts:row.ts,what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
+      if(CFG.audit){ CFG.audit.unshift({id:row.id,ts:row.ts,who:row.who||'',userId:(row.user_id==null?null:row.user_id),what:row.what,detail:row.detail}); if(CFG.audit.length>150) CFG.audit.pop(); }
       render();
     })
     .subscribe();
@@ -2066,6 +2101,99 @@ function moveDialogPanel(){
   return '';
 }
 
+/* ---------- 2026-10-13: Led by, campaign targets, partner $ target by FY ---------- */
+F.acc = v => { if(v==null||isNaN(v)) return '—'; const r=Math.round(Number(v)); const t='$'+Math.abs(r).toLocaleString('en-AU'); return r<0?'('+t+')':t; };
+function cpCampV2Payload(c){
+  if(!CFG.campV2Available) return {};
+  const n=v=>(v===''||v==null||isNaN(Number(v)))?null:Number(v);
+  return { led_by:c.ledBy||null, target_leads:n(c.targetLeads), target_pipeline:n(c.targetPipeline), actual_leads:n(c.actualLeads) };
+}
+function cpLedByOptions(){
+  const out=[], seen=new Set(); const add=x=>{ const t=String(x||'').trim(); if(!t) return; const k=t.toLowerCase(); if(seen.has(k)) return; seen.add(k); out.push(t); };
+  (CFG.ledByPresets||[]).forEach(add); (CFG.campaigns||[]).map(c=>c.ledBy).filter(Boolean).sort().forEach(add); return out;
+}
+async function setCampaignLedByCP(id,val){
+  const c=byId(CFG.campaigns,id); if(!c) return;
+  if(!CFG.campV2Available){ toast('Led by needs the 2026-10-13 database update first.'); render(); return; }
+  if(val==='__new__'){
+    const name=(prompt('New "Led by" option (e.g. Marketing-sourced, BDR-sourced, Partner-led):')||'').trim().slice(0,60);
+    if(!name){ render(); return; }
+    const existing=cpLedByOptions().find(x=>x.toLowerCase()===name.toLowerCase());
+    if(!existing){ CFG.ledByPresets=(CFG.ledByPresets||[]).concat([name]);
+      if(CFG.ledByAvailable){ const { error } = await sb.from('org_settings').update({led_by_presets:CFG.ledByPresets}).eq('org_id',_orgId);
+        if(error){ console.error('led_by_presets save failed',error); toast('Could not add it to the shared list (it is still set on this campaign).'); } } }
+    val=existing||name;
+  }
+  const old=c.ledBy||''; c.ledBy=val||''; logAudit('edit','campaigns.ledBy: '+(old||'—')+' → '+(c.ledBy||'—')); render();
+}
+window.setCampaignLedByCP=setCampaignLedByCP;
+function setCampTargetCP(id,field,val){
+  const c=byId(CFG.campaigns,id); if(!c||!CFG.campV2Available) return;
+  const t=String(val==null?'':val).replace(/[$,\s]/g,''); const v=t===''?null:parseFloat(t); if(t!==''&&isNaN(v)){ render(); return; }
+  c[field]=v; logAudit('edit','campaigns.'+field+': '+(v==null?'—':v)); render();
+}
+window.setCampTargetCP=setCampTargetCP;
+function cpCampFigures(c){
+  const a=c.activityId?CFG.activityById[c.activityId]:null;
+  const expLeads=(a&&a.costPer)?(Number(c.budget)||0)/a.costPer:null;
+  return { activity:a?a.name:null, expLeads, deals:CFG.campPipeline[c.id]||null };
+}
+function cpCampTargetsHtml(c){
+  const v2=!!CFG.campV2Available, dis=v2?'':'disabled title="Needs the 2026-10-13 database update"';
+  const f=cpCampFigures(c), d=f.deals;
+  const pct=(x,t)=>(x==null||!t)?'—':Math.round(x/t*100)+'%';
+  const nf=v=>v==null?'':Number(v).toLocaleString('en-AU',{maximumFractionDigits:0});
+  const inp=(fl,v)=>`<input class="in" style="width:110px;text-align:right" ${dis} value="${nf(v)}" placeholder="—" onchange="setCampTargetCP('${c.id}','${fl}',this.value)">`;
+  const cur=c.ledBy||'';
+  return `<div style="margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:6px">
+    <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+      <b>Targets and results</b><span class="sp" style="flex:1"></span>
+      <label class="lbl" style="margin:0">Led by</label>
+      <select class="in" style="width:auto" ${dis} onchange="setCampaignLedByCP('${c.id}',this.value)">
+        <option value="" ${!cur?'selected':''}>— choose —</option>
+        ${cpLedByOptions().map(o=>`<option value="${esc(o)}" ${o===cur?'selected':''}>${esc(o)}</option>`).join('')}
+        ${v2?'<option value="__new__">+ Add new…</option>':''}</select></div>
+    ${v2?'':`<div class="note w" style="margin-bottom:8px">Led by, targets and actual leads need <code>2026-10-13-migration-campaign-ledby-segments-targets-partner-fy.sql</code> run in Supabase.</div>`}
+    <table style="width:100%"><thead><tr><th></th><th class="n">Target</th><th class="n">Expected</th><th class="n">Actual</th><th class="n">Actual vs target</th></tr></thead><tbody>
+      <tr><td>Leads</td><td class="n">${inp('targetLeads',c.targetLeads)}</td>
+        <td class="n" title="${f.activity?'Budget ÷ cost per lead of '+esc(f.activity)+' (Strategy)':'No Strategy activity with a cost per lead is set for this campaign (Strategy > Campaign & cost > Business case)'}">${f.expLeads==null?'—':nf(f.expLeads)}</td>
+        <td class="n">${inp('actualLeads',c.actualLeads)}</td><td class="n">${pct(c.actualLeads,c.targetLeads)}</td></tr>
+      <tr><td>Pipeline</td><td class="n">${inp('targetPipeline',c.targetPipeline)}</td>
+        <td class="n" title="No pipeline benchmark is set up, so there is no expected figure">—</td>
+        <td class="n" title="Value of Scoring deals linked to this campaign, excluding Closed Lost">${d?F.acc(d.pipeline):'—'}</td><td class="n">${pct(d?d.pipeline:null,c.targetPipeline)}</td></tr>
+      <tr><td>Closed-won</td><td class="n">—</td><td class="n">—</td>
+        <td class="n" title="Value of Closed Won Scoring deals linked to this campaign">${d?F.acc(d.won):'—'}</td><td class="n">—</td></tr>
+    </tbody></table>
+    <div class="mini" style="margin-top:6px">Actual leads are typed in for now -- no lead feed is linked to campaigns yet. Pipeline and closed-won come from
+      ${d?d.count+' deal'+(d.count===1?'':'s'):'deals'} linked to this campaign in Scoring${d&&d.otherCcy?' (some in another currency, added as-is, not converted)':''}.</div></div>`;
+}
+/* partner $ target by financial year: keys like "FY27", using the org's FY start month */
+function cpFyKey(offset){
+  const d=new Date(); const iso=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  const fy=fyPeriodFromDate(iso,(CFG.campaignNaming||{}).fyStartMonth||1,'Quarter').fy;
+  return 'FY'+String((parseInt(fy,10)+(offset||0)+100)%100).padStart(2,'0');
+}
+function partnerFyTarget(p,fy){ const o=p.acvTargetsByFy||{}; return (o[fy]==null||o[fy]==='')?null:Number(o[fy]); }
+function setPartnerFyTarget(id,fy,val){
+  const p=byId(CFG.partners,id); if(!p) return;
+  if(!CFG.partnerFyAvailable){ toast('Targets by financial year need the 2026-10-13 database update first.'); render(); return; }
+  const t=String(val==null?'':val).replace(/[$,\s]/g,''); const v=t===''?null:parseFloat(t); if(t!==''&&isNaN(v)){ render(); return; }
+  p.acvTargetsByFy=Object.assign({},p.acvTargetsByFy||{}); if(v==null) delete p.acvTargetsByFy[fy]; else p.acvTargetsByFy[fy]=v;
+  if(fy===cpFyKey(0)) p.acvTarget=v; /* keep the single figure (read by Reporting) = this FY's target */
+  logAudit('edit','partners.acvTarget '+fy+': '+(v==null?'—':v)); render();
+}
+window.setPartnerFyTarget=setPartnerFyTarget;
+function addPartnerFyTarget(id){
+  const p=byId(CFG.partners,id); if(!p) return;
+  const fy=(prompt('Financial year (e.g. '+cpFyKey(1)+'):',cpFyKey(1))||'').trim().toUpperCase();
+  if(!/^FY\d{2}$/.test(fy)){ if(fy) toast('Use the format FY27.'); return; }
+  p.acvTargetsByFy=Object.assign({},p.acvTargetsByFy||{}); if(!(fy in p.acvTargetsByFy)) p.acvTargetsByFy[fy]=null; render();
+}
+window.addPartnerFyTarget=addPartnerFyTarget;
+function partnerTypeOptions(){
+  const out=[], seen=new Set(); const add=x=>{ const t=String(x||'').trim(); if(!t) return; const k=t.toLowerCase(); if(seen.has(k)) return; seen.add(k); out.push(t); };
+  (CFG.partnerTypePresets||[]).forEach(add); (CFG.partners||[]).map(p=>p.type).filter(Boolean).sort().forEach(add); return out;
+}
 function setIn(field,id,key,val,type){
   const row=byId(CFG[field],id); if(!row)return;
   let v=val;
@@ -2781,7 +2909,13 @@ function campaignContextForAI(c){
     activityCount:tasks.length, linkedEvents:events.length,
     eventAttendance: events.length ? { registered:evR.registered, attended:evR.attended } : null,
     partnerCount:partnerAllocs.length,
-    orgStrategy:{ winTarget:CFG.strategyDrivers.winTarget, bottomUpLeads:CFG.strategyDrivers.bottomUpLeads }
+    orgStrategy:{ winTarget:CFG.strategyDrivers.winTarget, bottomUpLeads:CFG.strategyDrivers.bottomUpLeads },
+    /* 2026-10-13: lead / pipeline figures so Alec can compare against a target (null = not set) */
+    ...(()=>{ const f=cpCampFigures(c), d=f.deals, r=v=>v==null?null:Math.round(v); return {
+      currency:(CFG.currency&&CFG.currency.main)||'', ledBy:c.ledBy||null,
+      leads:{ target:r(c.targetLeads), expected:r(f.expLeads), actual:r(c.actualLeads), expectedBasis:f.activity?('budget / cost per lead of '+f.activity):null },
+      pipeline:{ target:r(c.targetPipeline), actual:d?r(d.pipeline):null, linkedDeals:d?d.count:0 },
+      closedWon:{ actual:d?r(d.won):null } }; })()
   };
 }
 window.campaignContextForAI=campaignContextForAI;
@@ -2943,6 +3077,7 @@ function detailCampaignHtml(id){
         <span id="cK_alloc" style="display:contents">${campAllocHtml(c)}</span>
         ${events.length?`<div class="kpi hl"><div class="k">Linked events</div><div class="kpi-v">${events.length}</div><div class="sub">${evR.attended}/${evR.registered} attended · ${F.mk(evR.budget)} budget</div></div>`:''}
       </div>
+      ${cpCampTargetsHtml(c)}
       <div class="row" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg-2)">
         <div class="mini"><b>Org-wide Strategy targets</b> <span style="color:var(--ink-3)">(from Strategy, not specific to this campaign)</span> — win target <b>${F.n(CFG.strategyDrivers.winTarget,0)}</b> · bottom-up leads <b>${F.n(CFG.strategyDrivers.bottomUpLeads,0)}</b></div>
         ${CFG.aiScreenInterpreterEnabled?`<button class="btn sm" onclick="askAlecCampaign('${c.id}')" title="AI reasoning about this campaign in the context of the org's Strategy targets -- summary numbers only, never raw records">✨ Ask Alec</button>`:''}
@@ -3599,7 +3734,7 @@ function pagePartners(){
   h+=`<div class="card"><h3>Partners <span class="sp"></span><span class="pill n">${CFG.partners.length}</span>
       <button class="btn sm pri" onclick="addPartner()">Add partner</button></h3>
     <div class="bd flush"><div class="scroll cap"><table><thead><tr>
-      <th>Name</th><th>Type</th><th>Pod</th><th class="n">$ target</th><th class="n">Campaigns</th>
+      <th>Name</th><th>Type</th><th>Pod</th><th class="n">${CFG.partnerFyAvailable?'$ target '+cpFyKey(0):'$ target'}</th><th class="n">Campaigns</th>
       <th class="n">Attributed budget</th><th class="n">Won deals</th><th class="n">Attributed won value</th><th></th></tr></thead><tbody>
     ${!CFG.partners.length?`<tr><td colspan="9" class="empty">No partners yet.</td></tr>`:CFG.partners.map(p=>{
       const allocs=CFG.campaignPartnerAllocations.filter(a=>a.partnerId===p.id);
@@ -3613,8 +3748,7 @@ function pagePartners(){
         wonCount += won.length;
         attribWon += sum(won.map(d=>d.value||0))*share;
       });
-      const typeOptions=[''].concat(CFG.partnerTypePresets||[]);
-      if(p.type && !typeOptions.includes(p.type)) typeOptions.push(p.type);
+      const typeOptions=[''].concat(partnerTypeOptions()); /* 2026-10-13: presets + types already used on other partners */
       const podOptions=CFG.pods||[];
       const isOpen = UI.partnerDetailId===p.id;
       let rows = `<tr><td><input class="cel txt" style="width:150px" value="${esc(p.name)}" onchange="setIn('partners','${p.id}','name',this.value)"></td>
@@ -3624,7 +3758,9 @@ function pagePartners(){
         <td><select class="cel txt" style="width:130px" onchange="setIn('partners','${p.id}','podId',this.value||null)">
           <option value="" ${!p.podId?'selected':''}>— none —</option>
           ${podOptions.map(pd=>`<option value="${pd.id}" ${pd.id===p.podId?'selected':''}>${esc(pd.name)}</option>`).join('')}</select></td>
-        <td class="n"><input class="cel txt n" style="width:90px" value="${p.acvTarget==null?'':p.acvTarget}" placeholder="—" onchange="setPartnerAcvTarget('${p.id}',this.value)"></td>
+        <td class="n">${CFG.partnerFyAvailable
+          ?`<input class="cel txt n" style="width:100px;text-align:right" value="${partnerFyTarget(p,cpFyKey(0))==null?'':partnerFyTarget(p,cpFyKey(0)).toLocaleString('en-AU')}" placeholder="—" title="This financial year's target -- other years under Details" onchange="setPartnerFyTarget('${p.id}','${cpFyKey(0)}',this.value)">`
+          :`<input class="cel txt n" style="width:90px" value="${p.acvTarget==null?'':p.acvTarget}" placeholder="—" onchange="setPartnerAcvTarget('${p.id}',this.value)">`}</td>
         <td class="n calc">${campsAttached.length}</td>
         <td class="n calc">${F.mk(attribBudget)}</td>
         <td class="n calc">${wonCount}</td>
@@ -3655,6 +3791,15 @@ function pagePartners(){
                 <button class="btn sm dgr" onclick="removePartnerContactTerm('${p.id}',${i})">Remove</button></div>`).join('')}
               <button class="btn sm" style="margin-top:6px" onclick="addPartnerContactTerm('${p.id}')">+ Add contact / term</button>
             </div>
+            <div style="min-width:220px">
+              <label class="lbl">$ target by financial year</label>
+              ${!CFG.partnerFyAvailable?'<p class="mini" style="margin-top:4px">Needs the 2026-10-13 database update (one target per financial year).</p>':
+                `${Object.keys(Object.assign({[cpFyKey(0)]:null,[cpFyKey(1)]:null},p.acvTargetsByFy||{})).sort().map(fy=>`<div class="row" style="gap:6px;margin-top:5px;align-items:center">
+                  <span style="width:46px;font-weight:700">${esc(fy)}</span>
+                  <input class="cel txt n" style="width:110px;text-align:right" value="${partnerFyTarget(p,fy)==null?'':partnerFyTarget(p,fy).toLocaleString('en-AU')}" placeholder="—" onchange="setPartnerFyTarget('${p.id}','${fy}',this.value)">
+                  ${fy===cpFyKey(0)?'<span class="mini">this FY</span>':''}</div>`).join('')}
+                <button class="btn sm" style="margin-top:6px" onclick="addPartnerFyTarget('${p.id}')">+ Add year</button>`}
+            </div>
             <div style="min-width:200px">
               <label class="lbl">Attached campaigns (${campsAttached.length})</label>
               ${!campsAttached.length?'<p class="mini" style="margin-top:4px">None yet — attach from a campaign\'s own detail panel.</p>':
@@ -3669,7 +3814,7 @@ function pagePartners(){
       the full budget of every campaign they're allocated to. Attributed won value applies that same share to the value
       of deals Scoring has marked closed-won and linked to that exact campaign — same live link Effectiveness uses, so
       it carries the same known gap: a deal Scoring never linked to a campaign won't show up here either. Per-campaign
-      allocation itself is still edited from that campaign's own detail panel. $ target is this partner's own target,
+      allocation itself is still edited from that campaign's own detail panel. $ target is this partner's own target for each financial year (per the agreement; the table shows this year),
       independent of its Pod's derived target from Strategy's Region/Pod hierarchy.</p></div></div>`;
   return h;
 }
@@ -3790,9 +3935,9 @@ function pageSync(){
       export/import is still how data reaches Strategy and Configuration.</p>
     <button class="btn sm dgr" onclick="clearLocal()">Clear local autosave</button></div></div>`;
   h+=`<div class="card"><h3>Activity log</h3><div class="bd flush"><div class="scroll cap"><table><thead><tr>
-      <th>When</th><th>What</th><th>Detail</th></tr></thead><tbody>
-      ${!CFG.audit.length?`<tr><td colspan="3" class="empty">Nothing yet.</td></tr>`:
-        CFG.audit.map(a=>`<tr><td class="mini">${esc(a.ts)}</td><td>${esc(a.what)}</td><td class="mini">${esc(a.detail)}</td></tr>`).join('')}
+      <th>When</th><th>Who</th><th>What</th><th>Detail</th></tr></thead><tbody>
+      ${!CFG.audit.length?`<tr><td colspan="4" class="empty">Nothing yet.</td></tr>`:
+        CFG.audit.map(a=>`<tr><td class="mini">${esc(a.ts)}</td><td class="lb">${esc(auditWho(a))}</td><td>${esc(a.what)}</td><td class="mini">${esc(a.detail)}</td></tr>`).join('')}
       </tbody></table></div></div></div>`;
   return h;
 }

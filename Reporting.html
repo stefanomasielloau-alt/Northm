@@ -1462,7 +1462,7 @@ async function rmLoad(force){
     programmes:'*', campaigns:'*', activities:'*', routes:'*',
     regions:'*', pods:'*', reps:'*', segments:'*',
     partners:'*', campaign_partner_allocations:'id,campaign_id,partner_id',
-    campaign_pod_allocations:'id,campaign_id,pod_id', eventus_events:'*',
+    campaign_pod_allocations:'id,campaign_id,pod_id', campaign_segment_allocations:'id,campaign_id,segment_id,share_pct', eventus_events:'*',
     tasks:'*', task_campaign_links:'id,task_id,campaign_id',
     assets:'*',
     augur_deals:'*',
@@ -1529,6 +1529,8 @@ function rmBuild(d){
   d.campaigns.forEach(r=>{ const c=K('campaign',r.id);
     link(K('programme',r.programme_id),c); link(K('region',r.region_id),c); link(K('segment',r.segment_id),c); link(c,K('activity',r.activity_id)); });
   d.campaign_pod_allocations.forEach(r=>link(K('pod',r.pod_id),K('campaign',r.campaign_id)));
+  /* 2026-10-14: a campaign split across several segments links to each of them (not only its main one) */
+  (d.campaign_segment_allocations||[]).forEach(r=>{ if(Number(r.share_pct)>0) link(K('segment',r.segment_id),K('campaign',r.campaign_id)); });
   d.campaign_partner_allocations.forEach(r=>link(K('campaign',r.campaign_id),K('partner',r.partner_id)));
   d.eventus_events.forEach(r=>link(K('campaign',r.campaign_id),K('event',r.id)));
   d.tasks.forEach(r=>{ link(K('campaign',r.campaign_id),K('task',r.id)); link(K('event',r.event_id),K('task',r.id)); });

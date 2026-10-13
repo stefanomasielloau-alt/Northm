@@ -903,7 +903,9 @@ function campTargetFigures(c,m){
   const rate=campExitRate(c,m), proj=expLeads!=null?backward(expLeads*rate,m):null;
   const expWins=proj?proj[exitGate().id]:null, expWon=expWins!=null?expWins*blendedDeal():null;
   const d=(CFG.dealsByCampaign||{})[c.id]||null;
-  return { activity:a?a.name:null, costPerLead:a&&a.costPer?a.costPer:null, expLeads, expWins, expWon, rate, deals:d };
+  const pg=pipelineGate(); const pc=(proj&&pg.gate)?proj[pg.gate.id]:null;
+  const expPipeline=(pc!=null&&isFinite(pc))?pc*blendedDeal():null;
+  return { activity:a?a.name:null, costPerLead:a&&a.costPer?a.costPer:null, expLeads, expWins, expWon, expPipeline, pipelineStage:pg.gate?pg.gate.name:null, rate, deals:d };
 }
 function campTargetsHtml(c,m){
   const f=campTargetFigures(c,m), d=f.deals, v2=!!CFG.campV2Available;
@@ -920,9 +922,9 @@ function campTargetsHtml(c,m){
         <td class="n">${inp('actualLeads',c.actualLeads)}</td>
         <td class="n">${pct(c.actualLeads,c.targetLeads)}</td><td class="n">${pct(f.expLeads,c.targetLeads)}</td></tr>
       <tr><td class="lb">Pipeline</td><td class="n">${inp('targetPipeline',c.targetPipeline)}</td>
-        <td class="n calc" title="No pipeline-stage benchmark is set up in Strategy, so there is no expected figure">—</td>
+        <td class="n calc" title="${f.pipelineStage?'Expected '+esc(f.pipelineStage)+' × blended deal size (pipeline stage set in Admin > Funnel gates)':'No pipeline stage found -- choose one in Admin > Funnel gates'}">${f.expPipeline==null?'—':F.acc(f.expPipeline)}</td>
         <td class="n calc" title="Value of Scoring deals linked to this campaign, excluding Closed Lost">${d?F.acc(d.pipeline):'—'}</td>
-        <td class="n">${pct(d?d.pipeline:null,c.targetPipeline)}</td><td class="n">—</td></tr>
+        <td class="n">${pct(d?d.pipeline:null,c.targetPipeline)}</td><td class="n">${pct(f.expPipeline,c.targetPipeline)}</td></tr>
       <tr><td class="lb">Closed-won</td><td class="n">—</td>
         <td class="n calc" title="Projected ${esc(exitGate().name)} × blended deal size">${f.expWon==null?'—':F.acc(f.expWon)}</td>
         <td class="n calc" title="Value of Closed Won Scoring deals linked to this campaign">${d?F.acc(d.won):'—'}</td><td class="n">—</td><td class="n">—</td></tr>
@@ -938,7 +940,7 @@ function strategyCampaignOne(c,m){
   return { name:c.name, ledBy:c.ledBy||null, segments:campSegLabel(c), activity:f.activity, costPerLead:r(f.costPerLead),
     budget:r(bud), committed:r(com), actualSpend:r(sp), uncommitted:r(bud-com), unspent:r(bud-sp),
     leads:{ target:c.targetLeads==null?null:r(c.targetLeads), expected:r(f.expLeads), actual:c.actualLeads==null?null:r(c.actualLeads) },
-    pipeline:{ target:c.targetPipeline==null?null:r(c.targetPipeline), actual:f.deals?r(d.pipeline):null, linkedDeals:f.deals?d.count:0 },
+    pipeline:{ target:c.targetPipeline==null?null:r(c.targetPipeline), expected:r(f.expPipeline), expectedBasis:f.pipelineStage?('expected '+f.pipelineStage+' x blended deal size'):null, actual:f.deals?r(d.pipeline):null, linkedDeals:f.deals?d.count:0 },
     closedWon:{ expected:r(f.expWon), actual:f.deals?r(d.won):null },
     conversionRatePct:Math.round(f.rate*1000)/10, status:ragForCampaign(c).label };
 }
@@ -950,7 +952,7 @@ function strategyCampaignContextForAI(){
     const camps=CFG.campaigns.filter(c=>vis.includes(c.regionId)||c.regionId===unassignedRegionId());
     const sel=byId(camps,UI.bizCampaignId)||camps[0];
     return { module:'Strategy', page:'campaign', currency:ccy, selectedCampaign: sel?strategyCampaignOne(sel,m):null, campaignsInScope:camps.length,
-      notes:'Expected leads = budget / cost per lead. Actual leads are typed by hand. Pipeline and closed-won actuals are Scoring deals linked to the campaign. null = not set.' };
+      notes:'Expected leads = budget / cost per lead. Expected pipeline = expected count at the pipeline stage x blended deal size. Actual leads are typed by hand. Pipeline and closed-won actuals are Scoring deals linked to the campaign. null = not set.' };
   }
   if(UI.page==='admin' && UI.adminTab==='camps'){
     return { module:'Strategy', page:'admin-campaigns', currency:ccy, campaigns: CFG.campaigns.slice(0,40).map(c=>strategyCampaignOne(c,m)), truncated: CFG.campaigns.length>40 };
@@ -958,6 +960,111 @@ function strategyCampaignContextForAI(){
   return null;
 }
 window.strategyCampaignContextForAI=strategyCampaignContextForAI;
+/* ---------- 2026-10-14: campaign defaults, Led by options manager, expected pipeline ---------- */
+/* Campaigns started in Campaign Planning arrive with no segment and no Led by. On load, fill blanks only:
+   no segment -> the org's Unassigned segment (the standing "every dimension has an Unassigned member" rule);
+   blank Led by -> suggested from the campaign's activity / route. Logged once; never overwrites a value. */
+function suggestLedBy(c){
+  const a=act(c.activityId), n=(a&&a.name)||'', r=a?(CFG.routes.find(x=>x.id===a.routeId)||{}).name||'':'';
+  if(/partner/i.test(r)||/partner/i.test(n)) return 'Partner-led';
+  if(/self-?gen|bdm/i.test(n)) return 'Sales-sourced (self-gen)';
+  if(/outbound/i.test(r)||/sdr|bdr/i.test(n)) return 'BDR-sourced';
+  return 'Marketing-sourced';
+}
+function applyCampaignDefaults(){
+  try{
+    if(typeof SAV!=='undefined' && SAV.mode && SAV.mode()==='all') return;
+    if(CFG.savEnabled && typeof SAV!=='undefined' && SAV.canEdit && !SAV.canEdit()) return;
+    const una=(CFG.segments||[]).find(s=>s.unassigned);
+    const segFilled=[], ledFilled=[];
+    (CFG.campaigns||[]).forEach(c=>{
+      if(!c.segmentId && una){ c.segmentId=una.id; segFilled.push(c.name); }
+      if(CFG.campV2Available && !c.ledBy){ c.ledBy=suggestLedBy(c); ledFilled.push(c.name+' → '+c.ledBy); }
+    });
+    if(segFilled.length) logAudit('default','campaigns with no segment set to Unassigned: '+segFilled.join(', '));
+    if(ledFilled.length) logAudit('default','Led by suggested from activity: '+ledFilled.join(', '));
+  }catch(e){ console.warn('applyCampaignDefaults skipped',e); }
+}
+/* Led by options: rename / remove (remove only when no campaign uses it) */
+async function saveLedByPresets(){
+  if(!CFG.ledByAvailable){ toast('Led by options need the 2026-10-13 database update.'); return; }
+  const oid=(typeof _savOrgFilter!=='undefined'&&_savOrgFilter!==null)?_savOrgFilter:_orgId;
+  const { error } = await sb.from('org_settings').update({led_by_presets:CFG.ledByPresets}).eq('org_id',oid);
+  if(error){ console.error('led_by_presets save failed',error); toast('Could not save the Led by options -- see console.'); }
+}
+function toggleLedByMgr(){ UI.ledByMgr=!UI.ledByMgr; render(); }
+window.toggleLedByMgr=toggleLedByMgr;
+function renameLedBy(oldName,newName){
+  if(!canConfig()) return;
+  const n=String(newName||'').trim().slice(0,60); if(!n||n===oldName){ render(); return; }
+  if(ledByOptions().some(x=>x.toLowerCase()===n.toLowerCase()&&x!==oldName)){ toast('"'+n+'" already exists.'); render(); return; }
+  const list=(CFG.ledByPresets||[]).slice(); const i=list.indexOf(oldName);
+  if(i>=0) list[i]=n; else list.push(n);
+  CFG.ledByPresets=list;
+  let moved=0; CFG.campaigns.forEach(c=>{ if(c.ledBy===oldName){ c.ledBy=n; moved++; } });
+  logAudit('rename','Led by option "'+oldName+'" → "'+n+'" ('+moved+' campaign'+(moved===1?'':'s')+')');
+  render(); saveLedByPresets();
+}
+window.renameLedBy=renameLedBy;
+function removeLedBy(name){
+  if(!canConfig()) return;
+  const used=CFG.campaigns.filter(c=>c.ledBy===name).length;
+  if(used){ toast('Used by '+used+' campaign'+(used===1?'':'s')+' -- change them first.'); return; }
+  CFG.ledByPresets=(CFG.ledByPresets||[]).filter(x=>x!==name);
+  logAudit('remove','Led by option "'+name+'"'); render(); saveLedByPresets();
+}
+window.removeLedBy=removeLedBy;
+function addLedByOption(val){
+  if(!canConfig()) return;
+  const n=String(val||'').trim().slice(0,60); if(!n) return;
+  if(ledByOptions().some(x=>x.toLowerCase()===n.toLowerCase())){ toast('"'+n+'" already exists.'); render(); return; }
+  CFG.ledByPresets=(CFG.ledByPresets||[]).concat([n]);
+  logAudit('add','Led by option "'+n+'"'); render(); saveLedByPresets();
+}
+window.addLedByOption=addLedByOption;
+function ledByMgrHtml(){
+  const dis=canConfig()?'':'disabled';
+  const opts=ledByOptions();
+  return `<div class="bd" style="border-bottom:1px solid var(--line)">
+    <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><b>Led by options</b>
+      <span class="mini">Rename updates every campaign using it. Remove is only possible when no campaign uses it.</span></div>
+    ${opts.map(o=>{ const used=CFG.campaigns.filter(c=>c.ledBy===o).length; const q=esc(o).replace(/'/g,"\\'");
+      return `<div class="row" style="gap:8px;align-items:center;margin-top:4px">
+        <input class="cel txt" style="width:220px" ${dis} value="${esc(o)}" onchange="renameLedBy('${q}',this.value)">
+        <span class="mini" style="width:110px">${used} campaign${used===1?'':'s'}</span>
+        <button class="btn sm dgr" ${dis||(used?'disabled':'')} title="${used?'Used by '+used+' -- change those campaigns first':'Remove this option'}" onclick="removeLedBy('${q}')">Remove</button></div>`; }).join('')}
+    <div class="row" style="gap:8px;align-items:center;margin-top:8px">
+      <input class="cel txt" style="width:220px" ${dis} placeholder="+ New option" onchange="addLedByOption(this.value)"></div></div>`;
+}
+/* Expected pipeline: the funnel stage that counts as pipeline. Set in Admin > Funnel gates; until set,
+   the first stage named like SQO / opportunity / pipeline is used. Expected pipeline = expected count at
+   that stage x blended deal size (same projection the Business case table shows). */
+function pipelineGate(){
+  const c=chain();
+  const set=CFG.pipelineGateId?c.find(g=>g.id===CFG.pipelineGateId):null;
+  if(set) return {gate:set,auto:false};
+  const auto=c.find(g=>/\bsqo\b|opportunit|pipeline/i.test(g.name));
+  return {gate:auto||null,auto:!!auto};
+}
+async function setPipelineGate(id){
+  if(!canConfig()) return;
+  if(!CFG.pipelineGateAvailable){ toast('Choosing the pipeline stage needs 2026-10-14-migration-pipeline-gate.sql run first. Until then it is picked automatically.'); render(); return; }
+  CFG.pipelineGateId=id||null;
+  logAudit('edit','pipeline stage → '+(id?((chain().find(g=>g.id===id)||{}).name||id):'automatic'));
+  render();
+  const oid=(typeof _savOrgFilter!=='undefined'&&_savOrgFilter!==null)?_savOrgFilter:_orgId;
+  const { error } = await sb.from('org_settings').update({pipeline_gate_id:CFG.pipelineGateId}).eq('org_id',oid);
+  if(error){ console.error('pipeline_gate_id save failed',error); toast('Could not save the pipeline stage -- see console.'); }
+}
+window.setPipelineGate=setPipelineGate;
+function pipelineGateSelectorHtml(){
+  const pg=pipelineGate(), dis=canConfig()?'':'disabled';
+  return `<div class="note" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><strong>Pipeline stage</strong>
+    <select class="in" style="width:auto" ${dis} onchange="setPipelineGate(this.value)">
+      <option value="" ${!CFG.pipelineGateId?'selected':''}>Automatic${pg.auto&&pg.gate?' ('+esc(pg.gate.name)+')':' (none found)'}</option>
+      ${chain().map(g=>`<option value="${g.id}" ${g.id===CFG.pipelineGateId?'selected':''}>${esc(g.name)}</option>`).join('')}</select>
+    <span class="mini">The stage that counts as pipeline. Campaign expected pipeline = expected count at this stage × blended deal size.</span></div>`;
+}
 function campaignCommitted(camp){ const l=liFig(camp,'committed'); if(l!=null) return l; return camp.rollupCommitted!=null ? camp.rollupCommitted : (camp.committed||0); }
 function campaignActualSpend(camp){ const l=liFig(camp,'actual'); if(l!=null) return l; return camp.rollupActual!=null ? camp.rollupActual : (camp.actual||0); }
 function campaignBudgetMain(c){ /* multi-currency phase 3: use the converted snapshot when this campaign's budget was set in a non-main currency; fails soft to the raw figure otherwise, so main-currency campaigns (the default case) are unchanged. */ { const l=liFig(c,'budget'); if(l!=null) return l; } return (c.budgetFx && c.budgetFx.converted!=null) ? c.budgetFx.converted : (c.budget||0); }
@@ -2497,6 +2604,9 @@ async function loadFromSupabase(){
   CFG.customFieldDefsAvailable = Object.prototype.hasOwnProperty.call(os,'custom_fields_config');
   CFG.ledByPresets = Array.isArray(os.led_by_presets) ? os.led_by_presets : [];
   CFG.ledByAvailable = Object.prototype.hasOwnProperty.call(os,'led_by_presets');
+  CFG.pipelineGateId = os.pipeline_gate_id || null;
+  CFG.pipelineGateAvailable = Object.prototype.hasOwnProperty.call(os,'pipeline_gate_id');
+  applyCampaignDefaults(); /* 2026-10-14: blanks only -- see applyCampaignDefaults() */
 
   /* sample history depends on gates/regions/activities/segments/drivers/seasonality all
      being loaded — build it last, once everything above is in place. */
@@ -2973,6 +3083,7 @@ function adminGatesWidgetSet(){
   const _showOrgCol = typeof SAV!=='undefined' && SAV.mode && SAV.mode()==='all';
   const _orgName = oid => { const o=(CFG.allOrganizations||[]).find(x=>x.id===oid); return o?o.name:(oid?'Unknown org':'—'); };
   let h='';
+  if(c.length) h+=pipelineGateSelectorHtml(); /* 2026-10-14 */
   if(!c.length){
     h+=`<div class="note b"><strong>No gates are configured for this organization yet.</strong> Strategy needs at least one gate to compute anything. Click "Add gate" below, or use a starter preset from the "Gate naming presets" card underneath to get going quickly.</div>`;
   } else {
@@ -3283,8 +3394,10 @@ function adminCampsWidgetTable(){
   const ledOpts=ledByOptions();
   let h=`<div class="card"><h3>Campaigns <span class="sp"></span>
     <span class="pill n">${CFG.campaigns.length} records</span>
+    ${v2?`<button class="btn sm" onclick="toggleLedByMgr()">${UI.ledByMgr?'Close':'Led by options'}</button>`:''}
     <button class="btn sm" onclick="toast('Pull queued. In the built system this calls the MAP connector.')">Pull from feed</button>
     <button class="btn sm pri" ${dis} onclick="addCampaign()">Add campaign</button></h3>`;
+  if(v2 && UI.ledByMgr) h+=ledByMgrHtml();
   if(!v2||!sa) h+=`<div class="bd" style="padding-bottom:0"><div class="note w"><strong>Database update needed.</strong>
     Led by, the multi-segment split and campaign targets need <code>2026-10-13-migration-campaign-ledby-segments-targets-partner-fy.sql</code>
     (Claude outputs) run in Supabase. Until then Led by is read-only and each campaign keeps one segment.</div></div>`;

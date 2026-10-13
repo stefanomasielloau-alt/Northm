@@ -909,6 +909,24 @@ async function loadFromSupabase(){
     if(pfy && !pfy.error){ CFG.partnerFyAvailable=true; const by={}; (pfy.data||[]).forEach(r=>{ by[r.id]=r.acv_targets_by_fy||{}; });
       CFG.partners.forEach(p=>{ p.acvTargetsByFy=Object.assign({},by[p.id]||{}); }); }
   }catch(e){ /* not migrated yet -- fields stay hidden behind a banner */ }
+  /* 2026-10-14: expected pipeline = expected leads x funnel rates from the entry stage to the pipeline stage
+     x average deal size (Strategy's gates; pipeline stage set in Strategy > Admin > Funnel gates, else the
+     first stage named like SQO / opportunity / pipeline). Fail-soft: missing = no expected pipeline shown. */
+  CFG.cpFunnel=null;
+  try{
+    const [gR,osR]=await Promise.all([
+      orgScoped(sb.from('gates').select('id,name,order,rate,entry,active').order('order')),
+      sb.from('org_settings').select('*').eq('org_id',_orgId).maybeSingle()
+    ]);
+    if(gR && !gR.error && (gR.data||[]).length){
+      const gates=(gR.data||[]).filter(g=>g.active!==false);
+      const o=(osR&&!osR.error&&osR.data)||{};
+      const pg=gates.find(g=>g.id===o.pipeline_gate_id)||gates.find(g=>/\bsqo\b|opportunit|pipeline/i.test(g.name))||null;
+      let rate=null;
+      if(pg){ rate=1; const pi=gates.indexOf(pg); for(let i=1;i<=pi;i++) rate*=Number(gates[i].rate)||0; }
+      CFG.cpFunnel={ stage:pg?pg.name:null, rateToPipeline:rate, avgDeal:Number(o.avg_deal_size)||0 };
+    }
+  }catch(e){ /* no funnel readable -- expected pipeline stays blank */ }
   CFG.meta = { syncedAt:new Date().toISOString(), lastExportAt:null, lastPushAt:null, normaSyncedAt:null,
                normaConfigVersion:null, lastWebhookPushAt:null, lastReferenceExportAt:null, augurSyncedAt:null };
 
@@ -2136,7 +2154,8 @@ window.setCampTargetCP=setCampTargetCP;
 function cpCampFigures(c){
   const a=c.activityId?CFG.activityById[c.activityId]:null;
   const expLeads=(a&&a.costPer)?(Number(c.budget)||0)/a.costPer:null;
-  return { activity:a?a.name:null, expLeads, deals:CFG.campPipeline[c.id]||null };
+  const fu=CFG.cpFunnel; const expPipeline=(expLeads!=null&&fu&&fu.stage&&fu.rateToPipeline!=null&&fu.avgDeal)?expLeads*fu.rateToPipeline*fu.avgDeal:null;
+  return { activity:a?a.name:null, expLeads, expPipeline, pipelineStage:fu&&fu.stage, deals:CFG.campPipeline[c.id]||null };
 }
 function cpCampTargetsHtml(c){
   const v2=!!CFG.campV2Available, dis=v2?'':'disabled title="Needs the 2026-10-13 database update"';
@@ -2159,7 +2178,7 @@ function cpCampTargetsHtml(c){
         <td class="n" title="${f.activity?'Budget ÷ cost per lead of '+esc(f.activity)+' (Strategy)':'No Strategy activity with a cost per lead is set for this campaign (Strategy > Campaign & cost > Business case)'}">${f.expLeads==null?'—':nf(f.expLeads)}</td>
         <td class="n">${inp('actualLeads',c.actualLeads)}</td><td class="n">${pct(c.actualLeads,c.targetLeads)}</td></tr>
       <tr><td>Pipeline</td><td class="n">${inp('targetPipeline',c.targetPipeline)}</td>
-        <td class="n" title="No pipeline benchmark is set up, so there is no expected figure">—</td>
+        <td class="n" title="${f.expPipeline!=null?'Expected leads x funnel rates to '+esc(f.pipelineStage)+' x average deal size (Strategy)':'Needs a Strategy activity with a cost per lead, a pipeline stage and an average deal size'}">${f.expPipeline==null?'—':F.acc(f.expPipeline)}</td>
         <td class="n" title="Value of Scoring deals linked to this campaign, excluding Closed Lost">${d?F.acc(d.pipeline):'—'}</td><td class="n">${pct(d?d.pipeline:null,c.targetPipeline)}</td></tr>
       <tr><td>Closed-won</td><td class="n">—</td><td class="n">—</td>
         <td class="n" title="Value of Closed Won Scoring deals linked to this campaign">${d?F.acc(d.won):'—'}</td><td class="n">—</td></tr>
@@ -2961,7 +2980,7 @@ function campaignContextForAI(c){
     ...(()=>{ const f=cpCampFigures(c), d=f.deals, r=v=>v==null?null:Math.round(v); return {
       currency:(CFG.currency&&CFG.currency.main)||'', ledBy:c.ledBy||null,
       leads:{ target:r(c.targetLeads), expected:r(f.expLeads), actual:r(c.actualLeads), expectedBasis:f.activity?('budget / cost per lead of '+f.activity):null },
-      pipeline:{ target:r(c.targetPipeline), actual:d?r(d.pipeline):null, linkedDeals:d?d.count:0 },
+      pipeline:{ target:r(c.targetPipeline), expected:r(f.expPipeline), expectedBasis:f.pipelineStage?('expected leads x funnel rates to '+f.pipelineStage+' x average deal size'):null, actual:d?r(d.pipeline):null, linkedDeals:d?d.count:0 },
       closedWon:{ actual:d?r(d.won):null } }; })()
   };
 }

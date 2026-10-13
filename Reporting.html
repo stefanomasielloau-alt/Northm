@@ -237,6 +237,8 @@ input.cel.gs-swap-filter{width:150px}
 
 /* 2026-09-28: Relationship map */
 .rm-search{position:relative}
+/* 2026-10-14: saved map view tiles scale the whole map to the tile width instead of cutting it off */
+.rv-fit svg{width:100%!important;height:auto!important;max-height:400px}
 .rm-search input{width:320px;max-width:70vw}
 #rmResults{position:absolute;top:100%;left:0;z-index:60;min-width:340px;max-height:360px;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);box-shadow:var(--sh-2)}
 #rmResults:empty{display:none}
@@ -2204,7 +2206,7 @@ function rvTileHtml(id){
   const fn=(v.view&&v.view.focusName)||'';
   return `<div class="card" style="height:100%"><h3>${esc(v.name)} <span class="sp"></span>${rvPill(v)}</h3><div class="bd">
     <div class="mini" style="margin-bottom:6px">Starting from <b>${esc(fn)}</b>${v.mode==='frozen'&&v.snapshot_meta?` &middot; ${esc(String(v.snapshot_meta.records||''))} records`:''}</div>
-    <div class="rm-canvas" style="pointer-events:none;max-height:420px;overflow:hidden">${body}</div>
+    <div class="rm-canvas rv-fit" style="pointer-events:none;max-height:420px;overflow:hidden">${body}</div>
     <div style="margin-top:8px"><button class="btn sm" onclick="rvOpen('${esc(v.id)}')">Open in Relationship map &rarr;</button></div></div></div>`;
 }
 function rvListHtml(){

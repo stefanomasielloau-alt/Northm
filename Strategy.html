@@ -1197,7 +1197,8 @@ const entryGate=()=>chain()[0];
 const exitGate=()=>{ const c=chain(); return c[c.length-1]; };
 
 function rateOf(g,mult=1,regionId=null,podId=null){
-  if(!g||g.entry||g.rate==null)return 1;
+  if(!g||g.entry)return 1;
+  if(g.rate==null){ const fb=gateBenchFallback(g); return fb==null?1:clamp(fb*mult,0,1); } /* 2026-10-14: benchmark fallback */
   /* 2026-09-28: pod-level override (pod_gate_rates) wins over the region override, which wins over
      global -- a pod with no row of its own inherits its region exactly as before. */
   if(podId){ const pv=podGateRateFor(podId,g.id); if(pv!=null) return clamp(pv*mult,0,1); }
@@ -1218,7 +1219,7 @@ function rateIssues(){
        "No rate set." with no way to fix it via the UI. Match rateOf()'s own rule. */
     if(g.entry)return;
     if(g.rate===0)   out.push({gate:g,msg:'Rate is 0%. Backward planning cannot divide by zero. Enter 100% for a pass-through gate.'});
-    if(g.rate==null) out.push({gate:g,msg:'No rate set.'});
+    if(g.rate==null && gateBenchFallback(g)==null) out.push({gate:g,msg:'No rate set.'});
     if(g.rate>1)     out.push({gate:g,msg:'Rate is above 100%.'});
   });
   return out;
@@ -1261,12 +1262,121 @@ function campExitRate(camp,mult=1){
 function applyRateSource(id,src){
   const camp=byId(CFG.campaigns,id); if(!camp)return;
   camp.rateSource=src;
-  if(src==='benchmark_ind')       camp.convOverride=CFG.benchmarks.industryExitRate;
+  if(src==='benchmark_ind'){ const b=(CFG.bench||{}).available?campBenchExitRate(camp):null; camp.convOverride=b!=null?b:CFG.benchmarks.industryExitRate; } /* 2026-10-14: stage by stage when gates are mapped */
   else if(src==='benchmark_hist') camp.convOverride=historicalExitRate();
   else                            camp.convOverride=null;
   logAudit('conversion source', camp.name+' \u2192 '+src+(camp.convOverride!=null?' ('+F.p(camp.convOverride,2)+')':' (manual)'));
   render();
 }
+/* ============================================================================
+   2026-10-14 (Stef): INDUSTRY BENCHMARK LIBRARY. Base rates (generic / Tech hardware / SaaS x North America / EU /
+   APAC) researched from public sources and loaded into funnel_benchmarks (platform-wide, updated quarterly). Each
+   org maps its own gates to standard steps (Admin > Funnel gates) and may override the base on its ICP profiles
+   (Targets). Used (a) as a comparison column in the Rate library, (b) as the fallback for a gate with no rate,
+   and for gates with < 30 observations when adopting observed rates, (c) stage by stage for a campaign's
+   "Industry benchmark" conversion source. Migration: Claude outputs/2026-10-14-migration-benchmarks-icp-personas.sql
+   ============================================================================ */
+const BENCH_STEPS=[['lead_mql','Lead → MQL'],['mql_sql','MQL → SQL'],['sql_opp','SQL → Opportunity'],['opp_win','Opportunity → Win']];
+const BENCH_IND={generic:'Generic B2B',tech_hardware:'Tech hardware',saas:'SaaS'};
+const BENCH_REG={NA:'North America',EU:'EU',APAC:'APAC'};
+const BENCH_CAVEAT='Benchmarks are indicative only. Public figures vary widely by source, sample and definition (what counts as an MQL or an opportunity differs by company), and many come from vendor marketing. No public source found splits these rates by North America / EU / APAC, so the same global figure is used for each region until better data exists. Use the range and the source links, not a single number, and prefer your own history or ICP overrides where you have them.';
+function benchCtx(icpId){
+  const B=CFG.bench||{}; const icps=B.icps||[];
+  const icp=(icpId&&icps.find(x=>x.id===icpId))||(B.orgIcpId&&icps.find(x=>x.id===B.orgIcpId))||null;
+  return {icp, industry:(icp&&icp.industry)||'generic', region:(icp&&icp.region)||'NA', defaulted:!icp||!icp.industry||!icp.region};
+}
+function benchBase(step,industry,region){ return ((CFG.bench||{}).rows||[]).find(r=>r.step===step&&r.industry===industry&&r.region===region)||null; }
+function benchStep(step,ctx){
+  const row=benchBase(step,ctx.industry,ctx.region);
+  const ov=ctx.icp&&ctx.icp.overrides?ctx.icp.overrides[step]:null;
+  const ovr=ov&&ov.rate!=null&&!isNaN(Number(ov.rate))?Number(ov.rate):null;
+  if(ovr!=null&&ovr>0&&ovr<=1) return {rate:ovr,low:null,high:null,src:'override',note:(ov.note||''),row};
+  if(!row) return null;
+  return {rate:Number(row.typical),low:row.low==null?null:Number(row.low),high:row.high==null?null:Number(row.high),src:'base',note:row.note||'',row};
+}
+function benchGatesForStep(step){ const m=(CFG.bench||{}).gateStep||{}; return chain().filter(g=>!g.entry&&m[g.id]===step); }
+/* A gate's benchmark. When several gates map to one step (e.g. SAO and SQO both inside SQL -> Opportunity) the
+   step rate is compared with the product of those gates' rates, and each gate's share is rate^(1/n). */
+function gateBench(g,ctx){
+  const B=CFG.bench||{}; if(!B.available||!g||g.entry) return null;
+  const step=(B.gateStep||{})[g.id]; if(!step) return null;
+  const b=benchStep(step,ctx||benchCtx(null)); if(!b) return null;
+  const grp=benchGatesForStep(step), n=Math.max(1,grp.length);
+  let groupRate=1, groupOk=true; grp.forEach(x=>{ if(x.rate==null) groupOk=false; else groupRate*=clamp(x.rate,0,1); });
+  return {step,b,n,grp,per:Math.pow(b.rate,1/n),groupRate:groupOk?groupRate:null};
+}
+function benchFlag(gb){
+  if(!gb||gb.groupRate==null) return '';
+  const lo=gb.b.low, hi=gb.b.high;
+  if(lo==null||hi==null) return '';
+  if(gb.groupRate<lo) return '<span class="pill bad" title="Your rate is below the benchmark range">below range</span>';
+  if(gb.groupRate>hi) return '<span class="pill warn" title="Your rate is above the benchmark range">above range</span>';
+  return '<span class="pill ok">in range</span>';
+}
+function gateBenchFallback(g){ const gb=gateBench(g,null); return gb?gb.per:null; }
+function campBenchExitRate(camp){
+  const ctx=benchCtx(((CFG.bench||{}).campIcp||{})[camp.id]||null), c=chain(); let r=1, mapped=0;
+  for(let i=1;i<c.length;i++){ const gb=gateBench(c[i],ctx); if(gb){ r*=gb.per; mapped++; } else r*=rateOf(c[i]); }
+  return mapped?r:null;
+}
+function _benchOrgId(){ return (typeof _savOrgFilter!=='undefined'&&_savOrgFilter!==null)?_savOrgFilter:_orgId; }
+async function setGateBenchStep(gid,step){
+  if(!canConfig()||!(CFG.bench||{}).available) return;
+  const g=byId(CFG.gates,gid); if(!g) return;
+  if(step) CFG.bench.gateStep[gid]=step; else delete CFG.bench.gateStep[gid];
+  logAudit('edit','gates/'+g.name+'.benchmarkStep → '+(step||'none')); render();
+  const { error } = await sb.from('gates').update({benchmark_step:step||null}).eq('id',gid);
+  if(error){ console.error('benchmark_step save failed',error); toast('Could not save the benchmark step (a brand-new gate saves on the next autosave -- try again in a moment).'); }
+}
+window.setGateBenchStep=setGateBenchStep;
+async function setOrgBenchIcp(id){
+  if(!canConfig()||!(CFG.bench||{}).available) return;
+  CFG.bench.orgIcpId=id||null; logAudit('edit','benchmark ICP profile → '+(id?((CFG.bench.icps.find(x=>x.id===id)||{}).name||id):'none')); render();
+  const { error } = await sb.from('org_settings').update({benchmark_icp_id:CFG.bench.orgIcpId}).eq('org_id',_benchOrgId());
+  if(error){ console.error('benchmark_icp_id save failed',error); toast('Could not save the ICP profile choice -- see console.'); }
+}
+window.setOrgBenchIcp=setOrgBenchIcp;
+async function setCampBenchIcp(cid,id){
+  const camp=byId(CFG.campaigns,cid); if(!camp||!(CFG.bench||{}).available) return;
+  if(id) CFG.bench.campIcp[cid]=id; else delete CFG.bench.campIcp[cid];
+  if(camp.rateSource==='benchmark_ind') applyRateSource(cid,'benchmark_ind'); else render();
+  const { error } = await sb.from('campaigns').update({benchmark_icp_id:id||null}).eq('id',cid);
+  if(error){ console.error('campaigns.benchmark_icp_id save failed',error); toast('Could not save the campaign ICP profile -- see console.'); }
+}
+window.setCampBenchIcp=setCampBenchIcp;
+function benchCell(row){
+  if(!row) return '<span class="mini">—</span>';
+  const src=(Array.isArray(row.sources)?row.sources:[]).map((x,i)=>`<a href="${esc(x.url)}" target="_blank" rel="noopener" title="${esc(x.title)}">[${i+1}]</a>`).join(' ');
+  const cls=row.confidence==='high'?'ok':(row.confidence==='low'?'warn':'n');
+  return `<div title="${esc(row.note||'')}"><b>${F.p(Number(row.typical),0)}</b>${row.low!=null&&row.high!=null?` <span class="mini">(${F.p(Number(row.low),0)}–${F.p(Number(row.high),0)})</span>`:''}
+    <div class="mini"><span class="pill ${cls}" style="font-size:10px">${esc(row.confidence)}</span> ${src}</div></div>`;
+}
+function adminBenchWidgetLibrary(){
+  const B=CFG.bench||{};
+  if(!B.available) return `<div class="card"><div class="bd"><div class="note b"><strong>Database update needed.</strong> Run <code>Claude outputs/2026-10-14-migration-benchmarks-icp-personas.sql</code> to switch on the industry benchmark library.</div></div></div>`;
+  const dis=canConfig()?'':'disabled', ctx=benchCtx(null), reg=UI.benchRegion||ctx.region;
+  const rows=B.rows||[], ver=rows.map(r=>r.version).filter(Boolean).sort().pop()||'—', chk=rows.map(r=>r.checked_on).filter(Boolean).sort().pop()||'—';
+  let h=`<div class="card"><h3>Industry benchmarks <span class="sp"></span><span class="pill n">Base set ${esc(ver)} · checked ${esc(chk)}</span></h3><div class="bd">
+    <div class="note w"><strong>Caveat.</strong> ${esc(BENCH_CAVEAT)}</div>
+    <div class="note" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><strong>ICP profile used by Strategy</strong>
+      <select class="in" style="width:auto" ${dis} onchange="setOrgBenchIcp(this.value)">
+        <option value="">None — Generic B2B · North America</option>
+        ${(B.icps||[]).map(x=>`<option value="${x.id}" ${x.id===B.orgIcpId?'selected':''}>${esc(x.name)}${x.industry||x.region?' ('+esc(BENCH_IND[x.industry]||'industry?')+' · '+esc(BENCH_REG[x.region]||'region?')+')':' (no industry/region set)'}</option>`).join('')}</select>
+      <span class="mini">Industry, region and your own overrides are set on the ICP profile in <a href="Targets.html" target="tool_Targets">Targets › ICP filters</a>. A campaign can pick a different profile in Admin › Campaigns.${B.icpAvailable?'':' (ICP profiles could not be read.)'}</span></div>
+    <div class="row" style="margin:6px 0">${Object.keys(BENCH_REG).map(k=>`<button class="btn sm ${reg===k?'pri':''}" onclick="UI.benchRegion='${k}';render()">${BENCH_REG[k]}</button>`).join('')}</div>
+    </div><div class="bd flush"><div class="scroll"><table><thead><tr><th>Step</th>${Object.keys(BENCH_IND).map(k=>`<th>${BENCH_IND[k]}${k===ctx.industry&&reg===ctx.region?' <span class="pill v">yours</span>':''}</th>`).join('')}
+      <th>Your ICP override</th><th>Your funnel (mapped gates)</th></tr></thead><tbody>`;
+  BENCH_STEPS.forEach(([k,lbl])=>{
+    const ov=ctx.icp&&ctx.icp.overrides?ctx.icp.overrides[k]:null;
+    const grp=benchGatesForStep(k); const gb=grp.length?gateBench(grp[grp.length-1],ctx):null;
+    h+=`<tr><td class="lb">${lbl}</td>${Object.keys(BENCH_IND).map(ind=>`<td>${benchCell(benchBase(k,ind,reg))}</td>`).join('')}
+      <td>${ov&&ov.rate!=null?`<b>${F.p(Number(ov.rate),0)}</b><div class="mini">${esc(ov.note||'')}</div>`:'<span class="mini">—</span>'}</td>
+      <td>${grp.length?`${grp.map(g=>esc(g.name)).join(' × ')} = <b>${gb&&gb.groupRate!=null?F.p(gb.groupRate,1):'—'}</b> ${benchFlag(gb)}`:'<span class="mini">no gate mapped — set in Funnel gates</span>'}</td></tr>`;
+  });
+  h+=`</tbody></table></div></div><div class="bd"><div class="mini"><b>How it is used.</b> Rate library shows a Benchmark column; a gate with no rate falls back to its benchmark; "Adopt observed rates" uses the benchmark where history has fewer than 30 observations; a campaign's "Industry benchmark" conversion source is worked out stage by stage. Hover a figure for the note; [1], [2] open the sources. The base set is refreshed quarterly (researched, then approved before loading).</div></div></div>`;
+  return h;
+}
+window.adminBenchWidgetLibrary=adminBenchWidgetLibrary;
 function addCostBucket(){
   CFG.costBuckets.push({orgId:_clickOrgId(),id:uid('cb'),code:'NEW',label:'New bucket',dept:'Marketing',extCode:''});
   logAudit('add cost bucket','New bucket'); render(); toast('Cost bucket added.');
@@ -2311,6 +2421,20 @@ async function loadFromSupabase(){
     if(cv2 && !cv2.error){ CFG.campV2Available=true; (cv2.data||[]).forEach(r=>{ CFG.campV2[r.id]=r; }); }
     if(csa && !csa.error){ CFG.segAllocAvailable=true; CFG.campaignSegAllocs=(csa.data||[]).map(a=>({id:a.id,orgId:a.org_id,campaignId:a.campaign_id,segmentId:a.segment_id,sharePct:Number(a.share_pct)||0})); }
   }catch(e){ /* not migrated yet -- single segment, no Led by / targets */ }
+  /* 2026-10-14: benchmark library, gate steps, ICP profiles (Targets), campaign ICP -- fail-soft before the migration */
+  CFG.bench={available:false,rows:[],icps:[],icpAvailable:false,gateStep:{},orgIcpId:null,campIcp:{}};
+  try{
+    const [fb,gs,pf,cb]=await Promise.all([
+      sb.from('funnel_benchmarks').select('*'),
+      orgScoped(sb.from('gates').select('id,benchmark_step')),
+      orgScoped(sb.from('prospectus_filters').select('id,name,bench_industry,bench_region,bench_overrides')),
+      orgScoped(sb.from('campaigns').select('id,benchmark_icp_id'))
+    ]);
+    if(fb && !fb.error){ CFG.bench.available=true; CFG.bench.rows=fb.data||[]; }
+    if(gs && !gs.error) (gs.data||[]).forEach(r=>{ if(r.benchmark_step) CFG.bench.gateStep[r.id]=r.benchmark_step; });
+    if(pf && !pf.error){ CFG.bench.icpAvailable=true; CFG.bench.icps=(pf.data||[]).map(r=>({id:r.id,name:r.name||'(unnamed profile)',industry:r.bench_industry||null,region:r.bench_region||null,overrides:(r.bench_overrides&&typeof r.bench_overrides==='object')?r.bench_overrides:{}})); }
+    if(cb && !cb.error) (cb.data||[]).forEach(r=>{ if(r.benchmark_icp_id) CFG.bench.campIcp[r.id]=r.benchmark_icp_id; });
+  }catch(e){ /* benchmark migration not run yet */ }
 
   /* org_units/org_unit_access (phase8) and regions.org_unit_id (phase14) are
      optional, additive schema pieces -- an org that hasn't run those
@@ -2608,6 +2732,7 @@ async function loadFromSupabase(){
   CFG.ledByAvailable = Object.prototype.hasOwnProperty.call(os,'led_by_presets');
   CFG.pipelineGateId = os.pipeline_gate_id || null;
   CFG.pipelineGateAvailable = Object.prototype.hasOwnProperty.call(os,'pipeline_gate_id');
+  if(CFG.bench) CFG.bench.orgIcpId = os.benchmark_icp_id || null; /* 2026-10-14 */
   applyCampaignDefaults(); /* 2026-10-14: blanks only -- see applyCampaignDefaults() */
 
   /* sample history depends on gates/regions/activities/segments/drivers/seasonality all
@@ -3077,6 +3202,7 @@ const ADMIN_TABS=[
 ADMIN_TABS.splice(ADMIN_TABS.findIndex(t=>t[0]==='acts')+1,0,['routes','Routes']);
 ADMIN_TABS.splice(ADMIN_TABS.findIndex(t=>t[0]==='camps')+1,0,['customfields','Custom fields']);
 ADMIN_TABS.splice(ADMIN_TABS.findIndex(t=>t[0]==='time'),0,['naming','Naming']);
+ADMIN_TABS.splice(ADMIN_TABS.findIndex(t=>t[0]==='gates')+1,0,['bench','Benchmarks']); /* 2026-10-14 */
 function adminGatesWidgetSet(){
   const dis=canConfig()?'':'disabled';
   const ro=canConfig()?'':'class="locked"';
@@ -3103,7 +3229,7 @@ function adminGatesWidgetSet(){
     <div class="bd flush"><div class="scroll"><table ${ro}><thead><tr>
       <th style="width:30px"></th><th>Gate name</th><th>Code</th>${_showOrgCol?`<th style="cursor:pointer" onclick="UI.gatesSortByOrg=!UI.gatesSortByOrg;render();" title="Click to ${UI.gatesSortByOrg?'go back to chain order':'group by organization'}">Org ${UI.gatesSortByOrg?'▾':'⇅'}</th>`:''}
       <th class="n" title="The conversion rate INTO this gate from the previous one, as a percentage (e.g. 25 means 25% of the prior stage converts through). The entry gate has no inbound rate -- nothing converts into it.">Rate in (%) ⓘ</th>
-      <th class="n" title="Cumulative conversion rate from the entry gate all the way down to this one.">Cum. to here</th><th>Role</th><th>Definition shown to users</th><th class="n">Order</th><th></th>
+      <th class="n" title="Cumulative conversion rate from the entry gate all the way down to this one.">Cum. to here</th>${(CFG.bench||{}).available?'<th title="The standard benchmark step this gate completes (Admin › Benchmarks). Several gates may share one step.">Benchmark step</th>':''}<th>Role</th><th>Definition shown to users</th><th class="n">Order</th><th></th>
     </tr></thead><tbody>`;
   _gatesDisplay.forEach((g,i)=>{
     const isEntry=g.entry, cum=g.active?cumRate(g.id):null;
@@ -3115,6 +3241,7 @@ function adminGatesWidgetSet(){
       <td class="n">${isEntry?'<span class="mini">entry</span>':
         `<input class="cel w ${g.rate===0?'bad':''}" value="${(g.rate*100).toFixed(0)}" ${dis} onchange="setIn('gates','${g.id}','rate',this.value,'pct')" title="Percent -- e.g. 25 means 25%">%`}</td>
       <td class="n calc">${isEntry?'100%':F.p(cum,2)}</td>
+      ${(CFG.bench||{}).available?`<td>${isEntry?'<span class="mini">—</span>':`<select class="cel txt" style="width:150px" ${dis} onchange="setGateBenchStep('${g.id}',this.value)"><option value="">— not compared —</option>${BENCH_STEPS.map(([k,l])=>`<option value="${k}" ${(CFG.bench.gateStep||{})[g.id]===k?'selected':''}>${l}</option>`).join('')}</select>`}</td>`:''}
       <td>${isEntry?'<span class="pill v">Entry</span>':(i===CFG.gates.length-1?'<span class="pill ok">Target</span>':'<span class="pill n">Stage</span>')}</td>
       <td><input class="cel txt" style="width:260px" value="${esc(g.note||'')}" ${dis} onchange="setIn('gates','${g.id}','note',this.value)"></td>
       <td class="n">
@@ -3447,7 +3574,9 @@ function adminCampsWidgetTable(){
       <td><select class="cel txt" style="width:150px" onchange="applyRateSource('${c.id}',this.value)">
         <option value="manual" ${c.rateSource==='manual'?'selected':''}>Manual entry</option>
         <option value="benchmark_ind" ${c.rateSource==='benchmark_ind'?'selected':''}>Industry benchmark</option>
-        <option value="benchmark_hist" ${c.rateSource==='benchmark_hist'?'selected':''} title="Strategy's history is SAMPLE data until a real actuals feed is connected (see Actuals &amp; history)">Historical (sample data)</option></select></td>
+        <option value="benchmark_hist" ${c.rateSource==='benchmark_hist'?'selected':''} title="Strategy's history is SAMPLE data until a real actuals feed is connected (see Actuals &amp; history)">Historical (sample data)</option></select>
+        ${c.rateSource==='benchmark_ind'&&(CFG.bench||{}).available&&(CFG.bench.icps||[]).length?`<select class="cel txt" style="width:150px;margin-top:3px" title="ICP profile (industry + region) whose benchmark this campaign uses" onchange="setCampBenchIcp('${c.id}',this.value)">
+          <option value="">ICP: org default</option>${CFG.bench.icps.map(x=>`<option value="${x.id}" ${(CFG.bench.campIcp||{})[c.id]===x.id?'selected':''}>ICP: ${esc(x.name)}</option>`).join('')}</select>`:''}</td>
       <td class="n"><input class="cel w" value="${c.convOverride!=null?(c.convOverride*100).toFixed(2):''}" placeholder="auto"
         onchange="setIn('campaigns','${c.id}','convOverride',this.value,'pct')"></td>
       <td><span class="pill ${c.source==='Feed'?'n':'v'}">${esc(c.source)}</span></td>
@@ -3710,6 +3839,7 @@ const ADMIN_TAB_WIDGETS={
   acts:{boxSizes:{box1:12,box2:12},defaults:{box1:'table',box2:'prechains'},fns:{table:adminActsWidgetTable,prechains:adminActsWidgetPreChains}},
   routes:{boxSizes:{box1:12},defaults:{box1:'table'},fns:{table:adminRoutesWidgetTable}},
   naming:{boxSizes:{box1:12},defaults:{box1:'table'},fns:{table:adminNamingWidgetTable}},
+  bench:{boxSizes:{box1:12},defaults:{box1:'library'},fns:{library:adminBenchWidgetLibrary}},
   customfields:{boxSizes:{box1:12,box2:12},defaults:{box1:'defs',box2:'values'},fns:{defs:adminCustomFieldsWidgetDefs,values:adminCustomFieldsWidgetValues}},
   segs:{boxSizes:{box1:12},defaults:{box1:'table'},fns:{table:adminSegsWidgetTable}},
   camps:{boxSizes:{box1:12,box2:12,box3:12},defaults:{box1:'cursuslink',box2:'programmes',box3:'table'},fns:{cursuslink:adminCampsWidgetCursusLink,programmes:adminCampsWidgetProgrammes,table:adminCampsWidgetTable}},
@@ -4639,13 +4769,14 @@ function driversWidgetGlobal(){
 function driversWidgetRateLibrary(){
   const c=chain(),ro=readOnly()?'disabled':'';
   const obs=observedRates({fy:null});
+  const _bOn=!!(CFG.bench||{}).available, _bCtx=_bOn?benchCtx(null):null;
   let h=`<div class="card"><h3>Rate library <span class="sp"></span>
       <span class="pill v" title="Observed rates come from Strategy's history, which is generated sample data until a real actuals feed is connected">Sample history</span>
       <button class="btn sm" ${ro} onclick="adoptObserved()" title="Replaces published rates with rates observed in the SAMPLE history">Adopt observed rates</button></h3>
       <div class="bd flush"><table><thead><tr><th>Gate</th><th class="n">Published rate</th>
-        <th class="n">Observed (sample history)</th><th>Evidence</th><th class="n">Delta</th><th class="n">Cumulative</th></tr></thead><tbody>`;
+        <th class="n">Observed (sample history)</th><th>Evidence</th><th class="n">Delta</th>${_bOn?'<th title="Industry benchmark for the mapped step (Admin › Benchmarks). Indicative only.">Benchmark</th>':''}<th class="n">Cumulative</th></tr></thead><tbody>`;
   c.forEach((g,i)=>{
-    if(i===0){ h+=`<tr><td class="lb">${esc(g.name)}</td><td class="n mini">entry</td><td class="n mini">—</td>
+    if(i===0){ h+=`<tr><td class="lb">${esc(g.name)}</td><td class="n mini">entry</td><td class="n mini">—</td>${_bOn?'<td class="mini">—</td>':''}
       <td class="mini">—</td><td class="n">—</td><td class="n calc">100%</td></tr>`; return; }
     const o=obs[g.id]||{},cb=confBand(o.n);
     const delta=(o.rate!=null)?(g.rate-o.rate):null;
@@ -4654,11 +4785,14 @@ function driversWidgetRateLibrary(){
       <td class="n calc">${o.rate!=null?F.p(o.rate,1):'—'}</td>
       <td><span class="pill ${cb.cls}">${cb.label}</span></td>
       <td class="n">${delta!=null?`<span class="pill ${Math.abs(delta)>0.05?'warn':'ok'}">${F.sp(delta,1)}</span>`:'—'}</td>
+      ${_bOn?(()=>{ const gb=gateBench(g,_bCtx); if(!gb) return '<td class="mini">not mapped</td>';
+        return `<td title="${esc(gb.b.note||'')}">${F.p(gb.b.rate,0)}${gb.b.low!=null&&gb.b.high!=null?` <span class="mini">(${F.p(gb.b.low,0)}–${F.p(gb.b.high,0)})</span>`:''}${gb.b.src==='override'?' <span class="pill v">ICP</span>':''}
+          ${gb.n>1?`<div class="mini">${esc(BENCH_STEPS.find(x=>x[0]===gb.step)[1])} across ${gb.n} gates</div>`:''} ${g===gb.grp[gb.grp.length-1]?benchFlag(gb):''}</td>`; })():''}
       <td class="n calc">${F.p(cumRate(g.id),2)}</td></tr>`;
   });
   h+=`</tbody></table></div>
     <div class="bd"><div class="mini"><b>Evidence bands.</b> A rate backed by 8 observations is shown differently from one
-      backed by 4,000. Adopting observed rates overwrites the published rate and logs the change.</div></div></div>`;
+      backed by 4,000. Adopting observed rates overwrites the published rate and logs the change${_bOn?'; where history has fewer than 30 observations the mapped industry benchmark is used instead. Benchmarks are indicative only — see Admin › Benchmarks for ranges and sources':''}.</div></div></div>`;
   return h;
 }
 function driversWidgetSegmentMultipliers(){
@@ -4765,8 +4899,12 @@ function adoptObserved(){
      feed exists, so adopting "observed" rates would replace real published rates with sample-derived ones -- confirm first. */
   if(typeof confirm==='function' && !confirm('Strategy\'s history is SAMPLE data, not your real results. Adopting will replace your published rates with rates from the sample history. Continue?')) return;
   const obs=observedRates({fy:null});
-  chain().forEach((g,i)=>{ if(i===0)return; const o=obs[g.id]; if(o&&o.rate!=null&&o.n>=30) g.rate=Math.round(o.rate*1000)/1000; });
-  logAudit('adopt observed rates','gates with n>=30 updated from history'); render(); toast('Published rates updated from history where n ≥ 30.');
+  let nb=0;
+  chain().forEach((g,i)=>{ if(i===0)return; const o=obs[g.id];
+    if(o&&o.rate!=null&&o.n>=30) g.rate=Math.round(o.rate*1000)/1000;
+    else { const gb=gateBench(g,null); if(gb){ g.rate=Math.round(gb.per*1000)/1000; nb++; } } /* 2026-10-14: benchmark where n < 30 */ });
+  logAudit('adopt observed rates','gates with n>=30 updated from sample history'+(nb?'; '+nb+' gate(s) with n<30 set from industry benchmark':''));
+  render(); toast('Published rates updated from sample history where n ≥ 30'+(nb?'; '+nb+' gate(s) from the industry benchmark':'')+'.');
 }
 
 /* ============================================================================
@@ -5605,7 +5743,7 @@ function campaignWidgetTable(){
   const m=verMult()*segBlend();
   const committed=sum(camps.map(campaignCommitted)), actualSpend=sum(camps.map(campaignActualSpend));
   let h=`<div class="card"><h3>Campaigns in scope <span class="sp"></span>
-    <span class="mini">Conv. % shown is per-campaign — manual, industry benchmark, or the sample history (Section 6.1; real history once an actuals feed is connected)</span></h3>
+    <span class="mini">Conv. % shown is per-campaign — manual, industry benchmark (stage by stage from Admin › Benchmarks when gates are mapped), or the sample history (Section 6.1; real history once an actuals feed is connected)</span></h3>
     <div class="bd flush"><div class="scroll cap"><table><thead><tr>
     <th>Campaign</th><th>Status</th><th>Activity</th><th>Bucket</th><th>Segment</th><th>Region</th><th>Window</th>
     <th class="n">Days</th><th class="n">Budgeted</th><th class="n">Committed</th><th class="n">Actual</th>

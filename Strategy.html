@@ -3447,7 +3447,7 @@ function adminCampsWidgetTable(){
       <td><select class="cel txt" style="width:150px" onchange="applyRateSource('${c.id}',this.value)">
         <option value="manual" ${c.rateSource==='manual'?'selected':''}>Manual entry</option>
         <option value="benchmark_ind" ${c.rateSource==='benchmark_ind'?'selected':''}>Industry benchmark</option>
-        <option value="benchmark_hist" ${c.rateSource==='benchmark_hist'?'selected':''}>Historical (this org)</option></select></td>
+        <option value="benchmark_hist" ${c.rateSource==='benchmark_hist'?'selected':''} title="Strategy's history is SAMPLE data until a real actuals feed is connected (see Actuals &amp; history)">Historical (sample data)</option></select></td>
       <td class="n"><input class="cel w" value="${c.convOverride!=null?(c.convOverride*100).toFixed(2):''}" placeholder="auto"
         onchange="setIn('campaigns','${c.id}','convOverride',this.value,'pct')"></td>
       <td><span class="pill ${c.source==='Feed'?'n':'v'}">${esc(c.source)}</span></td>
@@ -4640,9 +4640,10 @@ function driversWidgetRateLibrary(){
   const c=chain(),ro=readOnly()?'disabled':'';
   const obs=observedRates({fy:null});
   let h=`<div class="card"><h3>Rate library <span class="sp"></span>
-      <button class="btn sm" ${ro} onclick="adoptObserved()">Adopt observed rates</button></h3>
+      <span class="pill v" title="Observed rates come from Strategy's history, which is generated sample data until a real actuals feed is connected">Sample history</span>
+      <button class="btn sm" ${ro} onclick="adoptObserved()" title="Replaces published rates with rates observed in the SAMPLE history">Adopt observed rates</button></h3>
       <div class="bd flush"><table><thead><tr><th>Gate</th><th class="n">Published rate</th>
-        <th class="n">Observed in history</th><th>Evidence</th><th class="n">Delta</th><th class="n">Cumulative</th></tr></thead><tbody>`;
+        <th class="n">Observed (sample history)</th><th>Evidence</th><th class="n">Delta</th><th class="n">Cumulative</th></tr></thead><tbody>`;
   c.forEach((g,i)=>{
     if(i===0){ h+=`<tr><td class="lb">${esc(g.name)}</td><td class="n mini">entry</td><td class="n mini">—</td>
       <td class="mini">—</td><td class="n">—</td><td class="n calc">100%</td></tr>`; return; }
@@ -4760,6 +4761,9 @@ function pageDrivers(){
   return h;
 }
 function adoptObserved(){
+  /* 2026-10-14 (Stef: label the sample history): history is generated sample data (buildHist) until a real actuals
+     feed exists, so adopting "observed" rates would replace real published rates with sample-derived ones -- confirm first. */
+  if(typeof confirm==='function' && !confirm('Strategy\'s history is SAMPLE data, not your real results. Adopting will replace your published rates with rates from the sample history. Continue?')) return;
   const obs=observedRates({fy:null});
   chain().forEach((g,i)=>{ if(i===0)return; const o=obs[g.id]; if(o&&o.rate!=null&&o.n>=30) g.rate=Math.round(o.rate*1000)/1000; });
   logAudit('adopt observed rates','gates with n>=30 updated from history'); render(); toast('Published rates updated from history where n ≥ 30.');
@@ -5601,7 +5605,7 @@ function campaignWidgetTable(){
   const m=verMult()*segBlend();
   const committed=sum(camps.map(campaignCommitted)), actualSpend=sum(camps.map(campaignActualSpend));
   let h=`<div class="card"><h3>Campaigns in scope <span class="sp"></span>
-    <span class="mini">Conv. % shown is per-campaign — manual, industry benchmark, or this org's history (Section 6.1)</span></h3>
+    <span class="mini">Conv. % shown is per-campaign — manual, industry benchmark, or the sample history (Section 6.1; real history once an actuals feed is connected)</span></h3>
     <div class="bd flush"><div class="scroll cap"><table><thead><tr>
     <th>Campaign</th><th>Status</th><th>Activity</th><th>Bucket</th><th>Segment</th><th>Region</th><th>Window</th>
     <th class="n">Days</th><th class="n">Budgeted</th><th class="n">Committed</th><th class="n">Actual</th>

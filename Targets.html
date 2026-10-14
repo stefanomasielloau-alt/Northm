@@ -1881,7 +1881,7 @@ function benchOverridesCardHtml(f,dis){
     <div class="note w"><strong>Caveat.</strong> ${esc(BENCH_CAVEAT)}</div>
     <p class="mini" style="margin:0 0 8px">Leave “Your rate” blank to use the base benchmark. Your own rate (e.g. from your CRM) replaces it for this ICP profile only, everywhere Strategy uses benchmarks.</p></div>
     <div class="bd flush"><table><thead><tr><th>Step</th><th>Base benchmark</th><th>Sources</th><th class="n">Your rate (%)</th><th>Why / source of your rate</th></tr></thead><tbody>`;
-  BENCH_STEPS.forEach(([k,l])=>{ const b=base(k), ov=(f.benchOverrides||{})[k]||{};
+  BENCH_STEPS.concat([['abm_maa_sao','Account: MAA → SAO (ABM)']]).forEach(([k,l])=>{ const b=base(k), ov=(f.benchOverrides||{})[k]||{};
     h+=`<tr><td class="lb">${l}</td>
       <td title="${esc(b?b.note:'')}">${b?`<b>${(b.typical*100).toFixed(0)}%</b>${b.low!=null&&b.high!=null?` <span class="mini">(${(b.low*100).toFixed(0)}–${(b.high*100).toFixed(0)}%)</span>`:''} <span class="pill ${b.confidence==='low'?'warn':(b.confidence==='high'?'ok':'n')}">${esc(b.confidence)}</span>`:'<span class="mini">—</span>'}</td>
       <td class="mini">${b?(Array.isArray(b.sources)?b.sources:[]).map((x,i)=>`<a href="${esc(x.url)}" target="_blank" rel="noopener" title="${esc(x.title)}">[${i+1}]</a>`).join(' '):''}</td>

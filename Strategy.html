@@ -1277,6 +1277,7 @@ function applyRateSource(id,src){
    "Industry benchmark" conversion source. Migration: Claude outputs/2026-10-14-migration-benchmarks-icp-personas.sql
    ============================================================================ */
 const BENCH_STEPS=[['lead_mql','Lead → MQL'],['mql_sql','MQL → SQL'],['sql_opp','SQL → Opportunity'],['opp_win','Opportunity → Win']];
+const BENCH_ABM_STEP='abm_maa_sao', BENCH_ABM_LABEL='Account: MAA → SAO (ABM)'; /* 2026-10-14 (Stef: MAA = accounts, MQL = people) */
 const BENCH_IND={generic:'Generic B2B',tech_hardware:'Tech hardware',saas:'SaaS'};
 const BENCH_REG={NA:'North America',EU:'EU',APAC:'APAC'};
 const BENCH_CAVEAT='Benchmarks are indicative only. Public figures vary widely by source, sample and definition (what counts as an MQL or an opportunity differs by company), and many come from vendor marketing. No public source found splits these rates by North America / EU / APAC, so the same global figure is used for each region until better data exists. Use the range and the source links, not a single number, and prefer your own history or ICP overrides where you have them.';
@@ -1319,6 +1320,32 @@ function campBenchExitRate(camp){
   for(let i=1;i<c.length;i++){ const gb=gateBench(c[i],ctx); if(gb){ r*=gb.per; mapped++; } else r*=rateOf(c[i]); }
   return mapped?r:null;
 }
+/* ABM comparison: cumulative rate between two gates (default: first MAA/MQA/account gate -> first SAO gate) */
+function benchAbmGates(){
+  const c=chain(), cfg=(CFG.bench||{}).abm||null;
+  let from=cfg&&cfg.from_gate_id?c.find(g=>g.id===cfg.from_gate_id):null, to=cfg&&cfg.to_gate_id?c.find(g=>g.id===cfg.to_gate_id):null;
+  const auto=!cfg;
+  if(auto){ from=c.find(g=>/\bmaa\b|\bmqa\b|account/i.test(g.name))||null; to=c.find(g=>/\bsao\b/i.test(g.name))||null; }
+  if(from&&to&&c.indexOf(to)<=c.indexOf(from)) to=null;
+  return {from,to,auto};
+}
+function benchAbm(ctx){
+  const B=CFG.bench||{}; if(!B.available) return null;
+  const b=benchStep(BENCH_ABM_STEP,ctx||benchCtx(null)); const {from,to,auto}=benchAbmGates();
+  let rate=null, path=[];
+  if(from&&to){ const c=chain(); rate=1; for(let i=c.indexOf(from)+1;i<=c.indexOf(to);i++){ path.push(c[i]); if(c[i].rate==null){ rate=null; break; } rate*=clamp(c[i].rate,0,1); } }
+  return {b,from,to,auto,rate,path,groupRate:rate};
+}
+async function setBenchAbm(which,gid){
+  if(!canConfig()||!(CFG.bench||{}).available) return;
+  if(!CFG.bench.abmAvailable){ toast('The ABM comparison needs 2026-10-14-migration-benchmarks-abm-step.sql run first.'); render(); return; }
+  const cur=benchAbmGates(); const v={from_gate_id:cur.from?cur.from.id:null,to_gate_id:cur.to?cur.to.id:null};
+  v[which==='from'?'from_gate_id':'to_gate_id']=gid||null;
+  CFG.bench.abm=v; logAudit('edit','ABM benchmark gates → '+[v.from_gate_id,v.to_gate_id].map(id=>((chain().find(g=>g.id===id)||{}).name||'—')).join(' → ')); render();
+  const { error } = await sb.from('org_settings').update({benchmark_abm:v}).eq('org_id',_benchOrgId());
+  if(error){ console.error('benchmark_abm save failed',error); toast('Could not save the ABM gates -- see console.'); }
+}
+window.setBenchAbm=setBenchAbm;
 function _benchOrgId(){ return (typeof _savOrgFilter!=='undefined'&&_savOrgFilter!==null)?_savOrgFilter:_orgId; }
 async function setGateBenchStep(gid,step){
   if(!canConfig()||!(CFG.bench||{}).available) return;
@@ -1373,7 +1400,12 @@ function adminBenchWidgetLibrary(){
       <td>${ov&&ov.rate!=null?`<b>${F.p(Number(ov.rate),0)}</b><div class="mini">${esc(ov.note||'')}</div>`:'<span class="mini">—</span>'}</td>
       <td>${grp.length?`${grp.map(g=>esc(g.name)).join(' × ')} = <b>${gb&&gb.groupRate!=null?F.p(gb.groupRate,1):'—'}</b> ${benchFlag(gb)}`:'<span class="mini">no gate mapped — set in Funnel gates</span>'}</td></tr>`;
   });
-  h+=`</tbody></table></div></div><div class="bd"><div class="mini"><b>How it is used.</b> Rate library shows a Benchmark column; a gate with no rate falls back to its benchmark; "Adopt observed rates" uses the benchmark where history has fewer than 30 observations; a campaign's "Industry benchmark" conversion source is worked out stage by stage. Hover a figure for the note; [1], [2] open the sources. The base set is refreshed quarterly (researched, then approved before loading).</div></div></div>`;
+  { const ab=benchAbm(ctx), ov=ctx.icp&&ctx.icp.overrides?ctx.icp.overrides[BENCH_ABM_STEP]:null, c=chain();
+    const gsel=(which,cur)=>`<select class="cel txt" style="width:auto" ${dis} onchange="setBenchAbm('${which}',this.value)"><option value="">—</option>${c.map(g=>`<option value="${g.id}" ${cur&&cur.id===g.id?'selected':''}>${esc(g.name)}</option>`).join('')}</select>`;
+    h+=`<tr style="border-top:2px solid var(--line)"><td class="lb" title="Account-level comparison, separate from the lead (people) path above">${BENCH_ABM_LABEL}</td>${Object.keys(BENCH_IND).map(ind=>`<td>${benchCell(benchBase(BENCH_ABM_STEP,ind,reg))}</td>`).join('')}
+      <td>${ov&&ov.rate!=null?`<b>${F.p(Number(ov.rate),0)}</b><div class="mini">${esc(ov.note||'')}</div>`:'<span class="mini">—</span>'}</td>
+      <td>${B.abmAvailable?`${gsel('from',ab.from)} → ${gsel('to',ab.to)}${ab.auto?' <span class="mini">(auto)</span>':''}<div>${ab.path.length?ab.path.map(g=>esc(g.name)).join(' × ')+' = <b>'+(ab.rate!=null?F.p(ab.rate,1):'—')+'</b> '+(ab.b?benchFlag(ab):''):'<span class="mini">choose the account gate and the SAO gate</span>'}</div>`:'<span class="mini">needs 2026-10-14-migration-benchmarks-abm-step.sql</span>'}</td></tr>`; }
+  h+=`</tbody></table></div></div><div class="bd"><div class="mini"><b>Account-based row.</b> MAA counts accounts and MQL counts people, so the account gate is left out of the lead path and compared separately: the product of the stage rates from the account gate to SAO against account-level (MQA → opportunity) benchmarks. Definitions differ between sources — treat as directional.</div><div class="mini" style="margin-top:6px"><b>How it is used.</b> Rate library shows a Benchmark column; a gate with no rate falls back to its benchmark; "Adopt observed rates" uses the benchmark where history has fewer than 30 observations; a campaign's "Industry benchmark" conversion source is worked out stage by stage. Hover a figure for the note; [1], [2] open the sources. The base set is refreshed quarterly (researched, then approved before loading).</div></div></div>`;
   return h;
 }
 window.adminBenchWidgetLibrary=adminBenchWidgetLibrary;
@@ -2732,7 +2764,9 @@ async function loadFromSupabase(){
   CFG.ledByAvailable = Object.prototype.hasOwnProperty.call(os,'led_by_presets');
   CFG.pipelineGateId = os.pipeline_gate_id || null;
   CFG.pipelineGateAvailable = Object.prototype.hasOwnProperty.call(os,'pipeline_gate_id');
-  if(CFG.bench) CFG.bench.orgIcpId = os.benchmark_icp_id || null; /* 2026-10-14 */
+  if(CFG.bench){ CFG.bench.orgIcpId = os.benchmark_icp_id || null; /* 2026-10-14 */
+    CFG.bench.abmAvailable = Object.prototype.hasOwnProperty.call(os,'benchmark_abm');
+    CFG.bench.abm = (os.benchmark_abm && typeof os.benchmark_abm==='object') ? os.benchmark_abm : null; }
   applyCampaignDefaults(); /* 2026-10-14: blanks only -- see applyCampaignDefaults() */
 
   /* sample history depends on gates/regions/activities/segments/drivers/seasonality all
@@ -8472,6 +8506,7 @@ const THIS_MODULE='Ordo';
 const HELP_FAQ=[
   {q:'What are industry benchmarks and where do they come from?', a:'Admin \u2192 Benchmarks shows typical stage-to-stage rates (Lead\u2192MQL, MQL\u2192SQL, SQL\u2192Opportunity, Opportunity\u2192Win) for Generic B2B, Tech hardware and SaaS in North America, EU and APAC, researched from public sources (links on each figure) and refreshed quarterly. They are indicative only: sources disagree, many are vendor marketing, and no source found splits them by region, so each region currently uses the same global figure.'},
   {q:'How do benchmarks connect to my funnel?', a:'In Admin \u2192 Funnel gates pick the Benchmark step each gate completes (several gates can share one step, e.g. SAO and SQO inside SQL\u2192Opportunity). The Rate library then shows a Benchmark column with an in/below/above-range flag; a gate with no rate uses its benchmark; Adopt observed rates uses the benchmark where history has fewer than 30 observations; and a campaign set to Industry benchmark is worked out stage by stage.'},
+  {q:'Why is MAA compared separately?', a:'MAA (marketing accepted accounts) counts accounts while MQL counts people, so the account gate is left out of the lead benchmark path. Admin \u2192 Benchmarks has a separate account-based row: the stage rates from the account gate to SAO multiplied together, against account-level (MQA \u2192 opportunity) benchmarks. Pick the two gates there.'},
   {q:'Can we use our own benchmark rates?', a:'Yes. Set industry, region and your own rates on an ICP profile in Targets \u2192 Filters \u2192 Benchmarks, then choose that profile in Admin \u2192 Benchmarks (or per campaign in Admin \u2192 Campaigns when its conversion source is Industry benchmark). Your rate replaces the base figure for that profile only.'},
   {q:'How do I reset my password?', a:'An admin can trigger a reset from Configuration \u2192 Roles & users \u2192 Reset password, or use "Forgot password" at login. The email comes from Supabase directly, not from North.'},
   {q:"What's the difference between Simple and Expert mode?", a:'Simple mode walks you through a 5-step flow \u2014 Landing, Driver assumptions, Projections, Regional & gaps, Activity leads \u2014 to get a full plan drafted fast, with the rest of the sidebar shown greyed out (or hidden, if you prefer). Expert mode unlocks every planning/configuration page individually (Drivers & rates, Planning engine, Geography & pods, Segment & audience, Activity plan, Campaign & cost, Actuals & history, Insight, Snapshots, Relationships) plus the Quick calculator. Toggle it from the sidebar if your role allows it.'},

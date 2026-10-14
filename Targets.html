@@ -125,6 +125,26 @@ textarea.cel{resize:vertical; min-height:44px;}
 .bar i{display:block; height:100%; background:var(--nav); border-radius:20px;}
 .funnelrow{display:grid; grid-template-columns:150px 1fr 90px; align-items:center; gap:10px; padding:7px 0;}
 .icpcols{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+/* 2026-10-14 buyer persona card (one combined form from Stef's three templates) */
+.psn{display:grid;grid-template-columns:300px 1fr;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.psn-l{background:#1f4e8c;color:#fff;padding:18px}
+.psn-l h4{color:#fff;margin:14px 0 6px;font-size:13px}
+.psn-l .psn-in{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25)}
+.psn-photo{width:110px;height:110px;border-radius:50%;background:#c9cdd3 center/cover no-repeat;border:3px solid #fff;margin:0 auto 8px}
+.psn-hd{background:#0d2c6b;color:#fff;padding:14px 18px}
+.psn-hd .psn-in{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.25)}
+.psn-r{padding:0 0 14px}
+.psn-bg{background:#e6f0f3;padding:12px 18px}
+.psn-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 18px;padding:12px 18px}
+.psn-r h4{margin:6px 0 4px;font-size:13px}
+.psn-r .sub{font-size:11px;color:var(--ink-2);margin:-2px 0 4px}
+.psn-in{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:5px;padding:5px 7px;font:inherit;font-size:12px;background:#fff;resize:vertical}
+.psn-tac{margin:4px 18px 0;border-collapse:collapse;width:calc(100% - 36px)}
+.psn-tac th{background:#4aa82c;color:#fff;text-align:left;padding:6px 8px;font-size:12px}
+.psn-tac td{border:1px solid var(--line);vertical-align:top;padding:4px}
+@media print{ body.psn-printing .side, body.psn-printing .topnav, body.psn-printing .no-print, body.psn-printing .phead, body.psn-printing #helpPanel, body.psn-printing .savbar{display:none!important}
+  body.psn-printing main, body.psn-printing .main{margin:0!important;padding:0!important}
+  body.psn-printing .psn{border:none} body.psn-printing .psn-in{border:none;background:transparent;resize:none} }
 .icpcols ul{margin:6px 0 0; padding-left:18px;}
 .icpcols li{margin-bottom:5px;}
 .months{display:flex; align-items:flex-end; gap:6px; height:110px; margin:10px 0;}
@@ -647,6 +667,11 @@ async function saveToSupabase(){
     upsertRows('prospectus_filters', CFG.filters.filter(f=>f.revenueRange||f.techStack), f=>({
       id:f.id,revenue_range:f.revenueRange||'',tech_stack:f.techStack||''
     })),
+    /* 2026-10-14: benchmark fields -- after the main filter upsert so a new filter exists first */
+    (async()=>{ if(!CFG.benchAvailable) return; await new Promise(r=>setTimeout(r,400));
+      await upsertRows('prospectus_filters', CFG.filters.filter(f=>f.benchIndustry||f.benchRegion||Object.keys(f.benchOverrides||{}).length), f=>({
+        id:f.id,name:f.name,bench_industry:f.benchIndustry||null,bench_region:f.benchRegion||null,bench_overrides:f.benchOverrides||{} })); })(),
+    CFG.personasAvailable ? upsertRows('personas', CFG.personas, personaToRow) : Promise.resolve(),
     upsertRows('prospectus_reports', CFG.reports, r=>({
       id:r.id,filter_id:r.filterId||null,name:r.name,generated_at:r.generatedAt||null,
       market_low:r.marketLow,market_high:r.marketHigh,active_in_market_pct:r.activeInMarketPct,
@@ -776,6 +801,20 @@ async function loadFromSupabase(){
     console.warn('revenue_range/tech_stack columns not available yet (migration pending?)', e);
   }
 
+  /* 2026-10-14: benchmark industry/region/overrides on ICP profiles, the base benchmark library (read-only),
+     and buyer personas -- 2026-10-14-migration-benchmarks-icp-personas.sql. Fail-soft before it is run. */
+  CFG._benchById={}; CFG.benchAvailable=false; CFG.benchRows=[]; CFG.personas=[]; CFG.personasAvailable=false;
+  try{
+    const [bf,bl,ps]=await Promise.all([
+      orgScoped(sb.from('prospectus_filters').select('id,bench_industry,bench_region,bench_overrides')),
+      sb.from('funnel_benchmarks').select('*'),
+      orgScoped(sb.from('personas').select('*').order('created_at'))
+    ]);
+    if(bf && !bf.error){ CFG.benchAvailable=true; (bf.data||[]).forEach(r=>{ CFG._benchById[r.id]=r; }); }
+    if(bl && !bl.error) CFG.benchRows=bl.data||[];
+    if(ps && !ps.error){ CFG.personasAvailable=true; CFG.personas=(ps.data||[]).map(personaFromRow); }
+  }catch(e){ console.warn('benchmark / persona tables not available yet (migration pending?)', e); }
+
   /* 2026-09-09 (systemic org_id audit): prospectus_filters, prospectus_reports and
      prospectus_leads are all re-saved by this page's own upsertRows() calls, same
      vulnerable shape as the roles bug (see Ordo.html's fix). Filtered explicitly rather
@@ -802,7 +841,9 @@ async function loadFromSupabase(){
     /* backlog item 14 -- '' until 2026-09-04-icp-fields-migration.sql is run, same fail-soft
        pattern as everything else new this session. */
     revenueRange:(CFG._icpFieldsById[f.id]||{}).revenue_range||'',
-    techStack:(CFG._icpFieldsById[f.id]||{}).tech_stack||''
+    techStack:(CFG._icpFieldsById[f.id]||{}).tech_stack||'',
+    benchIndustry:(CFG._benchById[f.id]||{}).bench_industry||'', benchRegion:(CFG._benchById[f.id]||{}).bench_region||'',
+    benchOverrides:(CFG._benchById[f.id]||{}).bench_overrides||{}
   }));
   CFG.reports = (reportsR.data||[]).map(r=>({
     id:r.id,orgId:r.org_id,filterId:r.filter_id,name:r.name,generatedAt:r.generated_at,
@@ -1780,8 +1821,8 @@ function pageFilters(){
     ${UI.filtersView==='tiles'?`<div class="bd flush">${filterTilesHtml(dis)}</div></div>`:`
     <div class="bd flush"><div class="scroll cap"><table class="tt"><thead><tr>
       <th>Name</th><th>Industry</th><th>What you sell</th><th>Ideal client</th><th class="n">Avg deal</th><th>Market</th><th>Country</th>
-      <th>Company size</th><th>Target titles</th><th>Seniority</th><th>Revenue range</th><th>Tech stack</th><th>Updated</th><th></th></tr></thead><tbody>
-    ${!CFG.filters.length?`<tr><td colspan="14" class="empty">No filters yet.</td></tr>`:CFG.filters.map(f=>`<tr>
+      <th>Company size</th><th>Target titles</th><th>Seniority</th><th>Revenue range</th><th>Tech stack</th>${CFG.benchAvailable?'<th title="Selects the industry benchmark set Strategy compares your funnel with">Benchmark industry</th><th>Benchmark region</th>':''}<th>Updated</th><th></th></tr></thead><tbody>
+    ${!CFG.filters.length?`<tr><td colspan="16" class="empty">No filters yet.</td></tr>`:CFG.filters.map(f=>`<tr>
       <td><input class="cel txt" style="width:170px" ${dis} value="${esc(f.name)}" onchange="setIn('filters','${f.id}','name',this.value)"></td>
       <td><input class="cel txt" style="width:130px" ${dis} value="${esc(f.industry)}" onchange="setIn('filters','${f.id}','industry',this.value)"></td>
       <td><input class="cel txt" style="width:130px" ${dis} value="${esc(f.whatYouSell)}" onchange="setIn('filters','${f.id}','whatYouSell',this.value)"></td>
@@ -1800,12 +1841,148 @@ function pageFilters(){
         ${SENIORITY_LEVELS.map(s=>`<option ${(f.seniority||[]).includes(s)?'selected':''}>${s}</option>`).join('')}</select></td>
       <td><input class="cel txt" style="width:110px" ${dis} placeholder="e.g. $10-50M" value="${esc(f.revenueRange)}" onchange="setIn('filters','${f.id}','revenueRange',this.value)"></td>
       <td><input class="cel txt" style="width:150px" ${dis} placeholder="Salesforce, HubSpot..." value="${esc(f.techStack)}" onchange="setIn('filters','${f.id}','techStack',this.value)" title="Comma-separated"></td>
+      ${CFG.benchAvailable?`<td><select class="cel" style="width:110px" ${dis} onchange="setIn('filters','${f.id}','benchIndustry',this.value)"><option value="">—</option>${Object.keys(BENCH_IND).map(k=>`<option value="${k}" ${f.benchIndustry===k?'selected':''}>${BENCH_IND[k]}</option>`).join('')}</select></td>
+      <td><select class="cel" style="width:110px" ${dis} onchange="setIn('filters','${f.id}','benchRegion',this.value)"><option value="">—</option>${Object.keys(BENCH_REG).map(k=>`<option value="${k}" ${f.benchRegion===k?'selected':''}>${BENCH_REG[k]}</option>`).join('')}</select></td>`:''}
       <td class="mini">${F.d(f.updatedAt)}</td>
       <td class="n"><div class="row">
         <button class="btn sm" onclick="openPrModal('filter','${f.id}')">${dis?'View':'Edit'}</button>
         <button class="btn sm pri" ${dis} onclick="generateReport('${f.id}')">Generate report</button>
+        ${CFG.benchAvailable?`<button class="btn sm" onclick="UI.benchEditId=UI.benchEditId==='${f.id}'?null:'${f.id}';render()">Benchmarks</button>`:''}
         <button class="btn sm dgr" ${dis} onclick="removeFilter('${f.id}')">Remove</button></div></td></tr>`).join('')}
     </tbody></table></div></div></div>`}`;
+  if(CFG.benchAvailable && UI.benchEditId){ const bf=byId(CFG.filters,UI.benchEditId); if(bf) h+=benchOverridesCardHtml(bf,dis); }
+  else if(!CFG.benchAvailable) h+=`<div class="note">Industry benchmarks and buyer personas need <code>2026-10-14-migration-benchmarks-icp-personas.sql</code> run first.</div>`;
+  return h;
+}
+
+/* ============================================================================
+   2026-10-14 (Stef): benchmark industry / region and the org's own overrides live on the ICP profile; Strategy
+   reads them (Admin > Benchmarks). Same labels and caveat as Strategy.
+   ============================================================================ */
+const BENCH_STEPS=[['lead_mql','Lead → MQL'],['mql_sql','MQL → SQL'],['sql_opp','SQL → Opportunity'],['opp_win','Opportunity → Win']];
+const BENCH_IND={generic:'Generic B2B',tech_hardware:'Tech hardware',saas:'SaaS'};
+const BENCH_REG={NA:'North America',EU:'EU',APAC:'APAC'};
+const BENCH_CAVEAT='Benchmarks are indicative only. Public figures vary widely by source, sample and definition (what counts as an MQL or an opportunity differs by company), and many come from vendor marketing. No public source found splits these rates by North America / EU / APAC, so the same global figure is used for each region until better data exists. Use the range and the source links, not a single number, and prefer your own history or ICP overrides where you have them.';
+function setBenchOverride(fid,step,key,val){
+  const f=byId(CFG.filters,fid); if(!f) return;
+  const o=Object.assign({},f.benchOverrides||{}); const cur=Object.assign({},o[step]||{});
+  if(key==='rate'){ const t=String(val).trim(); if(t===''){ delete cur.rate; } else { const v=parseFloat(t)/100; if(isNaN(v)||v<=0||v>1){ toast('Enter a percentage between 0 and 100.'); render(); return; } cur.rate=Math.round(v*10000)/10000; } }
+  else cur.note=String(val||'').slice(0,200);
+  if(cur.rate==null&&!cur.note) delete o[step]; else o[step]=cur;
+  f.benchOverrides=o; f.updatedAt=new Date().toISOString().slice(0,10);
+  logAudit('edit','filters/'+f.name+'.benchmark '+step); render();
+}
+window.setBenchOverride=setBenchOverride;
+function benchOverridesCardHtml(f,dis){
+  const base=k=>(CFG.benchRows||[]).find(r=>r.step===k&&r.industry===(f.benchIndustry||'generic')&&r.region===(f.benchRegion||'NA'));
+  let h=`<div class="card"><h3>Benchmarks for “${esc(f.name)}” <span class="sp"></span>
+    <span class="pill n">${esc(BENCH_IND[f.benchIndustry]||'Generic B2B (not set)')} · ${esc(BENCH_REG[f.benchRegion]||'North America (not set)')}</span>
+    <button class="btn sm" onclick="UI.benchEditId=null;render()">Close</button></h3><div class="bd">
+    <div class="note w"><strong>Caveat.</strong> ${esc(BENCH_CAVEAT)}</div>
+    <p class="mini" style="margin:0 0 8px">Leave “Your rate” blank to use the base benchmark. Your own rate (e.g. from your CRM) replaces it for this ICP profile only, everywhere Strategy uses benchmarks.</p></div>
+    <div class="bd flush"><table><thead><tr><th>Step</th><th>Base benchmark</th><th>Sources</th><th class="n">Your rate (%)</th><th>Why / source of your rate</th></tr></thead><tbody>`;
+  BENCH_STEPS.forEach(([k,l])=>{ const b=base(k), ov=(f.benchOverrides||{})[k]||{};
+    h+=`<tr><td class="lb">${l}</td>
+      <td title="${esc(b?b.note:'')}">${b?`<b>${(b.typical*100).toFixed(0)}%</b>${b.low!=null&&b.high!=null?` <span class="mini">(${(b.low*100).toFixed(0)}–${(b.high*100).toFixed(0)}%)</span>`:''} <span class="pill ${b.confidence==='low'?'warn':(b.confidence==='high'?'ok':'n')}">${esc(b.confidence)}</span>`:'<span class="mini">—</span>'}</td>
+      <td class="mini">${b?(Array.isArray(b.sources)?b.sources:[]).map((x,i)=>`<a href="${esc(x.url)}" target="_blank" rel="noopener" title="${esc(x.title)}">[${i+1}]</a>`).join(' '):''}</td>
+      <td class="n"><input class="cel w" ${dis} value="${ov.rate!=null?(ov.rate*100).toFixed(1):''}" placeholder="base" onchange="setBenchOverride('${f.id}','${k}','rate',this.value)"></td>
+      <td><input class="cel txt" style="width:240px" ${dis} value="${esc(ov.note||'')}" placeholder="e.g. our FY26 CRM data" onchange="setBenchOverride('${f.id}','${k}','note',this.value)"></td></tr>`; });
+  h+=`</tbody></table></div><div class="bd"><div class="mini">Base set ${esc(((CFG.benchRows||[])[0]||{}).version||'—')}, refreshed quarterly. Strategy chooses which ICP profile to use in Admin › Benchmarks.</div></div></div>`;
+  return h;
+}
+
+/* ---------- Buyer personas (2026-10-14) -- one combined form from Stef's three templates ---------- */
+const PERSONA_LISTS=['goals','challenges','motivations','frustrations','previousExperience','expectations','identifiers','howWeHelp','marketingMessages','keyTactics'];
+const PERSONA_DEMO=[['ageRange','Age range'],['location','Location'],['education','Education'],['companySize','Company size'],['reportsTo','Reports to'],['other','Other']];
+function personaFromRow(r){ const a=x=>Array.isArray(x)?x:[];
+  return {id:r.id,orgId:r.org_id,icpId:r.icp_id||'',name:r.name||'',quote:r.quote||'',photoUrl:r.photo_url||'',title:r.title||'',seniority:r.seniority||'',
+    demographics:(r.demographics&&typeof r.demographics==='object')?r.demographics:{},background:r.background||'',
+    goals:a(r.goals),challenges:a(r.challenges),motivations:a(r.motivations),frustrations:a(r.frustrations),previousExperience:a(r.previous_experience),
+    expectations:a(r.expectations),identifiers:a(r.identifiers),howWeHelp:a(r.how_we_help),marketingMessages:a(r.marketing_messages),
+    targetingFocus:r.targeting_focus||'',outboundMessaging:r.outbound_messaging||'',keyTactics:a(r.key_tactics)}; }
+function personaToRow(p){ return {id:p.id,icp_id:p.icpId||null,name:p.name||'',quote:p.quote||'',photo_url:p.photoUrl||'',title:p.title||'',seniority:p.seniority||'',
+    demographics:p.demographics||{},background:p.background||'',goals:p.goals,challenges:p.challenges,motivations:p.motivations,frustrations:p.frustrations,
+    previous_experience:p.previousExperience,expectations:p.expectations,identifiers:p.identifiers,how_we_help:p.howWeHelp,marketing_messages:p.marketingMessages,
+    targeting_focus:p.targetingFocus||'',outbound_messaging:p.outboundMessaging||'',key_tactics:p.keyTactics,updated_at:new Date().toISOString()}; }
+function addPersona(icpId){
+  if(!CFG.personasAvailable){ toast('Personas need the 2026-10-14 database update first.'); return; }
+  const p=personaFromRow({id:uid('psn'),name:'New persona',icp_id:icpId||null}); p.orgId=null;
+  CFG.personas.push(p); UI.personaId=p.id; logAudit('add persona','New persona'); render();
+}
+window.addPersona=addPersona;
+function removePersona(id){
+  const p=byId(CFG.personas,id); if(!p) return;
+  if(!confirm('Remove persona "'+p.name+'"? This deletes it for everyone in the organisation.')) return;
+  CFG.personas=CFG.personas.filter(x=>x.id!==id); if(UI.personaId===id) UI.personaId=null;
+  logAudit('remove persona',p.name); render(); deleteRow('personas',id,p.orgId);
+}
+window.removePersona=removePersona;
+function setPersona(id,key,val){
+  const p=byId(CFG.personas,id); if(!p) return;
+  if(PERSONA_LISTS.includes(key)) p[key]=String(val||'').split('\n').map(x=>x.trim()).filter(Boolean).slice(0,30);
+  else if(key.startsWith('demo.')) p.demographics=Object.assign({},p.demographics,{[key.slice(5)]:String(val||'').slice(0,200)});
+  else p[key]=String(val==null?'':val);
+  logAudit('edit','personas/'+p.name+'.'+key); render();
+}
+window.setPersona=setPersona;
+function printPersona(){ document.body.classList.add('psn-printing'); setTimeout(()=>{ window.print(); document.body.classList.remove('psn-printing'); },50); }
+window.printPersona=printPersona;
+function personaCardHtml(p,dis){
+  const ta=(k,ph,rows)=>`<textarea class="psn-in" rows="${rows||4}" ${dis} placeholder="${esc(ph)}" onchange="setPersona('${p.id}','${k}',this.value)">${esc((p[k]||[]).join('\n'))}</textarea>`;
+  const sec=(k,t,sub,ph)=>`<div><h4>${t}</h4>${sub?`<div class="sub">${sub}</div>`:''}${ta(k,ph||'One per line')}</div>`;
+  const icp=byId(CFG.filters,p.icpId);
+  return `<div class="psn">
+    <div class="psn-l">
+      <div class="psn-photo" style="${p.photoUrl?`background-image:url('${esc(p.photoUrl)}')`:''}"></div>
+      <input class="psn-in no-print" ${dis} placeholder="Photo URL (optional)" value="${esc(p.photoUrl)}" onchange="setPersona('${p.id}','photoUrl',this.value)">
+      <h4>Role</h4>
+      <input class="psn-in" ${dis} placeholder="Title (e.g. VP Marketing)" value="${esc(p.title)}" onchange="setPersona('${p.id}','title',this.value)" style="margin-bottom:4px">
+      <select class="psn-in" ${dis} onchange="setPersona('${p.id}','seniority',this.value)"><option value="">Seniority</option>${SENIORITY_LEVELS.map(s=>`<option ${s===p.seniority?'selected':''}>${s}</option>`).join('')}</select>
+      <h4>Demographics</h4>
+      ${PERSONA_DEMO.map(([k,l])=>`<div style="display:grid;grid-template-columns:95px 1fr;gap:6px;align-items:center;margin-bottom:4px"><span style="font-size:11.5px;font-weight:600">${l}</span>
+        <input class="psn-in" ${dis} value="${esc((p.demographics||{})[k]||'')}" onchange="setPersona('${p.id}','demo.${k}',this.value)"></div>`).join('')}
+      <h4>Goals</h4>${ta('goals','One per line',4)}
+      <h4>Identifiers</h4><div style="font-size:11px;opacity:.85;margin:-2px 0 4px">Channels, communities, social platforms</div>${ta('identifiers','One per line',3)}
+    </div>
+    <div class="psn-r">
+      <div class="psn-hd">
+        <input class="psn-in" style="font-size:20px;font-weight:700" ${dis} value="${esc(p.name)}" onchange="setPersona('${p.id}','name',this.value)">
+        <input class="psn-in" style="margin-top:6px" ${dis} placeholder="A real or typical quote, in their words" value="${esc(p.quote)}" onchange="setPersona('${p.id}','quote',this.value)">
+        <div class="no-print" style="margin-top:6px;font-size:11.5px">ICP profile:
+          <select class="psn-in" style="width:auto" ${dis} onchange="setPersona('${p.id}','icpId',this.value)"><option value="">— none —</option>
+            ${CFG.filters.map(f=>`<option value="${f.id}" ${f.id===p.icpId?'selected':''}>${esc(f.name)}</option>`).join('')}</select>
+          ${icp&&(icp.benchIndustry||icp.benchRegion)?` <span>${esc(BENCH_IND[icp.benchIndustry]||'')} · ${esc(BENCH_REG[icp.benchRegion]||'')}</span>`:''}</div>
+      </div>
+      <div class="psn-bg"><h4>Background</h4><textarea class="psn-in" rows="3" ${dis} placeholder="Career path, responsibilities, the world they work in" onchange="setPersona('${p.id}','background',this.value)">${esc(p.background)}</textarea></div>
+      <div class="psn-grid">
+        ${sec('challenges','Challenges','What gets in the way of their goals?')}
+        ${sec('howWeHelp','What can we do?','…to help them reach their goals and overcome challenges')}
+        ${sec('motivations','Motivations')}
+        ${sec('frustrations','Frustrations')}
+        ${sec('previousExperience','Previous experience','With us, competitors or the category')}
+        ${sec('expectations','Expectations')}
+      </div>
+      <div style="padding:0 18px">${sec('marketingMessages','Marketing message','How to describe the solution for the biggest impact on this persona')}</div>
+      <table class="psn-tac"><thead><tr><th>Internal targeting focus</th><th>Outbound (vendor-neutral) messaging</th><th>Key tactics</th></tr></thead><tbody><tr>
+        <td><textarea class="psn-in" rows="4" ${dis} onchange="setPersona('${p.id}','targetingFocus',this.value)">${esc(p.targetingFocus)}</textarea></td>
+        <td><textarea class="psn-in" rows="4" ${dis} onchange="setPersona('${p.id}','outboundMessaging',this.value)">${esc(p.outboundMessaging)}</textarea></td>
+        <td>${ta('keyTactics','One per line',4)}</td></tr></tbody></table>
+    </div></div>`;
+}
+function pagePersonas(){
+  const dis=isViewer()?'disabled':'';
+  let h=`<div class="phead"><div><h1>Buyer personas</h1>
+    <p>The people inside an ICP profile: who they are, what they want, what frustrates them and how to reach them. Link each persona to an ICP profile (industry + region).</p></div></div>`;
+  if(!CFG.personasAvailable) return h+`<div class="note b"><strong>Database update needed.</strong> Run <code>Claude outputs/2026-10-14-migration-benchmarks-icp-personas.sql</code> to switch on personas.</div>`;
+  const sel=byId(CFG.personas,UI.personaId);
+  h+=`<div class="card no-print"><h3>Personas <span class="sp"></span><span class="pill n">${CFG.personas.length}</span>
+      <button class="btn sm pri" ${dis} onclick="addPersona()">New persona</button></h3><div class="bd">
+      ${!CFG.personas.length?'<p class="mini" style="margin:0">No personas yet.</p>':`<div class="row" style="flex-wrap:wrap;gap:8px">${CFG.personas.map(p=>{ const f=byId(CFG.filters,p.icpId);
+        return `<button class="btn ${sel&&sel.id===p.id?'pri':''}" onclick="UI.personaId='${p.id}';render()" style="text-align:left"><b>${esc(p.name)}</b><div class="mini">${esc(p.title||'—')}${f?' · '+esc(f.name):''}</div></button>`; }).join('')}</div>`}
+    </div></div>`;
+  if(sel) h+=`<div class="row no-print" style="justify-content:flex-end;gap:8px;margin:0 0 8px">
+      <button class="btn sm" onclick="printPersona()">Print / save as PDF</button>
+      <button class="btn sm dgr" ${dis} onclick="removePersona('${sel.id}')">Remove</button></div>${personaCardHtml(sel,dis)}`;
   return h;
 }
 
@@ -2102,6 +2279,7 @@ window.toggleRefFlag=toggleRefFlag;
 const PAGES=[
   {id:'home',         ix:'0', label:'Home',       fn:pageHome},
   {id:'filters',      ix:'1', label:'Filters',    fn:pageFilters},
+  {id:'personas',     ix:'1a', label:'Personas',  fn:pagePersonas}, /* 2026-10-14 */
   {id:'targets',      ix:'2', label:'Target list', fn:pageTargets},
   {id:'reports',      ix:'3', label:'Reports',    fn:pageReports},
   {id:'reportDetail', ix:'3', label:'Reports',    fn:pageReportDetail, hidden:true},
@@ -2142,6 +2320,8 @@ const MODULES=[
 ];
 const THIS_MODULE='Prospectus';
 const HELP_FAQ=[
+  {q:'How do I set benchmarks for an ICP profile?', a:'In Filters, choose a Benchmark industry and region for the profile, then click Benchmarks to see the base rates (with ranges and source links) and enter your own rate for any step. Blank means the base figure is used. Strategy reads these in Admin \u2192 Benchmarks. Benchmarks are indicative only.'},
+  {q:'What are buyer personas?', a:'Personas (1a in the side menu) describe the people inside an ICP profile: role, demographics, goals, challenges, motivations, frustrations, previous experience, expectations, channels, how we can help, marketing message, internal targeting focus, outbound messaging and key tactics. Lists take one point per line. Use Print / save as PDF to share one.'},
   {q:'How do I reset my password?', a:'An admin can trigger a reset from Configuration \u2192 Roles & users \u2192 Reset password, or use "Forgot password" at login. The email comes from Supabase directly, not from North.'},
   {q:'How do I set up a passkey?', a:'From your account menu, choose to set up a passkey \u2014 your browser or device (Windows Hello, Touch ID, a security key, etc.) will walk you through it.'},
   {q:'How do I invite a new teammate?', a:'Configuration \u2192 Invite a new teammate \u2192 choose their role \u2192 Generate invite code, then send them the code. They redeem it at signup by choosing "I have an invite code."'},

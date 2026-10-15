@@ -1941,13 +1941,14 @@ const RP_GRID={
 function rpGridPage(page){
   const P=RP_PART_FNS[page]();
   let h=P.head||'';
+  if(SR_DASH_PAGES.includes(page)) h+=srDashBarHtml(page); /* 2026-10-15: save as a named dashboard / jump to a saved one */
   h+=`<div class="grid-stack" id="rp-grid-${page}">`;
   RP_GRID[page].boxes.forEach(([box,wid,w])=>{ h+=`<div class="grid-stack-item" gs-w="${w}" gs-id="${box}"><div class="grid-stack-item-content">${P[wid]||''}</div></div>`; });
   return h+`</div>`;
 }
-function pageDashboards(){ return rpGridPage('dashboards'); }
-function pageOrganization(){ return rpGridPage('organization'); }
-function pageReports(){ return rpGridPage('reports'); }
+function pageDashboards(){ return rpGridPage('dashboards')+srEditorHtml(); }
+function pageOrganization(){ return rpGridPage('organization')+srEditorHtml(); }
+function pageReports(){ return rpGridPage('reports')+srEditorHtml(); }
 function pageDrilldown(){ return rpGridPage('drilldown')+rvEditorHtml(); }
 function pageRelmap(){ return rpGridPage('relmap')+rvEditorHtml(); }
 window.pageDrilldown=pageDrilldown; window.pageRelmap=pageRelmap;
@@ -2166,11 +2167,12 @@ async function srSave(){
     const desc=String(d.description||'').trim().slice(0,1000)||null;
     let r;
     if(d.id) r=await sb.from('saved_reports').update({name:name,description:desc,visibility:d.visibility,definition:def}).eq('id',d.id).select('id');
-    else r=await sb.from('saved_reports').insert({id:uid(),org_id:_orgId,owner_id:srMe(),owner_name:(_myProfile&&_myProfile.name)||'',name:name,description:desc,visibility:d.visibility,definition:def}).select('id');
+    else r=await sb.from('saved_reports').insert({id:(d.newId=uid()),org_id:_orgId,owner_id:srMe(),owner_name:(_myProfile&&_myProfile.name)||'',name:name,description:desc,visibility:d.visibility,definition:def}).select('id');
     if(r.error) throw r.error;
     if(!r.data||!r.data.length) throw {message:'You do not have permission to change this report.'};
     recordReportView(d.id?'saved report updated':'saved report created', name+' ('+d.visibility+')');
-    SR.editing=null; SR.busy=false; toast(d.id?'Report updated.':'Report saved.'); await srLoad();
+    SR.editing=null; SR.busy=false; toast(d.id?'Report updated.':(d.openAfter?'Dashboard saved.':'Report saved.')); await srLoad();
+    if(d.openAfter&&d.newId){ SR.viewId=d.newId; UI.page='saved'; render(); }
   }catch(e){ const f=srFriendly(e); SR.busy=false; d.error=f==='MISSING'?'Saved reports need a one-time database setup (the platform owner runs 2026-10-10-migration-saved-reports.sql).':f; render(); }
 }
 async function srDelete(id){
@@ -2216,7 +2218,7 @@ function srViewHtml(r){
   const title=(can&&SR.renaming===r.id)?`<span style="display:inline-flex;gap:6px;align-items:center"><input class="in" id="srRenameIn" maxlength="120" aria-label="Report name" value="${esc(r.name)}" style="font-size:18px;min-width:260px" onkeydown="if(event.key==='Enter')srRenameSave('${esc(r.id)}');if(event.key==='Escape')srRenameCancel()"><button class="btn sm pri" onclick="srRenameSave('${esc(r.id)}')">Save</button><button class="btn sm" onclick="srRenameCancel()">Cancel</button></span>`
     :`${esc(r.name)}${can?` <button class="btn sm" onclick="srRenameStart('${esc(r.id)}')" title="Rename this report">&#9998; Rename</button>`:''}`;
   let h=`<div class="phead"><div><h1>${title} ${srVisPill(r)}</h1><p>${r.description?esc(r.description)+' &middot; ':''}Saved by ${esc(r.owner_id===me?'you':(r.owner_name||'someone in your organisation'))} &middot; updated ${esc(F.dt(r.updated_at||r.created_at))}</p></div><div class="sp"></div>
-    <button class="btn" onclick="srBack()">&larr; All saved reports</button>${can?`<button class="btn" onclick="srEdit('${esc(r.id)}')">Edit</button>`:''}<button class="btn" onclick="window.print()">Print / Save as PDF</button></div>`;
+    ${srDashSelectHtml(r.id)}<button class="btn" onclick="srBack()">&larr; All saved reports</button>${can?`<button class="btn" onclick="srEdit('${esc(r.id)}')">Edit</button>`:''}<button class="btn" onclick="window.print()">Print / Save as PDF</button></div>`;
   h+=`<div class="note">This report shows the figures <b>your own access</b> allows (${esc(reportScopeLabel(reportScopeName()))}), computed live. Sharing it shares the layout, not anyone's data.</div>`;
   h+=can?'<div class="mini" style="margin:0 0 8px">Use <b>&#10303; Edit layout</b> in the top bar to drag and resize items, swap one for another, remove one, or add a tile from the library. Changes are saved with the report, so everyone who opens it sees them.</div>':'';
   h+=srGridHtml(r,can); /* 2026-10-15: the shared drag/resize grid, layout stored in the report */
@@ -2228,7 +2230,7 @@ function srEditorHtml(){
   const yr=new Date().getFullYear()%100, fys=[yr-1,yr,yr+1,yr+2].map(n=>'FY'+String(n).padStart(2,'0'));
   const posOpts=cur=>Array.from({length:12},(_,i)=>`<option value="${i}" ${cur===i?'selected':''}>Month ${i+1}</option>`).join('');
   return `<div class="mask" onclick="if(event.target===this)srCloseEditor()"><div class="modal" style="width:min(680px,100%)">
-    <h3>${d.id?'Edit report':'New report'} <span class="sp"></span><button class="btn sm" onclick="srCloseEditor()">Cancel</button></h3>
+    <h3>${d.id?'Edit report':(d.openAfter?'Save this dashboard':'New report')} <span class="sp"></span><button class="btn sm" onclick="srCloseEditor()">Cancel</button></h3>
     <div class="bd">
       <label class="lbl">Name</label>
       <input class="in" id="srName" style="width:100%;box-sizing:border-box;margin:3px 0 10px" maxlength="120" value="${esc(d.name)}" placeholder="e.g. Monday exec snapshot" oninput="srSetField('name',this.value)">
@@ -2307,6 +2309,58 @@ function srEditorLibraryHtml(d){
   }
   return h+`<div style="margin:4px 0 10px;max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:6px 8px">${srLibrary().map(g=>`<div style="margin-bottom:6px"><div class="mini"><b>${esc(g.label)}</b></div>${g.items.map(it=>`<label style="display:block;font-size:12.5px;margin-left:6px"><input type="checkbox" ${ws.includes(it.id)?'checked':''} onchange="srToggleWidget('${esc(it.id)}',this.checked)"> ${esc(it.label)} <span class="mini">&mdash; ${esc(it.hint)}</span></label>`).join('')}</div>`).join('')}</div>`;
 }
+/* ---- 2026-10-15 (Stef: save dashboards by name, Private / Public, and jump between saved dashboards). A saved dashboard
+   is a saved report made from the tiles and layout on screen -- same sharing, Edit layout, Swap / Remove / Add. ---- */
+const SR_DASH_PAGES=['dashboards','reports','organization'];
+function srDashKey(page,wid){
+  if(!wid||wid==='__hidden__') return null;
+  const id=wid.indexOf('.')<0?page+'.'+wid:wid, pg=id.split('.')[0];
+  if(SR_INTERACTIVE[id]) return null;
+  if(NorthSavedReports.TILES.some(t=>t.id===id)) return 'tile:'+id;
+  if(RP_PART_FNS[pg]||pg==='relview'||pg==='external') return 'widget:'+id;
+  return null; /* a saved report or the reports list can't go inside a saved dashboard */
+}
+function srDashSaveAs(page){
+  if(SR.missing){ toast('Saved dashboards need the one-time saved reports database setup first.'); return; }
+  const g=RP_GRID[page]; if(!g) return;
+  const cur=typeof window.northGridCurrent==='function'?window.northGridCurrent(page):{layout:[],widgets:{}};
+  const assigned=cur.widgets||{}, live=(cur.layout||[]).filter(b=>b&&b.id);
+  const boxes=live.length?live.slice().sort((a,b)=>((a.y||0)-(b.y||0))||((a.x||0)-(b.x||0))):g.boxes.map(([box,wid,w])=>({id:box,w}));
+  const tiles=[],widgets=[],L=[],seen={}; let skipped=0, adv=0;
+  boxes.forEach(b=>{
+    const nat=g.boxes.find(x=>x[0]===b.id), wid=assigned[b.id]||(nat&&nat[1]);
+    const k=srDashKey(page,wid);
+    if(!k){ if(wid&&wid!=='__hidden__') skipped++; return; }
+    if(seen[k]) return;
+    if(k.startsWith('widget:')&&!CFG.advCanCreate){ adv++; return; }
+    seen[k]=1; if(k.startsWith('tile:')) tiles.push(k.slice(5)); else widgets.push(k.slice(7));
+    const it={k,w:Number(b.w)||12}; if(live.length){ it.x=Number(b.x)||0; it.y=Number(b.y)||0; it.h=Number(b.h)||8; } L.push(it);
+  });
+  if(!L.length){ toast('Nothing on this page can be saved as a dashboard'+(adv?' (its charts need Advanced reports).':'.')); return; }
+  const notes=[];
+  if(adv) notes.push(adv+' chart'+(adv===1?' was':'s were')+' left out: chart library elements need Advanced reports.');
+  if(skipped) notes.push(skipped+' tile'+(skipped===1?'':'s')+' (saved reports, lists or interactive maps) can\'t go inside a saved dashboard and '+(skipped===1?'was':'were')+' left out.');
+  const d=srDraftFrom(null);
+  Object.assign(d,{name:g.label+' — '+(((_myProfile&&_myProfile.name)||'').split(' ')[0]||'my')+'\'s view', tiles, widgets, layout:L, note:notes.join(' '), openAfter:true});
+  SR.editing=d; render();
+}
+function srDashSelectHtml(curId){
+  if(SR.list===null&&!SR.loading) setTimeout(srLoad,0);
+  const sp=SR.list?NorthSavedReports.split(SR.list,srMe()):{mine:[],shared:[]};
+  const o=r=>`<option value="${esc(r.id)}" ${r.id===curId?'selected':''}>${esc(r.name)}${r.visibility==='public'?'':' (private)'}</option>`;
+  return `<label class="mini" style="display:inline-flex;gap:6px;align-items:center">Dashboard
+    <select class="in" style="width:auto;max-width:300px" aria-label="Jump to a saved dashboard" onchange="srJump(this.value)">
+      <option value="" ${curId?'':'selected'}>Standard Reporting dashboards</option>
+      ${sp.mine.length?`<optgroup label="My saved dashboards and reports">${sp.mine.map(o).join('')}</optgroup>`:''}
+      ${sp.shared.length?`<optgroup label="Shared with everyone">${sp.shared.map(o).join('')}</optgroup>`:''}
+    </select></label>`;
+}
+function srJump(id){ if(!id){ SR.viewId=null; go('dashboards'); return; } srOpenFrom(id); }
+function srDashBarHtml(page){
+  return `<div class="sr-dashbar" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:-4px 0 10px">${srDashSelectHtml(null)}
+    ${SR.missing?'':`<button class="btn sm" onclick="srDashSaveAs('${esc(page)}')" title="Save the tiles and layout on this page as a named dashboard, private or public">Save this dashboard as&hellip;</button>`}</div>`;
+}
+Object.assign(window,{srDashSaveAs,srJump});
 /* ---- dashboard tiles: one saved report / the list ---- */
 function srOpenFrom(id){ UI.page='saved'; srOpen(id); }
 window.srOpenFrom=srOpenFrom;
@@ -2656,6 +2710,7 @@ const MODULES=[
 ];
 const THIS_MODULE='Reportus';
 const HELP_FAQ=[
+  /* 2026-10-15 */ {q:"Can I save my own dashboard and share it?", a:"Yes. Arrange a Reporting dashboard the way you want (Edit layout), then click Save this dashboard as... Name it and choose Private (only you) or Public (everyone in your organisation). It opens as a saved dashboard you can keep editing with Edit layout. Use the Dashboard selector at the top of Dashboards, Reports, Organization or any saved report to jump between the standard dashboards and saved ones."},
   /* 2026-10-15 */ {q:"I changed a layout and want it back the way it was. How?", a:"While Edit layout is on, click Undo changes (next to Done editing). It puts the page back exactly as it was when you clicked Edit layout, including tiles you swapped, hid, removed or added. Reset layout is different: it goes back to the page's original default layout."},
   /* 2026-10-15 */ {q:"How do I get from a dashboard tile to the detail behind it?", a:"Tiles brought onto a dashboard from another page, and summary tiles that have a detail page, show an Open ... for the detail link at the bottom. Click it to go to that page."},
   /* 2026-10-15 */ {q:"Can I change a saved report from the report itself?", a:"If you own the report (or moderate public reports), open it and click Edit layout. You can drag and resize items, Swap one for another, Remove one, or + Add a tile from the library, and every change is saved with the report for everyone who opens it. Click Rename next to the title to rename it. Undo changes puts it back as it was when you started editing. Everyone else sees the report read-only."},

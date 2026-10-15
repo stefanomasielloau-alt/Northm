@@ -1877,6 +1877,12 @@
     if (containerId) initGrid(effectiveId, containerId);
   };
   window.northGetWidgetAssignments = getWidgetAssignments;
+  /* 2026-10-15 (Stef: save a dashboard as a named, shareable dashboard): the layout and tile picks on a page right now */
+  window.northGridCurrent = function (pageId) {
+    var g = GRIDS[pageId], layout = null;
+    try { layout = (g && g.el && document.body.contains(g.el)) ? g.save(false) : JSON.parse(localStorage.getItem(gridStorageKey(pageId)) || 'null'); } catch (e) { layout = null; }
+    return { layout: Array.isArray(layout) ? layout : [], widgets: getWidgetAssignments(pageId) };
+  };
   window.northResolveWidget = resolveWidget; /* 2026-10-14: lets Reporting draw a chart-library element inside a saved report */
 
   /* 2026-09-23 (Stef's real-use report: "Reset ALL layouts did nothing"): the

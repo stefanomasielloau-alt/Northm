@@ -646,6 +646,9 @@ async function loadFromSupabase(){
     const fbR = await sb.from('feedback_items').select('id,seq,reporter_id,reporter_name,page,url,comment,status,priority,notes,created_at').eq('org_id',_orgId).order('created_at',{ascending:false}).limit(200);
     if(fbR.error) throw fbR.error;
     CFG.feedbackItems = fbR.data || [];
+    /* 2026-10-15: screenshots / video on issues -- column from 2026-10-15-migration-messages.sql; fail-soft before it is run */
+    try{ const faR=await sb.from('feedback_items').select('id,attachments').eq('org_id',_orgId).limit(200);
+      if(!faR.error){ const m={}; (faR.data||[]).forEach(x=>m[x.id]=x.attachments||[]); CFG.feedbackItems.forEach(r=>r.attachments=m[r.id]||[]); } }catch(e2){}
   }catch(e){ console.warn('feedback_items table not available yet (migration pending?) -- Feedback tab will show empty.', e); }
 
   /* budget_line_categories (item 11 / Reference Environment subsystem 1, 2026-10-07):
@@ -4289,12 +4292,114 @@ function pageFeedback(){
         <td class="mini">${r.created_at?F.dt(r.created_at):'—'}</td>
         <td class="mini">${esc(r.reporter_name||(r.reporter_id?userName(r.reporter_id):'—'))}</td>
         <td class="mini">${esc(r.page||'—')}</td>
-        <td title="${esc(r.url||'')}">${esc((r.comment||'').slice(0,80))}${(r.comment||'').length>80?'…':''}</td>
+        <td title="${esc(r.url||'')}">${esc((r.comment||'').slice(0,80))}${(r.comment||'').length>80?'…':''}${(r.attachments||[]).length?` <span class="pill n" title="Screenshots / video attached">📎 ${(r.attachments||[]).length}</span>`:''}</td>
         <td class="n"><button class="btn sm" onclick="openFeedbackDetail('${r.id}')">View</button></td>
       </tr>`;
     }).join('')}
     </tbody></table>
   </div></div></div>`;
+  return h;
+}
+/* ============================================================================
+   2026-10-15 -- MESSAGES & CHANNELS. Every message always shows in North (✉ in the top bar). Here an organisation
+   switches on extra copies by email, Slack, Microsoft Teams, SMS and WhatsApp with ITS OWN provider account (standing
+   rule: bring your own credentials). Keys / tokens are write-only: saved through set_message_channel_secret(), never
+   readable from the browser, used only by the message-dispatch function. Database: 2026-10-15-migration-messages.sql
+   ============================================================================ */
+const MSG_CHANNELS=[
+  {id:'email',label:'Email',providers:[['resend','Resend'],['sendgrid','SendGrid'],['postmark','Postmark'],['brevo','Brevo']],
+    fields:{_:[['from','From address','North <notifications@your-domain.com> -- must be a verified sender at the provider'],['reply_to','Reply-to (optional)','']]},
+    secret:'API key (Postmark: Server API token)', note:'Each person gets the copy at their login email unless they set another in ✉ › My settings.'},
+  {id:'slack',label:'Slack',providers:[['bot','Slack app (bot token) -- direct messages'],['webhook','Incoming webhook -- one channel']],
+    fields:{bot:[['default_channel','Fallback channel ID (optional)','Used when a person has not added their Slack member ID']],webhook:[]},
+    secret:'Bot token (xoxb-…) or webhook URL', note:'Bot needs the chat:write scope (and im:write for direct messages). People add their Slack member ID in ✉ › My settings.'},
+  {id:'teams',label:'Microsoft Teams',providers:[['webhook','Teams Workflows / incoming webhook -- one channel']],fields:{webhook:[]},
+    secret:'Webhook URL', note:'Posts to one Teams channel (Teams has no simple per-person push without a full Teams app).'},
+  {id:'sms',label:'SMS',providers:[['twilio','Twilio']],fields:{twilio:[['account_sid','Account SID','AC…'],['from_number','From number or Messaging Service SID','+61… or MG…']]},
+    secret:'Auth token', note:'People add a mobile number (international format) in ✉ › My settings. SMS is short: title plus a link.'},
+  {id:'whatsapp',label:'WhatsApp',providers:[['twilio','Twilio WhatsApp'],['meta','Meta WhatsApp Cloud API']],
+    fields:{twilio:[['account_sid','Account SID','AC…'],['from_number','WhatsApp sender','whatsapp:+61…']],
+            meta:[['phone_number_id','Phone number ID',''],['template_name','Approved template name','required by WhatsApp to message people who have not written to you in the last 24 hours'],['template_lang','Template language','en / en_AU']]},
+    secret:'Auth token (Twilio) or access token (Meta)', note:'WhatsApp only allows business-started messages through a pre-approved template; the template should take one text parameter (the message).'}
+];
+const MSGC={loaded:false,missing:false,settings:{},secrets:{},deliveries:[],busy:{},testTo:{}};
+async function msgcLoad(){
+  MSGC.loaded=true;
+  try{
+    const [a,b,c]=await Promise.all([
+      sb.from('message_channel_settings').select('*').eq('org_id',_orgId),
+      sb.rpc('message_channel_secret_status',{p_org:_orgId}),
+      sb.from('message_deliveries').select('id,channel,destination,status,attempts,last_error,created_at,sent_at,message_id').eq('org_id',_orgId).order('created_at',{ascending:false}).limit(50)
+    ]);
+    if(a.error) throw a.error;
+    MSGC.settings={}; (a.data||[]).forEach(r=>MSGC.settings[r.channel]=r);
+    MSGC.secrets={}; (b.data||[]).forEach(r=>MSGC.secrets[r.channel]=r);
+    MSGC.deliveries=c.error?[]:(c.data||[]);
+  }catch(e){ MSGC.missing=true; console.warn('messages tables not available yet', e); }
+  render();
+}
+function msgcGet(ch){ return MSGC.settings[ch]||{org_id:_orgId,channel:ch,enabled:false,provider:(MSG_CHANNELS.find(c=>c.id===ch).providers[0][0]),config:{}}; }
+async function msgcSave(ch,patch){
+  if(!canConfig()){ toast('Only a Configure role can change message channels.'); return; }
+  const row=Object.assign({},msgcGet(ch),patch,{org_id:_orgId,channel:ch,updated_at:new Date().toISOString()});
+  const { error } = await sb.from('message_channel_settings').upsert(row);
+  if(error){ toast('Could not save: '+error.message); return; }
+  MSGC.settings[ch]=row; logAudit('edit','messages channel '+ch+' '+Object.keys(patch).join(',')); render();
+}
+function msgcSetConfig(ch,k,v){ const c=Object.assign({},msgcGet(ch).config||{}); c[k]=String(v||'').trim(); msgcSave(ch,{config:c}); }
+async function msgcSetSecret(ch){
+  const el=document.getElementById('msgcSecret_'+ch); const v=el?el.value:''; if(!v.trim()){ toast('Paste the key / token first.'); return; }
+  const { error } = await sb.rpc('set_message_channel_secret',{p_org:_orgId,p_channel:ch,p_secret:v});
+  if(el) el.value='';
+  if(error){ toast('Could not save the credential: '+error.message); return; }
+  logAudit('edit','messages channel '+ch+' credential set'); toast('Saved. It cannot be read back -- paste it again to replace it.'); msgcLoad();
+}
+async function msgcClearSecret(ch){
+  if(!confirm('Remove the saved credential for '+ch+'? Copies on this channel will stop until a new one is added.')) return;
+  const { error } = await sb.rpc('set_message_channel_secret',{p_org:_orgId,p_channel:ch,p_secret:''});
+  if(error){ toast(error.message); return; } logAudit('edit','messages channel '+ch+' credential removed'); msgcLoad();
+}
+async function msgcTest(ch){
+  const to=(document.getElementById('msgcTestTo_'+ch)||{}).value||'';
+  MSGC.busy[ch]=true; render();
+  try{
+    const { data, error } = await sb.functions.invoke('message-dispatch',{body:{test:true,org_id:_orgId,channel:ch,to:to.trim()}});
+    if(error){ let m=error.message||String(error); try{ const j=await error.context.json(); m=j.error||m; }catch(e){} throw new Error(m); }
+    toast(data&&data.ok?'Test sent: '+(data.detail||'check your '+ch):'Test failed: '+((data&&data.error)||'unknown error'));
+  }catch(e){ toast('Test failed: '+(/Failed to send a request|404|not found/i.test(e.message||'')?'the message-dispatch function is not deployed yet (see its setup notes)':e.message)); }
+  MSGC.busy[ch]=false; render(); msgcLoad();
+}
+Object.assign(window,{msgcSave,msgcSetConfig,msgcSetSecret,msgcClearSecret,msgcTest,msgcLoad});
+function pageMessaging(){
+  if(!MSGC.loaded){ setTimeout(msgcLoad,0); }
+  const dis=canConfig()?'':'disabled';
+  let h=`<div class="phead"><div><h1>Messages &amp; channels</h1>
+    <p>Everyone gets their messages in North (✉ in the top bar of every module): tasks assigned to them, things due or overdue, sign-offs waiting, @mentions, and replies about issues they logged. Switch on a channel below to also send copies by email, Slack, Teams, SMS or WhatsApp, using your organisation's own provider account. Each person chooses which copies they want in ✉ › My settings.</p></div></div>`;
+  if(MSGC.missing) return h+`<div class="note b"><strong>Database update needed.</strong> Run <code>Claude outputs/2026-10-15-migration-messages.sql</code> to switch on Messages.</div>`;
+  if(!MSGC.loaded||!Object.keys(MSGC).length) return h+'<div class="card"><div class="empty">Loading…</div></div>';
+  MSG_CHANNELS.forEach(c=>{
+    const st=msgcGet(c.id), sec=MSGC.secrets[c.id], fields=(c.fields[st.provider]||c.fields._||[]);
+    h+=`<div class="card"><h3>${esc(c.label)} <span class="sp"></span>
+      ${st.enabled?(sec?'<span class="pill ok">On</span>':'<span class="pill warn">On -- credential missing</span>'):'<span class="pill n">Off</span>'}
+      <label class="mini" style="display:flex;gap:5px;align-items:center;margin-left:8px"><input type="checkbox" ${st.enabled?'checked':''} ${dis} onchange="msgcSave('${c.id}',{enabled:this.checked})"> Send copies</label></h3>
+      <div class="bd"><div class="row" style="gap:14px;flex-wrap:wrap;align-items:flex-end">
+        <div><div class="lbl">Provider</div><select class="in" style="width:auto" ${dis} onchange="msgcSave('${c.id}',{provider:this.value})">${c.providers.map(pv=>`<option value="${pv[0]}" ${st.provider===pv[0]?'selected':''}>${esc(pv[1])}</option>`).join('')}</select></div>
+        ${fields.map(f=>`<div><div class="lbl">${esc(f[1])}</div><input class="in" style="width:240px" ${dis} value="${esc((st.config||{})[f[0]]||'')}" placeholder="${esc(f[2]||'')}" onchange="msgcSetConfig('${c.id}','${f[0]}',this.value)"></div>`).join('')}
+        <div><div class="lbl">${esc(c.secret)} ${sec?`<span class="pill ok" title="Saved ${esc(F.dt?F.dt(sec.updated_at):sec.updated_at)}">saved</span>`:'<span class="pill n">not set</span>'}</div>
+          <input class="in" type="password" autocomplete="off" id="msgcSecret_${c.id}" style="width:220px" ${dis} placeholder="${sec?'paste to replace':'paste here'}">
+          <button class="btn sm" ${dis} onclick="msgcSetSecret('${c.id}')">Save</button>${sec?` <button class="btn sm dgr" ${dis} onclick="msgcClearSecret('${c.id}')">Remove</button>`:''}</div>
+      </div>
+      <div class="mini" style="margin-top:8px">${esc(c.note)}</div>
+      <div class="row" style="gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap"><input class="in" id="msgcTestTo_${c.id}" style="width:240px" placeholder="${c.id==='email'?'test address (blank = your login email)':c.id==='slack'?'member or channel ID (blank = fallback)':c.id==='teams'?'(posts to the webhook channel)':'mobile, e.g. +61400111222'}">
+        <button class="btn sm" ${dis||(!sec?'disabled':'')} onclick="msgcTest('${c.id}')">${MSGC.busy[c.id]?'Sending…':'Send a test'}</button></div>
+      </div></div>`;
+  });
+  const d=MSGC.deliveries||[];
+  h+=`<div class="card"><h3>Recent deliveries <span class="sp"></span><button class="btn sm" onclick="msgcLoad()">Refresh</button></h3><div class="bd flush"><div class="scroll cap"><table><thead><tr><th>When</th><th>Channel</th><th>To</th><th>Status</th><th>Detail</th></tr></thead><tbody>
+    ${d.length?d.map(x=>`<tr><td class="mini">${esc(F.dt?F.dt(x.created_at):x.created_at)}</td><td>${esc(x.channel)}</td><td class="mini">${esc(String(x.destination||'').replace(/^(.{3}).*(.{3})$/,'$1…$2'))}</td>
+      <td><span class="pill ${x.status==='sent'?'ok':x.status==='failed'?'bad':x.status==='skipped'?'n':'warn'}">${esc(x.status)}</span></td><td class="mini">${esc(x.last_error||(x.sent_at?'sent '+(F.dt?F.dt(x.sent_at):x.sent_at):''))}</td></tr>`).join('')
+      :'<tr><td colspan="5" class="empty">No copies sent yet.</td></tr>'}</tbody></table></div></div>
+    <div class="bd"><div class="mini">Copies are queued the moment a message is created and sent by the <b>message-dispatch</b> function within a couple of minutes. "Skipped" means the person has no address for that channel yet.</div></div></div>`;
   return h;
 }
 function feedbackDetailModalHtml(){
@@ -4310,7 +4415,12 @@ function feedbackDetailModalHtml(){
         on <strong>${esc(r.page||'—')}</strong>${r.url?` — <a href="${esc(r.url)}" target="_blank" rel="noopener">source page</a>`:''}
       </div>
       <div class="lbl" style="margin-bottom:4px">Description</div>
-      <div class="note" style="margin-bottom:14px;white-space:pre-wrap">${esc(r.comment||'')}</div>
+      <div class="note" style="margin-bottom:10px;white-space:pre-wrap">${esc(r.comment||'')}</div>
+      ${(r.attachments||[]).length?`<div class="lbl" style="margin-bottom:4px">Screenshots / video</div><div style="margin-bottom:12px">${(r.attachments||[]).map(a=>`<button class="btn sm" style="margin:0 6px 6px 0" onclick="window.NorthMessages&&NorthMessages.openAttachment('${esc(a.path)}')">📎 ${esc(a.name)}</button>`).join('')}</div>`:''}
+      ${r.reporter_id&&window.NorthMessages?`<div class="row" style="gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="btn sm pri" onclick="feedbackMessageReporter('${r.id}','reply')">✉ Message ${esc(r.reporter_name||'the reporter')}</button>
+        <button class="btn sm" onclick="feedbackMessageReporter('${r.id}','info')" title="Ask for steps, screenshots or a short screen recording">Ask for more detail / screenshots</button>
+        <button class="btn sm" onclick="feedbackMessageReporter('${r.id}','fixed')">Tell them it's fixed</button></div>`:''}
       <div class="row" style="gap:16px;margin-bottom:14px">
         <div style="flex:1">
           <div class="lbl" style="margin-bottom:4px">Priority</div>
@@ -4332,6 +4442,24 @@ function feedbackDetailModalHtml(){
   </div></div>`;
 }
 function openFeedbackDetail(id){ UI.feedbackDetailId=id; render(); }
+/* 2026-10-15 (Stef: "when fixed update the person who logged it ... if unsure or can't reproduce ask for more information incl video / screen shots") */
+function feedbackMessageReporter(id,kind){
+  const r=(CFG.feedbackItems||[]).find(x=>x.id===id); if(!r||!r.reporter_id||!window.NorthMessages) return;
+  const code=feedbackCode(r), quote='"'+String(r.comment||'').slice(0,200)+'"';
+  const body={
+    reply:'',
+    info:'Thanks for reporting '+code+' ('+quote+').\n\nI could not reproduce it yet. Could you reply with:\n- the steps you took, and what you expected to happen\n- a screenshot, or a short screen recording (you can attach it to your reply)\n- roughly when it happened and which organisation you were viewing\n\nThank you!',
+    fixed:'Good news: '+code+' ('+quote+') is fixed. Please check it and reply here if anything still looks wrong.'
+  }[kind]||'';
+  NorthMessages.compose({to:r.reporter_id,title:(kind==='fixed'?'Fixed: ':kind==='info'?'More detail needed: ':'About ')+code,body,kind:'issue',linkModule:'Configuration',linkRecord:r.id,linkLabel:code});
+  logAudit('feedback message',code+' -- '+kind);
+}
+window.feedbackMessageReporter=feedbackMessageReporter;
+/* open a feedback item from a message link: Configuration.html#feedback=<id> */
+(function(){ let n=0; const t=setInterval(()=>{ if(++n>60){ clearInterval(t); return; }
+  const m=/^#feedback=([\w-]+)/.exec(location.hash||''); if(!m){ clearInterval(t); return; }
+  if(!(CFG.feedbackItems||[]).length) return;
+  clearInterval(t); if(typeof canConfig==='function'&&!canConfig()) return; UI.page='feedback'; UI.feedbackDetailId=m[1]; render(); },500); })();
 function closeFeedbackDetail(){ UI.feedbackDetailId=null; render(); }
 window.openFeedbackDetail=openFeedbackDetail; window.closeFeedbackDetail=closeFeedbackDetail;
 function exportFeedbackCsv(){
@@ -5068,7 +5196,8 @@ const PAGES=[
   {id:'licensing',  ix:'15',label:'Licensing',       fn:pageLicensing},
   {id:'branding',   ix:'16',label:'Branding',        fn:pageBranding},
   {id:'regionsadmin',ix:'17',label:'Regions & pods (all orgs)', fn:pageRegionsAdmin},
-  {id:'advreports', ix:'1b', label:'Advanced reports', fn:pageAdvancedReports}
+  {id:'advreports', ix:'1b', label:'Advanced reports', fn:pageAdvancedReports},
+  {id:'messaging',  ix:'5b', label:'Messages & channels', fn:pageMessaging} /* 2026-10-15 */
 ];
 
 /* 2026-10-08: the left nav used to list all 21 pages. They are bundled into 9 groups; a group's pages show as tabs across the top of
@@ -5079,7 +5208,7 @@ const NAV=[
   {id:'g_cost', label:'Costs & partners',  ix:'2', pages:['buckets','budgetcats','partnertypes','partners','currency']},
   {id:'g_track',label:'Tracking & naming', ix:'3', pages:['tracking','campnaming']},
   {id:'g_ai',   label:'AI & agents',       ix:'4', pages:['llm','agentregistry','agentactivity']},
-  {id:'g_int',  label:'Integrations',      ix:'5', pages:['integrations','sync']},
+  {id:'g_int',  label:'Integrations',      ix:'5', pages:['integrations','messaging','sync']},
   {id:'g_fb',   label:'Feedback',          ix:'6', pages:['feedback','hubfeedback']},
   {id:'g_ah',   label:'AH',                ix:'7', pages:['hubaccounts','hubcompanies']},
   {id:'g_admin',label:'Admin',             ix:'8', pages:['branding','licensing','regionsadmin']}
@@ -5143,6 +5272,9 @@ const MODULES=[
 ];
 const THIS_MODULE='Norma';
 const HELP_FAQ=[
+  {q:'How do Messages work?', a:'The \u2709 button in the top bar of every module shows your unread count. Click it to see your messages (time stamped), open the linked record, reply (with screenshots or video), mark them read, actioned or archived. North sends you a message when an activity is assigned to you, when something you own is due or overdue, when a campaign sign-off is waiting for you, when someone @mentions you in a notes field, and when an issue you logged changes or gets a reply. Type @ followed by a person\u2019s full name in any notes field to message them.'},
+  {q:'How do I get messages by email, Slack, Teams, SMS or WhatsApp?', a:'An administrator switches on each channel in Configuration \u203a Integrations \u203a Messages & channels with your organisation\u2019s own provider account (the key is saved write-only and can never be read back), then sends a test. Each person then picks which copies they want, and adds a mobile number or Slack member ID, in \u2709 \u203a My settings. Messages always stay in North as well.'},
+  {q:'How do I reply to someone who reported an issue?', a:'Open Configuration \u203a Feedback, click View on the issue, then Message the reporter, Ask for more detail / screenshots, or Tell them it\u2019s fixed. Changing an issue\u2019s stage also messages the reporter automatically. Their reply (with any screenshots or video) comes back to your \u2709 Messages.'},
   {q:'How do I reset my password?', a:'An admin can trigger a reset from Configuration \u2192 Roles & users \u2192 Reset password, or use "Forgot password" at login. The email comes from Supabase directly, not from North.'},
   {q:'How do I set up a passkey?', a:'From your account menu, choose to set up a passkey \u2014 your browser or device (Windows Hello, Touch ID, a security key, etc.) will walk you through it.'},
   {q:'How do I invite a new teammate?', a:'Configuration \u2192 Invite a new teammate \u2192 choose their role \u2192 Generate invite code, then send them the code. They redeem it at signup by choosing "I have an invite code."'},
@@ -5382,7 +5514,7 @@ async function submitFeedback(){
   if(btn) btn.disabled=true;
   try{
     const { error } = await sb.from('feedback_items').insert({
-      org_id:_orgId, reporter_id:_myProfile.id, reporter_name:name,
+      org_id:_orgId, reporter_id:_myProfile.id, reporter_name:name, ...(window.NorthMessages&&NorthMessages.feedbackAttachments?await NorthMessages.feedbackAttachments():{}), /* 2026-10-15: screenshots / video */
       page:FEEDBACK_MODULE, url:location.href,
       /* 2026-09-28 (feedback cross-org attribution): the item stays filed under the reporter's own org
          (RLS requires that), but if a Super Admin was viewing ANOTHER org, say which, so triage has context. */

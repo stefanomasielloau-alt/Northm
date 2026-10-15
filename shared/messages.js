@@ -360,6 +360,29 @@
   }, 500);
   setInterval(function () { if (M.ready && !document.getElementById('nmBtn')) mountBtn(); }, 3000);   // a page redrew its top bar
 
-  window.NorthMessages = { open: openPanel, compose: compose, refresh: countUnread, send: send, _state: M,
+  /* the "Report an issue" widget on every page: optional screenshots / video (stored under <org>/feedback/...) */
+  function mountFeedbackFiles() {
+    var c = document.getElementById('fbComment'); if (!c || document.getElementById('fbFiles') || M.missing) return;
+    var d = document.createElement('div'); d.style.margin = '-6px 0 12px';
+    d.innerHTML = '<label style="font-size:11px;font-weight:600;color:#666;display:block;margin-bottom:3px">Screenshots or a short video (optional)</label>' +
+      '<input type="file" id="fbFiles" multiple accept="image/*,video/*" style="font-size:12px">' +
+      '<div style="font-size:11px;color:#888;margin-top:3px">You will get a message in ✉ when it is updated or fixed.</div>';
+    (c.parentNode.parentNode || c.parentNode).insertBefore(d, c.parentNode.nextSibling);
+  }
+  async function feedbackAttachments() {
+    var fi = document.getElementById('fbFiles'); if (!fi || !fi.files || !fi.files.length || M.missing) return {};
+    var s = S(), o = g('_orgId'), u = me(), out = [];
+    for (var i = 0; i < fi.files.length && i < 5; i++) {
+      var f = fi.files[i]; if (f.size > MAX_FILE) { toast(f.name + ' is over 50 MB and was left out.'); continue; }
+      var path = o + '/feedback/' + u.id + '/' + Date.now() + '-' + f.name.replace(/[^\w.\-]+/g, '_').slice(-80);
+      var r = await s.storage.from(BUCKET).upload(path, f, { contentType: f.type || 'application/octet-stream' });
+      if (!r.error) out.push({ path: path, name: f.name, size: f.size, type: f.type || '' }); else toast('Could not upload ' + f.name + ': ' + r.error.message);
+    }
+    fi.value = '';
+    return out.length ? { attachments: out } : {};
+  }
+  setInterval(mountFeedbackFiles, 1500);
+
+  window.NorthMessages = { open: openPanel, compose: compose, refresh: countUnread, send: send, openAttachment: openAttachment, feedbackAttachments: feedbackAttachments, _state: M,
     _test: { when: when, linkUrl: linkUrl, fnv: fnv, mentionsIn: mentionsIn, itemHtml: itemHtml, settingsHtml: settingsHtml } };
 })();

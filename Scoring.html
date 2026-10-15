@@ -2305,7 +2305,7 @@ async function submitFeedback(){
   if(btn) btn.disabled=true;
   try{
     const { error } = await sb.from('feedback_items').insert({
-      org_id:_orgId, reporter_id:_myProfile.id, reporter_name:name,
+      org_id:_orgId, reporter_id:_myProfile.id, reporter_name:name, ...(window.NorthMessages&&NorthMessages.feedbackAttachments?await NorthMessages.feedbackAttachments():{}), /* 2026-10-15: screenshots / video */
       page:FEEDBACK_MODULE, url:location.href,
       /* 2026-09-28 (feedback cross-org attribution): the item stays filed under the reporter's own org
          (RLS requires that), but if a Super Admin was viewing ANOTHER org, say which, so triage has context. */

@@ -2053,12 +2053,80 @@ function srResetLayout(id){
   const def=NorthSavedReports.sanitizeDefinition(Object.assign({},d,{layout:L})); r.definition=def;
   clearTimeout(SR_LAYOUT_T[id]); srWriteLayout(id,def);
 }
+/* 2026-10-15 (Stef: "as an owner you really should be able to" Swap / Hide / + Add tile on a report): in Edit layout
+   the owner / a moderator can swap an item, remove it, or add one from the library -- each change is saved into the report.
+   Picks arrive as grid ids ('dashboards.kpis', 'relview.<id>', 'external.<id>'); this maps them to report items. */
+function srKeyFor(wid){
+  wid=String(wid||'');
+  if(NorthSavedReports.TILES.some(t=>t.id===wid)) return 'tile:'+wid;
+  const pg=wid.split('.')[0];
+  if(RP_PART_FNS[pg]||pg==='relview'||pg==='external'){
+    if(!CFG.advCanCreate){ toast('That one is a chart library element, part of Advanced reports. Ask an administrator to turn it on for you.'); return null; }
+    return 'widget:'+wid;
+  }
+  toast('That tile cannot go inside a saved report.'); return null;
+}
+function srItemWidth(k){ const id=k.replace(/^(tile|widget):/,''), dot=id.indexOf('.'), g=RP_GRID[id.slice(0,dot)]; const b=g&&g.boxes.find(x=>x[1]===id.slice(dot+1)); return b?b[2]:12; }
+function srDefWith(d,keys,layout){
+  const tiles=[],widgets=[]; let board=null;
+  keys.forEach(k=>{ if(k==='board') board=d.board||{}; else if(k.startsWith('tile:')) tiles.push(k.slice(5)); else widgets.push(k.slice(7)); });
+  return NorthSavedReports.sanitizeDefinition({tiles,widgets,board,layout});
+}
+async function srApplyDef(id,def,msg){
+  const r=(SR.list||[]).find(x=>x.id===id); if(!r) return false;
+  const prev=r.definition; r.definition=def; clearTimeout(SR_LAYOUT_T[id]); render();
+  try{
+    const q=await sb.from('saved_reports').update({definition:def}).eq('id',id).select('id');
+    if(q.error) throw q.error;
+    if(!q.data||!q.data.length) throw {message:'You do not have permission to change this report.'};
+    recordReportView('saved report updated', r.name+' ('+msg+')'); toast(msg+'.'); return true;
+  }catch(e){ r.definition=prev; window.__northGridReenterEdit=srGridPid(id); render(); const f=srFriendly(e); toast('Could not change the report: '+(f==='MISSING'?'saved reports are not set up yet.':f)); return false; }
+}
+function srContentRemove(id,k){
+  const r=(SR.list||[]).find(x=>x.id===id); if(!r||!k) return;
+  const d=NorthSavedReports.sanitizeDefinition(r.definition), L=NorthSavedReports.layoutOf(d).filter(it=>it.k!==k);
+  if(!L.length){ toast('A report needs at least one item. Add another first, or delete the report.'); window.__northGridReenterEdit=null; return; }
+  return srApplyDef(id,srDefWith(d,L.map(it=>it.k),L),'Removed '+srItemLabel(k));
+}
+function srContentAdd(id,wid){
+  const r=(SR.list||[]).find(x=>x.id===id), k=srKeyFor(wid); if(!r||!k){ window.__northGridReenterEdit=null; return; }
+  const d=NorthSavedReports.sanitizeDefinition(r.definition), L=NorthSavedReports.layoutOf(d);
+  if(L.some(it=>it.k===k)){ toast('That is already in this report.'); window.__northGridReenterEdit=null; return; }
+  L.push({k,w:srItemWidth(k)});
+  return srApplyDef(id,srDefWith(d,L.map(it=>it.k),L),'Added '+srItemLabel(k));
+}
+function srContentSwap(id,oldK,wid){
+  const r=(SR.list||[]).find(x=>x.id===id), k=srKeyFor(wid); if(!r||!oldK||!k){ window.__northGridReenterEdit=null; return; }
+  if(k===oldK) return;
+  const d=NorthSavedReports.sanitizeDefinition(r.definition), L=NorthSavedReports.layoutOf(d);
+  if(L.some(it=>it.k===k)){ toast('That is already in this report.'); window.__northGridReenterEdit=null; return; }
+  const L2=L.map(it=>it.k===oldK?Object.assign({},it,{k}):it);
+  return srApplyDef(id,srDefWith(d,L2.map(it=>it.k),L2),'Swapped in '+srItemLabel(k));
+}
+/* rename from the report itself */
+function srRenameStart(id){ SR.renaming=id; render(); setTimeout(()=>{ const el=document.getElementById('srRenameIn'); if(el){ el.focus(); el.select(); } },0); }
+function srRenameCancel(){ SR.renaming=null; render(); }
+async function srRenameSave(id){
+  const r=(SR.list||[]).find(x=>x.id===id), el=document.getElementById('srRenameIn'); if(!r||!el) return;
+  const name=NorthSavedReports.sanitizeName(el.value);
+  if(!name){ toast('Give the report a name.'); return; }
+  if(name===r.name){ SR.renaming=null; render(); return; }
+  try{
+    const q=await sb.from('saved_reports').update({name}).eq('id',id).select('id');
+    if(q.error) throw q.error;
+    if(!q.data||!q.data.length) throw {message:'You do not have permission to change this report.'};
+    recordReportView('saved report renamed', r.name+' → '+name); r.name=name; SR.renaming=null; toast('Report renamed.'); render();
+  }catch(e){ const f=srFriendly(e); toast('Could not rename: '+(f==='MISSING'?'saved reports are not set up yet.':f)); }
+}
+Object.assign(window,{srRenameStart,srRenameCancel,srRenameSave});
 function srGridHtml(r,can){
   const d=NorthSavedReports.sanitizeDefinition(r.definition), L=srOrdered(NorthSavedReports.layoutOf(d));
   if(!L.length) return SR_EMPTY;
   const pid=srGridPid(r.id), byGid={}; L.forEach(it=>{ byGid[srGid(it.k)]=it.k; });
   if(typeof window.northGridAddPage!=='function') return srBodyHtml(r);
-  window.northGridAddPage(pid,{label:'Saved report', container:'rp-grid-'+pid, opts:{lockContent:true, readOnly:!can, persist:{
+  window.northGridAddPage(pid,{label:'Saved report', container:'rp-grid-'+pid, opts:{lockContent:!can, readOnly:!can, excludeSources:['savedreport','myreports'],
+    content: can?{ remove:gid=>srContentRemove(r.id,byGid[gid]), swap:(gid,wid)=>srContentSwap(r.id,byGid[gid],wid), add:wid=>srContentAdd(r.id,wid) }:null,
+    persist:{
     load(){ const cur=(SR.list||[]).find(x=>x.id===r.id)||r; const LL=NorthSavedReports.layoutOf(NorthSavedReports.sanitizeDefinition(cur.definition)).filter(it=>Number.isFinite(it.y));
       return LL.length?LL.map(it=>({id:srGid(it.k),x:it.x,y:it.y,w:it.w,h:it.h})):null; },
     save(layout){ const el=document.getElementById('rp-grid-'+pid); if(can&&el&&el.classList.contains('grid-edit-mode')) srQueueLayoutSave(r.id,layout,byGid); },
@@ -2129,10 +2197,12 @@ function srBoardCardHtml(b){
 }
 function srViewHtml(r){
   const d=NorthSavedReports.sanitizeDefinition(r.definition), me=srMe(), can=NorthSavedReports.canManage(r,me,myRole(),!!CFG.isSuperAdmin);
-  let h=`<div class="phead"><div><h1>${esc(r.name)} ${srVisPill(r)}</h1><p>${r.description?esc(r.description)+' &middot; ':''}Saved by ${esc(r.owner_id===me?'you':(r.owner_name||'someone in your organisation'))} &middot; updated ${esc(F.dt(r.updated_at||r.created_at))}</p></div><div class="sp"></div>
+  const title=(can&&SR.renaming===r.id)?`<span style="display:inline-flex;gap:6px;align-items:center"><input class="in" id="srRenameIn" maxlength="120" aria-label="Report name" value="${esc(r.name)}" style="font-size:18px;min-width:260px" onkeydown="if(event.key==='Enter')srRenameSave('${esc(r.id)}');if(event.key==='Escape')srRenameCancel()"><button class="btn sm pri" onclick="srRenameSave('${esc(r.id)}')">Save</button><button class="btn sm" onclick="srRenameCancel()">Cancel</button></span>`
+    :`${esc(r.name)}${can?` <button class="btn sm" onclick="srRenameStart('${esc(r.id)}')" title="Rename this report">&#9998; Rename</button>`:''}`;
+  let h=`<div class="phead"><div><h1>${title} ${srVisPill(r)}</h1><p>${r.description?esc(r.description)+' &middot; ':''}Saved by ${esc(r.owner_id===me?'you':(r.owner_name||'someone in your organisation'))} &middot; updated ${esc(F.dt(r.updated_at||r.created_at))}</p></div><div class="sp"></div>
     <button class="btn" onclick="srBack()">&larr; All saved reports</button>${can?`<button class="btn" onclick="srEdit('${esc(r.id)}')">Edit</button>`:''}<button class="btn" onclick="window.print()">Print / Save as PDF</button></div>`;
   h+=`<div class="note">This report shows the figures <b>your own access</b> allows (${esc(reportScopeLabel(reportScopeName()))}), computed live. Sharing it shares the layout, not anyone's data.</div>`;
-  h+=can?'<div class="mini" style="margin:0 0 8px">Use <b>&#10303; Edit layout</b> in the top bar to drag and resize the items. The layout is saved with the report, so everyone who opens it sees it.</div>':'';
+  h+=can?'<div class="mini" style="margin:0 0 8px">Use <b>&#10303; Edit layout</b> in the top bar to drag and resize items, swap one for another, remove one, or add a tile from the library. Changes are saved with the report, so everyone who opens it sees them.</div>':'';
   h+=srGridHtml(r,can); /* 2026-10-15: the shared drag/resize grid, layout stored in the report */
   return h;
 }

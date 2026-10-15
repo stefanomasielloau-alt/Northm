@@ -755,8 +755,9 @@
      list: () => [{id,label,hint}], get: (id) => item|null, render: (id) => html }]. Picks are stored as
      '<prefix>.<id>' like every other cross-page pick and resolved in resolveWidget() below. */
   function extraSources() { return (typeof window !== 'undefined' && Array.isArray(window.northExtraWidgetSources)) ? window.northExtraWidgetSources : []; }
-  function extraGroupsHtml(makeRow) {
-    return extraSources().map(function (src) {
+  function extraGroupsHtml(makeRow, pageId) {
+    var ex = (typeof PAGE_OPTS !== 'undefined' && pageId && PAGE_OPTS[pageId] && PAGE_OPTS[pageId].excludeSources) || [];
+    return extraSources().filter(function (src) { return ex.indexOf(src.prefix) === -1; }).map(function (src) {
       var items = []; try { items = src.list() || []; } catch (e) { items = []; }
       if (!items.length) return '';
       return '<div class="gs-swap-category" data-search="' + String(src.label).toLowerCase().replace(/"/g, '&quot;') + '">' + src.label + '</div>' +
@@ -955,6 +956,8 @@
   // node has to appear, same as Hide/Unhide -- see the __northGridReenterEdit
   // comment below for why that needs a full render rather than an in-place patch).
   function addNewTile(pageId, widgetId) {
+    var copts = PAGE_OPTS[pageId] || {};
+    if (copts.content) { window.__northGridReenterEdit = pageId; copts.content.add(widgetId); return; }
     var boxId = 'custom_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     addCustomBoxId(pageId, boxId);
     setWidgetAssignment(pageId, boxId, widgetId);
@@ -1045,7 +1048,9 @@
         // box does, so its Hide button now deletes it outright instead -- see the click
         // handler below. Native boxes keep the original hide/unhide behaviour, since
         // Unhide genuinely restores something meaningful for those.
-        var hideBtnHtml = customIdSet[boxIdForHandle]
+        var hideBtnHtml = opts.content
+          ? '<button type="button" class="gs-hide-btn" data-gs-hide="' + boxIdForHandle + '" title="Remove this item from the report — add it again any time from + Add tile">✕ Remove</button>'
+          : customIdSet[boxIdForHandle]
           ? '<button type="button" class="gs-hide-btn" data-gs-hide="' + boxIdForHandle + '" title="Delete this tile — it was added from the widget library and can be added again the same way">🗑 Delete tile</button>'
           : '<button type="button" class="gs-hide-btn" data-gs-hide="' + boxIdForHandle + '" title="Hide this tile — bring it back later from + Add / unhide tile">✕ Hide</button>';
         // 2026-09-24 (Stef: "I don't like the fit height, I prefer the ability to drag
@@ -1386,6 +1391,11 @@
       btn.onclick = function (e) {
         e.stopPropagation();
         var boxId = btn.getAttribute('data-gs-hide');
+        if (opts.content) {
+          window.__northGridReenterEdit = pageId;
+          opts.content.remove(boxId);
+          return;
+        }
         if (customIdSet[boxId]) {
           removeCustomBox(pageId, boxId);
         } else {
@@ -1449,14 +1459,14 @@
        the "efficiency in how someone uses North" Stef asked to keep in
        mind. */
     var libraryGroups = Object.keys(PAGE_LABELS).filter(function (pid) {
-      return pid !== pageId && WIDGET_LIBRARIES[pid];
+      return pid !== pageId && WIDGET_LIBRARIES[pid] && Object.keys(WIDGET_LIBRARIES[pid].widgets || {}).length;
     }).map(function (pid) {
       var otherLib = WIDGET_LIBRARIES[pid];
       var groupRows = Object.keys(otherLib.widgets).map(function (wid) {
         return rowHtml(pid + '.' + wid, otherLib.widgets[wid], (pid + '.' + wid) === currentId);
       }).join('');
       return '<div class="gs-swap-category" data-search="' + attrEsc(PAGE_LABELS[pid].toLowerCase()) + '">' + PAGE_LABELS[pid] + '</div>' + groupRows;
-    }).join('') + extraGroupsHtml(function (fullId, label, hint) { return rowHtml(fullId, { label: label, hint: hint }, fullId === currentId); }) + ((typeof CFG !== 'undefined' && CFG.customWidgets && CFG.customWidgets.length) ?
+    }).join('') + extraGroupsHtml(function (fullId, label, hint) { return rowHtml(fullId, { label: label, hint: hint }, fullId === currentId); }, pageId) + ((typeof CFG !== 'undefined' && CFG.customWidgets && CFG.customWidgets.length) ?
       '<div class="gs-swap-category" data-search="external widgets">External widgets</div>' +
       CFG.customWidgets.map(function (w) {
         var fullId = 'external.' + w.id;
@@ -1482,6 +1492,8 @@
     function wireRow(row) {
       row.onclick = function () {
         var wid = row.getAttribute('data-wid');
+        var copts = PAGE_OPTS[pageId] || {};
+        if (copts.content) { closeSwapPicker(); window.__northGridReenterEdit = pageId; copts.content.swap(boxId, wid); return; }
         setWidgetAssignment(pageId, boxId, wid);
         applyWidgetSwap(pageId, boxId, wid);
         closeSwapPicker();
@@ -1556,7 +1568,7 @@
 
     var libraryGroups = Object.keys(PAGE_LABELS).map(function (pid) {
       var pidLib = WIDGET_LIBRARIES[pid];
-      if (!pidLib) return '';
+      if (!pidLib || !Object.keys(pidLib.widgets || {}).length) return '';
       var prefix = pid === pageId ? '' : pid + '.';
       var groupRows = Object.keys(pidLib.widgets).map(function (wid) {
         var w = pidLib.widgets[wid];
@@ -1570,7 +1582,7 @@
     }).join('') + extraGroupsHtml(function (fullId, label, hint) {
       return '<button type="button" class="gs-swap-row" data-gs-addwidget="' + fullId + '" data-search="' + attrEsc((label + ' ' + hint).toLowerCase()) + '">' +
         '<span class="gs-swap-row-label">' + label + '</span><span class="gs-swap-row-hint">' + hint + '</span></button>';
-    }) + ((typeof CFG !== 'undefined' && CFG.customWidgets && CFG.customWidgets.length) ?
+    }, pageId) + ((typeof CFG !== 'undefined' && CFG.customWidgets && CFG.customWidgets.length) ?
       '<div class="gs-swap-category" data-search="external widgets">External widgets</div>' +
       CFG.customWidgets.map(function (w) {
         var fullId = 'external.' + w.id;

@@ -3182,7 +3182,7 @@ function detailActivityHtml(id){
         <div style="flex:1;min-width:130px"><label class="lbl">Type</label>
           <select class="in" onchange="setIn('tasks','${t.id}','type',this.value)">${activityTypeOptionsHtml(t)}</select></div>
         <div style="flex:1;min-width:110px"><label class="lbl">Owner</label>
-          <input class="in" value="${esc(t.owner)}" onchange="setIn('tasks','${t.id}','owner',this.value)"></div>
+          <input list="cpPeopleList" title="Pick a person so they get a message when this is assigned to them" class="in" value="${esc(t.owner)}" onchange="setIn('tasks','${t.id}','owner',this.value)"></div>
       </div>
       <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:8px">
         <div style="flex:1;min-width:110px"><label class="lbl">Start</label>
@@ -3452,7 +3452,7 @@ function planSingleLevelTableHtml(level, items){
         <td class="mini" style="cursor:grab" title="Drag to reorder">⠿</td>
         <td><input class="cel txt" style="width:160px" value="${esc(t.name)}" onchange="setIn('tasks','${t.id}','name',this.value)"></td>
         <td><select class="cel txt" style="width:100px" onchange="setIn('tasks','${t.id}','type',this.value)">${activityTypeOptionsHtml(t)}</select></td>
-        <td><input class="cel txt" style="width:100px" value="${esc(t.owner)}" onchange="setIn('tasks','${t.id}','owner',this.value)"></td>
+        <td><input list="cpPeopleList" title="Pick a person so they get a message when this is assigned to them" class="cel txt" style="width:100px" value="${esc(t.owner)}" onchange="setIn('tasks','${t.id}','owner',this.value)"></td>
         <td><input class="cel txt" style="width:104px" type="date" value="${t.startDate||''}" onchange="setIn('tasks','${t.id}','startDate',this.value)"></td>
         <td><input class="cel txt" style="width:104px" type="date" value="${t.dueDate||''}" onchange="setIn('tasks','${t.id}','dueDate',this.value)"></td>
         <td><select class="cel txt" style="width:106px" onchange="setIn('tasks','${t.id}','status',this.value)">
@@ -4225,6 +4225,8 @@ if(window.NorthAskAlec) NorthAskAlec.init({
   reviewFocus:"Look for campaigns that are over budget, behind schedule or have no activities, activities performing weakly against the rest, and unallocated budget or timing gaps. Recommend specific activities or campaigns (channel, audience or region, timing; budget only if visible) that fix a shortfall visible on this screen."
 });
 
+/* 2026-10-15: people picker for activity owners -- picking a person's exact name sends them an "Assigned to you" message */
+function cpPeopleListHtml(){ return '<datalist id="cpPeopleList">'+(CFG.orgUsers||[]).filter(u=>u.name).map(u=>'<option value="'+esc(u.name)+'">').join('')+'</datalist>'; }
 function render(){
   const p=PAGES.find(x=>x.id===UI.page)||PAGES[0];
   document.getElementById('side').innerHTML=renderSide();
@@ -4244,7 +4246,7 @@ function render(){
       '<p>'+esc(e && e.message || String(e))+'</p>'+
       '<p class="sub">Page: '+esc(p.id)+'. Try another page from the sidebar, or contact your Super Admin if this keeps happening.</p></div>';
   }
-  document.getElementById('main').innerHTML=mainHtml;
+  document.getElementById('main').innerHTML=mainHtml+cpPeopleListHtml();
   document.getElementById('wizardLayer').innerHTML=campaignWizardPanel()+moveDialogPanel()+draftActivityPanel()+detailPanelHtml()+contactPickerHtml()+askAlecCursusPanel();
   try{ if(window.NorthBudgetLines) NorthBudgetLines.sync(sb, document.getElementById('nblHost'), {onRows:liOnRows}); }catch(e){}
   saveLocal();
@@ -4323,7 +4325,7 @@ function draftActivityPanel(){
       <label class="lbl">Type</label><select class="in" style="width:100%" onchange="draftActSet('type',this.value)">${topts}</select>
       <div class="row" style="gap:8px"><div style="flex:1"><label class="lbl">Start</label><input type="date" class="in" style="width:100%" value="${esc(d.startDate)}" onchange="draftActSet('startDate',this.value)"></div>
         <div style="flex:1"><label class="lbl">Due</label><input type="date" class="in" style="width:100%" value="${esc(d.dueDate)}" onchange="draftActSet('dueDate',this.value)"></div></div>
-      <div class="row" style="gap:8px"><div style="flex:1"><label class="lbl">Owner</label><input class="in" style="width:100%" value="${esc(d.owner)}" onchange="draftActSet('owner',this.value)"></div>
+      <div class="row" style="gap:8px"><div style="flex:1"><label class="lbl">Owner</label><input list="cpPeopleList" title="Pick a person so they get a message when this is assigned to them" class="in" style="width:100%" value="${esc(d.owner)}" onchange="draftActSet('owner',this.value)"></div>
         <div style="flex:1"><label class="lbl">Planned cost</label><input type="number" min="0" class="in" style="width:100%" value="${d.plannedCost||0}" onchange="draftActSet('plannedCost',this.value)"></div></div>
       <label class="lbl">Notes</label><textarea class="in" rows="5" style="width:100%" onchange="draftActSet('notes',this.value)">${esc(d.notes)}</textarea>
     </div>

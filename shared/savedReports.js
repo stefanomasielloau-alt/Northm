@@ -59,6 +59,21 @@
       .filter(function(w){ if(seen[w] || !/^[a-z_]{2,40}\.[A-Za-z0-9_-]{1,80}$/.test(w)) return false; seen[w] = true; return true; }).slice(0, 30);
     var out = { v: 1, tiles: tiles, board: sanitizeBoard(def.board) };
     if(widgets.length){ out.v = 2; out.widgets = widgets; }
+    /* 2026-10-15 (Stef: change the layout of saved reports): optional order + width per item, kept only for items in the report */
+    if(Array.isArray(def.layout)) out.layout = layoutOf({ tiles: tiles, widgets: widgets, board: out.board, layout: def.layout });
+    return out;
+  }
+  var WIDTHS = [3, 4, 6, 8, 12];
+  function itemKeys(d){ return (d.tiles || []).map(function(t){ return 'tile:' + t; }).concat((d.widgets || []).map(function(w){ return 'widget:' + w; })).concat(d.board ? ['board'] : []); }
+  /* full ordered layout for a definition: saved order first, then anything not placed yet (full width) */
+  function layoutOf(d){
+    d = d || {}; var keys = itemKeys(d), have = {}, out = [];
+    (Array.isArray(d.layout) ? d.layout : []).forEach(function(it){
+      if(!it || typeof it !== 'object') return; var k = String(it.k || '');
+      if(keys.indexOf(k) < 0 || have[k]) return; have[k] = 1;
+      var w = Math.round(Number(it.w)); out.push({ k: k, w: WIDTHS.indexOf(w) >= 0 ? w : 12 });
+    });
+    keys.forEach(function(k){ if(!have[k]) out.push({ k: k, w: 12 }); });
     return out;
   }
   function isEmpty(def){ var d = sanitizeDefinition(def); return !d.tiles.length && !d.board && !(d.widgets && d.widgets.length); }
@@ -99,5 +114,5 @@
     return parts.length ? parts.join(' + ') : 'Empty';
   }
   G.NorthSavedReports = { TILES: TILES, BOARD_TYPES: BOARD_TYPES, BOARD_LABEL: BOARD_LABEL, sanitizeDefinition: sanitizeDefinition, sanitizeName: sanitizeName,
-    sanitizeBoard: sanitizeBoard, isEmpty: isEmpty, isAdvanced: isAdvanced, canPublish: canPublish, canManage: canManage, canSee: canSee, split: split, boardSummary: boardSummary, boardLink: boardLink, summary: summary };
+    sanitizeBoard: sanitizeBoard, layoutOf: layoutOf, WIDTHS: WIDTHS, isEmpty: isEmpty, isAdvanced: isAdvanced, canPublish: canPublish, canManage: canManage, canSee: canSee, split: split, boardSummary: boardSummary, boardLink: boardLink, summary: summary };
 })();

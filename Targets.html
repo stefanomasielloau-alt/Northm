@@ -1928,32 +1928,34 @@ window.setPersona=setPersona;
 function printPersona(){ document.body.classList.add('psn-printing'); setTimeout(()=>{ window.print(); document.body.classList.remove('psn-printing'); },50); }
 window.printPersona=printPersona;
 function personaCardHtml(p,dis){
-  const ta=(k,ph,rows)=>`<textarea class="psn-in" rows="${rows||4}" ${dis} placeholder="${esc(ph)}" onchange="setPersona('${p.id}','${k}',this.value)">${esc((p[k]||[]).join('\n'))}</textarea>`;
+  /* 2026-10-15: aria-labels so "Talk to this screen" names every persona field correctly */
+  const PL={goals:'Goals',challenges:'Challenges',motivations:'Motivations',frustrations:'Frustrations',previousExperience:'Previous experience',expectations:'Expectations',identifiers:'Identifiers (channels)',howWeHelp:'What can we do',marketingMessages:'Marketing message',keyTactics:'Key tactics'};
+  const ta=(k,ph,rows)=>`<textarea class="psn-in" aria-label="Persona ${PL[k]||k} (one per line)" rows="${rows||4}" ${dis} placeholder="${esc(ph)}" onchange="setPersona('${p.id}','${k}',this.value)">${esc((p[k]||[]).join('\n'))}</textarea>`;
   const sec=(k,t,sub,ph)=>`<div><h4>${t}</h4>${sub?`<div class="sub">${sub}</div>`:''}${ta(k,ph||'One per line')}</div>`;
   const icp=byId(CFG.filters,p.icpId);
   return `<div class="psn">
     <div class="psn-l">
       <div class="psn-photo" style="${p.photoUrl?`background-image:url('${esc(p.photoUrl)}')`:''}"></div>
-      <input class="psn-in no-print" ${dis} placeholder="Photo URL (optional)" value="${esc(p.photoUrl)}" onchange="setPersona('${p.id}','photoUrl',this.value)">
+      <input class="psn-in no-print" aria-label="Persona photo URL" ${dis} placeholder="Photo URL (optional)" value="${esc(p.photoUrl)}" onchange="setPersona('${p.id}','photoUrl',this.value)">
       <h4>Role</h4>
-      <input class="psn-in" ${dis} placeholder="Title (e.g. VP Marketing)" value="${esc(p.title)}" onchange="setPersona('${p.id}','title',this.value)" style="margin-bottom:4px">
-      <select class="psn-in" ${dis} onchange="setPersona('${p.id}','seniority',this.value)"><option value="">Seniority</option>${SENIORITY_LEVELS.map(s=>`<option ${s===p.seniority?'selected':''}>${s}</option>`).join('')}</select>
+      <input class="psn-in" aria-label="Persona title / role" ${dis} placeholder="Title (e.g. VP Marketing)" value="${esc(p.title)}" onchange="setPersona('${p.id}','title',this.value)" style="margin-bottom:4px">
+      <select class="psn-in" aria-label="Persona seniority" ${dis} onchange="setPersona('${p.id}','seniority',this.value)"><option value="">Seniority</option>${SENIORITY_LEVELS.map(s=>`<option ${s===p.seniority?'selected':''}>${s}</option>`).join('')}</select>
       <h4>Demographics</h4>
       ${PERSONA_DEMO.map(([k,l])=>`<div style="display:grid;grid-template-columns:95px 1fr;gap:6px;align-items:center;margin-bottom:4px"><span style="font-size:11.5px;font-weight:600">${l}</span>
-        <input class="psn-in" ${dis} value="${esc((p.demographics||{})[k]||'')}" onchange="setPersona('${p.id}','demo.${k}',this.value)"></div>`).join('')}
+        <input class="psn-in" aria-label="Persona ${l.toLowerCase()}" ${dis} value="${esc((p.demographics||{})[k]||'')}" onchange="setPersona('${p.id}','demo.${k}',this.value)"></div>`).join('')}
       <h4>Goals</h4>${ta('goals','One per line',4)}
       <h4>Identifiers</h4><div style="font-size:11px;opacity:.85;margin:-2px 0 4px">Channels, communities, social platforms</div>${ta('identifiers','One per line',3)}
     </div>
     <div class="psn-r">
       <div class="psn-hd">
-        <input class="psn-in" style="font-size:20px;font-weight:700" ${dis} value="${esc(p.name)}" onchange="setPersona('${p.id}','name',this.value)">
-        <input class="psn-in" style="margin-top:6px" ${dis} placeholder="A real or typical quote, in their words" value="${esc(p.quote)}" onchange="setPersona('${p.id}','quote',this.value)">
+        <input class="psn-in" aria-label="Persona name" style="font-size:20px;font-weight:700" ${dis} value="${esc(p.name)}" onchange="setPersona('${p.id}','name',this.value)">
+        <input class="psn-in" aria-label="Persona quote" style="margin-top:6px" ${dis} placeholder="A real or typical quote, in their words" value="${esc(p.quote)}" onchange="setPersona('${p.id}','quote',this.value)">
         <div class="no-print" style="margin-top:6px;font-size:11.5px">ICP profile:
-          <select class="psn-in" style="width:auto" ${dis} onchange="setPersona('${p.id}','icpId',this.value)"><option value="">— none —</option>
+          <select class="psn-in" aria-label="Persona ICP profile" style="width:auto" ${dis} onchange="setPersona('${p.id}','icpId',this.value)"><option value="">— none —</option>
             ${CFG.filters.map(f=>`<option value="${f.id}" ${f.id===p.icpId?'selected':''}>${esc(f.name)}</option>`).join('')}</select>
           ${icp&&(icp.benchIndustry||icp.benchRegion)?` <span>${esc(BENCH_IND[icp.benchIndustry]||'')} · ${esc(BENCH_REG[icp.benchRegion]||'')}</span>`:''}</div>
       </div>
-      <div class="psn-bg"><h4>Background</h4><textarea class="psn-in" rows="3" ${dis} placeholder="Career path, responsibilities, the world they work in" onchange="setPersona('${p.id}','background',this.value)">${esc(p.background)}</textarea></div>
+      <div class="psn-bg"><h4>Background</h4><textarea class="psn-in" aria-label="Persona background" rows="3" ${dis} placeholder="Career path, responsibilities, the world they work in" onchange="setPersona('${p.id}','background',this.value)">${esc(p.background)}</textarea></div>
       <div class="psn-grid">
         ${sec('challenges','Challenges','What gets in the way of their goals?')}
         ${sec('howWeHelp','What can we do?','…to help them reach their goals and overcome challenges')}
@@ -1964,8 +1966,8 @@ function personaCardHtml(p,dis){
       </div>
       <div style="padding:0 18px">${sec('marketingMessages','Marketing message','How to describe the solution for the biggest impact on this persona')}</div>
       <table class="psn-tac"><thead><tr><th>Internal targeting focus</th><th>Outbound (vendor-neutral) messaging</th><th>Key tactics</th></tr></thead><tbody><tr>
-        <td><textarea class="psn-in" rows="4" ${dis} onchange="setPersona('${p.id}','targetingFocus',this.value)">${esc(p.targetingFocus)}</textarea></td>
-        <td><textarea class="psn-in" rows="4" ${dis} onchange="setPersona('${p.id}','outboundMessaging',this.value)">${esc(p.outboundMessaging)}</textarea></td>
+        <td><textarea class="psn-in" aria-label="Persona internal targeting focus" rows="4" ${dis} onchange="setPersona('${p.id}','targetingFocus',this.value)">${esc(p.targetingFocus)}</textarea></td>
+        <td><textarea class="psn-in" aria-label="Persona outbound (vendor-neutral) messaging" rows="4" ${dis} onchange="setPersona('${p.id}','outboundMessaging',this.value)">${esc(p.outboundMessaging)}</textarea></td>
         <td>${ta('keyTactics','One per line',4)}</td></tr></tbody></table>
     </div></div>`;
 }
@@ -1980,7 +1982,7 @@ function pagePersonas(){
       ${!CFG.personas.length?'<p class="mini" style="margin:0">No personas yet.</p>':`<div class="row" style="flex-wrap:wrap;gap:8px">${CFG.personas.map(p=>{ const f=byId(CFG.filters,p.icpId);
         return `<button class="btn ${sel&&sel.id===p.id?'pri':''}" onclick="UI.personaId='${p.id}';render()" style="text-align:left"><b>${esc(p.name)}</b><div class="mini">${esc(p.title||'—')}${f?' · '+esc(f.name):''}</div></button>`; }).join('')}</div>`}
     </div></div>`;
-  if(sel) h+=`<div class="row no-print" style="justify-content:flex-end;gap:8px;margin:0 0 8px">
+  if(sel) h+=`<div class="row no-print" data-afl-skip style="justify-content:flex-end;gap:8px;margin:0 0 8px">
       <button class="btn sm" onclick="printPersona()">Print / save as PDF</button>
       <button class="btn sm dgr" ${dis} onclick="removePersona('${sel.id}')">Remove</button></div>${personaCardHtml(sel,dis)}`;
   return h;

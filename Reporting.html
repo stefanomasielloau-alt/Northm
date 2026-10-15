@@ -250,6 +250,8 @@ input.cel.gs-swap-filter{width:150px}
 .rm-chip i{width:9px;height:9px;border-radius:2px;display:inline-block}
 .rm-chip span{color:var(--ink-3)}
 .rm-chip.off{opacity:.5}
+.sr-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px;margin-bottom:12px}.sr-item{min-width:0}.sr-item>.card{height:100%;margin:0}
+@media (max-width:760px){.sr-grid .sr-item{grid-column:span 12!important}}
 .rm-canvas{overflow:auto;max-height:680px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--canvas)}
 .rm-node:hover rect:first-of-type{stroke:#10182B}
 .rm-tip{position:fixed;z-index:9500;display:none;width:280px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-2);padding:10px 12px;font-size:12px}
@@ -1437,6 +1439,7 @@ const RM_CAP=25;               /* boxes per type per column before "+N more" */
 const RM_NW=196, RM_NH=34, RM_COLW=262, RM_VG=8, RM_GG=18, RM_PAD=16;
 let RM=null, _rmLoading=false, _rmErr=null, _rmVis=[];
 UI.rmFocus=null; UI.rmDepth=99; UI.rmHidden={}; UI.rmMissing=false; UI.rmHistory=[]; UI.rmExpand={};
+UI.rmZoom=1; /* 2026-10-15 (Stef: large maps -- zoom to fit, zoom in/out): a number (1 = 100%) or 'fit' */
 /* 2026-09-28 v2 (Stef: "as you drill up or down you lose the complete view"): 'web' = every record
    connected to the start point in ANY direction (the whole web), laid out left-to-right by
    relationship; 'focus' = the original straight parents/children only. Web + All is the default. */
@@ -1691,6 +1694,26 @@ function rmSvg(col){
   return `<svg width="${L.w}" height="${L.h}" viewBox="0 0 ${L.w} ${L.h}" style="display:block;font-family:inherit">${edges}${heads}${boxes}${more}</svg>`;
 }
 
+/* ---- 2026-10-15: zoom for the Relationship map (live map only; saved snapshots and tiles are unchanged) ---- */
+let _rmFitZ=1;
+function rmScaledSvg(svg){
+  const m=/<svg width="([\d.]+)" height="([\d.]+)"/.exec(svg); if(!m) return svg;
+  const z=typeof UI.rmZoom==='number'?UI.rmZoom:1;
+  return svg.replace(m[0],`<svg width="${Math.round(m[1]*z)}" height="${Math.round(m[2]*z)}" data-w="${m[1]}" data-h="${m[2]}"`);
+}
+function rmCurZoom(){ return UI.rmZoom==='fit'?_rmFitZ:UI.rmZoom; }
+function rmApplyZoom(){
+  const c=document.querySelector('.rm-canvas'), sv=c&&c.querySelector('svg'); if(!sv) return;
+  const w=+sv.getAttribute('data-w'), h=+sv.getAttribute('data-h'); if(!w||!h) return;
+  let z=UI.rmZoom;
+  if(z==='fit'){ const cw=c.clientWidth-6, ch=Math.min(680,Math.max(240,window.innerHeight*0.75))-6; z=_rmFitZ=Math.max(0.05,Math.min(1.5,cw/w,ch/h)); }
+  sv.setAttribute('width',Math.round(w*z)); sv.setAttribute('height',Math.round(h*z));
+  const el=document.getElementById('rmZoomPct'); if(el) el.textContent=(UI.rmZoom==='fit'?'Fit · ':'')+Math.round(z*100)+'%';
+  document.querySelectorAll('.rm-zoom .btn').forEach(b=>{ if(b.textContent==='Fit') b.classList.toggle('pri',UI.rmZoom==='fit'); });
+}
+function rmZoomBy(f){ UI.rmZoom=clamp(Math.round(rmCurZoom()*f*100)/100,0.05,3); rmApplyZoom(); }
+function rmZoomSet(v){ UI.rmZoom=v; rmApplyZoom(); }
+Object.assign(window,{rmZoomBy,rmZoomSet,rmApplyZoom});
 function rmSetFocus(k){
   if(!k || !RM || !RM.nodes[k]) return;
   if(UI.rmFocus && UI.rmFocus!==k){ UI.rmHistory.push(UI.rmFocus); if(UI.rmHistory.length>30) UI.rmHistory.shift(); }
@@ -1770,7 +1793,16 @@ function rmWidgetMap(){
     h+=`<div class="mini" style="margin:8px 0 6px">Starting point: <b style="color:${RM_COLOR[focus.type]}">${esc(RM_LABEL[focus.type])}</b> <b>${esc(focus.name)}</b>${rmCode(focus.raw)?' <span class="pill n">'+esc(rmCode(focus.raw))+'</span>':''}
       · ${inView-1} connected record${inView===2?'':'s'}${UI.rmDepth>=99?'':' within '+UI.rmDepth+' step'+(UI.rmDepth>1?'s':'')} · ${UI.rmMode==='web'?'whole web — ':''}parents on the left, children on the right
       ${UI.rmMissing?` · <span style="color:var(--bad)">${missInView} with missing links</span>`:''}</div>`;
-    h+=`<div class="rm-canvas">${rmSvg(col)}</div>`;
+    h+=`<div class="rm-zoom" style="display:flex;gap:6px;align-items:center;justify-content:flex-end;margin:0 0 6px">
+        <span class="mini">Zoom</span>
+        <button class="btn sm" onclick="rmZoomBy(1/1.25)" title="Zoom out" aria-label="Zoom out">−</button>
+        <span class="mini" id="rmZoomPct" style="min-width:42px;text-align:center">${UI.rmZoom==='fit'?'Fit':Math.round(UI.rmZoom*100)+'%'}</span>
+        <button class="btn sm" onclick="rmZoomBy(1.25)" title="Zoom in" aria-label="Zoom in">+</button>
+        <button class="btn sm ${UI.rmZoom==='fit'?'pri':''}" onclick="rmZoomSet('fit')" title="Fit the whole map in the window">Fit</button>
+        <button class="btn sm" onclick="rmZoomSet(1)" title="Actual size">100%</button>
+        <span class="mini" title="Hold Ctrl (or ⌘) and use the mouse wheel over the map">Ctrl + wheel also zooms</span></div>`;
+    h+=`<div class="rm-canvas" onwheel="if(event.ctrlKey||event.metaKey){event.preventDefault();rmZoomBy(event.deltaY<0?1.1:1/1.1)}">${rmScaledSvg(rmSvg(col))}</div>`;
+    setTimeout(rmApplyZoom,0);
     if(inView===1) h+=`<div class="mini" style="margin-top:6px">Nothing is linked to this record${Object.keys(UI.rmHidden).some(t=>UI.rmHidden[t])?' among the types switched on':''}.</div>`;
   }
   h+=`<div class="mini" style="margin-top:8px">Click a box to re-centre on it. Hover for its code, details and a link to open it in its module. Companies are matched by name from deal and contact accounts; “≈ dup?” marks names that look like the same company. Contacts show as a count. Read-only — loaded ${RM.loadedAt?esc(F.dt(RM.loadedAt.toISOString())):''}.</div>
@@ -1956,16 +1988,45 @@ async function srLoad(){
 function srDraftFrom(r,asCopy){
   const d=r?NorthSavedReports.sanitizeDefinition(r.definition):{tiles:[],board:null}, b=d.board;
   return { id:(r&&!asCopy)?r.id:null, name:r?(asCopy?r.name+' (copy)':r.name):'', description:r?(r.description||''):'', visibility:(r&&!asCopy)?r.visibility:'private',
-    tiles:d.tiles.slice(), widgets:(asCopy&&!CFG.advCanCreate)?[]:(d.widgets||[]).slice(), note:(asCopy&&!CFG.advCanCreate&&(d.widgets||[]).length)?'Chart library elements were left out of this copy -- Advanced reports is not enabled for you.':'', boardOn:!!b, fy:(b&&b.fy)||'', type:b?b.sel.type:'fy', month:b&&b.sel.month!=null?b.sel.month:0, from:b&&b.sel.from!=null?b.sel.from:0, to:b&&b.sel.to!=null?b.sel.to:2, cmp:b?b.cmp:0, error:'' };
+    tiles:d.tiles.slice(), widgets:(asCopy&&!CFG.advCanCreate)?[]:(d.widgets||[]).slice(), layout:NorthSavedReports.layoutOf(d), /* 2026-10-15 */ note:(asCopy&&!CFG.advCanCreate&&(d.widgets||[]).length)?'Chart library elements were left out of this copy -- Advanced reports is not enabled for you.':'', boardOn:!!b, fy:(b&&b.fy)||'', type:b?b.sel.type:'fy', month:b&&b.sel.month!=null?b.sel.month:0, from:b&&b.sel.from!=null?b.sel.from:0, to:b&&b.sel.to!=null?b.sel.to:2, cmp:b?b.cmp:0, error:'' };
 }
-function srDefFromDraft(d){ return NorthSavedReports.sanitizeDefinition({tiles:d.tiles,widgets:d.widgets||[],board:d.boardOn?{fy:d.fy||null,sel:{type:d.type,month:d.month,from:d.from,to:d.to},cmp:d.cmp}:null}); }
+function srDefFromDraft(d){ return NorthSavedReports.sanitizeDefinition({tiles:d.tiles,widgets:d.widgets||[],layout:d.layout||[],board:d.boardOn?{fy:d.fy||null,sel:{type:d.type,month:d.month,from:d.from,to:d.to},cmp:d.cmp}:null}); }
 function srNew(){ SR.editing=srDraftFrom(null); render(); }
 function srEdit(id){ const r=(SR.list||[]).find(x=>x.id===id); if(r){ SR.editing=srDraftFrom(r,false); render(); } }
 function srCopy(id){ const r=(SR.list||[]).find(x=>x.id===id); if(r){ SR.editing=srDraftFrom(r,true); render(); } }
 function srCloseEditor(){ SR.editing=null; render(); }
 function srSetField(k,v){ if(SR.editing) SR.editing[k]=v; }
 function srSetNum(k,v){ if(SR.editing) SR.editing[k]=Number(v); }
-function srToggleTile(id,on){ const d=SR.editing; if(!d) return; d.tiles=d.tiles.filter(x=>x!==id); if(on) d.tiles.push(id); }
+function srToggleTile(id,on){ const d=SR.editing; if(!d) return; d.tiles=d.tiles.filter(x=>x!==id); if(on) d.tiles.push(id); render(); }
+/* ---- 2026-10-15 (Stef: change the layout of saved reports): order + width of each item ---- */
+const SR_WLABEL={12:'Full width',8:'Two-thirds',6:'Half',4:'Third',3:'Quarter'};
+function srDraftLayout(d){ const b=d.boardOn?{}:null; return NorthSavedReports.layoutOf({tiles:d.tiles,widgets:d.widgets||[],board:b,layout:d.layout||[]}); }
+function srItemLabel(k){
+  if(k==='board') return 'Board report';
+  if(k.startsWith('tile:')){ const t=NorthSavedReports.TILES.find(x=>x.id===k.slice(5)); return t?t.group+' › '+t.label:k; }
+  return srLibLabel(k.slice(7));
+}
+function srMoveItem(k,dir){ const d=SR.editing; if(!d) return; const L=srDraftLayout(d), i=L.findIndex(x=>x.k===k), j=i+dir; if(i<0||j<0||j>=L.length) return; [L[i],L[j]]=[L[j],L[i]]; d.layout=L; render(); }
+function srSetWidth(k,w){ const d=SR.editing; if(!d) return; const L=srDraftLayout(d); const it=L.find(x=>x.k===k); if(it) it.w=Number(w)||12; d.layout=L; render(); }
+Object.assign(window,{srMoveItem,srSetWidth});
+function srLayoutEditorHtml(d){
+  const L=srDraftLayout(d); if(!L.length) return '';
+  return `<div class="lbl" style="margin-top:4px">Layout <span class="mini">— order and width of each item in the report</span></div>
+    <div style="margin:4px 0 10px;border:1px solid var(--line);border-radius:6px">${L.map((it,i)=>`<div style="display:flex;gap:8px;align-items:center;padding:5px 8px;${i?'border-top:1px solid var(--line)':''}">
+      <span class="mini" style="width:18px">${i+1}</span><span style="flex:1;font-size:12.5px">${esc(srItemLabel(it.k))}</span>
+      <select class="in" style="width:auto" aria-label="Width of ${esc(srItemLabel(it.k))}" onchange="srSetWidth('${esc(it.k)}',this.value)">${NorthSavedReports.WIDTHS.slice().reverse().map(w=>`<option value="${w}" ${it.w===w?'selected':''}>${SR_WLABEL[w]}</option>`).join('')}</select>
+      <button class="btn sm" ${i?'':'disabled'} onclick="srMoveItem('${esc(it.k)}',-1)" title="Move up">↑</button><button class="btn sm" ${i<L.length-1?'':'disabled'} onclick="srMoveItem('${esc(it.k)}',1)" title="Move down">↓</button></div>`).join('')}</div>`;
+}
+/* the report body: items in layout order on a 12-column grid (one column on small screens) */
+function srBodyHtml(r){
+  const d=NorthSavedReports.sanitizeDefinition(r.definition), L=NorthSavedReports.layoutOf(d);
+  if(!L.length) return '<div class="card"><div class="empty">This report has nothing in it yet. Edit it to add tiles.</div></div>';
+  return `<div class="sr-grid">${L.map(it=>{ let body='';
+    if(it.k==='board') body=srBoardCardHtml(d.board);
+    else if(it.k.startsWith('tile:')){ const t=NorthSavedReports.TILES.find(x=>x.id===it.k.slice(5)); body=t?rpPart(t.page,t.wid):''; }
+    else body=srWidgetHtml(it.k.slice(7));
+    return `<div class="sr-item" style="grid-column:span ${it.w}">${body}</div>`; }).join('')}</div>`;
+}
 function srSetBoardOn(on){ if(SR.editing){ SR.editing.boardOn=!!on; render(); } }
 function srSetType(v){ if(SR.editing){ SR.editing.type=v; render(); } }
 function srSetVisibility(v){ if(SR.editing){ SR.editing.visibility=(v==='public'&&srCanPublish())?'public':'private'; render(); } }
@@ -2031,10 +2092,7 @@ function srViewHtml(r){
   let h=`<div class="phead"><div><h1>${esc(r.name)} ${srVisPill(r)}</h1><p>${r.description?esc(r.description)+' &middot; ':''}Saved by ${esc(r.owner_id===me?'you':(r.owner_name||'someone in your organisation'))} &middot; updated ${esc(F.dt(r.updated_at||r.created_at))}</p></div><div class="sp"></div>
     <button class="btn" onclick="srBack()">&larr; All saved reports</button>${can?`<button class="btn" onclick="srEdit('${esc(r.id)}')">Edit</button>`:''}<button class="btn" onclick="window.print()">Print / Save as PDF</button></div>`;
   h+=`<div class="note">This report shows the figures <b>your own access</b> allows (${esc(reportScopeLabel(reportScopeName()))}), computed live. Sharing it shares the layout, not anyone's data.</div>`;
-  d.tiles.forEach(id=>{ const t=NorthSavedReports.TILES.find(x=>x.id===id); if(t) h+=`<div style="margin-bottom:12px">${rpPart(t.page,t.wid)}</div>`; });
-  (d.widgets||[]).forEach(id=>{ h+=`<div style="margin-bottom:12px">${srWidgetHtml(id)}</div>`; });
-  if(d.board) h+=`<div style="margin-bottom:12px">${srBoardCardHtml(d.board)}</div>`;
-  if(!d.tiles.length&&!d.board&&!(d.widgets||[]).length) h+='<div class="card"><div class="empty">This report has nothing in it yet. Edit it to add tiles.</div></div>';
+  h+=srBodyHtml(r); /* 2026-10-15: laid out per the report's own order and widths */
   return h;
 }
 function srEditorHtml(){
@@ -2058,6 +2116,7 @@ function srEditorHtml(){
       <div style="margin:4px 0 10px">${Object.keys(groups).map(g=>`<div style="margin-bottom:6px"><div class="mini"><b>${esc(g)}</b></div>${groups[g].map(t=>`<label style="display:block;font-size:12.5px;margin-left:6px"><input type="checkbox" ${d.tiles.includes(t.id)?'checked':''} onchange="srToggleTile('${t.id}',this.checked)"> ${esc(t.label)} <span class="mini">&mdash; ${esc(t.hint)}</span></label>`).join('')}</div>`).join('')}</div>
       ${d.note?`<div class="note w" style="margin:0 0 8px">${esc(d.note)}</div>`:''}
       ${srEditorLibraryHtml(d)}
+      ${srLayoutEditorHtml(d)}
       <label style="display:block;font-size:12.5px;margin-bottom:6px"><input type="checkbox" id="srBoardOn" ${d.boardOn?'checked':''} onchange="srSetBoardOn(this.checked)"> <b>Include a Board report setting</b> <span class="mini">&mdash; a button that opens the Board report with this period and comparison already chosen</span></label>
       ${d.boardOn?`<div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end;margin:0 0 10px 22px">
         <div><div class="mini">Financial year</div><select class="in" onchange="srSetField('fy',this.value)"><option value="">Whatever Strategy has selected</option>${fys.map(f=>`<option ${d.fy===f?'selected':''}>${f}</option>`).join('')}</select></div>
@@ -2085,6 +2144,9 @@ function srLibrary(){
   const groups=[];
   Object.keys(RP_GRID).forEach(pg=>{ const g=RP_GRID[pg];
     groups.push({label:g.label, items:g.boxes.map(([box,wid,w,label,hint])=>({id:pg+'.'+wid,label,hint}))}); });
+  /* 2026-10-15 (Stef: a saved view inserted into a report should show the view, not a link) */
+  if(RV.list===null){ if(!RV.loading) setTimeout(rvLoad,0); }
+  else if((RV.list||[]).length) groups.push({label:'Saved Relationship map views', items:RV.list.map(v=>({id:'relview.'+v.id,label:v.name,hint:(v.mode==='frozen'?'Frozen':'Live')+' view from '+((v.view&&v.view.focusName)||'—')}))});
   const cw=(CFG.customWidgets||[]);
   if(cw.length) groups.push({label:'Your custom widgets', items:cw.map(w=>({id:'external.'+w.id,label:w.name,hint:w.hint||w.type||''}))});
   return groups;
@@ -2096,6 +2158,7 @@ function srWidgetHtml(id){
   const dot=id.indexOf('.'), pg=id.slice(0,dot), wid=id.slice(dot+1);
   try{
     if(RP_PART_FNS[pg]) return rpPart(pg,wid);
+    if(pg==='relview') return rvTileHtml(wid,{inline:true}); /* 2026-10-15: draw the saved view itself */
     if(pg==='external' && typeof window.northResolveWidget==='function'){ const w=window.northResolveWidget('dashboards',id); if(w) return w.fn(); }
   }catch(e){ console.error(e); }
   return '<div class="card"><div class="empty">This chart library element is no longer available.</div></div>';
@@ -2116,10 +2179,9 @@ function srTileHtml(id){
   if(SR.list===null){ if(!SR.loading) setTimeout(srLoad,0); return '<div class="card"><div class="empty">Loading saved report…</div></div>'; }
   const r=(SR.list||[]).find(x=>x.id===id);
   if(!r) return '<div class="card"><div class="empty">This saved report was deleted or is not shared with you.</div></div>';
-  return `<div class="card" style="height:100%"><h3>${esc(r.name)} <span class="sp"></span>${srVisPill(r)}</h3><div class="bd">
-    ${r.description?`<p style="margin:0 0 6px;font-size:12.5px">${esc(r.description)}</p>`:''}
-    <div class="mini" style="margin-bottom:8px">${esc(NorthSavedReports.summary(r.definition))} &middot; by ${esc(r.owner_id===srMe()?'you':(r.owner_name||'someone in your organisation'))}</div>
-    <button class="btn pri sm" onclick="srOpenFrom('${esc(r.id)}')">Open report &rarr;</button></div></div>`;
+  /* 2026-10-15 (Stef: inserting a saved report/view should show it, not a link): the report is drawn inside the tile */
+  return `<div class="card" style="height:100%;display:flex;flex-direction:column"><h3>${esc(r.name)} <span class="sp"></span>${srVisPill(r)} <button class="btn sm" onclick="srOpenFrom('${esc(r.id)}')" title="Open full page">Open &rarr;</button></h3>
+    <div class="bd sr-tile-body" style="flex:1;overflow:auto;min-height:0">${srBodyHtml(r)}</div></div>`;
 }
 function srListTileHtml(){
   if(SR.list===null){ if(!SR.loading) setTimeout(srLoad,0); return '<div class="card"><div class="empty">Loading saved reports…</div></div>'; }
@@ -2185,7 +2247,7 @@ function rvApply(v){ const w=v.view||{}; UI.rmFocus=w.focus||null; UI.rmDepth=w.
 function rvOpen(id){ const v=(RV.list||[]).find(x=>x.id===id); if(!v) return; rvApply(v); UI.page='relmap'; render(); }
 Object.assign(window,{rvLoad,rvStart,rvSet,rvClose,rvSave,rvDelete,rvOpen});
 function rvPill(v){ return (v.visibility==='public'?'<span class="pill ok">Public</span>':'<span class="pill n">Private</span>')+' '+(v.mode==='frozen'?`<span class="pill warn" title="A picture fixed at the time it was saved">Frozen &middot; as at ${esc(F.dt(v.frozen_at))}</span>`:'<span class="pill v" title="Redrawn from current data each time">Live</span>'); }
-function rvTileHtml(id){
+function rvTileHtml(id,opt){
   if(RV.list===null){ if(!RV.loading) setTimeout(rvLoad,0); return '<div class="card"><div class="empty">Loading saved view…</div></div>'; }
   const v=(RV.list||[]).find(x=>x.id===id);
   if(!v) return '<div class="card"><div class="empty">This saved view was deleted or is not shared with you.</div></div>';
@@ -2206,7 +2268,7 @@ function rvTileHtml(id){
   const fn=(v.view&&v.view.focusName)||'';
   return `<div class="card" style="height:100%"><h3>${esc(v.name)} <span class="sp"></span>${rvPill(v)}</h3><div class="bd">
     <div class="mini" style="margin-bottom:6px">Starting from <b>${esc(fn)}</b>${v.mode==='frozen'&&v.snapshot_meta?` &middot; ${esc(String(v.snapshot_meta.records||''))} records`:''}</div>
-    <div class="rm-canvas rv-fit" style="pointer-events:none;max-height:420px;overflow:hidden">${body}</div>
+    <div class="rm-canvas rv-fit" style="pointer-events:none;${opt&&opt.inline?'max-height:none':'max-height:420px'};overflow:hidden">${body}</div>
     <div style="margin-top:8px"><button class="btn sm" onclick="rvOpen('${esc(v.id)}')">Open in Relationship map &rarr;</button></div></div></div>`;
 }
 function rvListHtml(){
@@ -2329,6 +2391,8 @@ const HELP_FAQ=[
   /* 2026-10-10 */ {q:"Who can see or change my saved report?", a:"A Private report is visible only to you. A Public report can be opened by everyone in your organisation, but only you (or someone with the Configure permission, who can edit or remove public reports) can change it. Making a report public needs a role with Publish or Configure. Anyone can make their own private copy of a public report with Copy."},
   /* 2026-10-14 */ {q:"How do I add charts from the library to a saved report?", a:"In Saved reports, New or Edit, use the Chart library section to tick any Reporting tile or your custom widgets. This is part of Advanced reports, a paid add-on; if it isn't active for you, you'll see a short note instead. Anyone who can see the report can open it."},
   /* 2026-10-14 */ {q:"Can I put a saved report on a dashboard?", a:"Yes. Edit layout > + Add tile > Saved reports adds one report as a tile with an Open button; Saved reports (list) adds a tile listing your reports and the shared ones. You're only offered reports you can see."},
+  /* 2026-10-15 */ {q:"How do I change the layout of a saved report?", a:"Open the report and click Edit. Under Layout, use the arrows to change the order of items and pick a width for each (full, two-thirds, half, third or quarter) so items sit side by side. Save the report. A saved report added to a dashboard (Edit layout \u203a + Add tile) now shows the report itself in the tile, and saved Relationship map views can be added to a report from the chart library (Advanced reports)."},
+  /* 2026-10-15 */ {q:"How do I see a large Relationship map?", a:"Use the Zoom buttons above the map: Fit shows the whole map in the window, + and \u2212 zoom in and out, 100% returns to actual size. You can also hold Ctrl (or \u2318) and use the mouse wheel over the map. The zoom stays as you click to re-centre."},
   /* 2026-10-14 */ {q:"How do I save a Relationship map view?", a:"Pick a starting record, set the depth and record types, then click Save view. Give it a name, choose Private or Public, and Live (redrawn from current data each time) or Frozen (keeps the picture exactly as at the time you saved it). Saved views appear in the Saved views tile and can be added to any dashboard with Edit layout > + Add tile."},
   /* 2026-10-14 */ {q:"Who can see a saved view, and can I change a frozen one?", a:"Private views are only yours; Public views are visible to everyone in your organisation and need a role with Publish or Configure. A frozen view never changes; to update it, save a new view and delete the old one."},
 ];

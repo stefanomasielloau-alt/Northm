@@ -311,6 +311,7 @@
         if (!any) return;
         var mk = lc(obj[ld.matchKey]); if (mk) { if (seen[mk]) return; seen[mk] = 1; }
         var existing = mk ? (ld.rows() || []).filter(function (r) { return lc(r[ld.matchKey]) === mk; })[0] : null;
+        if (existing && ld.addOnly) return; /* hybrid screen mode: existing rows are edited via their on-screen fields */
         if (existing) {
           var ch = [], overwrite = false;
           ld.columns.forEach(function (c) {
@@ -567,7 +568,15 @@
      checks, audit and saving run; each set is then re-read from the screen and counted as skipped if the page
      did not keep it (e.g. a view-only role). */
   var SKIP_NAME = /pass(word)?|secret|token|api[-_ ]?key|credential|card|cvv|iban|ssn|otp|2fa|private[-_ ]?key/i;
-  var MAX_SCREEN_FIELDS = 120;
+  var MAX_SCREEN_FIELDS = 400; /* 2026-10-15: was 120 -- long Event detail / Campaign pages could cut off the lower cards */
+  /* 2026-10-15 (Stef: talk-to-screen on Event detail didn't fill speakers / notes): navigation pickers (onchange
+     goes to another page/record), table filter rows (thead) and anything marked data-afl-skip are not data fields. */
+  var NAV_HANDLER = /\bgo\(|openReport\(|location\.|UI\.page\s*=|switchOrg|setView\(/;
+  function headingText(card) {
+    var h = card && card.querySelector('h3'); if (!h) return '';
+    var c = h.cloneNode(true); c.querySelectorAll('button,select,input,textarea,.sp,.pill,.mini,a.btn').forEach(function (n) { n.remove(); });
+    return txt(c).slice(0, 50);
+  }
   function visibleEl(el) { return !!(el.offsetParent || (el.getClientRects && el.getClientRects().length)); }
   function txt(n) { return (n && n.textContent || '').replace(/\s+/g, ' ').trim(); }
   function screenScope() {
@@ -592,6 +601,8 @@
   }
   function describeCtrl(el) {
     var lab = el.getAttribute('aria-label') || '';
+    /* rich-text boxes: their neighbours are toolbars, so name them by their card + placeholder instead */
+    if (!lab && ctrlType(el) === 'html') { var sec0 = headingText(el.closest('.card')); return [sec0, 'text' + (el.getAttribute('data-ph') ? ' (' + el.getAttribute('data-ph').slice(0, 60) + ')' : '')].filter(Boolean).join(' › '); }
     if (!lab && el.id) { try { var l = document.querySelector('label[for="' + CSS.escape(el.id) + '"]'); if (l) lab = txt(l); } catch (e) { /* bad id */ } }
     if (!lab) { var wl = el.closest('label'); if (wl) { var c = wl.cloneNode(true); c.querySelectorAll('input,select,textarea,button').forEach(function (n) { n.remove(); }); lab = txt(c); } }
     var td = el.closest('td,th');
@@ -611,7 +622,7 @@
       row = 'row ' + n + (key ? ' (' + key + ')' : '');
     }
     lab = lab || el.getAttribute('placeholder') || el.getAttribute('title') || el.getAttribute('name') || el.id || 'field';
-    var card = el.closest('.card'), h = card && card.querySelector('h3'), sec = h ? txt(h).slice(0, 50) : '';
+    var sec = headingText(el.closest('.card'));
     return [sec, row, lab.slice(0, 60)].filter(Boolean).join(' › ');
   }
   var YESNO = [{ value: 'yes', label: 'Ticked' }, { value: 'no', label: 'Unticked' }];
@@ -634,19 +645,21 @@
     var scope = screenScope(), out = [], seen = {}, groups = {}, els = scope.querySelectorAll('input,select,textarea,[contenteditable]');
     for (var i = 0; i < els.length && out.length < MAX_SCREEN_FIELDS; i++) {
       var el = els[i];
-      if (el.closest('#aflModal,#naiModal,.asst,.afl-chip,#aflFab,[hidden]') || el.disabled || el.readOnly) continue;
+      if (el.closest('#aflModal,#naiModal,.asst,.afl-chip,#aflFab,[hidden],thead,h3,.phead,[data-afl-skip]') || el.disabled || el.readOnly) continue;
+      if (NAV_HANDLER.test(el.getAttribute('onchange') || '') || /-sel$/.test(el.id || '')) continue; /* record switchers and "attach existing ..." pickers; controls in card headings (h3) and page headers are view pickers, not data */
       var type = ctrlType(el); if (!type || !visibleEl(el)) continue;
       if (type === 'radio') {
         var gk = (el.form ? 'f' : 'd') + '|' + (el.name || ''); if (!el.name) continue;
         if (groups[gk]) { groups[gk].radios.push(el); continue; }
         groups[gk] = { el: el, radios: [el], type: 'radio' };
-        var gl = radioGroupLabel(el), card0 = el.closest('.card'), h0 = card0 && card0.querySelector('h3');
-        var g = groups[gk]; g.label = ([h0 ? txt(h0).slice(0, 50) : '', gl.slice(0, 60)].filter(Boolean).join(' › '));
+        var gl = radioGroupLabel(el);
+        var g = groups[gk]; g.label = ([headingText(el.closest('.card')), gl.slice(0, 60)].filter(Boolean).join(' › '));
         g.pending = true; continue;
       }
       if ((el.getAttribute('type') || '') === 'search' || el.getAttribute('role') === 'search' || /search|filter/i.test(el.getAttribute('placeholder') || '')) continue;
       var label = describeCtrl(el);
-      if (SKIP_NAME.test((el.name || '') + ' ' + (el.id || '') + ' ' + (el.getAttribute('autocomplete') || '') + ' ' + label)) continue;
+      /* 2026-10-15: test the field's own name/label only, not its section heading (a "Scorecard" or "Notes card" section is not a payment card) */
+      if (SKIP_NAME.test((el.name || '') + ' ' + (el.id || '') + ' ' + (el.getAttribute('autocomplete') || '') + ' ' + label.split(' › ').pop())) continue;
       var n = seen[label] = (seen[label] || 0) + 1, f = { el: el, sig: label + ' #' + n, label: label, type: type };
       if (type === 'checkbox') { f.type = 'select'; f.kind = 'checkbox'; f.options = YESNO; f.blank = 'no'; }
       if (type === 'select') f.options = [].slice.call(el.options).filter(function (o) { return o.value !== '' && !o.disabled; }).map(function (o) { return { value: o.value, label: txt(o) || o.value }; });
@@ -690,8 +703,17 @@
     if (!after || !sameLoose(ctrlValue(after), v)) throw new Error('the page did not keep the value');
   }
   function screenTitle() { var h = document.querySelector('#main h1'); return (h && txt(h)) || document.title || 'this page'; }
+  /* 2026-10-15: a page can say which record is on screen (NorthAIFill.setScreenRecord(fn) -> {id, ctx} or null).
+     Talk to this screen then also offers that record's LISTS so new rows (speakers, venues, tasks...) can be
+     ADDED by voice; existing rows are still edited through the on-screen fields, so each change appears once. */
+  var SCREEN_RECORD = null;
+  function recordLists() {
+    if (typeof SCREEN_RECORD !== 'function') return [];
+    try { var r = SCREEN_RECORD(); if (!r || !REG[r.id]) return []; var sc = REG[r.id](r.ctx || {}); return (sc && sc.lists) ? sc.lists.map(function (l) { return Object.assign({}, l, { addOnly: true, hint: (l.hint ? l.hint + '. ' : '') + 'Only NEW items not already on screen' }); }) : []; }
+    catch (e) { console.warn('aiFill screen record failed', e); return []; }
+  }
   function universalSchema() {
-    var found = scanScreen(); if (!found.length) return null;
+    var found = scanScreen(), lists = recordLists(); if (!found.length && !lists.length) return null;
     var page = screenTitle();
     return {
       key: 'screen:' + location.pathname + ':' + page, title: 'This screen — ' + page, universal: true,
@@ -704,7 +726,8 @@
           set: function (v) { setScreenField(f, v); }
         };
       }),
-      lists: []
+      lists: lists,
+      after: lists.length ? function () { if (typeof window.render === 'function') window.render(); } : undefined
     };
   }
   function openScreen() {
@@ -731,10 +754,11 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initUniversal); else initUniversal();
 
   function register(id, builder) { REG[id] = builder; }
+  function setScreenRecord(fn) { SCREEN_RECORD = fn; }
   register('__screen__', universalSchema);
 
   window.NorthAIFill = {
-    register: register, open: open, openScreen: openScreen, fileToText: fileToText, createDictation: createDictation, speechSupported: speechSupported,
+    register: register, setScreenRecord: setScreenRecord, open: open, openScreen: openScreen, fileToText: fileToText, createDictation: createDictation, speechSupported: speechSupported,
     FILE_ACCEPT: FILE_ACCEPT, dirSupported: dirSupported,
     _test: { scanScreen: scanScreen, universalSchema: universalSchema, zipEntryText: zipEntryText, docxText: docxText, buildPrompt: buildPrompt, interpret: interpret, normVal: normVal, htmlFromText: htmlFromText }
   };

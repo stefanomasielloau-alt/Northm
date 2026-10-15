@@ -2235,7 +2235,7 @@ function pageEvent(){
       ['heading','Heading','Heading (click again for normal text)'],['insertUnorderedList','&bull; List','Bullet list'],['insertOrderedList','1. List','Numbered list'],null,['link','Link','Insert link (select text first)']];
     h+=`<div class="card"><h3>Event brief <span class="sp"></span><span class="mini">${canEdit?'Saves when you click away':'View only'}</span></h3><div class="bd">
       ${canEdit?`<div class="rte-bar">${tb.map(b=>b?`<button type="button" title="${esc(b[2])}" onmousedown="event.preventDefault()" onclick="briefCmd('${b[0]}')">${b[1]}</button>`:'<span class="sep"></span>').join('')}</div>`:''}
-      <div id="evBrief" class="rte" data-eid="${esc(e.id)}" contenteditable="${canEdit?'true':'false'}" spellcheck="true" data-ph="${canEdit?'Describe the event brief: objectives, audience, format, key messages, logistics...':'No brief yet.'}" onpaste="briefPaste(event)" onblur="commitBrief('${e.id}',this)">${sanitizeHtml(e.briefHtml||'')}</div>
+      <div id="evBrief" class="rte" aria-label="Event brief" data-eid="${esc(e.id)}" contenteditable="${canEdit?'true':'false'}" spellcheck="true" data-ph="${canEdit?'Describe the event brief: objectives, audience, format, key messages, logistics...':'No brief yet.'}" onpaste="briefPaste(event)" onblur="commitBrief('${e.id}',this)">${sanitizeHtml(e.briefHtml||'')}</div>
     </div>${evMigNote('brief','the brief')}</div>`; }
 
   h+=`<div class="kpis">
@@ -2582,7 +2582,11 @@ if(window.NorthAIFill) NorthAIFill.register('event', function(ctx){
     {key:'requester',label:'Requester',type:'text',hint:'the person asking for / owning the event',get:()=>e.requester,set:v=>setIn('events',e.id,'requester',v)},
     {key:'budget',label:'Budget',type:'money',hint:'total event budget as a plain number, assumed to be in '+CFG.currency.main,get:()=>e.budget,
       set:v=>{ setIn('events',e.id,'budget',v,'money'); if(typeof recomputeEventBudgetFx==='function') recomputeEventBudgetFx(e.id); }},
-    {key:'campaignId',label:'Linked campaign',type:'select',options:CFG.campaigns.map(c=>({value:c.id,label:c.name})),hint:'only if the input names one of these campaigns',get:()=>e.campaignId||'',set:v=>setIn('events',e.id,'campaignId',v||null)}
+    {key:'campaignId',label:'Linked campaign',type:'select',options:CFG.campaigns.map(c=>({value:c.id,label:c.name})),hint:'only if the input names one of these campaigns',get:()=>e.campaignId||'',set:v=>setIn('events',e.id,'campaignId',v||null)},
+    /* 2026-10-15: remaining editable event fields */
+    {key:'campaignRef',label:'Campaign reference (if not tracked here)',type:'text',get:()=>e.campaignRef||'',set:v=>setIn('events',e.id,'campaignRef',v)},
+    {key:'registered',label:'Registered (number of registrations)',type:'number',get:()=>e.registered||0,set:v=>setIn('events',e.id,'registered',String(v),'num')},
+    {key:'attended',label:'Attended (number who attended)',type:'number',get:()=>e.attended||0,set:v=>setIn('events',e.id,'attended',String(v),'num')}
   ];
   if(typeof _evCols!=='undefined' && _evCols.brief) fields.push({key:'brief',label:'Event brief',type:'html',hint:'a clean written summary of objectives, audience, format, key messages and logistics taken from the input',
     get:()=>e.briefHtml||'',set:html=>{ e.briefHtml=sanitizeHtml(html); logAudit('edit','events.brief ('+e.name+')'); }});
@@ -2599,9 +2603,24 @@ if(window.NorthAIFill) NorthAIFill.register('event', function(ctx){
         add:o=>{ const n=VENUES(e.id).length; CFG.eventVenues.push(Object.assign({id:uid('venue'),eventId:e.id,name:'Venue '+(n+1),country:'',location:'',address:'',pax:0,start:'',end:'',status:'Planned',sortOrder:n},o)); },
         update:(row,o)=>Object.assign(row,o)},
       {key:'speakers',label:'Speakers',hint:'each speaker or presenter mentioned',matchKey:'name',
-        columns:[{key:'name',label:'Name',type:'text'},{key:'company',label:'Company',type:'text'},{key:'topic',label:'Topic',type:'text'},{key:'contact',label:'Contact',type:'text'}],
+        columns:[{key:'name',label:'Name',type:'text'},{key:'company',label:'Company',type:'text'},{key:'topic',label:'Topic',type:'text'},{key:'contact',label:'Contact',type:'text'}]
+          .concat((typeof _evCols!=='undefined' && _evCols.speakers)?[{key:'notes',label:'Notes',type:'text'}]:[]),
         rows:()=>SPEAKERS(e.id),
         add:o=>{ CFG.speakers.push(Object.assign({orgId:_clickOrgId(),id:uid('spk'),eventId:e.id,name:'',company:'',topic:'',contact:''},o)); },
+        update:(row,o)=>Object.assign(row,o)},
+      /* 2026-10-15 (Stef: talk to the screen should fill everything editable): checklist tasks and cost lines */
+      {key:'checklist',label:'Checklist tasks',hint:'each to-do / task mentioned for this event',matchKey:'item',
+        columns:[{key:'item',label:'Task',type:'text'},{key:'dueDate',label:'Due date',type:'date'},{key:'done',label:'Done',type:'select',options:[{value:'yes',label:'Done'},{value:'no',label:'Not done'}]}]
+          .concat((typeof _evCols!=='undefined' && _evCols.checklist)?[{key:'notes',label:'Notes',type:'text'}]:[]),
+        rows:()=>CFG.checklist.filter(c=>c.eventId===e.id),
+        add:o=>{ const d=o.done==='yes'; delete o.done; CFG.checklist.push(Object.assign({orgId:_clickOrgId(),id:uid('chk'),eventId:e.id,item:'New task',done:d,dueDate:''},o)); },
+        update:(row,o)=>{ if('done' in o){ row.done=o.done==='yes'; delete o.done; } Object.assign(row,o); }},
+      {key:'costLines',label:'Cost lines',hint:'each cost, quote or supplier spend mentioned; amounts as plain numbers in '+CFG.currency.main,matchKey:'description',
+        columns:[{key:'category',label:'Category',type:'select',options:opts(COST_CATEGORIES)},{key:'supplier',label:'Supplier',type:'text'},{key:'description',label:'Description',type:'text'},
+          {key:'plannedCost',label:'Planned',type:'money'},{key:'committedCost',label:'Committed',type:'money'},{key:'actualCost',label:'Actual',type:'money'}]
+          .concat((typeof _evCols!=='undefined' && _evCols.costLines)?[{key:'notes',label:'Notes',type:'text'}]:[]),
+        rows:()=>CFG.costLines.filter(c=>c.eventId===e.id),
+        add:o=>{ CFG.costLines.push(Object.assign({orgId:_clickOrgId(),id:uid('cost'),eventId:e.id,category:COST_CATEGORIES[0],supplier:'',description:'',plannedCost:0,committedCost:0,actualCost:0},o)); },
         update:(row,o)=>Object.assign(row,o)}
     ],
     after:()=>render(),
@@ -2609,6 +2628,8 @@ if(window.NorthAIFill) NorthAIFill.register('event', function(ctx){
   };
 });
 
+/* 2026-10-15: Talk to this screen on Event detail can also ADD speakers, venues, checklist tasks and cost lines */
+if(window.NorthAIFill && NorthAIFill.setScreenRecord) NorthAIFill.setScreenRecord(()=>(UI.page==='event' && UI.eventId)?{id:'event',ctx:{eventId:UI.eventId}}:null);
 function render(){
   const p=PAGES.find(x=>x.id===UI.page)||PAGES[0];
   document.getElementById('side').innerHTML=renderSide();

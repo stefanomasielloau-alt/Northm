@@ -71,7 +71,12 @@
     (Array.isArray(d.layout) ? d.layout : []).forEach(function(it){
       if(!it || typeof it !== 'object') return; var k = String(it.k || '');
       if(keys.indexOf(k) < 0 || have[k]) return; have[k] = 1;
-      var w = Math.round(Number(it.w)); out.push({ k: k, w: WIDTHS.indexOf(w) >= 0 ? w : 12 });
+      /* 2026-10-15: the report now uses the shared drag/resize Edit layout, so any width 1-12 is kept, plus
+         the grid position (x, y) and height (h) once someone has arranged it */
+      var w = Math.round(Number(it.w)); var o = { k: k, w: (w >= 1 && w <= 12) ? w : 12 };
+      var x = Math.round(Number(it.x)), y = Math.round(Number(it.y)), h = Math.round(Number(it.h));
+      if (isFinite(x) && isFinite(y) && isFinite(h) && x >= 0 && x <= 11 && y >= 0 && y <= 5000 && h >= 1 && h <= 1000) { o.x = Math.min(x, 12 - o.w); o.y = y; o.h = h; }
+      out.push(o);
     });
     keys.forEach(function(k){ if(!have[k]) out.push({ k: k, w: 12 }); });
     return out;

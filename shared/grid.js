@@ -983,6 +983,7 @@
        still emits an "Unknown widget" placeholder for a hidden box (it doesn't
        know about the sentinel), but that markup never becomes visible -- it's
        stripped right here, before layout runs. */
+    var opts = PAGE_OPTS[pageId] || {};
     var hiddenNow = getWidgetAssignments(pageId);
 
     // Synthesize a DOM node for every custom box this page has (see addNewTile()
@@ -1055,7 +1056,7 @@
         // handle on hover of that exact corner pixel. fitBoxHeight() itself is kept --
         // applyWidgetSwap() below still uses it to auto-grow/shrink a box right after a
         // widget swap, which was never in question.
-        h.innerHTML = '<span>⠿⠿ drag to move · drag corner to resize</span>' +
+        h.innerHTML = opts.lockContent ? '<span>⠿⠿ drag to move · drag corner to resize</span>' : '<span>⠿⠿ drag to move · drag corner to resize</span>' +
           '<button type="button" class="gs-swap-btn" data-gs-swap="' + boxIdForHandle + '">⇄ Swap widget</button>' +
           hideBtnHtml;
         wrap.appendChild(h);
@@ -1085,7 +1086,7 @@
     var missingFromSaved = [];
     var savedLayout = null;
     try {
-      savedLayout = JSON.parse(localStorage.getItem(gridStorageKey(pageId)) || 'null');
+      savedLayout = opts.persist ? opts.persist.load() : JSON.parse(localStorage.getItem(gridStorageKey(pageId)) || 'null');
       if (savedLayout && savedLayout.length) {
         // 2026-09-24 fix (Stef: "the hide button hides the widget but not the area,
         // we need to remove that area"): the saved layout is whatever was on screen
@@ -1280,6 +1281,7 @@
 
     grid.on('change', function () {
       if (!settled) return;
+      if (opts.persist) { try { opts.persist.save(grid.save(false)); } catch (e) { console.error('layout save failed', e); } return; }
       try { localStorage.setItem(gridStorageKey(pageId), JSON.stringify(grid.save(false))); } catch (e) {}
     });
 
@@ -1314,7 +1316,7 @@
         toggleBtn.textContent = on ? '✓ Done editing' : '⠿ Edit layout';
         toggleBtn.classList.toggle('active', on);
       }
-      if (addBtn) addBtn.style.display = on ? '' : 'none';
+      if (addBtn) addBtn.style.display = (on && !opts.lockContent) ? '' : 'none';
       if (on) refreshAddBtn();
     }
     // "+ Add / unhide tile" -- 2026-09-23 (Stef: "finish the hide/unhide tiles",
@@ -1351,6 +1353,7 @@
 
     if (toggleBtn) toggleBtn.onclick = function () { setEditing(!editing); };
     if (resetBtn) resetBtn.onclick = function () {
+      if (opts.persist) { try { if (opts.persist.reset) opts.persist.reset(); } catch (e) {} if (typeof window.render === 'function') window.render(); return; }
       try {
         localStorage.removeItem(gridStorageKey(pageId));
         localStorage.removeItem(widgetStorageKey(pageId));
@@ -1725,6 +1728,12 @@
   // only once it's actually been wired up (its own widget functions + grid
   // markup added to Ordo.html) -- this list is also what drives whether the
   // shared Edit layout / Reset layout buttons in the ctxbar show at all.
+  /* 2026-10-15 (Stef: saved reports should use this same Edit layout): per-page options for pages added
+     with northGridAddPage() -- persist {load(),save(layout),reset()} stores the layout somewhere other
+     than this browser (a saved report keeps it in the report itself, so everyone sees it); lockContent
+     hides Swap / Hide / + Add tile (the report's content is chosen in its own Edit dialog); readOnly
+     hides Edit layout and Reset layout for people who can't change it. */
+  var PAGE_OPTS = {};
   var PAGE_GRID_CONTAINERS = {
     home: 'ordo-grid-home',
     drivers: 'ordo-grid-drivers',
@@ -1777,7 +1786,7 @@
     var resetBtn = document.getElementById('grid-reset');
     var addTileBtn = document.getElementById('grid-addtile');
     var containerId = PAGE_GRID_CONTAINERS[effectiveId];
-    var show = !!containerId;
+    var show = !!containerId && !(PAGE_OPTS[effectiveId] || {}).readOnly;
     if (toggleBtn) toggleBtn.style.display = show ? '' : 'none';
     if (resetBtn) resetBtn.style.display = show ? '' : 'none';
     // grid-addtile only ever shows WHILE editing (per Stef: "in edit mode it
@@ -1786,6 +1795,7 @@
     // all, so it doesn't stay visible (stale, from a previous grid page) when
     // initGrid() never runs this time to otherwise manage it.
     if (addTileBtn && !show) addTileBtn.style.display = 'none';
+    if (addTileBtn && show && (PAGE_OPTS[effectiveId] || {}).lockContent) addTileBtn.style.display = 'none';
     if (containerId) initGrid(effectiveId, containerId);
   };
   window.northGetWidgetAssignments = getWidgetAssignments;
@@ -1837,7 +1847,7 @@
   window.northGridUseModule = function (cfg) {
     if (!cfg || !cfg.pages) return;
     if (cfg.storePrefix) _storePrefix = cfg.storePrefix;
-    [WIDGET_LIBRARIES, PAGE_LABELS, PAGE_GRID_CONTAINERS].forEach(function (o) { Object.keys(o).forEach(function (k) { delete o[k]; }); });
+    [WIDGET_LIBRARIES, PAGE_LABELS, PAGE_GRID_CONTAINERS, PAGE_OPTS].forEach(function (o) { Object.keys(o).forEach(function (k) { delete o[k]; }); });
     ALL_WIDGETS.length = 0;
     Object.keys(cfg.pages).forEach(function (pid) {
       var pg = cfg.pages[pid];
@@ -1847,5 +1857,14 @@
         ALL_WIDGETS.push({ key: pid + '.' + wid, pageId: pid, category: pg.label, label: w.label, hint: w.hint, fn: w.fn });
       });
     });
+  };
+  /* 2026-10-15 (Stef: "for Saved reports why can't we use the same layout change function"): adds ONE
+     page without wiping the others (northGridUseModule replaces the whole registry). Used for pages that
+     come and go, like one saved report. pg = { label, container, lib?, opts?: { persist, lockContent,
+     readOnly } }. Its widgets are not offered in the + Add tile library. */
+  window.northGridAddPage = function (pid, pg) {
+    if (!pid || !pg || !pg.container) return;
+    WIDGET_LIBRARIES[pid] = pg.lib || { defaults: {}, boxSizes: {}, widgets: {} };
+    PAGE_LABELS[pid] = pg.label || pid; PAGE_GRID_CONTAINERS[pid] = pg.container; PAGE_OPTS[pid] = pg.opts || {};
   };
 })();

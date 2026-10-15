@@ -1999,33 +1999,73 @@ function srSetField(k,v){ if(SR.editing) SR.editing[k]=v; }
 function srSetNum(k,v){ if(SR.editing) SR.editing[k]=Number(v); }
 function srToggleTile(id,on){ const d=SR.editing; if(!d) return; d.tiles=d.tiles.filter(x=>x!==id); if(on) d.tiles.push(id); render(); }
 /* ---- 2026-10-15 (Stef: change the layout of saved reports): order + width of each item ---- */
-const SR_WLABEL={12:'Full width',8:'Two-thirds',6:'Half',4:'Third',3:'Quarter'};
 function srDraftLayout(d){ const b=d.boardOn?{}:null; return NorthSavedReports.layoutOf({tiles:d.tiles,widgets:d.widgets||[],board:b,layout:d.layout||[]}); }
 function srItemLabel(k){
   if(k==='board') return 'Board report';
   if(k.startsWith('tile:')){ const t=NorthSavedReports.TILES.find(x=>x.id===k.slice(5)); return t?t.group+' › '+t.label:k; }
   return srLibLabel(k.slice(7));
 }
-function srMoveItem(k,dir){ const d=SR.editing; if(!d) return; const L=srDraftLayout(d), i=L.findIndex(x=>x.k===k), j=i+dir; if(i<0||j<0||j>=L.length) return; [L[i],L[j]]=[L[j],L[i]]; d.layout=L; render(); }
-function srSetWidth(k,w){ const d=SR.editing; if(!d) return; const L=srDraftLayout(d); const it=L.find(x=>x.k===k); if(it) it.w=Number(w)||12; d.layout=L; render(); }
-Object.assign(window,{srMoveItem,srSetWidth});
-function srLayoutEditorHtml(d){
-  const L=srDraftLayout(d); if(!L.length) return '';
-  return `<div class="lbl" style="margin-top:4px">Layout <span class="mini">— order and width of each item in the report</span></div>
-    <div style="margin:4px 0 10px;border:1px solid var(--line);border-radius:6px">${L.map((it,i)=>`<div style="display:flex;gap:8px;align-items:center;padding:5px 8px;${i?'border-top:1px solid var(--line)':''}">
-      <span class="mini" style="width:18px">${i+1}</span><span style="flex:1;font-size:12.5px">${esc(srItemLabel(it.k))}</span>
-      <select class="in" style="width:auto" aria-label="Width of ${esc(srItemLabel(it.k))}" onchange="srSetWidth('${esc(it.k)}',this.value)">${NorthSavedReports.WIDTHS.slice().reverse().map(w=>`<option value="${w}" ${it.w===w?'selected':''}>${SR_WLABEL[w]}</option>`).join('')}</select>
-      <button class="btn sm" ${i?'':'disabled'} onclick="srMoveItem('${esc(it.k)}',-1)" title="Move up">↑</button><button class="btn sm" ${i<L.length-1?'':'disabled'} onclick="srMoveItem('${esc(it.k)}',1)" title="Move down">↓</button></div>`).join('')}</div>`;
+function srItemBody(d,k){
+  if(k==='board') return srBoardCardHtml(d.board);
+  if(k.startsWith('tile:')){ const t=NorthSavedReports.TILES.find(x=>x.id===k.slice(5)); return t?rpPart(t.page,t.wid):''; }
+  return srWidgetHtml(k.slice(7));
 }
-/* the report body: items in layout order on a 12-column grid (one column on small screens) */
+/* items in on-screen order: arranged items top-to-bottom, left-to-right; anything not yet arranged after them */
+function srOrdered(L){ const placed=L.filter(it=>Number.isFinite(it.y)), rest=L.filter(it=>!Number.isFinite(it.y)); placed.sort((a,b)=>(a.y-b.y)||(a.x-b.x)); return placed.concat(rest); }
+const SR_EMPTY='<div class="card"><div class="empty">This report has nothing in it yet. Edit it to add tiles.</div></div>';
+/* the compact report body (inside a dashboard tile): a 12-column grid in on-screen order (one column on small screens) */
 function srBodyHtml(r){
-  const d=NorthSavedReports.sanitizeDefinition(r.definition), L=NorthSavedReports.layoutOf(d);
-  if(!L.length) return '<div class="card"><div class="empty">This report has nothing in it yet. Edit it to add tiles.</div></div>';
-  return `<div class="sr-grid">${L.map(it=>{ let body='';
-    if(it.k==='board') body=srBoardCardHtml(d.board);
-    else if(it.k.startsWith('tile:')){ const t=NorthSavedReports.TILES.find(x=>x.id===it.k.slice(5)); body=t?rpPart(t.page,t.wid):''; }
-    else body=srWidgetHtml(it.k.slice(7));
-    return `<div class="sr-item" style="grid-column:span ${it.w}">${body}</div>`; }).join('')}</div>`;
+  const d=NorthSavedReports.sanitizeDefinition(r.definition), L=srOrdered(NorthSavedReports.layoutOf(d));
+  if(!L.length) return SR_EMPTY;
+  return `<div class="sr-grid">${L.map(it=>`<div class="sr-item" style="grid-column:span ${it.w}">${srItemBody(d,it.k)}</div>`).join('')}</div>`;
+}
+/* ---- 2026-10-15 (Stef: "why can't we use the same layout change function we used elsewhere?"): the open report
+   uses the shared drag/resize Edit layout (shared/grid.js). The layout is stored in the report itself, not in this
+   browser, so everyone who opens it sees the same arrangement. Only the owner / a moderator can change it. ---- */
+function srGridPid(id){ return 'sr_'+String(id).replace(/[^A-Za-z0-9_-]/g,''); }
+function srGid(k){ return String(k).replace(/[^A-Za-z0-9_.:-]/g,'_'); }
+const SR_LAYOUT_T={};
+function srLayoutFromGrid(id,layout,byGid){
+  const r=(SR.list||[]).find(x=>x.id===id); if(!r) return null;
+  const d=NorthSavedReports.sanitizeDefinition(r.definition), old=NorthSavedReports.layoutOf(d), seen={};
+  const L=(layout||[]).filter(g=>byGid[g.id]).map(g=>{ const k=byGid[g.id]; seen[k]=1; return {k,w:Number(g.w)||12,x:Number(g.x)||0,y:Number(g.y)||0,h:Number(g.h)||1}; });
+  L.sort((a,b)=>(a.y-b.y)||(a.x-b.x));
+  old.forEach(it=>{ if(!seen[it.k]) L.push(it); });
+  return {r,d,L};
+}
+function srQueueLayoutSave(id,layout,byGid){
+  const x=srLayoutFromGrid(id,layout,byGid); if(!x) return;
+  const before=JSON.stringify(NorthSavedReports.layoutOf(x.d)), def=NorthSavedReports.sanitizeDefinition(Object.assign({},x.d,{layout:x.L}));
+  if(JSON.stringify(def.layout)===before) return; /* nothing moved (e.g. heights settling as charts load) */
+  x.r.definition=def; /* keep the open copy current so a re-render keeps the new positions */
+  clearTimeout(SR_LAYOUT_T[id]); SR_LAYOUT_T[id]=setTimeout(()=>srWriteLayout(id,def),700);
+}
+async function srWriteLayout(id,def){
+  try{
+    const r=await sb.from('saved_reports').update({definition:def}).eq('id',id).select('id');
+    if(r.error) throw r.error;
+    if(!r.data||!r.data.length) throw {message:'You do not have permission to change this report.'};
+  }catch(e){ const f=srFriendly(e); toast('Could not save the report layout: '+(f==='MISSING'?'saved reports are not set up yet.':f)); }
+}
+function srResetLayout(id){
+  const r=(SR.list||[]).find(x=>x.id===id); if(!r) return;
+  const d=NorthSavedReports.sanitizeDefinition(r.definition), L=srOrdered(NorthSavedReports.layoutOf(d)).map(it=>({k:it.k,w:it.w}));
+  const def=NorthSavedReports.sanitizeDefinition(Object.assign({},d,{layout:L})); r.definition=def;
+  clearTimeout(SR_LAYOUT_T[id]); srWriteLayout(id,def);
+}
+function srGridHtml(r,can){
+  const d=NorthSavedReports.sanitizeDefinition(r.definition), L=srOrdered(NorthSavedReports.layoutOf(d));
+  if(!L.length) return SR_EMPTY;
+  const pid=srGridPid(r.id), byGid={}; L.forEach(it=>{ byGid[srGid(it.k)]=it.k; });
+  if(typeof window.northGridAddPage!=='function') return srBodyHtml(r);
+  window.northGridAddPage(pid,{label:'Saved report', container:'rp-grid-'+pid, opts:{lockContent:true, readOnly:!can, persist:{
+    load(){ const cur=(SR.list||[]).find(x=>x.id===r.id)||r; const LL=NorthSavedReports.layoutOf(NorthSavedReports.sanitizeDefinition(cur.definition)).filter(it=>Number.isFinite(it.y));
+      return LL.length?LL.map(it=>({id:srGid(it.k),x:it.x,y:it.y,w:it.w,h:it.h})):null; },
+    save(layout){ const el=document.getElementById('rp-grid-'+pid); if(can&&el&&el.classList.contains('grid-edit-mode')) srQueueLayoutSave(r.id,layout,byGid); },
+    reset(){ if(can) srResetLayout(r.id); }
+  }}});
+  window.__northGridSubId=pid;
+  return `<div class="grid-stack" id="rp-grid-${pid}">${L.map(it=>`<div class="grid-stack-item" gs-id="${esc(srGid(it.k))}" gs-w="${it.w}"><div class="grid-stack-item-content">${srItemBody(d,it.k)}</div></div>`).join('')}</div>`;
 }
 function srSetBoardOn(on){ if(SR.editing){ SR.editing.boardOn=!!on; render(); } }
 function srSetType(v){ if(SR.editing){ SR.editing.type=v; render(); } }
@@ -2092,7 +2132,8 @@ function srViewHtml(r){
   let h=`<div class="phead"><div><h1>${esc(r.name)} ${srVisPill(r)}</h1><p>${r.description?esc(r.description)+' &middot; ':''}Saved by ${esc(r.owner_id===me?'you':(r.owner_name||'someone in your organisation'))} &middot; updated ${esc(F.dt(r.updated_at||r.created_at))}</p></div><div class="sp"></div>
     <button class="btn" onclick="srBack()">&larr; All saved reports</button>${can?`<button class="btn" onclick="srEdit('${esc(r.id)}')">Edit</button>`:''}<button class="btn" onclick="window.print()">Print / Save as PDF</button></div>`;
   h+=`<div class="note">This report shows the figures <b>your own access</b> allows (${esc(reportScopeLabel(reportScopeName()))}), computed live. Sharing it shares the layout, not anyone's data.</div>`;
-  h+=srBodyHtml(r); /* 2026-10-15: laid out per the report's own order and widths */
+  h+=can?'<div class="mini" style="margin:0 0 8px">Use <b>&#10303; Edit layout</b> in the top bar to drag and resize the items. The layout is saved with the report, so everyone who opens it sees it.</div>':'';
+  h+=srGridHtml(r,can); /* 2026-10-15: the shared drag/resize grid, layout stored in the report */
   return h;
 }
 function srEditorHtml(){
@@ -2116,7 +2157,7 @@ function srEditorHtml(){
       <div style="margin:4px 0 10px">${Object.keys(groups).map(g=>`<div style="margin-bottom:6px"><div class="mini"><b>${esc(g)}</b></div>${groups[g].map(t=>`<label style="display:block;font-size:12.5px;margin-left:6px"><input type="checkbox" ${d.tiles.includes(t.id)?'checked':''} onchange="srToggleTile('${t.id}',this.checked)"> ${esc(t.label)} <span class="mini">&mdash; ${esc(t.hint)}</span></label>`).join('')}</div>`).join('')}</div>
       ${d.note?`<div class="note w" style="margin:0 0 8px">${esc(d.note)}</div>`:''}
       ${srEditorLibraryHtml(d)}
-      ${srLayoutEditorHtml(d)}
+      <div class="mini" style="margin:0 0 10px">To arrange the items, open the report and use <b>Edit layout</b> (drag to move, drag a corner to resize).</div>
       <label style="display:block;font-size:12.5px;margin-bottom:6px"><input type="checkbox" id="srBoardOn" ${d.boardOn?'checked':''} onchange="srSetBoardOn(this.checked)"> <b>Include a Board report setting</b> <span class="mini">&mdash; a button that opens the Board report with this period and comparison already chosen</span></label>
       ${d.boardOn?`<div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end;margin:0 0 10px 22px">
         <div><div class="mini">Financial year</div><select class="in" onchange="srSetField('fy',this.value)"><option value="">Whatever Strategy has selected</option>${fys.map(f=>`<option ${d.fy===f?'selected':''}>${f}</option>`).join('')}</select></div>

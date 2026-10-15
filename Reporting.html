@@ -2326,6 +2326,7 @@ function srDashSaveAs(page){
   const cur=typeof window.northGridCurrent==='function'?window.northGridCurrent(page):{layout:[],widgets:{}};
   const assigned=cur.widgets||{}, live=(cur.layout||[]).filter(b=>b&&b.id);
   const boxes=live.length?live.slice().sort((a,b)=>((a.y||0)-(b.y||0))||((a.x||0)-(b.x||0))):g.boxes.map(([box,wid,w])=>({id:box,w}));
+  const okPos=live.length>0 && live.every(b=>Number.isFinite(Number(b.h))&&Number(b.h)>1&&Number.isFinite(Number(b.y))); /* heights not settled yet -> let the report lay itself out */
   const tiles=[],widgets=[],L=[],seen={}; let skipped=0, adv=0;
   boxes.forEach(b=>{
     const nat=g.boxes.find(x=>x[0]===b.id), wid=assigned[b.id]||(nat&&nat[1]);
@@ -2334,7 +2335,7 @@ function srDashSaveAs(page){
     if(seen[k]) return;
     if(k.startsWith('widget:')&&!CFG.advCanCreate){ adv++; return; }
     seen[k]=1; if(k.startsWith('tile:')) tiles.push(k.slice(5)); else widgets.push(k.slice(7));
-    const it={k,w:Number(b.w)||12}; if(live.length){ it.x=Number(b.x)||0; it.y=Number(b.y)||0; it.h=Number(b.h)||8; } L.push(it);
+    const it={k,w:Number(b.w)||12}; if(okPos){ it.x=Number(b.x)||0; it.y=Number(b.y)||0; it.h=Number(b.h); } L.push(it);
   });
   if(!L.length){ toast('Nothing on this page can be saved as a dashboard'+(adv?' (its charts need Advanced reports).':'.')); return; }
   const notes=[];
@@ -2495,7 +2496,9 @@ function rvStart(kind){
   const L=(UI.rvLoaded&&UI.rvLoaded.kind===kind)?(RV.list||[]).find(x=>x.id===UI.rvLoaded.id):null;
   const canUp=!!(L&&NorthSavedReports.canManage(L,srMe(),myRole(),!!CFG.isSuperAdmin));
   RV.editing={kind, name:canUp?L.name:base, visibility:canUp?L.visibility:'private', mode:canUp?L.mode:'live', frame:'now',
-    loadedId:canUp?L.id:null, loadedName:canUp?L.name:'', updateId:canUp?L.id:null, error:''};
+    loadedId:canUp?L.id:null, loadedName:canUp?L.name:'', updateId:canUp?L.id:null, error:'',
+    /* capture what's on screen now -- opening this dialog redraws the page and resets the scroll position */
+    capFrame:kind==='drilldown'?ddVisibleFrame():rmVisibleFrame()};
   render();
 }
 function rvSet(k,v){ if(!RV.editing) return; if(k==='visibility') v=(v==='public'&&srCanPublish())?'public':'private'; if(k==='updateId') v=v?RV.editing.loadedId:null; RV.editing[k]=v; if(k!=='name') render(); }
@@ -2507,12 +2510,12 @@ async function rvSave(){
   let view, svgOf, meta;
   if(d.kind==='drilldown'){
     if(!UI.ddStartType){ d.error='Pick a start point first.'; render(); return; }
-    view=ddCurrentView(); if(d.frame==='now') view.frame=ddVisibleFrame();
+    view=ddCurrentView(); if(d.frame==='now') view.frame=d.capFrame||ddVisibleFrame();
     svgOf=()=>ddViewSvg(view); meta=svg=>({records:(svg.match(/data-node=/g)||[]).length, kind:'drilldown', focusName:view.startName});
   } else {
     const f=RM&&RM.nodes[UI.rmFocus]; if(!f){ d.error='Pick a starting record first.'; render(); return; }
     view=rvCurrentView(); view.focusName=f.name; view.focusType=f.type;
-    if(d.frame==='now'){ const fr=rmVisibleFrame(); if(fr) view.frame=fr; }
+    if(d.frame==='now'){ const fr=d.capFrame||rmVisibleFrame(); if(fr) view.frame=fr; }
     let n=0; svgOf=()=>{ const col=rmTraverse(); n=col?Object.keys(col).length:0; return col?rmSvg(col):''; };
     meta=()=>({records:n, focusName:f.name, focusType:f.type});
   }

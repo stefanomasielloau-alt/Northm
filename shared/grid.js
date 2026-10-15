@@ -930,6 +930,14 @@
     row.appendChild(a); inner.appendChild(row);
   }
 
+  /* 2026-10-15 (found in live testing): layout passes waited for requestAnimationFrame, which never fires while the
+     page isn't being painted (a background tab, a hidden window) -- tiles without a saved position stayed missing until
+     the page was looked at. Run on the next frame, or after 250ms if no frame comes, whichever is first (once). */
+  function nextFrame(fn) {
+    var done = false, run = function () { if (done) return; done = true; fn(); };
+    try { requestAnimationFrame(run); } catch (e) {}
+    setTimeout(run, 250);
+  }
   var GRIDS = {}; // pageId -> live GridStack instance, kept for the swap handler to resize a box after its content changes
 
   /* 2026-09-28: storage prefix is per module -- Strategy keeps 'northm_ordo_', Reporting
@@ -1283,7 +1291,7 @@
     }
 
     if (!restoredSaved) {
-      requestAnimationFrame(function () {
+      nextFrame(function () {
         packItems(items, 0);
         settled = true;
       });
@@ -1311,7 +1319,7 @@
          for) brings it back as a real tracked grid item again, and only
          then can packItems() give it a position. Packs as new rows appended
          below everything the saved layout already placed. */
-      requestAnimationFrame(function () {
+      nextFrame(function () {
         missingFromSaved.forEach(function (el) {
           if (!gridEl.contains(el)) { gridEl.appendChild(el); }
           grid.makeWidget(el);
@@ -1797,7 +1805,7 @@
     // measure-and-step approach as the initial layout pass, without moving or
     // resizing any other box. (2026-09-24: now shared with the manual "Fit height"
     // button via fitBoxHeight() above, instead of keeping its own copy of this loop.)
-    requestAnimationFrame(function () { fitBoxHeight(pageId, boxId); });
+    nextFrame(function () { fitBoxHeight(pageId, boxId); });
   }
 
   // pageId -> its <div class="grid-stack"> container id. A page appears here

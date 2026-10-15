@@ -150,7 +150,7 @@
   function nameOf(id) { var d = (M.dir || []).filter(function (x) { return x.id === id; })[0]; return d ? d.name : 'someone'; }
   function attHtml(list) { return (list || []).map(function (a) { return '<span class="nm-att" data-a="att" data-p="' + esc(a.path) + '">📎 ' + esc(a.name) + '</span>'; }).join(''); }
   function itemHtml(m) {
-    var k = KIND[m.kind] || KIND.message, u = me(), mine = !!(u && m.sender_id === u.id), url = linkUrl(m), th = M.expanded[m.id];
+    var k = KIND[m.kind] || KIND.message, u = me(), toMe = !!(u && m.recipient_id === u.id), mine = !!(u && m.sender_id === u.id && !toMe) /* 2026-10-15: a note to yourself is an incoming message */, url = linkUrl(m), th = M.expanded[m.id];
     var h = '<div class="nm-item ' + (m.status === 'unread' && !mine ? 'unread' : '') + '"><div class="nm-meta"><span class="nm-kind" style="background:' + k[1] + '">' + k[0] + '</span>' +
       '<span>' + (mine ? 'To ' + esc(nameOf(m.recipient_id)) : 'From ' + esc(m.sender_name || 'North')) + '</span><span>·</span><span title="' + esc(new Date(m.created_at).toLocaleString('en-AU')) + '">' + esc(when(m.created_at)) + '</span>' +
       (m.status === 'actioned' ? '<span>· ✓ actioned ' + esc(when(m.actioned_at)) + '</span>' : '') + (m.status === 'archived' ? '<span>· archived</span>' : '') + '</div>' +

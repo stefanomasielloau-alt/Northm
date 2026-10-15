@@ -597,7 +597,8 @@
     var tr = td.closest('tr'), table = td.closest('table'); if (!tr || !table) return '';
     var idx = [].indexOf.call(tr.children, td), ths = table.querySelectorAll('thead th');
     if (!ths.length) { var fr = table.querySelector('tr'); ths = fr && fr !== tr ? fr.children : []; }
-    return ths[idx] ? txt(ths[idx]) : '';
+    /* 2026-10-15: drop sort arrows from column names ('Notes▲▼' -> 'Notes') */
+    return ths[idx] ? txt(ths[idx]).replace(/[\u25B2\u25BC\u2191\u2193\u21C5\u25B4\u25BE]/g, '').trim() : '';
   }
   function describeCtrl(el) {
     var lab = el.getAttribute('aria-label') || '';
@@ -618,7 +619,10 @@
     if (td) {
       lab = lab || headerForCell(td);
       var tr = td.closest('tr'), body = tr.parentElement, n = [].indexOf.call(body.children, tr) + 1, key = '';
-      [].slice.call(tr.querySelectorAll('input[type=text],input:not([type]),textarea,td')).some(function (c) { var v = (c.value != null && c.tagName !== 'TD') ? c.value : txt(c); if (v && v.length <= 40) { key = v; return true; } return false; });
+      /* 2026-10-15: name the row by its first text field (e.g. the task), else by a plain-text cell -- never by a cell
+         holding buttons or inputs (a 'Remove' button used to name every checklist row) */
+      [].slice.call(tr.querySelectorAll('input[type=text],input:not([type]),textarea')).some(function (c) { var v = c.value; if (v && v.length <= 40) { key = v; return true; } return false; });
+      if (!key) [].slice.call(tr.children).some(function (c) { if (c.querySelector('button,input,select,textarea,a,[contenteditable]')) return false; var v = txt(c); if (v && v.length <= 40) { key = v; return true; } return false; });
       row = 'row ' + n + (key ? ' (' + key + ')' : '');
     }
     lab = lab || el.getAttribute('placeholder') || el.getAttribute('title') || el.getAttribute('name') || el.id || 'field';

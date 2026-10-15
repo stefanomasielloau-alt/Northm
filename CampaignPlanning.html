@@ -162,6 +162,7 @@ input[type=date].cel{font-family:inherit;}
 .authbrand img{width:auto;max-width:210px;height:auto;display:block;margin:0 auto 8px;}
 .authbrand .ab-name{font-weight:800;font-size:18px;color:var(--ink);}
 .authbrand .ab-ver{font-size:9px;letter-spacing:.08em;color:var(--ink-3);font-weight:700;text-transform:uppercase;margin-top:1px;}
+/* 2026-10-15: home tiles open their detail page */ .kpi[data-open]{cursor:pointer}.kpi[data-open]:hover{box-shadow:0 0 0 2px var(--line,#DFE3EC)}
 </style>
 </head>
 <body>
@@ -2571,9 +2572,9 @@ function pageHome(){
     <button class="btn pri" onclick="openCampaignWizard()">+ Quick add campaign</button></div>`;
 
   h+=`<div class="kpis">
-    <div class="kpi"><div class="k">Campaigns</div><div class="kpi-v">${CFG.campaigns.length}</div><div class="sub">${CFG.programmes.length} programme${CFG.programmes.length===1?'':'s'}</div></div>
-    <div class="kpi"><div class="k">Total budget</div><div class="kpi-v">${F.mk(totalBudget)}</div><div class="sub">across all campaigns</div></div>
-    <div class="kpi"><div class="k">Activities in flight</div><div class="kpi-v">${inFlight}</div><div class="sub">${CFG.tasks.length} total</div></div>
+    <div class="kpi" data-open="planning" role="link" tabindex="0" onclick="go('planning')" onkeydown="if(event.key==='Enter')go('planning')" title="Open Planning for the detail"><div class="k">Campaigns <span aria-hidden="true">&rsaquo;</span></div><div class="kpi-v">${CFG.campaigns.length}</div><div class="sub">${CFG.programmes.length} programme${CFG.programmes.length===1?'':'s'}</div></div>
+    <div class="kpi" data-open="planning" role="link" tabindex="0" onclick="go('planning')" onkeydown="if(event.key==='Enter')go('planning')" title="Open Planning for the detail"><div class="k">Total budget <span aria-hidden="true">&rsaquo;</span></div><div class="kpi-v">${F.mk(totalBudget)}</div><div class="sub">across all campaigns</div></div>
+    <div class="kpi" data-open="planning" role="link" tabindex="0" onclick="go('planning')" onkeydown="if(event.key==='Enter')go('planning')" title="Open Planning for the detail"><div class="k">Activities in flight <span aria-hidden="true">&rsaquo;</span></div><div class="kpi-v">${inFlight}</div><div class="sub">${CFG.tasks.length} total</div></div>
     <div class="kpi ${awaitingSignoff?'hl':''}" ${awaitingSignoff?'style="cursor:pointer" onclick="goPlanAwaitingSignoff()" title="Open the campaign board, Submitted column"':''}><div class="k">Awaiting sign-off</div><div class="kpi-v">${awaitingSignoff}</div><div class="sub">campaigns submitted</div></div>
   </div>`;
 
@@ -4077,6 +4078,7 @@ const MODULES=[
 ];
 const THIS_MODULE='Cursus';
 const HELP_FAQ=[
+  /* 2026-10-15 */ {q:"Can I click the numbers on the Home page?", a:"Yes. Home tiles marked with \u203a open the page that holds the detail behind that number."},
   /* 2026-10-10 */ {q:"Why can't I type Planned, Committed or Actual on an activity?", a:"Once an activity has budget line items, its Planned, Committed and Actual are calculated from them (the sum of each stage) and the boxes turn grey with 'from line items'. Edit the amounts in the Budget line items panel inside the activity. An activity with no line items keeps its own single typed numbers. A campaign's Committed and Actual are its activities plus any line items on the campaign itself (costs that belong to the whole campaign, not one activity). The campaign's own Budget box stays as the approved budget, and 'Allocated by line items' shows how much of it the lines add up to."},
   {q:'How do I reset my password?', a:'An admin can trigger a reset from Configuration \u2192 Roles & users \u2192 Reset password, or use "Forgot password" at login. The email comes from Supabase directly, not from North.'},
   {q:'How do I set up a passkey?', a:'From your account menu, choose to set up a passkey \u2014 your browser or device (Windows Hello, Touch ID, a security key, etc.) will walk you through it.'},

@@ -134,6 +134,7 @@ td.lb{font-weight:600;}
 .authbrand img{width:auto;max-width:210px;height:auto;display:block;margin:0 auto 8px;}
 .authbrand .ab-name{font-weight:800;font-size:18px;color:var(--ink);}
 .authbrand .ab-ver{font-size:9px;letter-spacing:.08em;color:var(--ink-3);font-weight:700;text-transform:uppercase;margin-top:1px;}
+/* 2026-10-15: home tiles open their detail page */ .kpi[data-open]{cursor:pointer}.kpi[data-open]:hover{box-shadow:0 0 0 2px var(--line,#DFE3EC)}
 </style>
 </head>
 <body>
@@ -1496,8 +1497,8 @@ function pageHome(){
 
   h+=`<div class="kpis">
     <div class="kpi hl"${openDeals.length?' onclick="goOpenDeals()" style="cursor:pointer"':''}><div class="k">Open deals</div><div class="kpi-v">${openDeals.length}</div></div>
-    <div class="kpi"><div class="k">Open pipeline value</div><div class="kpi-v">${F.mk(sum(openDeals.map(d=>d.value)))}</div></div>
-    <div class="kpi"><div class="k">Weighted pipeline</div><div class="kpi-v">${F.mk(sum(openDeals.map(d=>dealMetrics(d).weightedValue)))}</div>
+    <div class="kpi" data-open="deals" role="link" tabindex="0" onclick="go('deals')" onkeydown="if(event.key==='Enter')go('deals')" title="Open Deals for the detail"><div class="k">Open pipeline value <span aria-hidden="true">&rsaquo;</span></div><div class="kpi-v">${F.mk(sum(openDeals.map(d=>d.value)))}</div></div>
+    <div class="kpi" data-open="forecast" role="link" tabindex="0" onclick="go('forecast')" onkeydown="if(event.key==='Enter')go('forecast')" title="Open Forecast for the detail"><div class="k">Weighted pipeline <span aria-hidden="true">&rsaquo;</span></div><div class="kpi-v">${F.mk(sum(openDeals.map(d=>dealMetrics(d).weightedValue)))}</div>
       <div class="sub">value × tier probability</div></div>
     <div class="kpi"><div class="k">Contacts</div><div class="kpi-v">${CFG.contacts.length}</div></div>
   </div>`;
@@ -1823,6 +1824,7 @@ const MODULES=[
 ];
 const THIS_MODULE='Augur';
 const HELP_FAQ=[
+  /* 2026-10-15 */ {q:"Can I click the numbers on the Home page?", a:"Yes. Home tiles marked with \u203a open the page that holds the detail behind that number."},
   {q:'How do I reset my password?', a:'An admin can trigger a reset from Configuration \u2192 Roles & users \u2192 Reset password, or use "Forgot password" at login. The email comes from Supabase directly, not from North.'},
   {q:'How do I set up a passkey?', a:'From your account menu, choose to set up a passkey \u2014 your browser or device (Windows Hello, Touch ID, a security key, etc.) will walk you through it.'},
   {q:'How do I invite a new teammate?', a:'Configuration \u2192 Invite a new teammate \u2192 choose their role \u2192 Generate invite code, then send them the code. They redeem it at signup by choosing "I have an invite code."'},

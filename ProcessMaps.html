@@ -315,6 +315,7 @@ svg.canvas{display:block; cursor:default;}
   .pr-body{width:100%}
   .pr-sec{flex-direction:column;gap:6px}
 }
+/* 2026-10-15: home tiles open their detail page */ .kpi[data-open]{cursor:pointer}.kpi[data-open]:hover{box-shadow:0 0 0 2px var(--line,#DFE3EC)}
 </style>
 </head>
 <body>
@@ -2292,9 +2293,9 @@ function pageHome(){
     <button class="btn pri" onclick="openWorkflow(addWorkflow())">+ New diagram</button></div>`;
 
   h+=`<div class="kpis">
-    <div class="kpi hl"><div class="k">Flows &amp; diagrams</div><div class="kpi-v">${CFG.workflows.length}</div></div>
-    <div class="kpi"><div class="k">Total nodes</div><div class="kpi-v">${totalNodes}</div></div>
-    <div class="kpi"><div class="k">Automation bundles (rules)</div><div class="kpi-v">${CFG.automations.length}</div><div class="sub">${enabledAutomations} enabled</div></div>
+    <div class="kpi hl" data-open="list" role="link" tabindex="0" onclick="go('list')" onkeydown="if(event.key==='Enter')go('list')" title="Open Flows & diagrams for the detail"><div class="k">Flows &amp; diagrams <span aria-hidden="true">&rsaquo;</span></div><div class="kpi-v">${CFG.workflows.length}</div></div>
+    <div class="kpi" data-open="list" role="link" tabindex="0" onclick="go('list')" onkeydown="if(event.key==='Enter')go('list')" title="Open Flows & diagrams for the detail"><div class="k">Total nodes <span aria-hidden="true">&rsaquo;</span></div><div class="kpi-v">${totalNodes}</div></div>
+    <div class="kpi" data-open="automations" role="link" tabindex="0" onclick="go('automations')" onkeydown="if(event.key==='Enter')go('automations')" title="Open Automation bundles for the detail"><div class="k">Automation bundles (rules) <span aria-hidden="true">&rsaquo;</span></div><div class="kpi-v">${CFG.automations.length}</div><div class="sub">${enabledAutomations} enabled</div></div>
   </div>`;
 
   h+=`<div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">`;
@@ -4879,6 +4880,7 @@ const MODULES=[
 ];
 const THIS_MODULE='Schema';
 const HELP_FAQ=[
+  /* 2026-10-15 */ {q:"Can I click the numbers on the Home page?", a:"Yes. Home tiles marked with \u203a open the page that holds the detail behind that number."},
   {q:'How do I reset my password?', a:'An admin can trigger a reset from Configuration \u2192 Roles & users \u2192 Reset password, or use "Forgot password" at login. The email comes from Supabase directly, not from North.'},
   {q:'How do I set up a passkey?', a:'From your account menu, choose to set up a passkey \u2014 your browser or device (Windows Hello, Touch ID, a security key, etc.) will walk you through it.'},
   {q:'How do I invite a new teammate?', a:'Configuration \u2192 Invite a new teammate \u2192 choose their role \u2192 Generate invite code, then send them the code. They redeem it at signup by choosing "I have an invite code."'},

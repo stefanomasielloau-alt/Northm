@@ -41,7 +41,7 @@
         kpis: { label: 'KPI summary', hint: 'Gates, regions/pods, campaigns, validations', fn: function () { return window.homeWidgetKpis(); } },
         quicklinks: { label: 'Quick links', hint: 'Shortcuts to Overview / Configure / Plan / Measure pages', fn: function () { return window.homeWidgetQuickLinks(); } },
         validations: { label: 'Validations', hint: 'Blocking and advisory validation messages', fn: function () { return window.homeWidgetValidations(); } },
-        recent: { label: 'Recent activity', hint: 'Latest entries from the audit log', fn: function () { return window.homeWidgetRecentActivity(); } }
+        recent: { open: 'admin_audit', label: 'Recent activity', hint: 'Latest entries from the audit log', fn: function () { return window.homeWidgetRecentActivity(); } }
       }
     },
     drivers: {
@@ -233,10 +233,10 @@
       boxSizes: { box1: 12, box2: 6, box3: 6, box4: 12, box5: 12 },
       widgets: {
         kpis: { label: 'KPI summary', hint: 'Exit gate plan vs actual, budgeted, committed, actual spend, ACV vs demand potential', fn: function () { return window.dashboardWidgetKpis(); } },
-        funnel: { label: 'Funnel — plan vs actual', hint: 'Gate-by-gate plan vs actual table with variance and status', fn: function () { return window.dashboardWidgetFunnel(); } },
-        costbucketchart: { label: 'Spend by cost bucket', hint: 'Bar chart of spend by cost bucket', fn: function () { return window.dashboardWidgetCostBucketChart(); } },
-        regions: { label: 'Regions at a glance', hint: 'Per-region ACV target vs demand potential table', fn: function () { return window.dashboardWidgetRegions(); } },
-        drift: { label: 'Plan drift vs baseline snapshot', hint: 'Target and budget drift since a named snapshot', fn: function () { return window.dashboardWidgetDrift(); } }
+        funnel: { open: 'actuals', label: 'Funnel — plan vs actual', hint: 'Gate-by-gate plan vs actual table with variance and status', fn: function () { return window.dashboardWidgetFunnel(); } },
+        costbucketchart: { open: 'campaign', label: 'Spend by cost bucket', hint: 'Bar chart of spend by cost bucket', fn: function () { return window.dashboardWidgetCostBucketChart(); } },
+        regions: { open: 'geo', label: 'Regions at a glance', hint: 'Per-region ACV target vs demand potential table', fn: function () { return window.dashboardWidgetRegions(); } },
+        drift: { open: 'snapshots', label: 'Plan drift vs baseline snapshot', hint: 'Target and budget drift since a named snapshot', fn: function () { return window.dashboardWidgetDrift(); } }
       }
     },
     // Quick calculator: mostly interactive inputs, but the top-down and
@@ -888,6 +888,48 @@
     while (tmp.firstChild) inner.appendChild(tmp.firstChild);
   }
 
+  /* 2026-10-15 (Stef: "when editing a layout the user may want to revert back to original"): the layout as it was when
+     Edit layout was clicked, so "Undo changes" can put it back. Reset layout still goes back to the page default. */
+  var EDIT_SNAP = {};
+  function takeEditSnap(pageId) {
+    var o = (typeof PAGE_OPTS !== 'undefined' && PAGE_OPTS[pageId]) || {};
+    if (o.revert) return { custom: o.revert.snapshot() };
+    var ls = {};
+    [gridStorageKey(pageId), widgetStorageKey(pageId), customBoxStorageKey(pageId)].forEach(function (k) { try { ls[k] = localStorage.getItem(k); } catch (e) { ls[k] = null; } });
+    return { ls: ls };
+  }
+  function restoreEditSnap(pageId, snap) {
+    var o = (typeof PAGE_OPTS !== 'undefined' && PAGE_OPTS[pageId]) || {};
+    if (snap.custom !== undefined && o.revert) { o.revert.restore(snap.custom); return true; }
+    Object.keys(snap.ls || {}).forEach(function (k) { try { if (snap.ls[k] === null) localStorage.removeItem(k); else localStorage.setItem(k, snap.ls[k]); } catch (e) {} });
+    return false;
+  }
+  /* 2026-10-15 (Stef: from any dashboard, drill down to the detailed view): a tile showing a widget from another page
+     (or a widget that names its detail page with `open`) gets an "Open <page> for the detail" link. The module can map a
+     grid page to its own navigation with window.northGridOpenPage(gridPageId); otherwise window.go(gridPageId). */
+  function openTargetFor(pageId, widgetId) {
+    if (!widgetId || widgetId === '__hidden__') return null;
+    var dot = widgetId.indexOf('.');
+    if (dot > 0) {
+      var pid = widgetId.slice(0, dot);
+      return (pid !== pageId && WIDGET_LIBRARIES[pid] && Object.keys(WIDGET_LIBRARIES[pid].widgets || {}).length) ? pid : null;
+    }
+    var lib = WIDGET_LIBRARIES[pageId], w = lib && lib.widgets && lib.widgets[widgetId];
+    return (w && w.open) || null;
+  }
+  function addOpenLink(pageId, item) {
+    var inner = item.querySelector('.gs-inner'); if (!inner) return;
+    Array.prototype.slice.call(inner.children).forEach(function (c) { if (c.classList.contains('gs-open-row')) c.remove(); });
+    var t = openTargetFor(pageId, getWidgetAssignments(pageId)[item.getAttribute('gs-id')]);
+    if (!t) return;
+    var row = document.createElement('div');
+    row.className = 'gs-open-row';
+    row.style.cssText = 'text-align:right;font-size:11.5px;margin:4px 6px 0';
+    var a = document.createElement('a'); a.href = '#'; a.textContent = 'Open ' + (PAGE_LABELS[t] || t) + ' for the detail \u2192';
+    a.onclick = function (e) { e.preventDefault(); if (typeof window.northGridOpenPage === 'function') window.northGridOpenPage(t); else if (typeof window.go === 'function') window.go(t); };
+    row.appendChild(a); inner.appendChild(row);
+  }
+
   var GRIDS = {}; // pageId -> live GridStack instance, kept for the swap handler to resize a box after its content changes
 
   /* 2026-09-28: storage prefix is per module -- Strategy keeps 'northm_ordo_', Reporting
@@ -987,6 +1029,7 @@
        know about the sentinel), but that markup never becomes visible -- it's
        stripped right here, before layout runs. */
     var opts = PAGE_OPTS[pageId] || {};
+    if (window.__northGridReenterEdit !== pageId) delete EDIT_SNAP[pageId];
     var hiddenNow = getWidgetAssignments(pageId);
 
     // Synthesize a DOM node for every custom box this page has (see addNewTile()
@@ -1149,6 +1192,7 @@
       if (widgetId && (widgetId.indexOf('.') !== -1 || customIdSet[boxId])) {
         fillBoxContent(item, resolveWidget(pageId, widgetId));
       }
+      addOpenLink(pageId, item);
     });
 
     /* 2026-09-23 (Stef's real-use report: "Reset ALL layouts still doesn't
@@ -1298,6 +1342,16 @@
     // grid wired up at all.
     var toggleBtn = document.getElementById('grid-edit-toggle');
     var resetBtn = document.getElementById('grid-reset');
+    var revertBtn = document.getElementById('grid-revert');
+    if (!revertBtn && toggleBtn && toggleBtn.parentNode) {
+      revertBtn = document.createElement('button');
+      revertBtn.type = 'button'; revertBtn.id = 'grid-revert';
+      revertBtn.className = toggleBtn.className.replace(/\bactive\b/, '').trim();
+      revertBtn.textContent = '\u21B6 Undo changes';
+      revertBtn.title = 'Put this layout back exactly as it was when you clicked Edit layout (Reset layout goes back to the page default)';
+      revertBtn.style.display = 'none';
+      toggleBtn.parentNode.insertBefore(revertBtn, toggleBtn.nextSibling);
+    }
     var editing = false;
     function refreshAddBtn() {
       if (!addBtn) return;
@@ -1322,6 +1376,9 @@
         toggleBtn.classList.toggle('active', on);
       }
       if (addBtn) addBtn.style.display = (on && !opts.lockContent) ? '' : 'none';
+      if (on && !EDIT_SNAP[pageId]) { try { EDIT_SNAP[pageId] = takeEditSnap(pageId); } catch (e) {} }
+      if (!on) delete EDIT_SNAP[pageId];
+      if (revertBtn) revertBtn.style.display = on ? '' : 'none';
       if (on) refreshAddBtn();
     }
     // "+ Add / unhide tile" -- 2026-09-23 (Stef: "finish the hide/unhide tiles",
@@ -1357,6 +1414,12 @@
     }
 
     if (toggleBtn) toggleBtn.onclick = function () { setEditing(!editing); };
+    if (revertBtn) revertBtn.onclick = function () {
+      var snap = EDIT_SNAP[pageId];
+      setEditing(false);
+      var handled = snap ? restoreEditSnap(pageId, snap) : false;
+      if (!handled && typeof window.render === 'function') window.render();
+    };
     if (resetBtn) resetBtn.onclick = function () {
       if (opts.persist) { try { if (opts.persist.reset) opts.persist.reset(); } catch (e) {} if (typeof window.render === 'function') window.render(); return; }
       try {
@@ -1720,6 +1783,7 @@
     // id from this page's own WIDGET_LIBRARIES entry -- resolveWidget()
     // handles both forms; see its own comment above for why.
     fillBoxContent(item, resolveWidget(pageId, widgetId));
+    addOpenLink(pageId, item);
     // 2026-09-28 (backlog: "no auto-resize when a cross-page widget doesn't fit its target box's
     // shape"): a widget designed for a full-width (12) box squeezed into a half-width (6) box
     // renders cramped. If the widget's own home box is wider than this one, widen this box to
@@ -1807,6 +1871,8 @@
     // all, so it doesn't stay visible (stale, from a previous grid page) when
     // initGrid() never runs this time to otherwise manage it.
     if (addTileBtn && !show) addTileBtn.style.display = 'none';
+    var revBtn = document.getElementById('grid-revert');
+    if (revBtn) revBtn.style.display = 'none';
     if (addTileBtn && show && (PAGE_OPTS[effectiveId] || {}).lockContent) addTileBtn.style.display = 'none';
     if (containerId) initGrid(effectiveId, containerId);
   };

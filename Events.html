@@ -152,6 +152,7 @@ textarea.ev-note:focus{height:78px}
 .authbrand img{width:auto;max-width:210px;height:auto;display:block;margin:0 auto 8px;}
 .authbrand .ab-name{font-weight:800;font-size:18px;color:var(--ink);}
 .authbrand .ab-ver{font-size:9px;letter-spacing:.08em;color:var(--ink-3);font-weight:700;text-transform:uppercase;margin-top:1px;}
+/* 2026-10-15: home tiles open their detail page */ .kpi[data-open]{cursor:pointer}.kpi[data-open]:hover{box-shadow:0 0 0 2px var(--line,#DFE3EC)}
 </style>
 </head>
 <body>
@@ -1931,9 +1932,9 @@ function pageHome(){
     <button class="btn pri" onclick="addEvent()">+ Quick add event</button></div>`;
 
   h+=`<div class="kpis">
-    <div class="kpi hl"><div class="k">Events</div><div class="kpi-v">${CFG.events.length}</div><div class="sub">${upcoming.length} upcoming</div></div>
-    <div class="kpi"><div class="k">Total budget</div><div class="kpi-v">${F.mk(totalBudget)}</div></div>
-    <div class="kpi"><div class="k">Total actual spend</div><div class="kpi-v">${F.mk(sum(CFG.events.map(e=>costsTotal(e.id,'actualCost'))))}</div></div>
+    <div class="kpi hl" data-open="events" role="link" tabindex="0" onclick="go('events')" onkeydown="if(event.key==='Enter')go('events')" title="Open Events for the detail"><div class="k">Events <span aria-hidden="true">&rsaquo;</span></div><div class="kpi-v">${CFG.events.length}</div><div class="sub">${upcoming.length} upcoming</div></div>
+    <div class="kpi" data-open="rollups" role="link" tabindex="0" onclick="go('rollups')" onkeydown="if(event.key==='Enter')go('rollups')" title="Open Programme roll-ups for the detail"><div class="k">Total budget <span aria-hidden="true">&rsaquo;</span></div><div class="kpi-v">${F.mk(totalBudget)}</div></div>
+    <div class="kpi" data-open="rollups" role="link" tabindex="0" onclick="go('rollups')" onkeydown="if(event.key==='Enter')go('rollups')" title="Open Programme roll-ups for the detail"><div class="k">Total actual spend <span aria-hidden="true">&rsaquo;</span></div><div class="kpi-v">${F.mk(sum(CFG.events.map(e=>costsTotal(e.id,'actualCost'))))}</div></div>
   </div>`;
 
   h+=`<div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">`;
@@ -2426,6 +2427,7 @@ const MODULES=[
 ];
 const THIS_MODULE='Eventus';
 const HELP_FAQ=[
+  /* 2026-10-15 */ {q:"Can I click the numbers on the Home page?", a:"Yes. Home tiles marked with \u203a open the page that holds the detail behind that number."},
   {q:'How do I reset my password?', a:'An admin can trigger a reset from Configuration \u2192 Roles & users \u2192 Reset password, or use "Forgot password" at login. The email comes from Supabase directly, not from North.'},
   {q:'How do I set up a passkey?', a:'From your account menu, choose to set up a passkey \u2014 your browser or device (Windows Hello, Touch ID, a security key, etc.) will walk you through it.'},
   {q:'How do I invite a new teammate?', a:'Configuration \u2192 Invite a new teammate \u2192 choose their role \u2192 Generate invite code, then send them the code. They redeem it at signup by choosing "I have an invite code."'},

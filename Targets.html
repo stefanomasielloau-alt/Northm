@@ -291,6 +291,7 @@ input.cel.gs-swap-filter{width:150px}
 .months .mcol{align-self:stretch}
 .months .mbar{flex:none}
 @media (max-width:640px){.pf-grid{grid-template-columns:1fr}.occ-row,.occ-head{grid-template-columns:1fr 1fr}}
+/* 2026-10-15: home tiles open their detail page */ .kpi[data-open]{cursor:pointer}.kpi[data-open]:hover{box-shadow:0 0 0 2px var(--line,#DFE3EC)}
 </style>
 </head>
 <body>
@@ -1758,9 +1759,9 @@ function pageHome(){
     <button class="btn pri" onclick="go('filters');addFilter()">+ Quick add filter</button></div>`;
 
   h+=`<div class="kpis">
-    <div class="kpi hl"><div class="k">ICP filters</div><div class="kpi-v">${CFG.filters.length}</div></div>
-    <div class="kpi"><div class="k">Target list</div><div class="kpi-v">${CFG.leads.length}</div><div class="sub">${newTargets} new</div></div>
-    <div class="kpi"><div class="k">Reports</div><div class="kpi-v">${CFG.reports.length}</div></div>
+    <div class="kpi hl" data-open="filters" role="link" tabindex="0" onclick="go('filters')" onkeydown="if(event.key==='Enter')go('filters')" title="Open Filters for the detail"><div class="k">ICP filters <span aria-hidden="true">&rsaquo;</span></div><div class="kpi-v">${CFG.filters.length}</div></div>
+    <div class="kpi" data-open="targets" role="link" tabindex="0" onclick="go('targets')" onkeydown="if(event.key==='Enter')go('targets')" title="Open Target list for the detail"><div class="k">Target list <span aria-hidden="true">&rsaquo;</span></div><div class="kpi-v">${CFG.leads.length}</div><div class="sub">${newTargets} new</div></div>
+    <div class="kpi" data-open="reports" role="link" tabindex="0" onclick="go('reports')" onkeydown="if(event.key==='Enter')go('reports')" title="Open Reports for the detail"><div class="k">Reports <span aria-hidden="true">&rsaquo;</span></div><div class="kpi-v">${CFG.reports.length}</div></div>
   </div>`;
 
   h+=`<div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">`;
@@ -2318,6 +2319,8 @@ const MODULES=[
 ];
 const THIS_MODULE='Prospectus';
 const HELP_FAQ=[
+  /* 2026-10-15 */ {q:"I changed a layout and want it back the way it was. How?", a:"While Edit layout is on, click Undo changes (next to Done editing). It puts the page back exactly as it was when you clicked Edit layout, including tiles you swapped, hid, removed or added. Reset layout is different: it goes back to the page's original default layout."},
+  /* 2026-10-15 */ {q:"Can I click the numbers on the Home page?", a:"Yes. Home tiles marked with \u203a open the page that holds the detail behind that number."},
   {q:'How do I set benchmarks for an ICP profile?', a:'In Filters, choose a Benchmark industry and region for the profile, then click Benchmarks to see the base rates (with ranges and source links) and enter your own rate for any step. Blank means the base figure is used. Strategy reads these in Admin \u2192 Benchmarks. Benchmarks are indicative only.'},
   {q:'What are buyer personas?', a:'Personas (1a in the side menu) describe the people inside an ICP profile: role, demographics, goals, challenges, motivations, frustrations, previous experience, expectations, channels, how we can help, marketing message, internal targeting focus, outbound messaging and key tactics. Lists take one point per line. Use Print / save as PDF to share one.'},
   {q:'How do I reset my password?', a:'An admin can trigger a reset from Configuration \u2192 Roles & users \u2192 Reset password, or use "Forgot password" at login. The email comes from Supabase directly, not from North.'},

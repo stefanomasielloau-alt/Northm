@@ -8349,6 +8349,15 @@ function toggleSidebar(){
   render();
 }
 window.toggleSidebar=toggleSidebar;
+/* 2026-10-15 (Stef: detail links from every dashboard): grid pages map back to Strategy's pages and tabs */
+window.northGridOpenPage=function(gid){
+  let m;
+  if((m=/^plan_(.+)$/.exec(gid))) return go('plan',m[1]);
+  if((m=/^admin_(.+)$/.exec(gid))) return go('admin',m[1]);
+  if((m=/^insight_(.+)$/.exec(gid))){ UI.insightTab=m[1]; return go('insight'); }
+  if(/^boardreport/.test(gid)) return go('boardreport');
+  if(PAGES.some(p=>p.id===gid)) return go(gid);
+};
 function go(page,tab){
   /* Governance (2026-09-03, Reporting module item 16): the Board report has no
      "Generate" button -- it renders fresh from live data every time someone opens
@@ -8504,6 +8513,8 @@ const MODULES=[
 ];
 const THIS_MODULE='Ordo';
 const HELP_FAQ=[
+  /* 2026-10-15 */ {q:"I changed a layout and want it back the way it was. How?", a:"While Edit layout is on, click Undo changes (next to Done editing). It puts the page back exactly as it was when you clicked Edit layout, including tiles you swapped, hid, removed or added. Reset layout is different: it goes back to the page's original default layout."},
+  /* 2026-10-15 */ {q:"How do I get from a dashboard tile to the detail behind it?", a:"Tiles brought onto a dashboard from another page, and summary tiles that have a detail page, show an Open ... for the detail link at the bottom. Click it to go to that page."},
   {q:'What are industry benchmarks and where do they come from?', a:'Admin \u2192 Benchmarks shows typical stage-to-stage rates (Lead\u2192MQL, MQL\u2192SQL, SQL\u2192Opportunity, Opportunity\u2192Win) for Generic B2B, Tech hardware and SaaS in North America, EU and APAC, researched from public sources (links on each figure) and refreshed quarterly. They are indicative only: sources disagree, many are vendor marketing, and no source found splits them by region, so each region currently uses the same global figure.'},
   {q:'How do benchmarks connect to my funnel?', a:'In Admin \u2192 Funnel gates pick the Benchmark step each gate completes (several gates can share one step, e.g. SAO and SQO inside SQL\u2192Opportunity). The Rate library then shows a Benchmark column with an in/below/above-range flag; a gate with no rate uses its benchmark; Adopt observed rates uses the benchmark where history has fewer than 30 observations; and a campaign set to Industry benchmark is worked out stage by stage.'},
   {q:'Why is MAA compared separately?', a:'MAA (marketing accepted accounts) counts accounts while MQL counts people, so the account gate is left out of the lead benchmark path. Admin \u2192 Benchmarks has a separate account-based row: the stage rates from the account gate to SAO multiplied together, against account-level (MQA \u2192 opportunity) benchmarks. Pick the two gates there.'},

@@ -76,6 +76,12 @@
       var w = Math.round(Number(it.w)); var o = { k: k, w: (w >= 1 && w <= 12) ? w : 12 };
       var x = Math.round(Number(it.x)), y = Math.round(Number(it.y)), h = Math.round(Number(it.h));
       if (isFinite(x) && isFinite(y) && isFinite(h) && x >= 0 && x <= 11 && y >= 0 && y <= 5000 && h >= 1 && h <= 1000) { o.x = Math.min(x, 12 - o.w); o.y = y; o.h = h; }
+      /* 2026-10-15: per-report framing of a saved map / drill-down view (the area shown, in the picture's own units) */
+      var f = it.f;
+      if (f && typeof f === 'object') {
+        var fx = Number(f.x), fy = Number(f.y), fw = Number(f.w), fh = Number(f.h);
+        if (isFinite(fx) && isFinite(fy) && isFinite(fw) && isFinite(fh) && fw > 0 && fh > 0 && fw < 1e6 && fh < 1e6 && Math.abs(fx) < 1e6 && Math.abs(fy) < 1e6) o.f = { x: Math.round(fx), y: Math.round(fy), w: Math.round(fw), h: Math.round(fh) };
+      }
       out.push(o);
     });
     keys.forEach(function(k){ if(!have[k]) out.push({ k: k, w: 12 }); });

@@ -1320,8 +1320,13 @@
          then can packItems() give it a position. Packs as new rows appended
          below everything the saved layout already placed. */
       nextFrame(function () {
+        var startY = 0;
+        savedLayout.forEach(function (s) { startY = Math.max(startY, (s.y || 0) + (s.h || 0)); });
         missingFromSaved.forEach(function (el) {
           if (!gridEl.contains(el)) { gridEl.appendChild(el); }
+          /* 2026-10-15 (found in live testing): without a position makeWidget() auto-placed the tile at the TOP, pushing
+             every saved tile down before packItems() moved it -- leaving the saved layout shuffled. Start it below. */
+          el.setAttribute('gs-x', '0'); el.setAttribute('gs-y', String(startY)); if (!el.getAttribute('gs-h')) el.setAttribute('gs-h', '1');
           grid.makeWidget(el);
         });
         // 2026-09-28: a tile added while already in edit mode is registered here, after edit

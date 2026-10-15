@@ -621,7 +621,7 @@
       var tr = td.closest('tr'), body = tr.parentElement, n = [].indexOf.call(body.children, tr) + 1, key = '';
       /* 2026-10-15: name the row by its first text field (e.g. the task), else by a plain-text cell -- never by a cell
          holding buttons or inputs (a 'Remove' button used to name every checklist row) */
-      [].slice.call(tr.querySelectorAll('input[type=text],input:not([type]),textarea')).some(function (c) { var v = c.value; if (v && v.length <= 40) { key = v; return true; } return false; });
+      [].slice.call(tr.querySelectorAll('input[type=text],input:not([type]),textarea')).some(function (c) { var v = (c.value || '').trim(); if (v) { key = v.length > 40 ? v.slice(0, 38) + '\u2026' : v; return true; } return false; });
       if (!key) [].slice.call(tr.children).some(function (c) { if (c.querySelector('button,input,select,textarea,a,[contenteditable]')) return false; var v = txt(c); if (v && v.length <= 40) { key = v; return true; } return false; });
       row = 'row ' + n + (key ? ' (' + key + ')' : '');
     }

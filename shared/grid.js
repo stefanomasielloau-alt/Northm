@@ -396,8 +396,8 @@
     },
     // Board report (2026-10-09): ten sections as movable boxes, same order as the page always had.
     boardreport: {
-      defaults: { box1: 'kpis', box2: 'yearchart', box3: 'funnel', box4: 'budget', box5: 'highlights', box6: 'targets', box7: 'scoring', box8: 'commentary', box9: 'bridge', box10: 'whatchanged' },
-      boxSizes: { box1: 12, box2: 12, box3: 12, box4: 12, box5: 12, box6: 6, box7: 6, box8: 12, box9: 12, box10: 12 },
+      defaults: { box1: 'kpis', box11: 'contribution', box2: 'yearchart', box3: 'funnel', box4: 'budget', box5: 'highlights', box6: 'targets', box7: 'scoring', box8: 'commentary', box9: 'bridge', box10: 'whatchanged' },
+      boxSizes: { box1: 12, box11: 12, box2: 12, box3: 12, box4: 12, box5: 12, box6: 6, box7: 6, box8: 12, box9: 12, box10: 12 },
       widgets: {
         kpis: { label: 'Headline KPIs', hint: 'Plan vs actual, pipeline value, revenue, budget committed / spent', fn: function () { return window.boardReportWidgetKpis(); } },
         yearchart: { label: 'Plan vs actual by year', hint: 'Actual bars with the plan line, FY25-FY27', fn: function () { return window.boardReportWidgetYearChart(); } },
@@ -405,6 +405,7 @@
         budget: { label: 'Budget summary, by cost bucket', hint: 'Budget vs spend chart and table by cost bucket', fn: function () { return window.boardReportWidgetBudget(); } },
         highlights: { label: 'Campaign highlights', hint: 'Campaigns awaiting sign-off or meaningfully off budget', fn: function () { return window.boardReportWidgetHighlights(); } },
         targets: { label: 'Targets (ICP definitions)', hint: 'ICP filters defined in Targets', fn: function () { return window.boardReportWidgetTargets(); } },
+        contribution: { label: 'Contribution to closed pipeline', hint: 'Closed Won credited to campaigns (multi-touch), partner vs marketing-sourced, unattributed, return on spend', fn: function () { return window.boardReportWidgetContribution(); } },
         scoring: { label: 'Scoring (deal pipeline)', hint: 'Pipeline value and deals by stage', fn: function () { return window.boardReportWidgetScoring(); } },
         commentary: { label: 'Commentary', hint: 'Add and manage dated notes for the report', fn: function () { return window.boardReportWidgetCommentary(); } },
         bridge: { label: 'Gap to target by region', hint: 'Waterfall from regional ACV target to recorded ACV', fn: function () { return window.boardReportWidgetBridge(); } },

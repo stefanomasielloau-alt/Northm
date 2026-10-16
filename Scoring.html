@@ -755,6 +755,16 @@ async function loadFromSupabase(){
     CFG.dealNotes = (dnR.data||[]).map(n=>({id:n.id,orgId:n.org_id,dealId:n.deal_id,text:n.text||'',createdAt:n.created_at,createdBy:n.created_by}));
   }catch(e){ console.warn('augur_deal_notes table not available yet (migration pending?)', e); }
 
+  /* 2026-10-16: campaign touches per deal (multi-touch credit for "Contribution to closed pipeline").
+     Fail-soft until 2026-10-16-migration-deal-campaign-touches.sql runs. */
+  CFG.dealTouches = []; CFG.dealTouchesAvailable = false;
+  try{
+    const tR = await orgScoped(sb.from('deal_campaign_touches').select('id,org_id,deal_id,campaign_id,role,weight'));
+    if(tR.error) throw tR.error;
+    CFG.dealTouches = (tR.data||[]).map(t=>({id:t.id,orgId:t.org_id,dealId:t.deal_id,campaignId:t.campaign_id,role:t.role||'influenced',weight:Number(t.weight)||1}));
+    CFG.dealTouchesAvailable = true;
+  }catch(e){ console.warn('deal_campaign_touches not available yet (migration pending?)', e); }
+
   /* 2026-09-09 (systemic org_id audit): augur_scoring_factors, augur_tiers, augur_deals,
      crm_contacts and crm_activities are all re-saved by this page's own upsertRows() calls,
      which unconditionally stamp org_id:_orgId -- same vulnerable shape as the roles bug (see
@@ -1825,6 +1835,8 @@ const MODULES=[
 ];
 const THIS_MODULE='Augur';
 const HELP_FAQ=[
+  /* 2026-10-16 */ {q:"How do I give several campaigns credit for one deal?", a:"Open the deal's details and use Campaign touches. The deal's own Campaign is the sourced campaign. Add any other campaign that helped as influenced, and set weights: 2 and 1 means two thirds and one third. When the deal is Closed Won, the Board report's Contribution to closed pipeline shares its value by those weights, never counting it twice. Partner-sourced is set under Attribution & licensing. Changes are recorded in the activity log."},
+  /* 2026-10-16 */ {q:"What is Contribution to closed pipeline?", a:"It is the Board report tile that shows how much Closed Won revenue marketing campaigns can claim for the chosen period (by deal close date), in your organisation's base currency. Each deal's value is shared across the campaigns that touched it, by weight (the deal's own campaign counts as sourced), so a deal is never counted twice. It also shows partner-sourced deals separately from marketing-sourced, Unattributed deals (Closed Won with no campaign, listed so you can link them in Scoring), Closed Lost (not included), open pipeline touched by campaigns, and return on spend. The rule is printed under the tile. Deals in other currencies need an exchange rate in Configuration > Currency, or they count 1:1 (the tile warns you)."},
   /* 2026-10-15 */ {q:"What is the \u2709 Messages button?", a:"It shows messages meant for you, with an unread count: activities assigned to you, things you own that are due or overdue, sign-offs waiting for you, @mentions (type @ and a person\u2019s full name in a notes field), and replies about issues you reported. Click a message to open the linked record, Reply (you can attach screenshots or video), or mark it read, Actioned or Archived; everything is time stamped. + New sends a message to anyone in your organisation, including a reminder to yourself. Copies by email, Slack, Teams, SMS or WhatsApp are set up in Configuration \u203a Messages & channels, and each person picks theirs in \u2709 \u203a My settings."},
   /* 2026-10-15 */ {q:"How do I report a problem with North?", a:"Use Report an issue (the feedback button). Describe what happened and attach screenshots or a short screen recording if you can; it helps us reproduce it. You\u2019ll get a message in \u2709 Messages when someone replies, asks for more detail, or marks it fixed."},
   /* 2026-10-15 */ {q:"Can I click the numbers on the Home page?", a:"Yes. Home tiles marked with \u203a open the page that holds the detail behind that number."},
@@ -1923,6 +1935,7 @@ function dealDetailsPanelHtml(dealId){
             onchange="setDealConfidenceLevel('${d.id}',this.value)">%</div></div>
       </div>
 
+      ${dealTouchesHtml(d)}
       <div class="lbl" style="margin-bottom:6px">Attribution & licensing</div>
       <div class="card" style="margin-bottom:14px"><div class="bd">
         <div class="row" style="gap:16px;flex-wrap:wrap">
@@ -2031,6 +2044,65 @@ function closeDealDetails(){ UI.dealDetailsFor=null; render(); }
 window.openDealDetails=openDealDetails; window.closeDealDetails=closeDealDetails;
 function setDealNoteDraft(v){ UI.dealNoteDraft=v; }
 window.setDealNoteDraft=setDealNoteDraft;
+/* ---- 2026-10-16 Campaign touches (multi-touch credit). The deal's own Campaign is the sourced campaign (weight 1
+   unless set here); other campaigns that helped are added as influenced, with a weight. The Board report's
+   "Contribution to closed pipeline" shares each Closed Won deal's value across them by weight -- never counted twice. ---- */
+function dealTouchesHtml(d){
+  const camps=(CFG.referenceList&&CFG.referenceList.campaigns)||[], nm=id=>{ const c=camps.find(x=>x.id===id); return c?c.name:'(campaign not found)'; };
+  if(!CFG.dealTouchesAvailable) return `<div class="lbl" style="margin-bottom:6px">Campaign touches</div><div class="card" style="margin-bottom:14px"><div class="bd"><div class="mini">Multi-touch credit needs a one-time database update (2026-10-16-migration-deal-campaign-touches.sql). Until then the deal credits its own Campaign only.</div></div></div>`;
+  const rows=CFG.dealTouches.filter(t=>t.dealId===d.id);
+  const own=d.campaignId, ownRow=rows.find(t=>t.campaignId===own);
+  const list=[]; if(own) list.push({campaignId:own,role:'sourced',weight:ownRow?ownRow.weight:1,id:ownRow?ownRow.id:null,own:true});
+  rows.filter(t=>t.campaignId!==own).forEach(t=>list.push(Object.assign({own:false},t)));
+  const tot=list.reduce((a,t)=>a+(Number(t.weight)||0),0)||1;
+  const avail=camps.filter(c=>!list.some(t=>t.campaignId===c.id));
+  return `<div class="lbl" style="margin-bottom:6px">Campaign touches <span class="mini" style="font-weight:400">(share of credit when this deal is Closed Won)</span></div>
+  <div class="card" style="margin-bottom:14px"><div class="bd">
+    ${list.length?`<table><thead><tr><th>Campaign</th><th>Role</th><th class="n">Weight</th><th class="n">Share</th><th></th></tr></thead><tbody>
+      ${list.map(t=>`<tr><td class="lb">${esc(nm(t.campaignId))}${t.own?' <span class="mini">(deal\'s campaign)</span>':''}</td><td class="mini">${t.own||t.role==='sourced'?'Sourced':'Influenced'}</td>
+        <td class="n"><input class="cel w" type="number" min="0.1" max="100" step="0.5" value="${t.weight}" onchange="setDealTouchWeight('${d.id}','${t.campaignId}',this.value)"></td>
+        <td class="n calc">${Math.round((Number(t.weight)||0)/tot*100)}%</td>
+        <td class="n">${t.own?'':`<button class="btn sm dgr" onclick="removeDealTouch('${t.id}')">Remove</button>`}</td></tr>`).join('')}
+      </tbody></table>`:'<div class="mini" style="margin-bottom:6px">No campaign yet. Set the deal\'s Campaign, or add the campaigns that touched it.</div>'}
+    <div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap">
+      <select class="cel txt" id="dtAddCamp"><option value="">+ Add a campaign that touched this deal…</option>${avail.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select>
+      <button class="btn sm" onclick="addDealTouch('${d.id}')">Add</button>
+    </div>
+    <div class="mini" style="margin-top:6px">Weights are relative: 2 and 1 means two thirds and one third.</div>
+  </div></div>`;
+}
+async function _dtSave(row){
+  const r=row.id
+    ? await sb.from('deal_campaign_touches').update({weight:row.weight,role:row.role}).eq('id',row.id).select('id').maybeSingle()
+    : await sb.from('deal_campaign_touches').insert({org_id:row.orgId,deal_id:row.dealId,campaign_id:row.campaignId,role:row.role,weight:row.weight,created_by:_myProfile?_myProfile.id:null}).select('id').maybeSingle();
+  if(r.error){ console.error('deal_campaign_touches save failed',r.error); toast('Could not save the campaign touch -- see console.'); return null; }
+  return r.data&&r.data.id;
+}
+async function addDealTouch(dealId){
+  const el=document.getElementById('dtAddCamp'), cid=el&&el.value; if(!cid) return;
+  const d=byId(CFG.deals,dealId); if(!d) return;
+  const row={id:null,orgId:d.orgId||_clickOrgId(),dealId,campaignId:cid,role:'influenced',weight:1};
+  const id=await _dtSave(row); if(!id) return; row.id=id; CFG.dealTouches.push(row);
+  const c=((CFG.referenceList&&CFG.referenceList.campaigns)||[]).find(x=>x.id===cid);
+  logAudit('Campaign touch added', (d.name||'Deal')+' ← '+(c?c.name:cid)+' (influenced, weight 1)'); render();
+}
+async function setDealTouchWeight(dealId,campaignId,v){
+  const w=Math.max(0.1,Math.min(100,Number(v)||1)), d=byId(CFG.deals,dealId); if(!d) return;
+  let row=CFG.dealTouches.find(t=>t.dealId===dealId&&t.campaignId===campaignId);
+  const own=d.campaignId===campaignId;
+  if(!row){ row={id:null,orgId:d.orgId||_clickOrgId(),dealId,campaignId,role:own?'sourced':'influenced',weight:w}; const id=await _dtSave(row); if(!id) return; row.id=id; CFG.dealTouches.push(row); }
+  else { const old=row.weight; row.weight=w; if(!(await _dtSave(row))){ row.weight=old; render(); return; } }
+  logAudit('Campaign touch weight', (d.name||'Deal')+': weight '+w); render();
+}
+async function removeDealTouch(id){
+  const t=CFG.dealTouches.find(x=>x.id===id); if(!t) return;
+  const r=await sb.from('deal_campaign_touches').delete().eq('id',id);
+  if(r.error){ console.error(r.error); toast('Could not remove the campaign touch -- see console.'); return; }
+  CFG.dealTouches=CFG.dealTouches.filter(x=>x.id!==id);
+  const d=byId(CFG.deals,t.dealId), c=((CFG.referenceList&&CFG.referenceList.campaigns)||[]).find(x=>x.id===t.campaignId);
+  logAudit('Campaign touch removed', ((d&&d.name)||'Deal')+' ← '+(c?c.name:t.campaignId)); render();
+}
+Object.assign(window,{addDealTouch,setDealTouchWeight,removeDealTouch});
 function addDealNote(dealId){
   const text=(UI.dealNoteDraft||'').trim(); if(!text)return;
   CFG.dealNotes=CFG.dealNotes||[];

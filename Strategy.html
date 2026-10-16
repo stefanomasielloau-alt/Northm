@@ -604,7 +604,8 @@ window.closeFieldGuide=closeFieldGuide;
 <script src="shared/chartsCombo.js"></script>
 <script src="shared/lineItemRollup.js"></script><!-- 2026-10-09: budget line items -> campaign Budget/Committed/Actual (additive; remove tag to roll back) -->
 <script src="shared/boardReportAccess.js"></script>
-<script src="shared/boardPeriod.js"></script><!-- 2026-10-10: Board report period + prior-year compare (pure helpers; remove tag + brPer() fallback to undo) -->
+<script src="shared/boardPeriod.js"></script>
+<script src="shared/pipelineContribution.js"></script><!-- 2026-10-16: Contribution to closed pipeline KPI (pure helpers) --><!-- 2026-10-10: Board report period + prior-year compare (pure helpers; remove tag + brPer() fallback to undo) -->
 <script src="assets/vendor/gridstack/gridstack-all.js"></script>
 <script src="shared/grid.js"></script>
 <script src="shared/aiRouter.js"></script>
@@ -2520,6 +2521,7 @@ async function loadFromSupabase(){
       rows.forEach(d=>{ if(!d.campaign_id) return; const b=CFG.dealsByCampaign[d.campaign_id]||(CFG.dealsByCampaign[d.campaign_id]={pipeline:0,won:0,count:0,otherCcy:false});
         const v=Number(d.value)||0; b.count++; if(d.stage!=='Closed Lost') b.pipeline+=v; if(d.stage==='Closed Won') b.won+=v; if(mainCcy&&d.currency&&d.currency!==mainCcy) b.otherCcy=true; });
     }
+    await pcLoad();
   }catch(e){ /* prospectus_filters/augur_deals not reachable (RLS, or org hasn't run those
                 modules yet) -- Board Report's Targets/Scoring section just renders empty
                 rather than failing Ordo's own load. */ }
@@ -2764,6 +2766,8 @@ async function loadFromSupabase(){
   CFG.ledByPresets = Array.isArray(os.led_by_presets) ? os.led_by_presets : [];
   CFG.ledByAvailable = Object.prototype.hasOwnProperty.call(os,'led_by_presets');
   CFG.pipelineGateId = os.pipeline_gate_id || null;
+  CFG.attributionModel = os.attribution_model==='sourced_only'?'sourced_only':'multi_touch'; /* 2026-10-16: Contribution to closed pipeline */
+  CFG.attributionModelAvailable = Object.prototype.hasOwnProperty.call(os,'attribution_model');
   CFG.pipelineGateAvailable = Object.prototype.hasOwnProperty.call(os,'pipeline_gate_id');
   if(CFG.bench){ CFG.bench.orgIcpId = os.benchmark_icp_id || null; /* 2026-10-14 */
     CFG.bench.abmAvailable = Object.prototype.hasOwnProperty.call(os,'benchmark_abm');
@@ -6946,6 +6950,7 @@ function pageBoardReportInner(){
   UI.brAi = UI.brAi || { status:'idle', text:'', error:'' };
   UI._brCtx = 'Exit gate ('+exitGate().name+'): actual '+F.n(actualAcc[exitId])+' vs plan '+F.n(plan[exitId])+' ('+F.sp(winVar,0)+' variance). '+
     'Budget: committed '+F.mk(committed)+', actual spend '+F.mk(actualSpend)+', budgeted '+F.mk(budgeted)+' ('+F.sp(spendVar,0)+' variance). '+
+    (function(){ try{ if(!CFG.pc.loaded||typeof NorthPipelineContribution==='undefined') return ''; const c=pcCompute(); return 'Contribution to closed pipeline: '+F.mk(c.credited)+' credited to campaigns ('+c.creditedPct+'% of '+F.mk(c.wonTotal)+' Closed Won), partner-sourced '+F.mk(c.partnerSourced.value)+', unattributed '+F.mk(c.unattributed.value)+'. '; }catch(e){ return ''; } })()+
     'Pipeline value (Scoring): '+F.mk(pipelineValue)+' across '+(CFG.scoringSummary.dealCount||0)+' deals. Revenue actual in period: '+F.mk(revenue)+'. Version: '+version().name+', FY '+UI.fy+'. Period: '+brLabel()+(B.cmp.length?' (compared with '+B.cmp.map(c=>c.fy).join(', ')+')':'')+'.';
   /* Same computed values, reshaped for the PPTX export endpoint (2026-09-03) -- kept in
      sync with the sections rendered below rather than recomputed a second way, so the
@@ -7036,9 +7041,9 @@ function pageBoardReportInner(){
   /* ---- Layout (2026-10-09): ten movable boxes in the same order as before. Uses the shared Edit layout /
      Reset layout tool (shared/grid.js, page id 'boardreport'). Printing follows the on-screen layout via the
      beforeprint handler below. ---- */
-  const brBoxSizes={box1:12,box2:12,box3:12,box4:12,box5:12,box6:6,box7:6,box8:12,box9:12,box10:12};
-  const brDefaults={box1:'kpis',box2:'yearchart',box3:'funnel',box4:'budget',box5:'highlights',box6:'targets',box7:'scoring',box8:'commentary',box9:'bridge',box10:'whatchanged'};
-  const brFns={kpis:boardReportWidgetKpis,yearchart:boardReportWidgetYearChart,funnel:boardReportWidgetFunnel,budget:boardReportWidgetBudget,highlights:boardReportWidgetHighlights,targets:boardReportWidgetTargets,scoring:boardReportWidgetScoring,commentary:boardReportWidgetCommentary,bridge:boardReportWidgetBridge,whatchanged:boardReportWidgetWhatChanged};
+  const brBoxSizes={box1:12,box11:12,box2:12,box3:12,box4:12,box5:12,box6:6,box7:6,box8:12,box9:12,box10:12};
+  const brDefaults={box1:'kpis',box11:'contribution',box2:'yearchart',box3:'funnel',box4:'budget',box5:'highlights',box6:'targets',box7:'scoring',box8:'commentary',box9:'bridge',box10:'whatchanged'};
+  const brFns={kpis:boardReportWidgetKpis,contribution:boardReportWidgetContribution,yearchart:boardReportWidgetYearChart,funnel:boardReportWidgetFunnel,budget:boardReportWidgetBudget,highlights:boardReportWidgetHighlights,targets:boardReportWidgetTargets,scoring:boardReportWidgetScoring,commentary:boardReportWidgetCommentary,bridge:boardReportWidgetBridge,whatchanged:boardReportWidgetWhatChanged};
   const brAssigned=(window.northGetWidgetAssignments?window.northGetWidgetAssignments('boardreport'):brDefaults);
   h+=`<div class="grid-stack" id="ordo-grid-boardreport">`;
   Object.keys(brBoxSizes).forEach(boxId=>{
@@ -7181,6 +7186,78 @@ function boardReportWidgetScoring(){
   return h;
 }
 window.boardReportWidgetScoring=boardReportWidgetScoring;
+
+/* ---- 2026-10-16 Contribution to closed pipeline (Stef: Closed Won only, multi-touch credit, org base currency,
+   partner-sourced separate, on the Board report by default). Maths in shared/pipelineContribution.js. Fail-soft:
+   before 2026-10-16-migration-deal-campaign-touches.sql runs there are no touch rows, so each deal credits its own
+   campaign only (and the tile says so). ---- */
+CFG.pc={deals:[],touches:[],touchesAvailable:false,loaded:false};
+function _pcScoped(q){ return (typeof _savOrgFilter==='undefined'||_savOrgFilter===null)?q:q.eq('org_id',_savOrgFilter); } /* same org filter as the main load (platform admins see one org at a time) */
+async function pcLoad(){
+  const P=CFG.pc; P.loaded=false;
+  try{
+    let r=await _pcScoped(sb.from('augur_deals').select('id,name,value,currency,stage,close_date,campaign_id,partner_id,attribution_source'));
+    if(r.error) r=await _pcScoped(sb.from('augur_deals').select('id,name,value,currency,stage,close_date,campaign_id')); /* partners migration not run */
+    P.deals=r.error?[]:(r.data||[]);
+    const t=await _pcScoped(sb.from('deal_campaign_touches').select('deal_id,campaign_id,role,weight'));
+    P.touchesAvailable=!t.error; P.touches=t.error?[]:(t.data||[]);
+    P.loaded=!r.error;
+  }catch(e){ console.warn('Contribution to closed pipeline: deals not readable', e); }
+}
+function pcCompute(){
+  const per=brPer(), dts=NorthBoardPeriod.periodDates(UI.fy,CFG.time.fyStartMonth,per.from,per.to);
+  const allRegions=R().length, vis=visibleRegions(), scoped=vis.length<allRegions;
+  const visIds=vis.map(r=>r.id), camps=CFG.campaigns.filter(c=>visIds.includes(c.regionId));
+  const und=per.months/12, spend={};
+  camps.forEach(c=>{ const a=campaignActualSpend(c)||0; const fr=per.isFull?1:(dts?NorthBoardPeriod.overlapFraction(c.start,c.end,dts.start,dts.end,und):und); spend[c.id]=a*fr; });
+  const main=(CFG.currency&&CFG.currency.main)||'', rates=(CFG.currency&&CFG.currency.rates)||[];
+  const noRate={}; (CFG.pc.deals||[]).forEach(d=>{ if(d.currency&&main&&d.currency!==main&&!rates.some(x=>x.code===d.currency&&x.rate)) noRate[d.currency]=1; });
+  const res=NorthPipelineContribution.compute({deals:CFG.pc.deals, touches:CFG.pc.touches, campaigns:CFG.campaigns.map(c=>({id:c.id,name:c.name})),
+    from:dts?dts.start:null, to:dts?dts.end:null, convert:(a,c)=>convertToMain(a,c).converted, model:CFG.attributionModel||'multi_touch',
+    scope:scoped?camps.map(c=>c.id):null, spend});
+  res.scoped=scoped; res.main=main; res.noRate=Object.keys(noRate); res.period=brLabel();
+  return res;
+}
+function boardReportWidgetContribution(){
+  if(typeof NorthPipelineContribution==='undefined') return '<div class="card"><h3>Contribution to closed pipeline</h3><div class="bd"><div class="empty">Not available (shared/pipelineContribution.js did not load).</div></div></div>';
+  if(!CFG.pc.loaded) return '<div class="card"><h3>Contribution to closed pipeline</h3><div class="bd"><div class="empty">Deals could not be read from Scoring.</div></div></div>';
+  const r=pcCompute(), ccy=r.main?' '+esc(r.main):'';
+  const big=(lbl,v,sub,tip)=>`<div class="kpi" style="flex:1;min-width:150px" ${tip?`title="${esc(tip)}"`:''}><div class="k">${lbl}</div><div class="kpi-v">${v}</div>${sub?`<div class="sub">${sub}</div>`:''}</div>`;
+  const cnt=n=>n+' deal'+(n===1?'':'s');
+  let h=`<div class="card"><h3>Contribution to closed pipeline</h3><div class="bd">`;
+  if(!r.wonCount){ h+=`<div class="empty">No Closed Won deals with a close date in ${esc(r.period)}.${r.noCloseDate?` ${r.noCloseDate} Closed Won deal${r.noCloseDate===1?' has':'s have'} no close date and can't be placed in a period.`:''}</div>`; }
+  else{
+    h+=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      ${big('Credited to campaigns',F.mk(r.credited),`<b>${r.creditedPct}%</b> of ${F.mk(r.wonTotal)} Closed Won (${cnt(r.wonCount)})`)}
+      ${big('Marketing-sourced',F.mk(r.marketingSourced.value),cnt(r.marketingSourced.count))}
+      ${big('Partner-sourced',F.mk(r.partnerSourced.value),cnt(r.partnerSourced.count),'Deals marked partner sourced (or with a partner and not marked house sourced). Reported separately from marketing-sourced.')}
+      ${big('Unattributed',F.mk(r.unattributed.value),cnt(r.unattributed.count)+' with no campaign','Closed Won deals not linked to any campaign. Always shown, never dropped.')}
+    </div>
+    <div class="mini" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px">
+      <span>Return on spend: <b>${r.returnOnSpend!=null?r.returnOnSpend.toFixed(2)+'&times;':'—'}</b>${r.returnOnSpend!=null?` (credited value ÷ ${F.mk(r.spend)} actual spend of the credited campaigns)`:' (no actual spend recorded for the credited campaigns)'}</span>
+      <span>Closed Lost (not included): <b>${F.mk(r.lost.value)}</b>, ${cnt(r.lost.count)}</span>
+      <span>Open pipeline touched by campaigns: <b>${F.mk(r.openInfluenced.value)}</b>, ${cnt(r.openInfluenced.count)}</span>
+    </div>`;
+    if(r.byCampaign.length) h+=`<table><thead><tr><th>Campaign</th><th class="n">Credit</th><th class="n">Sourced</th><th class="n">Influenced</th><th class="n">Deals</th></tr></thead><tbody>
+      ${r.byCampaign.slice(0,6).map(c=>`<tr><td class="lb">${esc(c.name)}</td><td class="n calc">${F.mk(c.value)}</td><td class="n">${F.mk(c.sourced)}</td><td class="n">${F.mk(c.influenced)}</td><td class="n">${c.deals}</td></tr>`).join('')}
+      </tbody></table>${r.byCampaign.length>6?`<div class="mini">+ ${r.byCampaign.length-6} more campaigns (see the deals list below).</div>`:''}`;
+    h+=`<details class="no-print" style="margin-top:8px"><summary class="mini" style="cursor:pointer">Deals behind the number (${r.deals.length})</summary>
+      <div class="scroll cap"><table><thead><tr><th>Deal</th><th>Closed</th><th class="n">Value${ccy}</th><th>Sourcing</th><th>Credited to</th></tr></thead><tbody>
+      ${r.deals.map(d=>`<tr><td class="lb">${esc(d.name)}</td><td class="mini">${esc(d.closeDate||'—')}</td><td class="n">${F.mk(d.value)}</td><td class="mini">${d.credits.length?(d.partner?'Partner':'Marketing'):'Unattributed'}</td>
+        <td class="mini">${d.credits.length?d.credits.map(c=>esc(c.name)+' '+Math.round(c.share*100)+'%'+(c.role==='sourced'?' (sourced)':'')).join(', '):'—'}</td></tr>`).join('')}
+      </tbody></table></div></details>`;
+    if(r.unattributed.count) h+=`<div class="mini no-print" style="margin-top:6px">Unlinked Closed Won: ${r.unattributed.deals.map(d=>esc(d.name)).join(', ')} &mdash; <a href="Scoring.html">link them to a campaign in Scoring &rarr;</a></div>`;
+  }
+  const notes=[];
+  if(r.noRate.length) notes.push(`No exchange rate set for ${esc(r.noRate.join(', '))}, so those deals are counted 1:1 in${ccy||' the base currency'}. Set rates in Configuration &rsaquo; Currency.`);
+  if(r.scoped) notes.push(`Credit counts campaigns in the regions you can see; ${F.mk(r.outOfScope)} went to campaigns outside them. Deal totals are organisation-wide.`);
+  if(r.wonCount&&r.noCloseDate) notes.push(`${r.noCloseDate} Closed Won deal${r.noCloseDate===1?' has':'s have'} no close date and ${r.noCloseDate===1?'is':'are'} left out.`);
+  if(!CFG.pc.touchesAvailable&&r.model==='multi_touch') notes.push('Multi-touch needs a one-time database update (2026-10-16-migration-deal-campaign-touches.sql); until then each deal credits its own campaign only.');
+  h+=`<div class="mini" style="margin-top:8px;color:var(--muted,#5b6475)"><b>Rule${ccy?' ('+esc(r.main)+')':''}:</b> ${esc(r.rule)}${notes.length?'<br>'+notes.join('<br>'):''}</div>`;
+  h+=`</div></div>`;
+  return h;
+}
+window.boardReportWidgetContribution=boardReportWidgetContribution;
 
 function boardReportWidgetCommentary(){
   const B=brState(); const {d,m,vis,visIds,gates,exitId,plan,actualAcc,winVar,winSt,revenue,camps,budgeted,committed,actualSpend,spendVar,spendSt,pipelineValue,fyNotes}=B;
@@ -8514,6 +8591,7 @@ const MODULES=[
 ];
 const THIS_MODULE='Ordo';
 const HELP_FAQ=[
+  /* 2026-10-16 */ {q:"What is Contribution to closed pipeline?", a:"It is the Board report tile that shows how much Closed Won revenue marketing campaigns can claim for the chosen period (by deal close date), in your organisation's base currency. Each deal's value is shared across the campaigns that touched it, by weight (the deal's own campaign counts as sourced), so a deal is never counted twice. It also shows partner-sourced deals separately from marketing-sourced, Unattributed deals (Closed Won with no campaign, listed so you can link them in Scoring), Closed Lost (not included), open pipeline touched by campaigns, and return on spend. The rule is printed under the tile. Deals in other currencies need an exchange rate in Configuration > Currency, or they count 1:1 (the tile warns you)."},
   /* 2026-10-15 */ {q:"What is the \u2709 Messages button?", a:"It shows messages meant for you, with an unread count: activities assigned to you, things you own that are due or overdue, sign-offs waiting for you, @mentions (type @ and a person\u2019s full name in a notes field), and replies about issues you reported. Click a message to open the linked record, Reply (you can attach screenshots or video), or mark it read, Actioned or Archived; everything is time stamped. + New sends a message to anyone in your organisation, including a reminder to yourself. Copies by email, Slack, Teams, SMS or WhatsApp are set up in Configuration \u203a Messages & channels, and each person picks theirs in \u2709 \u203a My settings."},
   /* 2026-10-15 */ {q:"How do I report a problem with North?", a:"Use Report an issue (the feedback button). Describe what happened and attach screenshots or a short screen recording if you can; it helps us reproduce it. You\u2019ll get a message in \u2709 Messages when someone replies, asks for more detail, or marks it fixed."},
   /* 2026-10-15 */ {q:"I changed a layout and want it back the way it was. How?", a:"While Edit layout is on, click Undo changes (next to Done editing). It puts the page back exactly as it was when you clicked Edit layout, including tiles you swapped, hid, removed or added. Reset layout is different: it goes back to the page's original default layout."},

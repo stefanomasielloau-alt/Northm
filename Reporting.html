@@ -263,6 +263,7 @@ input.cel.gs-swap-filter{width:150px}
 .rm-tip-row span{color:var(--ink-3)}
 .rm-tip-row b{font-weight:600;text-align:right;overflow-wrap:anywhere}
 .rm-tip-acts{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+/* 2026-10-16 (Stef): AH is separate from North -- wider gap and a light keyline before it */ .tn-link.tn-ah{margin-left:22px;position:relative;overflow:visible}.tn-link.tn-ah::before{content:'';position:absolute;left:-12px;top:5px;bottom:5px;border-left:1px solid var(--line,#DFE3EC)}
 </style>
 </head>
 <body>
@@ -817,7 +818,7 @@ function renderFilteredTnLinks(){
     return m.id===THIS_MODULE
       ? `<span class="tn-link on" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</span>`
       : `<a class="tn-link" href="${m.file}.html" target="tool_North" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
-  }).join('') + (navVisible('Contact') ? '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">AH</span>AH</a>' : '');
+  }).join('') + (navVisible('Contact') ? '<a class="tn-link tn-ah" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">AH</span>AH</a>' : '');
 }
 async function checkModuleAccess(){
   if(CFG.isSuperAdmin) return true;
@@ -2681,8 +2682,8 @@ const PAGES=[
   {id:'organization',ix:'1', label:'Organization', fn:pageOrganization},
   {id:'drilldown',   ix:'2', label:'Drill-down',   fn:pageDrilldown},
   {id:'reports',     ix:'3', label:'Reports',      fn:pageReports},
-  {id:'relmap',      ix:'4', label:'Relationship map', fn:pageRelmap},
-  {id:'saved',       ix:'5', label:'Saved reports', fn:pageSavedReports}
+  {id:'saved',       ix:'4', label:'Saved reports', fn:pageSavedReports}, /* 2026-10-16 (Stef): sits under Reports */
+  {id:'relmap',      ix:'5', label:'Relationship map', fn:pageRelmap}
 ];
 function renderSide(){
   let h='<h4>Reporting</h4>';
@@ -2708,8 +2709,8 @@ const MODULES=[
   {id:'Prospectus',file:'Targets',label:'Targets',desc:'ICP filters & opportunity reports',color:'#9C2B3C',icon:'Ta'},
   {id:'Augur',file:'Scoring',label:'Scoring',desc:'Lead & deal scoring',color:'#5A3E9C',icon:'Sc'},
   {id:'Schema',file:'ProcessMaps',label:'Process Maps',desc:'Process maps & workflows',color:'#3A5A8C',icon:'Pr'},
-  {id:'Norma',file:'Configuration',label:'Configuration',desc:'Shared configuration',color:'#B5730E',icon:'Co'},
-  {id:'Reportus',file:'Reporting',label:'Reporting',desc:'Cross-module dashboards, org overview & board reports',color:'#7C1F5A',icon:'Rp'}
+  {id:'Reportus',file:'Reporting',label:'Reporting',desc:'Cross-module dashboards, org overview & board reports',color:'#7C1F5A',icon:'Rp'},
+  {id:'Norma',file:'Configuration',label:'Configuration',desc:'Shared configuration',color:'#B5730E',icon:'Co'}
 ];
 const THIS_MODULE='Reportus';
 const HELP_FAQ=[
@@ -2767,7 +2768,7 @@ function renderTnModuleLinks(){
     return m.id===THIS_MODULE
       ? `<span class="tn-link on" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</span>`
       : `<a class="tn-link" href="${m.file}.html" target="tool_North" title="${t}"><span class="mk" style="background:${m.color}">${m.icon}</span>${m.label}</a>`;
-  }).join('') + '<a class="tn-link" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">AH</span>AH</a>';
+  }).join('') + '<a class="tn-link tn-ah" href="#" onclick="openContact();return false;" title="Search contacts, notes and outreach"><span class="mk" style="background:#1F1F1F">AH</span>AH</a>';
 }
 function tnSearchResults(q){
   q=(q||'').trim().toLowerCase(); if(!q) return [];

@@ -155,9 +155,26 @@ Deno.serve(async (req: Request) => {
   const { data: profile } = await anon.from('profiles').select('org_id').eq('id', userData.user.id).maybeSingle()
   if (!profile?.org_id) return json({ ok: false, error: 'could not resolve your organisation' }, 403)
 
-  if (PROVIDERS.indexOf(cfg.provider) < 0) return json({ ok: false, error: 'EMAIL_PROVIDER "' + cfg.provider + '" is not supported. Use resend, sendgrid, postmark or brevo.' }, 501)
-  if (!cfg.key) return json({ ok: false, error: 'Sending is not set up yet: the platform owner needs to add the EMAIL_API_KEY secret to the flow-test-send function (see 2026-10-10-flow-test-send-direct-setup.md).' }, 501)
-  if (!cfg.from) return json({ ok: false, error: 'Sending is not set up yet: the EMAIL_FROM secret is missing or is not a valid address (use  North <notifications@your-domain.com>).' }, 501)
+  /* 2026-10-16 (Stef: "set up email once in North"): use the organisation's own email channel from
+     Configuration > Messages & channels when it is switched on -- the same one Messages copies use. The function
+     secrets (EMAIL_PROVIDER / EMAIL_API_KEY / EMAIL_FROM) remain a fallback for organisations without one. */
+  let source = 'function secrets'
+  try {
+    const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
+    const [st, sk] = await Promise.all([
+      admin.from('message_channel_settings').select('enabled,provider,config').eq('org_id', profile.org_id).eq('channel', 'email').maybeSingle(),
+      admin.from('message_channel_secrets').select('secret').eq('org_id', profile.org_id).eq('channel', 'email').maybeSingle()])
+    const set: any = st.data, key = String((sk.data as any)?.secret || '').trim(), conf = (set && set.config) || {}
+    const oFrom = parseFrom(conf.from || '')
+    if (set && set.enabled && key && oFrom) {
+      cfg.provider = String(set.provider || 'resend').trim().toLowerCase(); cfg.key = key; cfg.from = oFrom
+      cfg.replyTo = conf.reply_to ? parseFrom(conf.reply_to) : null; source = 'North email channel'
+    }
+  } catch (_) { /* fall back to the function secrets */ }
+  const NOT_SET = 'Sending is not set up yet: switch on Email in Configuration \u203a Messages & channels (provider, API key and From address) -- the same setting sends Messages copies.'
+  if (PROVIDERS.indexOf(cfg.provider) < 0) return json({ ok: false, error: 'Email provider "' + cfg.provider + '" is not supported. Use resend, sendgrid, postmark or brevo.' }, 501)
+  if (!cfg.key) return json({ ok: false, error: NOT_SET }, 501)
+  if (!cfg.from) return json({ ok: false, error: NOT_SET + ' (the From address is missing or not valid, e.g.  North <notifications@your-domain.com>).' }, 501)
 
   const t = testEmailText(input)
   const idemKey = testKey(userData.user.id, Date.now(), input.subject, input.body)
@@ -170,7 +187,7 @@ Deno.serve(async (req: Request) => {
   try {
     const res = await fetch(req2!.url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...req2!.headers }, body: JSON.stringify(req2!.body), signal: ctl.signal, redirect: 'error' })
     const text = await res.text()
-    if (res.ok) return json({ ok: true, to: email, detail: 'Sent by ' + cfg.provider + ' from ' + cfg.from.email })
+    if (res.ok) return json({ ok: true, to: email, detail: 'Sent by ' + cfg.provider + ' from ' + cfg.from.email + ' (' + source + ')' })
     return json({ ok: false, error: providerError(res.status, text, cfg.key) })
   } catch (e) {
     const msg = String((e as Error)?.name === 'AbortError' ? 'timed out after 20 seconds' : ((e as Error)?.message || e)).split(cfg.key).join('[key]').slice(0, 200)

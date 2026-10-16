@@ -4375,7 +4375,7 @@ function pageMessaging(){
   if(!MSGC.loaded){ setTimeout(msgcLoad,0); }
   const dis=canConfig()?'':'disabled';
   let h=`<div class="phead"><div><h1>Messages &amp; channels</h1>
-    <p>Everyone gets their messages in North (✉ in the top bar of every module): tasks assigned to them, things due or overdue, sign-offs waiting, @mentions, and replies about issues they logged. Switch on a channel below to also send copies by email, Slack, Teams, SMS or WhatsApp, using your organisation's own provider account. Each person chooses which copies they want in ✉ › My settings.</p></div></div>`;
+    <p>Everyone gets their messages in North (✉ in the top bar of every module): tasks assigned to them, things due or overdue, sign-offs waiting, @mentions, and replies about issues they logged. Switch on a channel below to also send copies by email, Slack, Teams, SMS or WhatsApp, using your organisation's own provider account. Each person chooses which copies they want in ✉ › My settings. <b>Email</b> set up here is also used by Process Maps: flow emails, approval requests, watch alerts and Simulate's "Send test to me" — one email setup for all of North.</p></div></div>`;
   if(MSGC.missing) return h+`<div class="note b"><strong>Database update needed.</strong> Run <code>Claude outputs/2026-10-15-migration-messages.sql</code> to switch on Messages.</div>`;
   if(!MSGC.loaded||!Object.keys(MSGC).length) return h+'<div class="card"><div class="empty">Loading…</div></div>';
   MSG_CHANNELS.forEach(c=>{

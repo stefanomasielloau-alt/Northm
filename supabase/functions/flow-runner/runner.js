@@ -53,6 +53,69 @@ export function calcValue(expr, rec) {
   catch (_) { return { ok: false, error: 'could not evaluate' }; }
 }
 
+/* ---------- 2026-10-16 (Stef: "set up email once in North"): direct email through the organisation's own
+   email channel (Configuration > Messages & channels), same providers as the message-dispatch function. ---------- */
+const MAIL_PROVIDERS = ['resend', 'sendgrid', 'postmark', 'brevo'];
+export function mailParseFrom(raw) {
+  const s = String(raw || '').trim(); if (!s || /[\r\n]/.test(s)) return null;
+  const m = /^(.*)<([^<>]+)>\s*$/.exec(s), name = m ? m[1].trim().replace(/^"|"$/g, '') : '', email = (m ? m[2] : s).trim();
+  if (!/^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(email) || email.length > 254) return null;
+  return { name: name.slice(0, 100), email };
+}
+function mailEsc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function mailFromHeader(p) { return p.name ? p.name + ' <' + p.email + '>' : p.email; }
+export function mailRequest(ch, to, subject, text, idemKey) {
+  const from = ch.from, replyTo = ch.replyTo || null, p = String(ch.provider || 'resend').toLowerCase();
+  const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5">' + mailEsc(text).replace(/\r?\n/g, '<br>') + '</div>';
+  subject = String(subject || '').replace(/[\r\n]+/g, ' ').slice(0, 200);
+  if (p === 'resend') { const b = { from: mailFromHeader(from), to: [to], subject, text, html }; if (replyTo) b.reply_to = replyTo.email;
+    return { url: 'https://api.resend.com/emails', headers: { 'Authorization': 'Bearer ' + ch.key, 'Idempotency-Key': String(idemKey).slice(0, 256) }, body: b }; }
+  if (p === 'sendgrid') { const b = { personalizations: [{ to: [{ email: to }] }], from: from.name ? { email: from.email, name: from.name } : { email: from.email }, subject,
+      content: [{ type: 'text/plain', value: text }, { type: 'text/html', value: html }] }; if (replyTo) b.reply_to = { email: replyTo.email };
+    return { url: 'https://api.sendgrid.com/v3/mail/send', headers: { 'Authorization': 'Bearer ' + ch.key }, body: b }; }
+  if (p === 'postmark') { const b = { From: mailFromHeader(from), To: to, Subject: subject, TextBody: text, HtmlBody: html, MessageStream: 'outbound' }; if (replyTo) b.ReplyTo = replyTo.email;
+    return { url: 'https://api.postmarkapp.com/email', headers: { 'X-Postmark-Server-Token': ch.key, 'Accept': 'application/json' }, body: b }; }
+  if (p === 'brevo') { const b = { sender: from.name ? { email: from.email, name: from.name } : { email: from.email }, to: [{ email: to }], subject, textContent: text, htmlContent: html };
+    if (replyTo) b.replyTo = { email: replyTo.email };
+    return { url: 'https://api.brevo.com/v3/smtp/email', headers: { 'api-key': ch.key, 'Accept': 'application/json' }, body: b }; }
+  return null;
+}
+
+/* sendEmail(o, run, nodeId, attempt, rec, {to:[{email,name}], subject, body}) -- org email channel, else Hub dispatch */
+export function makeMailer({ db, fetch, stats, dispatch }) {
+  const orgMail = {};
+  async function orgEmailChannel(o) {
+    if (orgMail[o.id] !== undefined) return orgMail[o.id];
+    let ch = null;
+    try {
+      const [st, sk] = await Promise.all([
+        db.from('message_channel_settings').select('enabled,provider,config').eq('org_id', o.id).eq('channel', 'email').maybeSingle(),
+        db.from('message_channel_secrets').select('secret').eq('org_id', o.id).eq('channel', 'email').maybeSingle()]);
+      const set = st && st.data, key = String((sk && sk.data && sk.data.secret) || '').trim(), conf = (set && set.config) || {};
+      const from = mailParseFrom(conf.from), prov = String((set && set.provider) || 'resend').toLowerCase();
+      if (set && set.enabled && key && from && MAIL_PROVIDERS.includes(prov)) ch = { provider: prov, key, from, replyTo: conf.reply_to ? mailParseFrom(conf.reply_to) : null };
+    } catch (_) { ch = null; }
+    orgMail[o.id] = ch; return ch;
+  }
+  async function sendEmail(o, run, nodeId, attempt, rec, cfg) {
+    const ch = await orgEmailChannel(o);
+    if (!ch) return dispatch(o, run, nodeId, attempt, rec, { type: 'email', config: cfg });
+    let sent = 0;
+    for (const t of cfg.to) {
+      const r = mailRequest(ch, t.email, cfg.subject, String(cfg.body || ''), run.id + ':' + nodeId + ':' + attempt + ':' + t.email);
+      stats.dispatched++;
+      try {
+        const res = await fetch(r.url, { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, r.headers), body: JSON.stringify(r.body) });
+        if (!res.ok) { let txt = ''; try { txt = await res.text(); } catch (_) { txt = ''; }
+          return { ok: false, error: 'email provider (' + ch.provider + ') HTTP ' + res.status + (sent ? ' after ' + sent + ' sent' : '') + ': ' + String(txt).split(ch.key).join('[key]').slice(0, 200), retryable: res.status >= 500 || res.status === 429 }; }
+        sent++;
+      } catch (e) { return { ok: false, error: 'email provider unreachable: ' + String((e && e.message) || e).split(ch.key).join('[key]').slice(0, 200), retryable: true }; }
+    }
+    return { ok: true, result: { status: 'sent', detail: 'Emailed ' + sent + ' via ' + ch.provider + ' (North email channel)' } };
+  }
+  return sendEmail;
+}
+
 export async function tick(env, deps) {
   const db = deps.db, now = deps.now ? deps.now() : Date.now(), crypto = deps.crypto || globalThis.crypto;
   const log = deps.log || { warn() {}, error() {}, info() {} };
@@ -151,6 +214,8 @@ export async function tick(env, deps) {
       return { ok: false, error: 'Hub returned HTTP ' + res.status, retryable: res.status >= 500 || res.status === 429 };
     } catch (e) { return { ok: false, error: 'Hub unreachable: ' + (e && e.message || e), retryable: true }; }
   }
+  /* flow emails: straight out through the organisation's email channel when it is switched on, else via Hub (as before) */
+  const sendEmail = makeMailer({ db, fetch: (u, o) => deps.fetch(u, o), stats, dispatch });
   async function writeField(o, rec, field, value) {
     const P = FE.PROCESSES[rec.procKey || ''] || {};
     const table = P.table;
@@ -170,7 +235,7 @@ export async function tick(env, deps) {
     if (t === 'email') {
       const to = o.people.filter((p) => (a.recipientIds || []).includes(p.id) && p.email).map((p) => ({ email: p.email, name: p.name }));
       if (!to.length) return { ok: false, error: 'no recipients with an email address', retryable: false };
-      return dispatch(o, run, act.nodeId, attempt, rec, { type: 'email', config: { to, subject: a.subject || name, body: a.body || '' } });
+      return sendEmail(o, run, act.nodeId, attempt, rec, { to, subject: a.subject || name, body: a.body || '' });
     }
     if (t === 'task') {
       let owner = a.ownerId || ''; const p = o.people.find((x) => x.id === owner); if (p) owner = p.name;
@@ -238,15 +303,15 @@ export async function tick(env, deps) {
     const link = (d) => FN_BASE + '/flow-approve?id=' + id + '&token=' + token + '&decision=' + d;
     const what = (FE.ACTION_LABELS[filled.type] || filled.type) + (filled.field ? ' → ' + filled.field : filled.intoField ? ' → ' + filled.intoField : '');
     await audit(o, '✋ approval needed: ' + (flow ? flow.name : 'flow'), what + ' for ' + (rec ? rec.name : 'a record') + ' — approve in Process Maps → Runs & approvals', approverIds.length ? approverIds : null);
-    if (to.length) await dispatch(o, run, act.nodeId + ':approval', 1, rec, { type: 'email', config: { to, subject: 'Approval needed: ' + (flow ? flow.name : 'flow'),
-      body: 'The flow "' + (flow ? flow.name : '') + '" wants to: ' + what + ' for ' + (rec ? rec.name : 'a record') + '.\n\nApprove: ' + link('approve') + '\nReject: ' + link('reject') + '\n\nOr open Process Maps → Runs & approvals in North.' } });
+    if (to.length) await sendEmail(o, run, act.nodeId + ':approval', 1, rec, { to, subject: 'Approval needed: ' + (flow ? flow.name : 'flow'),
+      body: 'The flow "' + (flow ? flow.name : '') + '" wants to: ' + what + ' for ' + (rec ? rec.name : 'a record') + '.\n\nApprove: ' + link('approve') + '\nReject: ' + link('reject') + '\n\nOr open Process Maps → Runs & approvals in North.' });
     return id;
   }
   async function notifyWatch(o, w, text) {
     stats.watches++;
     await audit(o, '👁 Watch', text, [w.user_id]);
     const ch = w.channels || {};
-    if (ch.email) { const p = o.people.find((x) => x.id === w.user_id); if (p && p.email) await dispatch(o, { id: 'watch-' + w.id }, 'watch:' + iso(now), 1, null, { type: 'email', config: { to: [{ email: p.email, name: p.name }], subject: 'North watch', body: text } }); }
+    if (ch.email) { const p = o.people.find((x) => x.id === w.user_id); if (p && p.email) await sendEmail(o, { id: 'watch-' + w.id }, 'watch:' + iso(now), 1, null, { to: [{ email: p.email, name: p.name }], subject: 'North watch', body: text }); }
   }
 
   /* ---------- runs ---------- */
